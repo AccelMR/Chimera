@@ -6,3 +6,6 @@ build/
 
 # Exclude CMakeSettings.json
 CMakeSettings.json
+
+# Exclude Resource
+resources/

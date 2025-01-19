@@ -353,12 +353,12 @@ FileDataStream::init() {
   if (m_accessMode.isSetAny(ACCESS_MODE::kWRITE)) {
     mode |= std::fstream::out;
     m_pFStream = ch_shared_ptr_new<std::fstream>();
-    m_pFStream->open(m_path.getPlatformString().c_str(), mode);
+    m_pFStream->open(m_path.m_path, mode);
     m_pInStream = m_pFStream;
   }
   else {
     m_pFStreamRO = ch_shared_ptr_new<std::ifstream>();
-    m_pFStreamRO->open(m_path.getPlatformString().c_str(), mode);
+    m_pFStreamRO->open(m_path.m_path, mode);
     m_pInStream = m_pFStreamRO;
   }
 

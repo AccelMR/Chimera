@@ -39,6 +39,14 @@ class CH_UTILITY_EXPORT Color
   constexpr Color(const LinearColor& linearColor);
 
   /*
+   * Convert the color to a 16-bit value
+   * @param isRGB565: true if the color should be converted to RGB565, false if it should be converted to RGB555
+   * @return: 16-bit value
+   */
+  uint16
+  to16Bit(bool bIsRGB565 = false) const;
+
+  /*
    *   Default destructor
    */
   ~Color() = default;
@@ -115,6 +123,16 @@ class CH_UTILITY_EXPORT Color
  public:
   static Color
   makeRandomColor();
+
+  /*
+   * Convert a 16-bit value to a color
+   * @param value: 16-bit value
+   * @param isRGB565: true if the value is in RGB565 format, false if it is in RGB555 format
+   * @return: color
+   */
+  static Color
+  from16Bit(uint16 value, bool bIsRGB565 = false);
+
 
  public:
   static const Color Transparent;

@@ -14,6 +14,9 @@ class Screen;
 class ScreenEventHandle;
 class ScreenEvent;
 
+class GPUCommandBuffer;
+class GPUPipelineState;
+
 union ScreenEventData;
 struct MouseMoveData;
 struct KeyBoardData;

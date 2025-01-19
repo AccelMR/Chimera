@@ -76,8 +76,8 @@ VulkanTranslator::get(const DepthStencilOpDesc& stencilOp) {
   stencil.passOp = VulkanTranslator::get(stencilOp.stencilPassOp);
   stencil.depthFailOp = VulkanTranslator::get(stencilOp.stencilDepthFailOp);
   stencil.compareOp = VulkanTranslator::get(stencilOp.stencilFunc);
-  stencil.compareMask = stencilOp.stencilReadMask;
-  stencil.writeMask = stencilOp.stencilWriteMask;
+  //stencil.compareMask = stencilOp.stencilReadMask;
+  //stencil.writeMask = stencilOp.stencilWriteMask;
   stencil.reference = 1;  // Se puede parametrizar si es necesario.
 
   return stencil;

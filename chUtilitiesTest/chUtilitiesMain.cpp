@@ -32,6 +32,8 @@
 #include "chRandom.h"
 #include "chCommandParser.h"
 
+#ifdef RUN_UNIT_TESTS
+
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -1419,3 +1421,4 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
     }
 }
 
+#endif //CH_PLATFORM_WINDOWS

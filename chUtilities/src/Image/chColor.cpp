@@ -57,6 +57,18 @@ Color::Color(const LinearColor& linearColor)
 
 /*
 */
+uint16
+Color::to16Bit(bool bIsRGB565) const {
+  if (bIsRGB565) {
+    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+  }
+  else {
+    return ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+  }
+}
+
+/*
+*/
 Color
 Color::makeRandomColor() {
   Color ret;
@@ -66,6 +78,29 @@ Color::makeRandomColor() {
   ret.a = 1.f;
   return ret;
 }
+
+/*
+*/
+Color
+Color::from16Bit(uint16 value, bool bIsRGB565) {
+  Color color;
+  const float RGB555 = 255.0f / 31.0f;
+  const float RGB565 = 255.0f / 63.0f;
+
+  if (bIsRGB565) {
+    color.r = static_cast<uint8>(((value >> 11) & 0x1F) * RGB555);
+    color.g = static_cast<uint8>(((value >> 5) & 0x3F) * RGB565);
+    color.b = static_cast<uint8>((value & 0x1F) * RGB555);
+  } else {
+    color.r = static_cast<uint8>(((value >> 10) & 0x1F) * RGB555);
+    color.g = static_cast<uint8>(((value >> 5) & 0x1F) * RGB555);
+    color.b = static_cast<uint8>((value & 0x1F) * RGB555);
+  }
+
+  color.a = 255;
+  return color;
 }
+
+} // namespace chEngineSDK
 
 

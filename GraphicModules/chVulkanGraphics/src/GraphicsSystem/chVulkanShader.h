@@ -12,7 +12,6 @@
 
 #include "chShader.h"
 
-
 namespace chEngineSDK
 {
 // Forward declaration

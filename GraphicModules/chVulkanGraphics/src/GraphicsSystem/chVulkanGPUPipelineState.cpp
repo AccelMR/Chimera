@@ -180,7 +180,7 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   depthStencil.depthTestEnable = desc.depthStencilStateDesc.depthEnable;
   depthStencil.depthWriteEnable = desc.depthStencilStateDesc.depthWriteMask == DEPTH_WRITE_MASK::kALL;
-  depthStencil.depthCompareOp = VulkanTranslator::get(desc.depthStencilStateDesc.depthFunc);
+  //depthStencil.depthCompareOp = VulkanTranslator::get(desc.depthStencilStateDesc.depthFunc);
   depthStencil.depthBoundsTestEnable = VK_FALSE;
   depthStencil.minDepthBounds = 0.0f; // Optional
   depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -213,7 +213,7 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.layout = m_pipelineLayout;
-  pipelineInfo.renderPass = renderPass;
+  //pipelineInfo.renderPass = renderPass;
   pipelineInfo.subpass = 0;
 
   if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {

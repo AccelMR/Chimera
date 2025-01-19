@@ -69,10 +69,7 @@ Path::toString() const {
 
 String 
 Path::getFileName(bool withExtension) const {
-  if (withExtension) {
-    return m_path.filename().string();
-  }
-  return m_path.stem().string();
+  return withExtension ? m_path.filename().string() : m_path.stem().string();
 }
 
 String 
@@ -92,11 +89,17 @@ Path::setPath(const String& newPath) {
 
 Path 
 Path::join(const Path& other) const {
-  return Path((m_path / other.m_path).string());
+  return Path((m_path / other.m_path));
 }
 
 bool 
 Path::operator<(const Path& other) const {
   return m_path < other.m_path;
 }
+
+Path
+Path::operator+(const String& other) const {
+  return Path((m_path.c_str() + other));
+}
+
 }  // namespace chEngineSDK

@@ -3,7 +3,7 @@ include(FetchContent)
 # No se necesita FetchContent para Catch2 si estás usando un único archivo header
 
 # Define el ejecutable para las pruebas
-add_executable(chUtilitiesTest chUtilitiesMain.cpp)
+add_executable(chUtilitiesTest chUtilitiesMain.cpp chBitmapTest.cpp)
 
 # Añade el include directory para Catch2 (mismo directorio que chUtilitiesMain.cpp)
 target_include_directories(chUtilitiesTest PRIVATE ${CMAKE_SOURCE_DIR})

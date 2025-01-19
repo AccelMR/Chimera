@@ -89,6 +89,16 @@ class Box2D
   FORCEINLINE Box2D&
   operator+=(const Vector2 &Other);
 
+  /**
+   *   Clamps a Box2D to another Box2D.
+   *  If the Box2D is outside the other Box2D, it will be resized to fit within.
+   * 
+   * @param other
+   *  Box2D to clamp to.
+   */
+  void
+  clamp(const Box2D& other);
+
  public:
 
   Vector2 minPoint;
@@ -139,7 +149,6 @@ Box2D::getExtent() const
 {
   return getSize() * .5f;
 }
-
 
 }
 

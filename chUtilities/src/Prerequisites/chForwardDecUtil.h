@@ -25,6 +25,7 @@ class Matrix4;
 class Rotator;
 class Quaternion;
 
+class Box2D;
 class AABox;
 class Plane;
 class Sphere;
@@ -42,4 +43,9 @@ class HEvent;
 
 class LinearColor;
 class Color;
+
+class BMPImage;
+
+class DataStream;
+class MemoryDataStream;
 }

@@ -37,6 +37,35 @@ class CH_UTILITY_EXPORT Path {
    */
   Path(const String& path);
 
+  /**
+   * Constructor from a C-string.
+   * 
+   * @param path
+   *    As C-string.
+  */
+  Path(const char* path) 
+    : m_path(path) {}
+
+#if USING(CH_CPP17_OR_LATER)
+  /**
+   * Constructor from a filesystem path.
+   * 
+   * @param path
+   *    As filesystem path.
+   */
+  FORCEINLINE
+  Path(const fs::path& path) 
+    : m_path(path) {}
+
+  /**
+   * Conversion operator to fs::path.
+   */
+  FORCEINLINE
+  operator fs::path() const {
+    return m_path;
+  }
+#endif // #if USING(CH_CPP17_OR_LATER)
+
 #if USING(CH_PLATFORM_WIN32)
   /**
    * Constructor from a wide string. Windows Only constructor.
@@ -153,7 +182,7 @@ class CH_UTILITY_EXPORT Path {
    *    The path to join with.
    * @return The joined path.
    */
-  FORCEINLINE Path
+  Path
   join(const Path& rhs) const;
 
   /**
@@ -163,10 +192,23 @@ class CH_UTILITY_EXPORT Path {
    *    The path to compare to.
    * @return True if this path is less than the other path.
    */
-  FORCEINLINE bool
+  bool
   operator<(const Path& other) const;
 
-private:
+  /**
+   * Operator for adding a string to this path.
+   * 
+   * @param other
+   *   The string to add.
+   * @return The new path.
+   */
+  Path
+  operator+(const String& other) const;
+
+ protected:
+  friend class FileSystem;
+  friend class FileDataStream;
+  
   fs::path m_path;  // Using C++17 std::filesystem::path
 };
 }  // namespace chEngineSDK

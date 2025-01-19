@@ -55,7 +55,6 @@ void Renderer::initialize()
   CommandParser& commandParser = CommandParser::getInstance();
   const float width = std::stof(commandParser.getParam("Width", "1280"));
   const float height = std::stof(commandParser.getParam("Height", "720"));
-  const float height = std::stof(commandParser.getParam("Height", "720"));
 
   // Leer el shader en binario (SPIR-V en Vulkan o HLSL en DX12)
   Vector<uint8> shaderFile = FileSystem::fastReadFile({"/home/accelmr/nvme2TB/Programming/Chimera/ChimeraCore/Resources/Shaders/Basic_VS_PS.hlsl"});
@@ -128,7 +127,6 @@ void Renderer::initialize()
   indexBuffer = GPUResourceMngr.createIndexBuffer(indexBufferDesc);
   indexBuffer->update(indexBufferDesc, &boxIndices[0]);
 
-  GPUResourceModule &GPUResourceMngr = GPUResourceModule::instance();
   // Configurar las barreras de recursos
  
   barrierStart.transition.stateBefore = chGPUDesc::ResourceStates::kPRESENT;
