@@ -99,7 +99,7 @@ Path::operator<(const Path& other) const {
 
 Path
 Path::operator+(const String& other) const {
-  return Path((m_path.c_str() + other));
+  return Path((m_path.generic_string() + other));
 }
 
 }  // namespace chEngineSDK
