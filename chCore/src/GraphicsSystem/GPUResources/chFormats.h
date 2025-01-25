@@ -151,6 +151,15 @@ namespace chFormatUtils{
 CH_CORE_EXPORT uint32
 getFormatSize(const FORMAT format);
 
+/**
+ * @brief Get the number of components in a format.
+ * 
+ * @param format The format to get the number of components of.
+ * @return uint32 The number of components in the format.
+ */
+CH_CORE_EXPORT String
+toString(const FORMAT format);
+
 }
 }
 

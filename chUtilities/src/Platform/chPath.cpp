@@ -18,8 +18,6 @@
 #include "chPath.h"
 #include "chUnicode.h"
 
-
-
 namespace chEngineSDK {
 namespace fs = std::filesystem;
 
@@ -77,9 +75,9 @@ Path::getExtension() const {
   return m_path.extension().string();
 }
 
-String 
+Path 
 Path::getDirectory() const {
-  return m_path.parent_path().string();
+  return m_path.parent_path();
 }
 
 void 

@@ -87,6 +87,16 @@ class CH_UTILITY_EXPORT Debug
   void
   saveLog(const Path& path) const;
 
+  /**
+   *     Saves a log about the current state of the application to the
+   *        specified location in HTML format.
+   * 
+   * @param path  
+   *    Absolute path to the log filename.
+   */
+  void 
+  saveLogAsHtml(const Path& path) const;
+
  private:
   /** 
    *   Map that holds pointer to any created logger.

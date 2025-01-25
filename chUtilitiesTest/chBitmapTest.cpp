@@ -6,11 +6,14 @@
 
 using namespace chEngineSDK;
 
+#define RUN_BMP_TESTS
+#ifdef RUN_BMP_TESTS
+
 int main(int argc, char* argv[])
 {
   LOG_INFO("BMPImage Test");
   String resourcePath = "resources/";
-  String savePath = "resources/save/";
+  String savePath = "resources/save/tests/";
   String fileName = "test";
 
   BMPImage source;
@@ -51,3 +54,5 @@ int main(int argc, char* argv[])
 
   return 0;
 }
+
+#endif //RUN_BMP_TESTS

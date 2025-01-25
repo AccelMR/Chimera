@@ -111,7 +111,7 @@ class Logger
   /**
    *    Returns all log entries, including those marked as unread.
    */
-  FORCEINLINE Vector<LogEntry>
+  FORCEINLINE const Vector<LogEntry>&
   getAllEntries() const;
 
  private:
@@ -142,7 +142,7 @@ Logger::logMsg(const String& msg, LOG_LEVEL level) {
 
 /*
 */
-FORCEINLINE Vector<LogEntry>
+FORCEINLINE const Vector<LogEntry>&
 Logger::getAllEntries() const {
   RecursiveLock lock( m_mutex );
   return m_logs;

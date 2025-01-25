@@ -19,7 +19,10 @@
 
 namespace chEngineSDK {
 class VulkanSwapChain final: public SwapChain { 
- protected:
+ public:
+  friend class VulkanGPUCommandBuffer;
+  friend class GraphicsModuleVulkan;
+
   /*
   *   Default constructor
   */
@@ -28,34 +31,30 @@ class VulkanSwapChain final: public SwapChain {
   /*
   *   Default destructor
   */
-   ~VulkanSwapChain();
+  ~VulkanSwapChain();
 
-   friend class GraphicsModuleVulkan;
-   friend class VulkanGPUCommandBuffer;
-   
-   void 
-   init(const chGPUDesc::SwapChainDesc& desc) override;
-   
-   void
-   createResources();
-   
-   void
-   _internalResize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) override;
-   
-   void
-   _internalPresent(int32 syncInterval, int32 flags);
-   
-   uint32 
-   _internalGetCurrentFrameIndex() const override;
-   
-   SPtr<Texture>
-   getCurrentRenderTarget() const override;
+  void
+  init(const chGPUDesc::SwapChainDesc& desc);
+
+  void
+  createResources();
+
+  void
+  _internalResize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) override;
+
+  void
+  _internalPresent(int32 syncInterval, int32 flags);
+
+  uint32 
+  _internalGetCurrentFrameIndex() const override;
+
+  SPtr<Texture>
+  getCurrentRenderTarget() const override;
 
  protected:
-   VkSwapchainKHR m_swapchain;
-   
-   Vector<VkImage> m_images;
-   Vector<VkImageView> m_imageViews;
-   Vector<VkFramebuffer> m_framebuffers;
+  VkSwapchainKHR m_swapchain;
+  Vector<VkImage> m_images;
+  Vector<VkImageView> m_imageViews;
+  Vector<VkFramebuffer> m_framebuffers;
 };
 }

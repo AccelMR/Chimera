@@ -231,17 +231,159 @@ VulkanTranslator::getTopologyType(const PRIMITIVE_TOPOLOGY_TYPE& topology) {
  * Translates FORMAT to VkFormat.
  */
 VkFormat
-VulkanTranslator::get(const FORMAT& format) {
-  switch (format) {
-    case FORMAT::kR32G32B32A32_FLOAT:
-      return VK_FORMAT_R32G32B32A32_SFLOAT;
-    case FORMAT::kR8G8B8A8_UNORM:
-      return VK_FORMAT_R8G8B8A8_UNORM;
-    // Agrega más traducciones aquí según tus descriptores
-    default:
-      CH_EXCEPT(InternalErrorException, "Invalid FORMAT provided for Vulkan translation!");
+VulkanTranslator::get(const FORMAT &format)
+{
+  switch (format)
+  {
+  case FORMAT::kR32G32B32A32_FLOAT:
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  case FORMAT::kR32G32B32A32_UINT:
+    return VK_FORMAT_R32G32B32A32_UINT;
+  case FORMAT::kR32G32B32A32_SINT:
+    return VK_FORMAT_R32G32B32A32_SINT;
+  case FORMAT::kR32G32B32_FLOAT:
+    return VK_FORMAT_R32G32B32_SFLOAT;
+  case FORMAT::kR32G32B32_UINT:
+    return VK_FORMAT_R32G32B32_UINT;
+  case FORMAT::kR32G32B32_SINT:
+    return VK_FORMAT_R32G32B32_SINT;
+  case FORMAT::kR16G16B16A16_FLOAT:
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case FORMAT::kR16G16B16A16_UNORM:
+    return VK_FORMAT_R16G16B16A16_UNORM;
+  case FORMAT::kR16G16B16A16_UINT:
+    return VK_FORMAT_R16G16B16A16_UINT;
+  case FORMAT::kR16G16B16A16_SNORM:
+    return VK_FORMAT_R16G16B16A16_SNORM;
+  case FORMAT::kR16G16B16A16_SINT:
+    return VK_FORMAT_R16G16B16A16_SINT;
+  case FORMAT::kR16G16_FLOAT:
+    return VK_FORMAT_R16G16_SFLOAT;
+  case FORMAT::kR16G16_UNORM:
+    return VK_FORMAT_R16G16_UNORM;
+  case FORMAT::kR16G16_UINT:
+    return VK_FORMAT_R16G16_UINT;
+  case FORMAT::kR16G16_SNORM:
+    return VK_FORMAT_R16G16_SNORM;
+  case FORMAT::kR16G16_SINT:
+    return VK_FORMAT_R16G16_SINT;
+  case FORMAT::kR8G8B8A8_UNORM:
+    return VK_FORMAT_R8G8B8A8_UNORM;
+  case FORMAT::kR8G8B8A8_UINT:
+    return VK_FORMAT_R8G8B8A8_UINT;
+  case FORMAT::kR8G8B8A8_SNORM:
+    return VK_FORMAT_R8G8B8A8_SNORM;
+  case FORMAT::kR8G8B8A8_SINT:
+    return VK_FORMAT_R8G8B8A8_SINT;
+  case FORMAT::kR8G8_UNORM:
+    return VK_FORMAT_R8G8_UNORM;
+  case FORMAT::kR8G8_UINT:
+    return VK_FORMAT_R8G8_UINT;
+  case FORMAT::kR8G8_SNORM:
+    return VK_FORMAT_R8G8_SNORM;
+  case FORMAT::kR8G8_SINT:
+    return VK_FORMAT_R8G8_SINT;
+  case FORMAT::kR8_UNORM:
+    return VK_FORMAT_R8_UNORM;
+  case FORMAT::kR8_UINT:
+    return VK_FORMAT_R8_UINT;
+  case FORMAT::kR8_SNORM:
+    return VK_FORMAT_R8_SNORM;
+  case FORMAT::kR8_SINT:
+    return VK_FORMAT_R8_SINT;
+  case FORMAT::kD32_FLOAT:
+    return VK_FORMAT_D32_SFLOAT;
+  case FORMAT::kD32_FLOAT_S8X24_UINT:
+    return VK_FORMAT_D32_SFLOAT_S8_UINT;
+  case FORMAT::kD24_UNORM_S8_UINT:
+    return VK_FORMAT_D24_UNORM_S8_UINT;
+  case FORMAT::kD16_UNORM:
+    return VK_FORMAT_D16_UNORM;
+  case FORMAT::kB8G8R8A8_UNORM:
+    return VK_FORMAT_B8G8R8A8_UNORM;
+  case FORMAT::kB8G8R8A8_TYPELESS:
+    CH_EXCEPT(NotImplementedException, "No equivalent VK_FORMAT for kB8G8R8A8_TYPELESS.");
+  default:
+    CH_EXCEPT(InternalErrorException, "Invalid FORMAT provided for Vulkan translation!");
   }
 }
+
+/*
+*/
+FORMAT
+VulkanTranslator::get(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_UNDEFINED:
+            return FORMAT::kUNKNOWN;
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+            return FORMAT::kR32G32B32A32_FLOAT;
+        case VK_FORMAT_R32G32B32A32_UINT:
+            return FORMAT::kR32G32B32A32_UINT;
+        case VK_FORMAT_R32G32B32A32_SINT:
+            return FORMAT::kR32G32B32A32_SINT;
+        case VK_FORMAT_R32G32B32_SFLOAT:
+            return FORMAT::kR32G32B32_FLOAT;
+        case VK_FORMAT_R32G32B32_UINT:
+            return FORMAT::kR32G32B32_UINT;
+        case VK_FORMAT_R32G32B32_SINT:
+            return FORMAT::kR32G32B32_SINT;
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return FORMAT::kR16G16B16A16_FLOAT;
+        case VK_FORMAT_R16G16B16A16_UNORM:
+            return FORMAT::kR16G16B16A16_UNORM;
+        case VK_FORMAT_R16G16B16A16_UINT:
+            return FORMAT::kR16G16B16A16_UINT;
+        case VK_FORMAT_R16G16B16A16_SNORM:
+            return FORMAT::kR16G16B16A16_SNORM;
+        case VK_FORMAT_R16G16B16A16_SINT:
+            return FORMAT::kR16G16B16A16_SINT;
+        case VK_FORMAT_R16G16_SFLOAT:
+            return FORMAT::kR16G16_FLOAT;
+        case VK_FORMAT_R16G16_UNORM:
+            return FORMAT::kR16G16_UNORM;
+        case VK_FORMAT_R16G16_UINT:
+            return FORMAT::kR16G16_UINT;
+        case VK_FORMAT_R16G16_SNORM:
+            return FORMAT::kR16G16_SNORM;
+        case VK_FORMAT_R16G16_SINT:
+            return FORMAT::kR16G16_SINT;
+        case VK_FORMAT_R8G8B8A8_UNORM:
+            return FORMAT::kR8G8B8A8_UNORM;
+        case VK_FORMAT_R8G8B8A8_UINT:
+            return FORMAT::kR8G8B8A8_UINT;
+        case VK_FORMAT_R8G8B8A8_SNORM:
+            return FORMAT::kR8G8B8A8_SNORM;
+        case VK_FORMAT_R8G8B8A8_SINT:
+            return FORMAT::kR8G8B8A8_SINT;
+        case VK_FORMAT_R8G8_UNORM:
+            return FORMAT::kR8G8_UNORM;
+        case VK_FORMAT_R8G8_UINT:
+            return FORMAT::kR8G8_UINT;
+        case VK_FORMAT_R8G8_SNORM:
+            return FORMAT::kR8G8_SNORM;
+        case VK_FORMAT_R8G8_SINT:
+            return FORMAT::kR8G8_SINT;
+        case VK_FORMAT_R8_UNORM:
+            return FORMAT::kR8_UNORM;
+        case VK_FORMAT_R8_UINT:
+            return FORMAT::kR8_UINT;
+        case VK_FORMAT_R8_SNORM:
+            return FORMAT::kR8_SNORM;
+        case VK_FORMAT_R8_SINT:
+            return FORMAT::kR8_SINT;
+        case VK_FORMAT_D32_SFLOAT:
+            return FORMAT::kD32_FLOAT;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            return FORMAT::kD32_FLOAT_S8X24_UINT;
+        case VK_FORMAT_D24_UNORM_S8_UINT:
+            return FORMAT::kD24_UNORM_S8_UINT;
+        case VK_FORMAT_D16_UNORM:
+            return FORMAT::kD16_UNORM;
+        default:
+            return FORMAT::kUNKNOWN;
+    }
+}
+
 
 /*
  * Translates BindingGroup to VkDescriptorSetLayout.

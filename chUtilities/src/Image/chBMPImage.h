@@ -270,6 +270,15 @@ class CH_UTILITY_EXPORT BMPImage
                                  const Box2D& srcRect,
                                  int32& srcX, int32& srcY);
 
+  /*
+   * Calculate the source coordinates for a given destination coordinate in MIRROR mode
+   * @param x: x-coordinate of the destination
+   * @param y: y-coordinate of the destination
+   * @param srcRect: source rectangle
+   * @param srcX: x-coordinate of the source
+   * @param srcY: y-coordinate of the source
+   * @return: true if the source coordinates are valid, false otherwise
+  */
   bool calculateMirrorCoordinates(int32 x, int32 y, 
                                   const Box2D& srcRect,
                                   int32& srcX, int32& srcY);

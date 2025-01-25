@@ -17,9 +17,12 @@
 
 #include "chScreenEventHandle.h"
 
+
+#define CH_SDL_WINDOW USE_IF(USING(CH_PLATFORM_LINUX))
+
 #if USING(CH_PLATFORM_WIN32)
 using PlatformScreen = HWND*; //TODO: Change this to HWND
-#elif USING(CH_PLATFORM_LINUX)
+#elif USING(CH_SDL_WINDOW)
 struct SDL_Window;
 using PlatformScreen = SDL_Window*;
 #endif

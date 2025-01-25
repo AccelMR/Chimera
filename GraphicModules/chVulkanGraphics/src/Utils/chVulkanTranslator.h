@@ -102,6 +102,12 @@ class VulkanTranslator
   get(const FORMAT& format);
 
   /*
+   * Translates VkFormat to FORMAT.
+   */
+  static FORMAT
+  get(VkFormat format);
+
+  /*
    * Translates BindingGroup to VkDescriptorSetLayout.
    */
   static VkDescriptorSetLayout

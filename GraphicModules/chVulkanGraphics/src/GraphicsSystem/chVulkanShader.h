@@ -8,7 +8,7 @@
 /************************************************************************/
 #pragma once
 
-#include "chPrerequisitesCore.h"
+#include "chPrerequisitesVulkan.h"
 
 #include "chShader.h"
 

@@ -132,5 +132,7 @@ protected:
   virtual void
   _internalResetSwapChainAllocator() = 0;
 
+ protected:
+  SPtr<SwapChain> m_swapChain;
 };
 }

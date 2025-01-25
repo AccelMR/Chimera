@@ -124,6 +124,34 @@ public:
     : Exception("InternalErrorException", inDescription, inSource, inFile, inLine) {}
 };
 
+/**
+ * @brief	Exception for not implemented error, normally something that is not implemented yet.
+ */
+class NotImplementedException : public Exception
+{
+public:
+  NotImplementedException(const String& inDescription,
+                         const String& inSource,
+                         const char* inFile,
+                         long inLine)
+    : Exception("NotImplementedException", inDescription, inSource, inFile, inLine) {}
+};
+
+/**
+ * @brief	Exception for signaling an invalid parameters error, normally when a parameter
+ *        is invalid or outside of the specified range.
+ */
+class RunTimeException : public Exception
+{
+public:
+  RunTimeException(const String& inDescription,
+                   const String& inSource,
+                   const char* inFile,
+                   long inLine)
+    : Exception("RunTimeException", inDescription, inSource, inFile, inLine) {}
+};
+
+
 #define CH_EXCEPT(type, desc)                                                   \
 {                                                                               \
 static_assert((std::is_base_of<chEngineSDK::Exception, type>::value),           \

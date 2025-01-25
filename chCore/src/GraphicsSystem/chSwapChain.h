@@ -71,9 +71,6 @@ protected:
   friend class GraphicsModule;
 
   virtual void
-  init(const chGPUDesc::SwapChainDesc& desc) = 0;
-
-  virtual void
   _internalResize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) = 0;
 
   virtual uint32

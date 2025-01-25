@@ -69,6 +69,14 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
  */
 SPtr<DataStream>
 FileSystem::createAndOpenFile(const Path& path) {
+  // Get the parent directory of the file path
+  Path parentDir = path.getDirectory();
+
+  // Check if the directory exists, if not, create it
+  if (!FileSystem::exists(parentDir)) {
+    FileSystem::createDirectories(parentDir);
+  }
+
   return ch_shared_ptr_new<FileDataStream>(path, ACCESS_MODE::kWRITE, true);
 }
 

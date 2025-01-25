@@ -84,11 +84,9 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   for (auto& binding : desc.vertexBufferBindingsDesc) {
     bindingStride += chFormatUtils::getFormatSize(binding.format);
     vertexInputAttributes.push_back(
-     createVertexInputAtrributeDescription(0,
-                                        binding.slot,
-                                        VulkanTranslator::get(binding.format),
-                                        binding.byteStride)
-                                        );
+     createVertexInputAtrributeDescription(0, binding.slot,
+                                           VulkanTranslator::get(binding.format),
+                                           binding.byteStride));
   }
 
   // Vertex bindings an attributes based on ImGui vertex definition
@@ -96,20 +94,10 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   //	vks::initializers::vertexInputBindingDescription(0, sizeof(ImDrawVert), VK_VERTEX_INPUT_RATE_VERTEX),
   //};
 
-
   VkVertexInputBindingDescription binding{};
   binding.binding = 0; //TODO: not sure about this. We only have one binding
   binding.stride = bindingStride;
   binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-  VkPipelineVertexInputStateCreateInfo vertexInputState;
-  vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-  vertexInputState.vertexBindingDescriptionCount = 1; //TODO: not sure about this. We only have one binding (for now  xd)
-  vertexInputState.pVertexBindingDescriptions = &binding;
-
-  vertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexInputAttributes.size());
-  vertexInputState.pVertexAttributeDescriptions = vertexInputAttributes.data();
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

@@ -8,7 +8,7 @@
  /************************************************************************/
  #include "chScreen.h"
 
-#if USING(CH_PLATFORM_LINUX)
+#if USING(CH_SDL_WINDOW)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include "chDebug.h"
@@ -20,29 +20,24 @@ namespace chEngineSDK{
 NODISCARD bool
 Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
-    CH_EXCEPT(InternalErrorException, "Screen.init()");
+    CH_EXCEPT(InternalErrorException, "Screen.init() - SDL_Init failed.");
     return false;
   }
 
   m_screenHandle = SDL_CreateWindow(desc.title.c_str(),
                                     desc.width,
                                     desc.height,
-                                    0);
+                                    SDL_WINDOW_VULKAN);
 
   if (m_screenHandle == nullptr) {
-    CH_EXCEPT(InternalErrorException, "Screen.init()");
+    CH_EXCEPT(InternalErrorException, "Screen.init() - SDL_CreateWindow failed.");
     return false;
   }
-      SDL_Surface* screenSurface = NULL;
 
-  LOG_INFO("Screen being create in Wayland.");
-  
-    SDL_Renderer* r = SDL_CreateRenderer(m_screenHandle, NULL);
+  m_width = desc.width;
+  m_height = desc.height;
 
-//TODO: delete this
-  SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
-  SDL_RenderClear(r);
-  SDL_RenderPresent(r);
+  LOG_INFO("Screen created successfully with Vulkan support.");
   return true;
 }
 

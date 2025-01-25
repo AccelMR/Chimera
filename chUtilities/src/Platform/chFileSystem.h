@@ -70,6 +70,7 @@ class CH_UTILITY_EXPORT FileSystem {
 
   /** 
    *   Creates and opens a file. If file exist this will override all information.
+   *   If the directory doesn't exist, it will be created.
    * 
    * @param path
    *    The path where the file is going to be located.

@@ -47,6 +47,11 @@ class GraphicsModuleVulkan final : public GraphicsModule
     return m_physicalDevice;
   }
 
+  FORCEINLINE const VkFormat& 
+  getDepthFormat() const {
+    return m_depthFormat;
+  }
+
  protected:
   virtual void
   _internalInit(WPtr<Screen> screen) override;
@@ -93,16 +98,51 @@ class GraphicsModuleVulkan final : public GraphicsModule
   void
   createSurface();
 
- protected:
+ private:
+
+  void 
+  createInstance();
+
+  void
+  createDevice();
+
+  void
+  createCommandPool();
+
+  int32 
+  getQueueFamilyIndex(VkQueueFlagBits queueFlags);
+
+  bool
+  extensionSupported(const String extension);
+
+ public:
   VkInstance m_instance;
+  Vector<String> m_supportedInstanceExtensions;
+  Vector<const char*> m_enabledInstanceExtensions;
+  VkPhysicalDeviceProperties m_deviceProperties{};
+  VkPhysicalDeviceFeatures m_deviceFeatures{};
+  VkPhysicalDeviceMemoryProperties m_deviceMemoryProperties{};
+  Vector<VkQueueFamilyProperties> m_queueFamilyProperties;
+  VkFormat m_depthFormat;
 
   VkPhysicalDevice m_physicalDevice;
   VkSurfaceKHR m_surface;
   VkDevice m_device;
   //SPtr<VulkanSwapChain> m_swapChain;
-  Vector<VkCommandPool> m_commandPools;
+  VkCommandPool m_commandPool;
   uint32 m_graphicsQueueFamilyIndex = -1;
+  uint32 m_computeQueueFamilyIndex = -1;
+  uint32 m_transferQueueFamilyIndex = -1;
   uint32 m_frameIndex;
+
+  WPtr<Screen> m_screen;
+
+#if USING(CH_DEBUG_MODE)
+  PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT{ nullptr };
+  PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT{ nullptr };
+  PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT{ nullptr };
+#endif //USING(CH_DEBUG_MODE)
+
 };
 
 GraphicsModuleVulkan&

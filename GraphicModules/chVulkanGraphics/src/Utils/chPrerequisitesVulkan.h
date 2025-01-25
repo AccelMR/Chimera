@@ -19,7 +19,7 @@ namespace chEngineSDK {
 inline void throwIfFailed(VkResult vkResult) {
   if (vkResult != VK_SUCCESS) {
     String message = std::system_category().message(vkResult);
-    CH_EXCEPT(InternalErrorException, "HR failed in DX12 module." + message);
+    CH_EXCEPT(InternalErrorException, "HR failed in Vulkan module." + message);
   }
 }
 

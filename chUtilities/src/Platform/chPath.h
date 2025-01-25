@@ -172,7 +172,7 @@ class CH_UTILITY_EXPORT Path {
    * 
    * @return Directory as a string.
    */
-  String
+  Path
   getDirectory() const;
 
   /**
