@@ -249,7 +249,7 @@ using BasicStringStream = basic_stringstream<T, char_traits<T>, std::allocator<T
 /**
  * @brief Wide string used primarily for handling Unicode text.
  */
-using WString = BasicString<UNICHAR>;
+using WString = std::wstring;
 
 /**
  * @brief Narrow string used primarily for handling ASCII text.

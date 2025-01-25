@@ -3,6 +3,7 @@ build/
 
 # Exclude code files
 *.vscode/
+*.vs/
 
 # Exclude CMakeSettings.json
 CMakeSettings.json

@@ -97,28 +97,17 @@
 
 /************************************************************************/
 /**
- * Check for C++17 or later
- */
- /************************************************************************/
-#if __cplusplus >= 201703L
-#   define CH_CPP17_OR_LATER              IN_USE
-#else
-#   define CH_CPP17_OR_LATER              NOT_IN_USE
-#endif
-
-/************************************************************************/
-/**
  * See if we can use __forceinline or if we need to use __inline instead
  */
  /************************************************************************/
 #if USING(CH_COMPILER_MSVC)
-
+#  define CH_CPP17_OR_LATER              USE_IF(_MSVC_LANG >= 201703L)
 # if CH_COMP_VER >= 1920
-#   define  NODISCARD [[nodiscard]]
+#  define  NODISCARD [[nodiscard]]
 # else
-#   define  NODISCARD
+#  define  NODISCARD
+#  define CH_CPP17_OR_LATER                  USE_IF(__cplusplus >= 201703L)
 # endif
-
 # if CH_COMP_VER >= 1200
 #   define FORCEINLINE                     __forceinline
 #   ifndef RESTRICT 
