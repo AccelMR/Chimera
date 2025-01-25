@@ -15,7 +15,7 @@
 /************************************************************************/
 #include "chPrerequisitesDX12.h"
 
-#include <chResourceDescriptors.h>
+#include <chGPUResourceDescriptors.h>
 #include <chShader.h>
 
 
