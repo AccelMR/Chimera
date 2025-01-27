@@ -97,6 +97,12 @@ class CH_UTILITY_EXPORT Debug
   void 
   saveLogAsHtml(const Path& path) const;
 
+  /*
+   *   Logs a backtrace of the current state of the application.
+  */
+  void 
+  logBacktrace(LOG_LEVEL level = LOG_LEVEL::kFATAL);
+
  private:
   /** 
    *   Map that holds pointer to any created logger.

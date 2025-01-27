@@ -298,6 +298,8 @@
 # define CH_ASSERT(x)
 #endif
 
+#define CH_ENABLE_BACKTRACE USE_IF(USING(CH_DEBUG_MODE))
+
 /************************************************************************/
 /*
  * Extern.

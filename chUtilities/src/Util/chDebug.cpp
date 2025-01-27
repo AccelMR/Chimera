@@ -16,10 +16,12 @@
 
 #include "chStringUtils.h"
 #include "chFileSystem.h"
+# include <iostream>
 
 #if USING(CH_COMPILER_MSVC)
-# include "Win32/chWindows.h"
-# include <iostream>
+#include "Win32/chWindows.h"
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 
 void
 logIDEConsole(const chEngineSDK::String& msg) {
@@ -28,8 +30,8 @@ logIDEConsole(const chEngineSDK::String& msg) {
 
   std::cout << msg << std::endl;
 }
-#else
-#include <iostream>
+#elif USING(CH_COMPILER_GNUC)
+#include <execinfo.h>
 
 void logIDEConsole(const chEngineSDK::String& msg) 
 {
@@ -215,12 +217,62 @@ Debug::saveLogAsHtml(const Path& path) const {
 
 /*
 */
+void
+Debug::logBacktrace(LOG_LEVEL level) {
+#if USING(CH_ENABLE_BACKTRACE)
+  constexpr int MAX_FRAMES = 128;
+#  if USING(CH_COMPILER_MSVC)
+  void* callstack[MAX_FRAMES];
+  HANDLE process = GetCurrentProcess();
+  SymInitialize(process, NULL, TRUE);
+
+  WORD frames = CaptureStackBackTrace(0, MAX_FRAMES, callstack, NULL);
+
+  String backtraceStr = "Backtrace:\n";
+  for (WORD i = 0; i < frames; ++i) {
+    DWORD64 address = reinterpret_cast<DWORD64>(callstack[i]);
+    
+    SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(malloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char)));
+    symbol->MaxNameLen = 255;
+    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+
+    DWORD64 displacement = 0;
+    if (SymFromAddr(process, address, &displacement, symbol)) {
+      backtraceStr += StringUtils::format("{0}: {1} - 0x{2:X}\n", i, symbol->Name, symbol->Address);
+    } else {
+      backtraceStr += StringUtils::format("{0}: [Symbol not found] - 0x{1:X}\n", i, address);
+    }
+
+    free(symbol);
+  }
+
+  logMessage(backtraceStr, level);
+
+  SymCleanup(process);
+
+#  elif USING(CH_COMPILER_CLANG)
+    void* callstack[MAX_FRAMES];
+    int frames = backtrace(callstack, MAX_FRAMES);
+    char** strs = backtrace_symbols(callstack, frames);
+
+    String backtraceStr = "Backtrace:\n";
+    for (int i = 0; i < frames; ++i) {
+      backtraceStr += StringUtils::format("{0}: {1}\n", i, strs[i]);
+    }
+    logMessage(backtraceStr, level);
+    free(strs);
+#endif // USING(CH_COMPILER_MSVC)
+#endif // USING(CH_BACKTRACE)
+}
+
+/*
+*/
 CH_UTILITY_EXPORT Debug&
 g_Debug() {
   static Debug debug;
   return debug;
 }
 
-}
+} // namespace chEngineSDK
 
 
