@@ -14,12 +14,12 @@
  */                                                                     
 /************************************************************************/
 #include "chVulkanGPUResourceModule.h"
-
 #include "chVulkanGraphicsModule.h"
 // #include "chVulkanVertexBuffer.h"
 // #include "chVulkanIndexBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanShader.h"
+#include "chVulkanSampler.h"
 
 namespace chEngineSDK{
 
@@ -55,8 +55,10 @@ VulkanResourceModule::_internalCreateBuffer(const SIZE_T& size) {
 /*
 */
 SPtr<Sampler>
-VulkanResourceModule::_internalCreateSampler(const chGPUDesc::SampleDesc& desc) {
-    return nullptr;
+VulkanResourceModule::_internalCreateSampler(const chGPUDesc::SamplerDesc& desc) {
+  auto vulkanSampler = ch_shared_ptr_new<VulkanSampler>();
+  vulkanSampler->init(desc);
+  return std::reinterpret_pointer_cast<Sampler>(vulkanSampler);
 }
 
 /*

@@ -35,7 +35,7 @@ GPUResourceModule::createBuffer(const SIZE_T& size) {
 /*
 */
 SPtr<Sampler>
-GPUResourceModule::createSampler(const SampleDesc desc) {
+GPUResourceModule::createSampler(const SamplerDesc desc) {
   return _internalCreateSampler(desc);
 }
 

@@ -31,10 +31,7 @@ class VulkanShader: public Shader
   void
   _init(const chGPUDesc::ShaderDesc& desc);
   
-  VkShaderModule m_vertexShader;
-  VkShaderModule m_pixelShader;
-  VkShaderModule m_computeShader;
-  VkShaderModule m_meshShader;
+  VkShaderModule m_shaderModule;
 };
 
 } // namespace chEngineSDK

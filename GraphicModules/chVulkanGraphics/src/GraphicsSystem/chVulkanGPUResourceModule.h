@@ -46,7 +46,7 @@ class VulkanResourceModule final: public GPUResourceModule
   _internalCreateBuffer(const SIZE_T& size) override;
 
   SPtr<Sampler>
-  _internalCreateSampler(const SampleDesc& desc) override;
+  _internalCreateSampler(const  chGPUDesc::SamplerDesc& desc) override;
 
   SPtr<VertexBuffer> 
   _internalCreateVertexBuffer(const VertexBufferDesc& desc) override;

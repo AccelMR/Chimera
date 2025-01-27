@@ -55,7 +55,7 @@ DX12GPUResourceModule::_internalCreateBuffer(const SIZE_T& size) {
 /*
 */
 SPtr<Sampler>
-DX12GPUResourceModule::_internalCreateSampler(const chGPUDesc::SampleDesc& desc) {
+DX12GPUResourceModule::_internalCreateSampler(const chGPUDesc::SamplerDesc& desc) {
     return nullptr;
 }
 

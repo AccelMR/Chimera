@@ -48,7 +48,7 @@ class CH_CORE_EXPORT GPUResourceModule: public Module<GPUResourceModule>
   createBuffer(const SIZE_T& size);
 
   SPtr<Sampler>
-  createSampler(const SampleDesc desc);
+  createSampler(const SamplerDesc desc);
 
   //TODO: instead of this return a mesh that wrapps vertex and index info.
   SPtr<VertexBuffer>
@@ -69,7 +69,7 @@ class CH_CORE_EXPORT GPUResourceModule: public Module<GPUResourceModule>
   _internalCreateBuffer(const SIZE_T& size) = 0;
 
   virtual SPtr<Sampler>
-  _internalCreateSampler(const SampleDesc& desc) = 0;
+  _internalCreateSampler(const SamplerDesc& desc) = 0;
 
   virtual SPtr<VertexBuffer>
   _internalCreateVertexBuffer(const VertexBufferDesc& desc) = 0;

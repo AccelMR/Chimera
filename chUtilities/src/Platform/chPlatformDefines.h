@@ -122,6 +122,8 @@
 #   endif
 # endif
 #else
+
+#  define CH_CPP17_OR_LATER              USE_IF(__cplusplus >= 201703L)
 # define NODISCARD [[nodiscard]]
 # define FORCEINLINE                         __inline
 # ifndef RESTRICT

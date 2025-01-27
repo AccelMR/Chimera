@@ -18,6 +18,7 @@
 #include "chScreen.h"
 #include "chStringUtils.h"
 
+#include "chVulkanGPUComandBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanGPUPipelineState.h"
 #include "chVulkanTranslator.h"
@@ -198,6 +199,25 @@ GraphicsModuleVulkan::~GraphicsModuleVulkan() {}
 
 /*
 */
+VkDescriptorSetLayout
+GraphicsModuleVulkan::createDescriptorSetLayout(const BindingGroup& bindingGroup) {
+    const auto bindings = VulkanTranslator::get(bindingGroup);
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptorSetLayout;
+    if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create descriptor set layout.");
+    }
+
+    return descriptorSetLayout;
+}
+
+/*
+*/
 void
 GraphicsModuleVulkan::createInstance()
 {
@@ -354,9 +374,9 @@ GraphicsModuleVulkan::createSurface()
 {
 #if USING(CH_SDL_WINDOW)
   SDL_Window* sdlWindow = m_screen.lock()->getPlatformHandler();
+  CH_ASSERT(sdlWindow);
 
-  VkSurfaceKHR surface;
-  if (!SDL_Vulkan_CreateSurface(sdlWindow, m_instance, nullptr, &surface)) {
+  if (!SDL_Vulkan_CreateSurface(sdlWindow, m_instance, nullptr, &m_surface)) {
     CH_EXCEPT(InternalErrorException, "Failed to create Vulkan surface from SDL.");
   }
 #endif // USING(CH_SDL_WINDOW)
@@ -474,8 +494,23 @@ GraphicsModuleVulkan::createDevice()
   deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
   deviceCreateInfo.pEnabledFeatures = &m_deviceFeatures;
 
+  m_supportedInstanceExtensions.clear();
+  uint32 extCount = 0;
+  vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+  if (extCount > 0)
+  {
+    Vector<VkExtensionProperties> extensions(extCount);
+    if (vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, &extensions.front()) == VK_SUCCESS)
+    {
+      for (auto &ext : extensions)
+      {
+        m_supportedInstanceExtensions.push_back(ext.extensionName);
+      }
+    }
+  }
+
   if (deviceExtensions.size() > 0) {
-    for (const char *enabledExtension : deviceExtensions) {
+    for (const char* enabledExtension : deviceExtensions) {
       // Output message if requested extension is not available
       if (!extensionSupported(enabledExtension)) {
         LOG_ERROR("Enabled device extension \"" + 
@@ -484,7 +519,7 @@ GraphicsModuleVulkan::createDevice()
       }
     }
 
-    deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32>(deviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
   }
 
@@ -504,7 +539,7 @@ GraphicsModuleVulkan::createCommandPool()
   poolInfo.queueFamilyIndex = m_graphicsQueueFamilyIndex;
   poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-  if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
+  if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
     CH_EXCEPT(InternalErrorException, "Failed to create command pool.");
   }
 
@@ -523,15 +558,15 @@ GraphicsModuleVulkan::_internalInit(WPtr<Screen> screen)
   createSurface();
   createDevice();
 
-  VkBool32 validFormat{ false };
-  // Samples that make use of stencil will require a depth + stencil format, so we select from a different list
-  validFormat = getSupportedDepthStencilFormat(m_physicalDevice, &m_depthFormat);
-  CH_ASSERT(validFormat);
-
-  // FORMAT depthStencilFormat = VulkanTranslator::get(depthFormat);
-  // LOG_DBG(StringUtils::format("Depth stencil format: [{0}]", 
-  //                             chFormatUtils::toString(depthStencilFormat)));
-
+  VkBool32 presentSupport = VK_FALSE;
+  for (uint32 i = 0; i < m_queueFamilyProperties.size(); ++i) {
+    vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, i, m_surface, &presentSupport);
+    if (presentSupport) {
+      m_presentQueueFamilyIndex = i;
+      break;
+    }
+  }
+  CH_ASSERT(m_presentQueueFamilyIndex != INVALID_INDEX);
 
   _setupSwapchain(screen.lock()->getWidth(), screen.lock()->getHeight());
 
@@ -542,17 +577,22 @@ GraphicsModuleVulkan::_internalInit(WPtr<Screen> screen)
 */
 void
 GraphicsModuleVulkan::_setupSwapchain(uint32 width, uint32 height) {
+
+  VkBool32 validFormat{ false };
+  // Samples that make use of stencil will require a depth + stencil format, so we select from a different list
+  validFormat = getSupportedDepthStencilFormat(m_physicalDevice, &m_depthFormat);
+  CH_ASSERT(validFormat);
+
   //TODO: this might be generated from the screen
   SwapChainDesc swapDesc{
     .width = width,
     .height = height,
     .format = FORMAT::kB8G8R8A8_UNORM,
-    .frameCount = 2,
+    .frameCount = 3,
   };
 
   SPtr<VulkanSwapChain> vulkanSwapChain = ch_shared_ptr_new<VulkanSwapChain>();
   vulkanSwapChain->init(swapDesc);
-  vulkanSwapChain->createResources();
   m_swapChain = vulkanSwapChain;
 }
 
@@ -576,7 +616,7 @@ GraphicsModuleVulkan::createFence() {}
 */
 SPtr<GPUCommandBuffer>
 GraphicsModuleVulkan::_internalCreateGPUCommandBuffer() {
-  return nullptr;
+  return ch_shared_ptr_new<VulkanGPUCommandBuffer>();
 }
 
 /*
@@ -628,7 +668,8 @@ GraphicsModuleVulkan::_internalResetSwapChainAllocator() {}
 
 /*
  */
-int32 GraphicsModuleVulkan::getQueueFamilyIndex(VkQueueFlagBits queueFlags)
+int32 
+GraphicsModuleVulkan::getQueueFamilyIndex(VkQueueFlagBits queueFlags)
 {
   // Dedicated queue for compute
   // Try to find a queue family index that supports compute but not graphics

@@ -47,10 +47,29 @@ class GraphicsModuleVulkan final : public GraphicsModule
     return m_physicalDevice;
   }
 
-  FORCEINLINE const VkFormat& 
+  const VkFormat& 
   getDepthFormat() const {
     return m_depthFormat;
   }
+
+  /*
+  */
+  FORCEINLINE uint32 
+  getGraphicsQueueFamilyIndex() const{
+    return m_graphicsQueueFamilyIndex;
+  }
+
+ /*
+ */
+  uint32
+  getPresentQueueFamilyIndex() const {
+    return m_presentQueueFamilyIndex;
+  }
+
+  /*
+  */
+  VkDescriptorSetLayout
+  createDescriptorSetLayout(const BindingGroup& bindingGroup);
 
  protected:
   virtual void
@@ -129,10 +148,11 @@ class GraphicsModuleVulkan final : public GraphicsModule
   VkSurfaceKHR m_surface;
   VkDevice m_device;
   //SPtr<VulkanSwapChain> m_swapChain;
-  VkCommandPool m_commandPool;
-  uint32 m_graphicsQueueFamilyIndex = -1;
-  uint32 m_computeQueueFamilyIndex = -1;
-  uint32 m_transferQueueFamilyIndex = -1;
+  VkCommandPool commandPool;
+  uint32 m_graphicsQueueFamilyIndex = INVALID_INDEX;
+  uint32 m_computeQueueFamilyIndex = INVALID_INDEX;
+  uint32 m_transferQueueFamilyIndex = INVALID_INDEX;
+  uint32 m_presentQueueFamilyIndex = INVALID_INDEX;
   uint32 m_frameIndex;
 
   WPtr<Screen> m_screen;

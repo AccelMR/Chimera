@@ -57,14 +57,17 @@ void Renderer::initialize()
   const float height = std::stof(commandParser.getParam("Height", "720"));
 
   // Leer el shader en binario (SPIR-V en Vulkan o HLSL en DX12)
-  Vector<uint8> shaderFile = FileSystem::fastReadFile({"/home/accelmr/nvme2TB/Programming/Chimera/ChimeraCore/Resources/Shaders/Basic_VS_PS.hlsl"});
+  Vector<uint8> shaderFile = FileSystem::fastReadFile({"resources/shaders/vertex.spv"});
+  Vector<uint8> shaderFile2 = FileSystem::fastReadFile({"resources/shaders/fragment.spv"});
 
   // Crear el shader usando la abstracción
-  SPtr<Shader> VS_PS = GPUResourceMngr.createShader({.name = "BasicShader",
-                                                     .VS = {
-                                                         .byteCode = shaderFile,
-                                                         .entryFunc = "VSMain"},
-                                                     .PS = {.byteCode = shaderFile, .entryFunc = "PSMain"}});
+  SPtr<Shader> vertexShader = GPUResourceMngr.createShader({.name = "vertex.vert",
+                                                            .byteCode = shaderFile,
+                                                            .entryFunc = "main"});
+
+  SPtr<Shader> fragmentShader = GPUResourceMngr.createShader({.name = "fragment.frag",
+                                                              .byteCode = shaderFile2,
+                                                              .entryFunc = "main"});
 
   // Crear el buffer para MVP
   MatrixViewProj MVP;
@@ -74,8 +77,8 @@ void Renderer::initialize()
   // Crear el pipeline usando la abstracción
   viewport = Box2D({0.0f, 0.0f}, { width, height });
   m_pipeline = GraphicAPI.createPipelineState({
-    .VS = VS_PS,
-    .PS = VS_PS,
+    .VS = vertexShader,
+    .PS = fragmentShader,
     .rasterizerStateDesc = {
       .cullMode = CULL_MODE::kNONE
     },
@@ -103,8 +106,12 @@ void Renderer::initialize()
       .colorAttachments = { FORMAT::kR8G8B8A8_UNORM },
     },
     .sampleDesc = {
-      .count = 1,
-      .quality = 0
+      .count = SAMPLE_COUNT::kSAMPLE_COUNT_1,
+      .sampleShadingEnable = false,
+      .minSampleShading = 0.0f,
+      .sampleMask = { 0xffffffff },
+      .alphaToCoverageEnable = false,
+      .alphaToOneEnable = false
     },
     .viewport = viewport
   });

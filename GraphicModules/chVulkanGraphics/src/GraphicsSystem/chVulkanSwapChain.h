@@ -52,9 +52,9 @@ class VulkanSwapChain final: public SwapChain {
   getCurrentRenderTarget() const override;
 
  protected:
-  VkSwapchainKHR m_swapchain;
-  Vector<VkImage> m_images;
-  Vector<VkImageView> m_imageViews;
-  Vector<VkFramebuffer> m_framebuffers;
+  VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
+  VkExtent2D m_swapChainExtent{};
+  VkSurfaceFormatKHR m_surfaceFormat{};
+  Vector<VkImage> m_swapChainImages;
 };
 }

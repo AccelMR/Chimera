@@ -18,6 +18,7 @@
 #include <chGPUPipelineState.h>
 
 namespace chEngineSDK {
+
 class VulkanGPUPipelineState final : public GPUPipelineState
 {
  public:
@@ -34,9 +35,16 @@ class VulkanGPUPipelineState final : public GPUPipelineState
   void
   _init(const chGPUDesc::PipelineStateDesc& desc);
 
+  void
+  createRenderPass(const chGPUDesc::RenderPassDesc& desc);
+
+  void
+  createPipelineLayout(const chGPUDesc::BindingGroup& bindingGroup);
+
  private:
   VkPipeline m_pipeline;
   VkPipelineLayout m_pipelineLayout;
   VkRenderPass m_renderPass;
+  Vector<VkDescriptorSetLayout> m_descriptorSetLayouts; 
 };
 } // namespace chEngineSDK

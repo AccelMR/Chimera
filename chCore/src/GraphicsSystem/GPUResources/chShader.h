@@ -34,11 +34,11 @@ class CH_CORE_EXPORT Shader
   *   Get the name of the shader.
   */
   FORCEINLINE const String&
-  getName() const {
-    return m_name;
+  getEntryPoint() const {
+    return m_entryPoint;
   }
 
  protected:
-  String m_name;
+  String m_entryPoint;
 };
 }

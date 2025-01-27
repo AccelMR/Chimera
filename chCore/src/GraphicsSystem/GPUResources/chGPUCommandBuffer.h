@@ -21,7 +21,6 @@
 #include "chPrerequisitesGraphics.h"
 
 namespace chEngineSDK {
-
 class CH_CORE_EXPORT GPUCommandBuffer
 {
  public:

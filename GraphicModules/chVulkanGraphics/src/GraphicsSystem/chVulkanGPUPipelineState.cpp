@@ -17,9 +17,12 @@
 #include "chFormats.h"
 #include "chVulkanGraphicsModule.h"
 #include "chVulkanTranslator.h"
+#include "chVulkanSampler.h"
 #include "chVulkanShader.h"
 
 namespace chEngineSDK {
+using std::reinterpret_pointer_cast;
+
 /*
 */
 VulkanGPUPipelineState::~VulkanGPUPipelineState() {
@@ -30,6 +33,10 @@ VulkanGPUPipelineState::~VulkanGPUPipelineState() {
 
   if (m_pipelineLayout) {
     vkDestroyPipelineLayout(device, m_pipelineLayout, nullptr);
+  }
+
+  for (auto descriptorSetLayout : m_descriptorSetLayouts) {
+    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
   }
 }
 
@@ -47,52 +54,36 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
                             VkShaderStageFlagBits stage) {
     if (shader) {
       VkPipelineShaderStageCreateInfo shaderStageInfo{};
-      shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-      shaderStageInfo.stage = stage;
-      shaderStageInfo.module = shader->m_vertexShader;
-      shaderStageInfo.pName = shader->getName().c_str();
+      shaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+      shaderStageInfo.stage  = stage;
+      shaderStageInfo.module = shader->m_shaderModule;
+      shaderStageInfo.pName  = shader->getEntryPoint().c_str();
       shaderStages.push_back(shaderStageInfo);
     }
   };
 
-  auto vertexShader = std::reinterpret_pointer_cast<VulkanShader>(desc.VS);
+  auto vertexShader = reinterpret_pointer_cast<VulkanShader>(desc.VS);
   addShaderStage(vertexShader, VK_SHADER_STAGE_VERTEX_BIT);
-  auto pixelShader = std::reinterpret_pointer_cast<VulkanShader>(desc.PS);
+  auto pixelShader = reinterpret_pointer_cast<VulkanShader>(desc.PS);
   addShaderStage(pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT);
-  auto computeShader = std::reinterpret_pointer_cast<VulkanShader>(desc.CS);
+  auto computeShader = reinterpret_pointer_cast<VulkanShader>(desc.CS);
   addShaderStage(computeShader, VK_SHADER_STAGE_COMPUTE_BIT);
-  auto meshShader = std::reinterpret_pointer_cast<VulkanShader>(desc.MS);
+  auto meshShader = reinterpret_pointer_cast<VulkanShader>(desc.MS);
   addShaderStage(meshShader, VK_SHADER_STAGE_MESH_BIT_NV);
-
-  // Create VkPipelineVertexInputStateCreateInfo
-
-  auto createVertexInputAtrributeDescription = [](uint32 binding,
-                                                  uint32 location,
-                                                  VkFormat format,
-                                                  uint32 offset) 
-                                                  -> VkVertexInputAttributeDescription {
-    VkVertexInputAttributeDescription vInputAttribDescription {};
-    vInputAttribDescription.binding = binding;
-    vInputAttribDescription.location = location;
-    vInputAttribDescription.format = format;
-    vInputAttribDescription.offset = offset;
-    return vInputAttribDescription;
-  };
 
   uint32 bindingStride = 0;
   Vector<VkVertexInputAttributeDescription> vertexInputAttributes;
+
   for (auto& binding : desc.vertexBufferBindingsDesc) {
     bindingStride += chFormatUtils::getFormatSize(binding.format);
-    vertexInputAttributes.push_back(
-     createVertexInputAtrributeDescription(0, binding.slot,
-                                           VulkanTranslator::get(binding.format),
-                                           binding.byteStride));
-  }
 
-  // Vertex bindings an attributes based on ImGui vertex definition
-  //std::vector<VkVertexInputBindingDescription> vertexInputBindings = {
-  //	vks::initializers::vertexInputBindingDescription(0, sizeof(ImDrawVert), VK_VERTEX_INPUT_RATE_VERTEX),
-  //};
+    VkVertexInputAttributeDescription attribDescription {};
+    attribDescription.binding = 0;
+    attribDescription.location = binding.slot;
+    attribDescription.format = VulkanTranslator::get(binding.format);
+    attribDescription.offset = binding.byteStride;
+    vertexInputAttributes.push_back(attribDescription);
+  }
 
   VkVertexInputBindingDescription binding{};
   binding.binding = 0; //TODO: not sure about this. We only have one binding
@@ -101,15 +92,13 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  //vertexInputInfo.pNext = nullptr;
-  //vertexInputInfo.flags = 0;
   vertexInputInfo.vertexBindingDescriptionCount = 
     static_cast<uint32>(desc.vertexBufferBindingsDesc.size());
-  vertexInputInfo.pVertexBindingDescriptions = nullptr;
+  vertexInputInfo.pVertexBindingDescriptions = &binding;
 
   vertexInputInfo.vertexAttributeDescriptionCount = 
     static_cast<uint32>(desc.vertexBufferBindingsDesc.size());
-  vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+  vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributes.data();
 
   // Create VkPipelineInputAssemblyStateCreateInfo
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -158,33 +147,36 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   rasterizerState.lineWidth = rasterizerDesc.lineWidth;
 
   // Create Color Blending
-  VkPipelineColorBlendStateCreateInfo colorBlending = VulkanTranslator::get(desc.blendState);
+  VkPipelineColorBlendStateCreateInfo colorBlending = 
+    VulkanTranslator::get(desc.blendState, desc.numRenderTextures);
   
   // Create Multisampling
-  VkPipelineMultisampleStateCreateInfo multisampling = VulkanTranslator::get(desc.sampleDesc);
-  
+  VkPipelineMultisampleStateCreateInfo multisampling = {};
+  multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sampleShadingEnable = desc.sampleDesc.sampleShadingEnable ? VK_TRUE : VK_FALSE;
+  multisampling.rasterizationSamples = VulkanTranslator::get(desc.sampleDesc.count);
+  multisampling.minSampleShading = desc.sampleDesc.minSampleShading;
+  const Vector<uint32>& sampleMask = desc.sampleDesc.sampleMask;
+  multisampling.pSampleMask = sampleMask.empty() ? nullptr : sampleMask.data();
+  multisampling.alphaToCoverageEnable = desc.sampleDesc.alphaToCoverageEnable ? 
+                                        VK_TRUE : 
+                                        VK_FALSE;
+  multisampling.alphaToOneEnable = desc.sampleDesc.alphaToOneEnable ? VK_TRUE : VK_FALSE;
+
   // Create Depth and Stencil
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
   depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   depthStencil.depthTestEnable = desc.depthStencilStateDesc.depthEnable;
   depthStencil.depthWriteEnable = desc.depthStencilStateDesc.depthWriteMask == DEPTH_WRITE_MASK::kALL;
-  //depthStencil.depthCompareOp = VulkanTranslator::get(desc.depthStencilStateDesc.depthFunc);
   depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.minDepthBounds = 0.0f; // Optional
-  depthStencil.maxDepthBounds = 1.0f; // Optional
-  depthStencil.stencilTestEnable = VK_FALSE; //TODO: Implement stencil
+  depthStencil.minDepthBounds = 0.0f;
+  depthStencil.maxDepthBounds = 1.0f;
+  depthStencil.stencilTestEnable = VK_FALSE;
 
-  // Create Pipeline Layout
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = 0; // Optional
-  pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
-  pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-  pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-  
-  if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
-    CH_EXCEPT(InternalErrorException, "Failed to create Vulkan pipeline layout!");
-  }
+  createPipelineLayout(desc.bindingGroups);
+  CH_ASSERT(m_pipelineLayout != VK_NULL_HANDLE);
+  createRenderPass(desc.renderPassDesc);
+  CH_ASSERT(m_renderPass != VK_NULL_HANDLE);
 
   // Crear Graphics Pipeline
   VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -201,18 +193,161 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.layout = m_pipelineLayout;
-  //pipelineInfo.renderPass = renderPass;
+  pipelineInfo.renderPass = m_renderPass;
   pipelineInfo.subpass = 0;
 
-  if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
-    CH_EXCEPT(InternalErrorException, "Failed to create Vulkan graphics pipeline!");
-  }
+  throwIfFailed(vkCreateGraphicsPipelines(device, 
+                                          VK_NULL_HANDLE, 
+                                          1, 
+                                          &pipelineInfo, 
+                                          nullptr, 
+                                          &m_pipeline));
 
-  // Cleanup: Destruir los Shader Modules después de usarlos
   for (auto& stage : shaderStages) {
     vkDestroyShaderModule(device, stage.module, nullptr);
   }
+}
 
+/*
+*/
+void
+VulkanGPUPipelineState::createRenderPass(const RenderPassDesc& desc) {
+  Vector<VkAttachmentDescription> attachmentDescriptions;
+  GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
+  const VkDevice& device = VulkanAPI.getDevice();
+
+  for (const auto &colorAttachmentFormat : desc.colorAttachments) {
+    if (colorAttachmentFormat != FORMAT::kUNKNOWN)
+    {
+      VkAttachmentDescription colorAttachment{};
+      colorAttachment.format = VulkanTranslator::get(colorAttachmentFormat);
+      colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+      colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+      colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+      attachmentDescriptions.push_back(colorAttachment);
+    }
+  }
+
+  VkAttachmentReference depthReference{};
+  if (desc.depthStencilAttachment != FORMAT::kUNKNOWN) {
+    depthReference.attachment = static_cast<uint32>(attachmentDescriptions.size());
+    depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription depthAttachment{};
+    depthAttachment.format = VulkanTranslator::get(desc.depthStencilAttachment);
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    attachmentDescriptions.push_back(depthAttachment);
+  }
+
+  Vector<VkAttachmentReference> colorReferences;
+  for (uint32 attachmentIndex = 0; 
+       attachmentIndex < desc.colorAttachments.size(); 
+       ++attachmentIndex)  {
+    if (desc.colorAttachments[attachmentIndex] != FORMAT::kUNKNOWN) {
+      colorReferences.push_back({attachmentIndex,
+                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+    }
+  }
+
+  // Configurar Subpass
+  VkSubpassDescription subpass{};
+  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  subpass.colorAttachmentCount = static_cast<uint32>(colorReferences.size());
+  subpass.pColorAttachments = colorReferences.data();
+  subpass.pDepthStencilAttachment = (desc.depthStencilAttachment != FORMAT::kUNKNOWN)
+                                        ? &depthReference
+                                        : nullptr;
+
+  VkRenderPassCreateInfo renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  renderPassInfo.attachmentCount = static_cast<uint32>(attachmentDescriptions.size());
+  renderPassInfo.pAttachments = attachmentDescriptions.data();
+  renderPassInfo.subpassCount = 1;
+  renderPassInfo.pSubpasses = &subpass;
+  renderPassInfo.dependencyCount = 0;
+  renderPassInfo.pDependencies = nullptr;
+
+  throwIfFailed(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_renderPass));
+}
+
+/*
+*/
+void 
+VulkanGPUPipelineState::createPipelineLayout(const chGPUDesc::BindingGroup& bindingGroup) {
+  GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
+  const VkDevice& device = VulkanAPI.getDevice();
+
+  // Crear descriptor set layout bindings
+  Vector<VkDescriptorSetLayoutBinding> descriptorBindings;
+
+  for (const auto& textureBinding : bindingGroup.textures) {
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = textureBinding.slot;
+    binding.descriptorType = VulkanTranslator::get(textureBinding.type);
+    binding.descriptorCount = static_cast<uint32>(textureBinding.textures.size());
+    binding.stageFlags = VulkanTranslator::get(textureBinding.stages);
+
+    if (!textureBinding.samplers.empty()) {
+      Vector<VkSampler> immutableSamplers(textureBinding.samplers.size());
+      for (const auto& sampler : textureBinding.samplers) {
+        SPtr<VulkanSampler> vulkanSampler = std::static_pointer_cast<VulkanSampler>(sampler);
+        immutableSamplers.push_back(vulkanSampler->getSampler());
+      }
+      binding.pImmutableSamplers = immutableSamplers.data();
+    } 
+    else {
+      binding.pImmutableSamplers = nullptr;
+    }
+
+    descriptorBindings.push_back(binding);
+  }
+
+  for (const auto& bufferBinding : bindingGroup.buffers) {
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = bufferBinding.slot;
+    binding.descriptorType = VulkanTranslator::get(bufferBinding.type);
+    binding.descriptorCount = 1;
+    binding.stageFlags = VulkanTranslator::get(bufferBinding.stages);
+    binding.pImmutableSamplers = nullptr;
+
+    descriptorBindings.push_back(binding);
+  }
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo{};
+  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  layoutInfo.bindingCount = static_cast<uint32>(descriptorBindings.size());
+  layoutInfo.pBindings = descriptorBindings.data();
+
+  VkDescriptorSetLayout descriptorSetLayout;
+  throwIfFailed(vkCreateDescriptorSetLayout(device,
+                                            &layoutInfo,
+                                            nullptr,
+                                            &descriptorSetLayout));
+
+  m_descriptorSetLayouts.push_back(descriptorSetLayout);
+
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = static_cast<uint32>(m_descriptorSetLayouts.size());
+  pipelineLayoutInfo.pSetLayouts = m_descriptorSetLayouts.data();
+  pipelineLayoutInfo.pushConstantRangeCount = 0;
+  pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+  throwIfFailed(vkCreatePipelineLayout(device, 
+                                       &pipelineLayoutInfo,
+                                       nullptr,
+                                       &m_pipelineLayout));
 }
 
 } // namespace chEngineSDK

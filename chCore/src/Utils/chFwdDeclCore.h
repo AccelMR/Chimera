@@ -20,4 +20,13 @@ class GPUPipelineState;
 union ScreenEventData;
 struct MouseMoveData;
 struct KeyBoardData;
+
+namespace chGPUDesc {
+struct PipelineStateDesc;
+struct ShaderDesc;
+struct DepthStencilStateDesc;
+struct DepthStencilOpDesc;
+struct VertexBufferBindingDesc;
+struct RenderPassDesc;
+}
 }

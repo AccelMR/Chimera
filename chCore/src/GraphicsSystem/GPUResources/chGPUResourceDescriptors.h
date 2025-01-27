@@ -15,7 +15,7 @@
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 #include "chPrerequisitesGraphics.h"
-
+#include "chLinearColor.h"
 #include "chBox2D.h"
 #include "chFlags.h"
 #include "chVector3I.h"
@@ -38,6 +38,21 @@ namespace chGPUDesc {
  };
  CH_FLAGS_OPERATORS_EXT(TEXTURE_USAGE, uint32);
  using TextUsageFlag = Flags<TEXTURE_USAGE, uint32>;
+
+/*
+ * Multrisample count, used for sample in pipelines
+*/
+enum class SAMPLE_COUNT : uint32 {
+  kSAMPLE_COUNT_1 = 1,
+  kSAMPLE_COUNT_2 = 2,
+  kSAMPLE_COUNT_4 = 4,
+  kSAMPLE_COUNT_8 = 8,
+  kSAMPLE_COUNT_16 = 16,
+  kSAMPLE_COUNT_32 = 32,
+  kSAMPLE_COUNT_64 = 64
+};
+CH_FLAGS_OPERATORS_EXT(SAMPLE_COUNT, uint32);
+using SampleCountFlag = Flags<SAMPLE_COUNT, uint32>;
 
  /** 
  *   Do not use this as SHADER_STAGE since it's a flag. Use ShaderStageFlag
@@ -103,8 +118,8 @@ namespace chGPUDesc {
    ShaderStageFlag stages = SHADER_STAGE::ALL;
    uint32 slot = 0;
 
-   SPtr<Texture> texture;
-   SPtr<Sampler> sampler;
+   Vector<SPtr<Texture>> textures;
+   Vector<SPtr<Sampler>> samplers;
  };
 
  /** 
@@ -175,16 +190,14 @@ namespace chGPUDesc {
   FORMAT format;
  };
 
- /** 
-  *   Describes how a shader will be created and its state, etc.
-  **/
- struct ShaderDesc {
-   String name = "Undefined";
-   ShaderInfo VS;
-   ShaderInfo PS;
-   ShaderInfo CS;
-   ShaderInfo MS;
- };
+/** 
+ *   Describes how a shader will be created and its state, etc.
+ **/
+struct ShaderDesc {
+  String name = "Undefined";
+  Vector<uint8> byteCode;
+  String entryFunc = "main";
+};
 
  enum class FILL_MODE {
    kWIREFRAME,
@@ -305,59 +318,82 @@ namespace chGPUDesc {
    kALWAYS = 8
  };
 
- enum class STENCIL_OP {
-   kNONE = 0,
-   kKEEP = 1,
-   kZERO = 2,
-   kREPLACE = 3,
-   kINCR_SAT = 4,
-   kDECR_SAT = 5,
-   kINVERT = 6,
-   kINCR = 7,
-   kDECR = 8
- };
+enum class STENCIL_OP {
+  kNONE = 0,
+  kKEEP = 1,
+  kZERO = 2,
+  kREPLACE = 3,
+  kINCR_SAT = 4,
+  kDECR_SAT = 5,
+  kINVERT = 6,
+  kINCR = 7,
+  kDECR = 8
+};
 
- struct DepthStencilOpDesc {
+struct DepthStencilOpDesc {
   STENCIL_OP stencilFailOp = STENCIL_OP::kNONE;
   STENCIL_OP stencilDepthFailOp = STENCIL_OP::kNONE;
   STENCIL_OP stencilPassOp = STENCIL_OP::kNONE;
   COMPARISON_FUNC stencilFunc = COMPARISON_FUNC::kNONE;
- };
+};
 
- struct DepthStencilStateDesc {
-   bool depthEnable = false;
-   DEPTH_WRITE_MASK depthWriteMask = DEPTH_WRITE_MASK::kZERO;
-   COMPARISON_FUNC DepthFunc = COMPARISON_FUNC::kNONE;
-   bool stencilEnable = false;
-   uint8 stencilReadMask = 0;
-   uint8 stencilWriteMask =  0;
-   DepthStencilOpDesc FrontFace;
-   DepthStencilOpDesc BackFace;
- };
+struct DepthStencilStateDesc {
+  bool depthEnable = false;
+  DEPTH_WRITE_MASK depthWriteMask = DEPTH_WRITE_MASK::kZERO;
+  COMPARISON_FUNC DepthFunc = COMPARISON_FUNC::kNONE;
+  bool stencilEnable = false;
+  uint8 stencilReadMask = 0;
+  uint8 stencilWriteMask =  0;
+  DepthStencilOpDesc FrontFace;
+  DepthStencilOpDesc BackFace;
+};
 
- struct SampleDesc {
-  uint32 count = 1;
-  uint32 quality = 0;
- };
+enum class TEXTURE_ADDRESS_MODE {
+  kWRAP = 1,
+  kMIRROR = 2,
+  kCLAMP = 3,
+  kBORDER = 4,
+  kMIRROR_ONCE = 5
+};
 
-//  struct PipelineStateDesc {
-//   SPtr<Shader> VS;
-//   SPtr<Shader> PS;
-//   SPtr<Shader> CS;
-//   SPtr<Shader> MS;
-//   BlendStateDesc blendState;
-//   uint32 sampleMask = 0xffffffff;
-//   RasterizerStateDesc rasterizerStateDesc;
-//   DepthStencilStateDesc depthStencilStateDesc;
-//   Vector<VertexBufferBindingDesc> vertexBufferBindingsDesc;
-//   BindingGroup bindingGroups;
-//   PRIMITIVE_TOPOLOGY_TYPE topology = PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-//   uint32 numRenderTextures = 1;
-//   CH_CORE_EXPORT static Array<FORMAT, 8> renderTextureFormats;
-//   FORMAT depthStencilFormat = FORMAT::kD32_FLOAT_S8X24_UINT;
-//   SampleDesc sampleDesc;
-//   //TODO: Implement steam output for geometry shader input
-//  };
+enum class FILTER {
+  kNEAREST = 0,
+  kLINEAR = 1,
+  kCUBIC_EXT = 1000015000,
+  kCUBIC_IMG = kCUBIC_EXT,
+  kMAX_ENUM = 0x7FFFFFFF
+};
+
+struct SamplerDesc {
+  SamplerDesc() = default;
+
+  FILTER minFilter = FILTER::kLINEAR;
+  FILTER magFilter = FILTER::kLINEAR;
+  TEXTURE_ADDRESS_MODE addressU = TEXTURE_ADDRESS_MODE::kWRAP;
+  TEXTURE_ADDRESS_MODE addressV = TEXTURE_ADDRESS_MODE::kWRAP;
+  TEXTURE_ADDRESS_MODE addressW = TEXTURE_ADDRESS_MODE::kWRAP;
+  float mipLODBias = 0.0f;
+  uint32 maxAnisotropy = 1;
+  bool anisotropyEnable = false;
+  bool compareEnable = false;
+  COMPARISON_FUNC comparisonFunc = COMPARISON_FUNC::kNONE;
+  LinearColor borderColor = LinearColor::Black;
+  float minLOD = -std::numeric_limits<float>::max();
+  float maxLOD = std::numeric_limits<float>::max();
+  FILTER mipMapMode = FILTER::kLINEAR;
+  uint32 maxLODClamp = 0;
+  uint32 shaderRegister = 0;
+  uint32 registerSpace = 0;
+};
+
+struct MultiSampleDesc {
+  SampleCountFlag count = SAMPLE_COUNT::kSAMPLE_COUNT_1;
+  bool sampleShadingEnable = false;
+  float minSampleShading = 0.0f;
+  Vector<uint32> sampleMask;
+  bool alphaToCoverageEnable = false;
+  bool alphaToOneEnable = false;
+};
 
 struct RenderPassDesc {
   Array<FORMAT, 8> colorAttachments;
@@ -379,9 +415,8 @@ struct PipelineStateDesc {
   PRIMITIVE_TOPOLOGY_TYPE topology = PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
   uint32 numRenderTextures = 1;
   RenderPassDesc renderPassDesc;
-  SampleDesc sampleDesc;
+  MultiSampleDesc sampleDesc;
   Box2D viewport;
-  //TODO: Implement stream output for geometry shader input
 };
 
 struct VertexBufferDesc {
@@ -471,7 +506,7 @@ struct SwapChainDesc {
   bool stereo = false;
   //TODO: sample desc
   //TODO: uint32 bufferUsage
-  uint32 frameCount = 2;
+  uint32 frameCount = 3;
   SWAPCHAIN_EFFECT effect = SWAPCHAIN_EFFECT::FLIP_DISCARD;
 };
 

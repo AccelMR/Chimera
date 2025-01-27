@@ -108,21 +108,15 @@ class VulkanTranslator
   get(VkFormat format);
 
   /*
-   * Translates BindingGroup to VkDescriptorSetLayout.
-   */
-  static VkDescriptorSetLayout
-  get(const BindingGroup& bindingGroup, const VkDevice& device);
-
-  /*
    * Combines multiple DescriptorSetLayouts into a VkPipelineLayout.
    */
-  static VkPipelineLayout
-  get(const Vector<BindingGroup>& bindingGroups, const VkDevice& device);
+  static Vector<VkDescriptorSetLayoutBinding>
+  get(const BindingGroup& bindingGroup);
 
   /*
   */
   static VkPipelineColorBlendStateCreateInfo
-  get(const BlendStateDesc& blendState);
+  get(const BlendStateDesc& blendState, uint32 renderTargetCount);
 
   /*
   */
@@ -131,10 +125,34 @@ class VulkanTranslator
 
   /*
   */
- static VkPipelineMultisampleStateCreateInfo
- get(const SampleDesc& sampleDesc);
+  static VkShaderStageFlags
+  get(const ShaderStageFlag& stages);
 
 
+  /*
+  */
+  static VkDescriptorType
+  get(const TextureBindingDesc::TYPE& textureType);
+
+  /*
+  /*/
+  static VkDescriptorType
+  get(const BufferBindingDesc::TYPE& bufferType);
+
+ /*
+ */
+  static VkPresentModeKHR
+  get(const SWAPCHAIN_EFFECT& effect);
+
+  /*
+  */
+  static VkFilter
+  get(const FILTER& filter);
+
+  /*
+  */
+  static VkSamplerAddressMode
+  get(const TEXTURE_ADDRESS_MODE& addressMode);
 };
 
 } // namespace chEngineSDK

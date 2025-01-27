@@ -28,25 +28,19 @@ void
 VulkanShader::_init(const chGPUDesc::ShaderDesc& desc) {
   GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
   const VkDevice& device = VulkanAPI.getDevice();
-  m_name = desc.name;
+  const Vector<uint8>& byteCode = desc.byteCode;
 
-  auto createShaderModule = [&](const std::vector<uint8>& byteCode, VkShaderModule& shaderModule) {
-    if (!byteCode.empty()) {
-      VkShaderModuleCreateInfo createInfo{};
-      createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      createInfo.codeSize = byteCode.size();
-      createInfo.pCode = reinterpret_cast<const uint32*>(byteCode.data());
-
-      if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-        CH_EXCEPT(InternalErrorException, "Failed to create Vulkan shader module!");
-      }
-    }
-  };
+  CH_ASSERT(byteCode.size() > 0);
+  CH_ASSERT(!desc.entryFunc.empty());
   
-  createShaderModule(desc.VS.byteCode, m_vertexShader);
-  createShaderModule(desc.PS.byteCode, m_pixelShader);
-  createShaderModule(desc.CS.byteCode, m_computeShader);
-  createShaderModule(desc.MS.byteCode, m_meshShader);
+  m_entryPoint = desc.entryFunc;
+
+  VkShaderModuleCreateInfo createInfo{};
+  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize = byteCode.size();
+  createInfo.pCode = reinterpret_cast<const uint32*>(byteCode.data());
+
+  throwIfFailed(vkCreateShaderModule(device, &createInfo, nullptr, &m_shaderModule));
 }
 
 } // namespace chEngineSDK

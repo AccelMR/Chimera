@@ -64,7 +64,7 @@ BaseApplication::initPlatform(int argc, char** argv) {
   SIZE_T count = readlink("/proc/self/exe", exePath, 1024);
 
   if (count == -1) {
-    std::cerr << "Error: No se pudo obtener la ruta del ejecutable." << std::endl;
+    LOG_ERROR("Error: Couldn't get the executable path.");
   }
 
   const String exeDir = String(exePath).substr(0, String(exePath).find_last_of("/"));

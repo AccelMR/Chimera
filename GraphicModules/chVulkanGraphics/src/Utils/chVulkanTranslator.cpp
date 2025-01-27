@@ -14,6 +14,8 @@
 /************************************************************************/
 #include "chVulkanTranslator.h"
 #include "chFormats.h"
+#include "chDebug.h"
+#include "chMath.h"
 
 namespace chEngineSDK {
 
@@ -384,88 +386,65 @@ VulkanTranslator::get(VkFormat format) {
     }
 }
 
-
-/*
- * Translates BindingGroup to VkDescriptorSetLayout.
- */
-VkDescriptorSetLayout
-VulkanTranslator::get(const BindingGroup& bindingGroup, const VkDevice& device) {
-  std::vector<VkDescriptorSetLayoutBinding> bindings;
-
-  for (const auto& buffer : bindingGroup.buffers) {
-    VkDescriptorSetLayoutBinding layoutBinding{};
-    layoutBinding.binding = buffer.slot;
-    layoutBinding.descriptorType = (buffer.type == BufferBindingDesc::TYPE::kUNIFORM)
-                                       ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-                                       : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    layoutBinding.descriptorCount = 1;
-    layoutBinding.stageFlags = VK_SHADER_STAGE_ALL;
-    bindings.push_back(layoutBinding);
-  }
-
-  for (const auto& texture : bindingGroup.textures) {
-    VkDescriptorSetLayoutBinding layoutBinding{};
-    layoutBinding.binding = texture.slot;
-    layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    layoutBinding.descriptorCount = 1;
-    layoutBinding.stageFlags = VK_SHADER_STAGE_ALL;
-    bindings.push_back(layoutBinding);
-  }
-
-  VkDescriptorSetLayoutCreateInfo layoutInfo{};
-  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-  layoutInfo.pBindings = bindings.data();
-
-  VkDescriptorSetLayout descriptorSetLayout;
-  if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
-    CH_EXCEPT(InternalErrorException, "Failed to create descriptor set layout!");
-  }
-
-  return descriptorSetLayout;
-}
-
 /*
  * Combines multiple DescriptorSetLayouts into a VkPipelineLayout.
  */
-VkPipelineLayout
-VulkanTranslator::get(const Vector<BindingGroup>& bindingGroups, const VkDevice& device) {
-  std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+Vector<VkDescriptorSetLayoutBinding>
+VulkanTranslator::get(const BindingGroup &bindingGroup) {
+  Vector<VkDescriptorSetLayoutBinding> bindings;
 
-  for (const auto& group : bindingGroups) {
-    descriptorSetLayouts.push_back(VulkanTranslator::get(group, device));
+  for (const auto &buffer : bindingGroup.buffers) {
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = buffer.slot; // El slot especificado
+    binding.descriptorType = (buffer.type == BufferBindingDesc::TYPE::kUNIFORM)
+                                 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                 : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorCount = 1;                               // Por ahora, un solo buffer por slot
+    binding.stageFlags = VulkanTranslator::get(buffer.stages); // Convertir los flags de stages
+    binding.pImmutableSamplers = nullptr;                      // Los buffers no necesitan samplers
+    bindings.push_back(binding);
   }
 
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
-  pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-
-  VkPipelineLayout pipelineLayout;
-  if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-    CH_EXCEPT(InternalErrorException, "Failed to create pipeline layout!");
+  // Procesar las texturas
+  for (const auto &texture : bindingGroup.textures) {
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = texture.slot;
+    binding.descriptorType = VulkanTranslator::get(texture.type);
+    binding.descriptorCount = 1; // Asumimos una textura por slot
+    binding.stageFlags = VulkanTranslator::get(texture.stages);
+    binding.pImmutableSamplers = nullptr; // Por ahora no usamos samplers inmutables
+    bindings.push_back(binding);
   }
 
-  return pipelineLayout;
+  return bindings;
 }
 
+/*
+*/
 VkPipelineColorBlendStateCreateInfo
-VulkanTranslator::get(const BlendStateDesc& blendState) {
+VulkanTranslator::get(const BlendStateDesc &blendState, uint32 renderTargetCount) {
   VkPipelineColorBlendStateCreateInfo blendStateInfo{};
   blendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  blendStateInfo.logicOpEnable = VK_FALSE; // DX12 usa logicOp, Vulkan no suele necesitarlo para blending normal
-  blendStateInfo.logicOp = VK_LOGIC_OP_COPY; // Solo si necesitas lógica de píxeles
 
-  blendStateInfo.attachmentCount = static_cast<uint32_t>(blendState.renderTargetBlendDesc.size());
+  blendStateInfo.logicOpEnable = VK_FALSE;
+  blendStateInfo.logicOp = VK_LOGIC_OP_COPY;
 
-  Vector<VkPipelineColorBlendAttachmentState> attachments(blendState.renderTargetBlendDesc.size());
+  if (blendState.renderTargetBlendDesc.empty()) {
+    LOG_WARN("BlendStateDesc does not contain any render target blend descriptions.");
+    return blendStateInfo;
+  }
 
-  for (uint32_t i = 0; i < blendState.renderTargetBlendDesc.size(); ++i) {
-    const auto& rtBlendDesc = blendState.renderTargetBlendDesc[i];
+  Array<VkPipelineColorBlendAttachmentState, 8> attachments{};
+  const uint32 attachmentCount = Math::min(static_cast<uint32>(blendState.renderTargetBlendDesc.size()), renderTargetCount);
 
-    VkPipelineColorBlendAttachmentState& blendAttachment = attachments[i];
-    blendAttachment.blendEnable = (rtBlendDesc.srcBlend != BLEND::kBLEND_ONE || 
-                                   rtBlendDesc.destBlend != BLEND::kBLEND_ZERO) ? VK_TRUE : VK_FALSE;
+  for (uint32 i = 0; i < attachmentCount; ++i) {
+    const auto &rtBlendDesc = blendState.renderTargetBlendDesc[i];
+    VkPipelineColorBlendAttachmentState &blendAttachment = attachments[i];
+
+    blendAttachment.blendEnable = (rtBlendDesc.srcBlend != BLEND::kBLEND_ONE ||
+                                   rtBlendDesc.destBlend != BLEND::kBLEND_ZERO)
+                                      ? VK_TRUE
+                                      : VK_FALSE;
 
     blendAttachment.srcColorBlendFactor = VulkanTranslator::get(rtBlendDesc.srcBlend);
     blendAttachment.dstColorBlendFactor = VulkanTranslator::get(rtBlendDesc.destBlend);
@@ -479,11 +458,13 @@ VulkanTranslator::get(const BlendStateDesc& blendState) {
   }
 
   blendStateInfo.pAttachments = attachments.data();
-  blendStateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+  blendStateInfo.attachmentCount = attachmentCount;
 
   return blendStateInfo;
 }
 
+/*
+*/
 VkSampleCountFlagBits
 VulkanTranslator::get(uint32 count) {
   switch (count) {
@@ -498,20 +479,119 @@ VulkanTranslator::get(uint32 count) {
   }
 }
 
-
-VkPipelineMultisampleStateCreateInfo
-VulkanTranslator::get(const SampleDesc& sampleDesc) {
-  VkPipelineMultisampleStateCreateInfo multisampling{};
-  multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VulkanTranslator::get(sampleDesc.count);
-  multisampling.minSampleShading = 1.0f;
-  multisampling.pSampleMask = nullptr;
-  multisampling.alphaToCoverageEnable = VK_FALSE;
-  multisampling.alphaToOneEnable = VK_FALSE;
-
-  return multisampling;
+/*
+*/
+VkShaderStageFlags
+VulkanTranslator::get(const ShaderStageFlag& stageFlags) {
+  VkShaderStageFlags flags = 0;
+  if (stageFlags.isSet(chGPUDesc::SHADER_STAGE::kVERTEX)) {
+    flags |= VK_SHADER_STAGE_VERTEX_BIT;
+  }
+  if (stageFlags.isSet(chGPUDesc::SHADER_STAGE::kPIXEL)) {
+    flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+  }
+  if (stageFlags.isSet(chGPUDesc::SHADER_STAGE::kCOMPUTE)) {
+  }
+  //todo: implement geometry shader
+  //if (stageFlags.isSet(chGPUDesc::SHADER_STAGE::kGEOMETRY)) {
+  //  return VK_SHADER_STAGE_GEOMETRY_BIT;
+  //}
+  if (stageFlags.isSet(chGPUDesc::SHADER_STAGE::kMESH)) {
+    flags |= VK_SHADER_STAGE_MESH_BIT_NV;
+  }
+  return flags;
 }
 
+/*
+*/
+VkDescriptorType
+VulkanTranslator::get(const TextureBindingDesc::TYPE& type) {
+  switch (type) {
+    case TextureBindingDesc::TYPE::kSAMPLED:
+      return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case TextureBindingDesc::TYPE::kSTORAGE:
+      return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case TextureBindingDesc::TYPE::kRENDER_TARGET_READ:
+      return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid TextureBindingDesc::TYPE provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkDescriptorType
+VulkanTranslator::get(const BufferBindingDesc::TYPE& type) {
+  switch (type) {
+    case BufferBindingDesc::TYPE::kUNIFORM:
+      return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case BufferBindingDesc::TYPE::kSTORAGE:
+      return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid BufferBindingDesc::TYPE provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkPresentModeKHR
+VulkanTranslator::get(const SWAPCHAIN_EFFECT &presentMode)
+{
+  switch (presentMode)
+  {
+  case SWAPCHAIN_EFFECT::DISCARD:
+    return VK_PRESENT_MODE_FIFO_KHR;
+    break;
+  case SWAPCHAIN_EFFECT::SEQUENTIAL:
+    return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    break;
+  case SWAPCHAIN_EFFECT::FLIP_SEQUENTIAL:
+    return VK_PRESENT_MODE_MAILBOX_KHR;
+    break;
+  case SWAPCHAIN_EFFECT::FLIP_DISCARD:
+    return VK_PRESENT_MODE_IMMEDIATE_KHR;
+    break;
+  default:
+    LOG_WARN("Unknown swapchain effect. Using default FIFO mode.");
+    return VK_PRESENT_MODE_FIFO_KHR;
+    break;
+  }
+}
+
+/*
+*/
+VkFilter
+VulkanTranslator::get(const FILTER& filter) {
+  switch (filter) {
+    case FILTER::kNEAREST:
+      return VK_FILTER_NEAREST;
+    case FILTER::kLINEAR:
+      return VK_FILTER_LINEAR;
+    case FILTER::kCUBIC_EXT:
+      return VK_FILTER_CUBIC_EXT;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid FILTER provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkSamplerAddressMode
+VulkanTranslator::get(const TEXTURE_ADDRESS_MODE& addressMode) {
+  switch (addressMode) {
+    case TEXTURE_ADDRESS_MODE::kWRAP:
+      return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case TEXTURE_ADDRESS_MODE::kMIRROR:
+      return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    case TEXTURE_ADDRESS_MODE::kCLAMP:
+      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case TEXTURE_ADDRESS_MODE::kBORDER:
+      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    case TEXTURE_ADDRESS_MODE::kMIRROR_ONCE:
+      return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid TEXTURE_ADDRESS_MODE provided for Vulkan translation!");
+  }
+}
 
 } // namespace chEngineSDK
