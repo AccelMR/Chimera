@@ -18,6 +18,7 @@ int main(int argc, char** argv) {
   {
     LOG_ERROR(e.what());
     
+    g_Debug().logBacktrace();
     g_Debug().saveLog("resources/engine/logs/CRASHED_chCoreTestMain.txt");
     g_Debug().saveLogAsHtml("resources/engine/logs/CRASHED_chCoreTestMain.html");
     return 0;
