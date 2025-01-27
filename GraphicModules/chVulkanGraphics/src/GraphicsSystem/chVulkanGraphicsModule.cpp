@@ -18,7 +18,7 @@
 #include "chScreen.h"
 #include "chStringUtils.h"
 
-#include "chVulkanGPUComandBuffer.h"
+#include "chVulkanGPUCommandBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanGPUPipelineState.h"
 #include "chVulkanTranslator.h"
@@ -570,6 +570,9 @@ GraphicsModuleVulkan::_internalInit(WPtr<Screen> screen)
 
   _setupSwapchain(screen.lock()->getWidth(), screen.lock()->getHeight());
 
+  createCommandPool();
+  CH_ASSERT(commandPool);
+
   LOG_INFO("Vulkan initialized successfully.");
 }
 
@@ -616,7 +619,8 @@ GraphicsModuleVulkan::createFence() {}
 */
 SPtr<GPUCommandBuffer>
 GraphicsModuleVulkan::_internalCreateGPUCommandBuffer() {
-  return ch_shared_ptr_new<VulkanGPUCommandBuffer>();
+  auto commandBuffer = ch_shared_ptr_new<VulkanGPUCommandBuffer>();
+  return std::static_pointer_cast<GPUCommandBuffer>(commandBuffer);
 }
 
 /*

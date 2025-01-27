@@ -33,6 +33,7 @@ GraphicsModule::OnResize(uint32 width, uint32 height) {
 }
 
 /*
+ *TODO: add command pool?
 */
 SPtr<GPUCommandBuffer>
 GraphicsModule::beginCommandRecording(COMMAND_BUFFER_TYPES commandBufferType, 
