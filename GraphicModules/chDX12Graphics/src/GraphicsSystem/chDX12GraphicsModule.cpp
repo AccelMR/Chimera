@@ -217,14 +217,6 @@ GraphicsModuleDX12::_internalOnResize(uint32 width, uint32 height) {
 /*
 */
 void
-GraphicsModuleDX12::_internalPresent(int32 syncInterval, int32 flags) {
-  // Present the frame.
-  m_swapChain->_internalPresent(syncInterval, flags);
-}
-
-/*
-*/
-void
 GraphicsModuleDX12::_internalWaitGPU() {
   // Schedule a Signal command in the queue.
   ThrowIfFailed(m_commandQueue->Signal(m_fence, m_fenceValues[m_frameIndex]));

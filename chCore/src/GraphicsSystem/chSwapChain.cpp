@@ -15,22 +15,26 @@
 /************************************************************************/
 #include "chSwapChain.h"
 
+#include "chFence.h"
+
 namespace chEngineSDK{
 
 /*
 */
-SwapChain::SwapChain()
-  : m_frameCount(2),
-    m_width(4),
-    m_height(4),
-    m_format(FORMAT::kR8G8B8A8_UNORM)
-{}
+SwapChain::SwapChain() {}
 
 /*
 */
 void
 SwapChain::resize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) {
   _internalResize(frameCount, width, height, fromat);
+}
+
+/*
+*/
+void
+SwapChain::present(uint32 syncInterval, uint32 flags) {
+  _internalPresent(syncInterval, flags);
 }
 }
 

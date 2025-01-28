@@ -32,92 +32,30 @@ class CH_CORE_EXPORT SwapChain {
   virtual ~SwapChain() = default;
 
   void
-  resize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat);
+  resize(uint32 width, uint32 height);
 
   void
-  moveNextFrame();
+  present(uint32 syncInterval, uint32 flags);
 
-  /** 
-   *   Returns frame count
-   **/
-  FORCEINLINE uint32
-  getFrameCounter() const;
-
-  /**
-   *   Returns the height of the swapchain
-   **/
-  FORCEINLINE uint32
-  getHeight() const;
-
-  /**
-   *   Returns the width of the swapchain
-   **/
-  FORCEINLINE uint32
-  getWidth() const;
-  
-  /**
-   *   Returns the width of the swapchain
-   **/
-  FORCEINLINE uint32
+  uint32
   getCurrentFrameIndex() const;
 
-  /**
-   *   Returns the current render target
-   **/
-  virtual SPtr<Texture>
-  getCurrentRenderTarget() const = 0; //TODO not  pure
+  SPtr<Fence>
+  getCurrentFrameFence() const;
 
-protected:
-  friend class GraphicsModule;
+ protected:
+  virtual void
+  _internalResize(uint32 width, uint32 height) = 0;
 
   virtual void
-  _internalResize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) = 0;
+  _internalPresent(uint32 syncInterval, uint32 flags) = 0;
 
   virtual uint32
   _internalGetCurrentFrameIndex() const = 0;
 
-protected:
-  uint32 m_frameCount;
-  uint32 m_width;
-  uint32 m_height;
-  FORMAT m_format;
-  //Vector<SPtr<Texture>> m_renderTargets;
- 
+  virtual SPtr<Fence>
+  _internalGetCurrentFrameFence() const = 0;
+
 };
-
-
-/************************************************************************/
-/*
- * Implementations
- */                                                                     
-/***********************************************************************
-/*
-*/
-FORCEINLINE uint32 
-SwapChain::getFrameCounter() const {
-  return m_frameCount;
-}
-
-/*
-*/
-FORCEINLINE uint32 
-SwapChain::getCurrentFrameIndex() const {
-  return _internalGetCurrentFrameIndex();
-}
-
-/*
-*/
-FORCEINLINE uint32 
-SwapChain::getHeight() const {
-  return m_height;
-}
-
-/*
-*/
-FORCEINLINE uint32 
-SwapChain::getWidth() const {
-  return m_width;
-}
-
 }
 

@@ -71,6 +71,11 @@ class GraphicsModuleVulkan final : public GraphicsModule
   VkDescriptorSetLayout
   createDescriptorSetLayout(const BindingGroup& bindingGroup);
 
+  /*
+  */
+  uint32
+  findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties);
+
  protected:
   virtual void
   _internalInit(WPtr<Screen> screen) override;
@@ -83,24 +88,11 @@ class GraphicsModuleVulkan final : public GraphicsModule
 
   void 
   onShutDown() override;
-
-  void 
-  createFence() override;
-
   SPtr<GPUCommandBuffer>
   _internalCreateGPUCommandBuffer() override;
 
   void
   _internalExecuteCommandBuffers(const Vector<SPtr<GPUCommandBuffer>>& commandBuffers) override;
-
-  void
-  _internalPresent(int32, int32) override;
-
-  void
-  _internalMoveToNextFrame() override;
-
-  void
-  _internalWaitGPU() override;
 
   SPtr<GPUPipelineState>
   _internalcreatePipelineState(const PipelineStateDesc& pipelineStateDesc) override;
@@ -113,6 +105,12 @@ class GraphicsModuleVulkan final : public GraphicsModule
 
   void
   _internalResetSwapChainAllocator() override;
+
+  SPtr<Fence>
+  _internalCreateFence() override;
+
+  void
+  _internalSyncGPU(const WPtr<Fence> fence, uint64 value) override;
 
   void
   createSurface();
@@ -154,6 +152,10 @@ class GraphicsModuleVulkan final : public GraphicsModule
   uint32 m_transferQueueFamilyIndex = INVALID_INDEX;
   uint32 m_presentQueueFamilyIndex = INVALID_INDEX;
   uint32 m_frameIndex;
+
+  VkQueue m_graphicsQueue;
+  VkQueue m_computeQueue;
+  VkQueue m_transferQueue;
 
   WPtr<Screen> m_screen;
 

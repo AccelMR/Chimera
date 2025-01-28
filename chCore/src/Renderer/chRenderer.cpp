@@ -10,6 +10,7 @@
 
 #include "chCommandParser.h"
 #include "chBox.h"
+#include "chFence.h"
 #include "chFileSystem.h"
 #include "chGraphicsModule.h"
 #include "chGPUResourceModule.h"
@@ -51,6 +52,8 @@ void Renderer::initialize()
   // Instancias de los módulos
   GraphicsModule &GraphicAPI = GraphicsModule::instance();
   GPUResourceModule &GPUResourceMngr = GPUResourceModule::instance();
+
+  m_swapChain = GraphicAPI.getSwapChain();
 
   CommandParser& commandParser = CommandParser::getInstance();
   const float width = std::stof(commandParser.getParam("Width", "1280"));
@@ -139,11 +142,11 @@ void Renderer::initialize()
   barrierStart.transition.stateBefore = chGPUDesc::ResourceStates::kPRESENT;
   barrierStart.transition.stateAfter = chGPUDesc::ResourceStates::kRENDER_TARGET;
 
-  
   barrierEnd.transition.stateBefore = chGPUDesc::ResourceStates::kRENDER_TARGET;
   barrierEnd.transition.stateAfter = chGPUDesc::ResourceStates::kPRESENT;
 
-  GraphicAPI.createFence();
+  m_fence = GraphicAPI.createFence();
+  m_fenceValue = 1;
 }
 
 /*
@@ -152,6 +155,8 @@ void
 Renderer::render()
 {
   GraphicsModule &GraphicAPI = GraphicsModule::instance();
+
+  m_swapChain->waitForCurrentFrame(m_fenceValue);
 
   m_commandBuffer->reset(m_pipeline);
   m_commandBuffer->setPipeLineState(m_pipeline);
@@ -169,8 +174,9 @@ Renderer::render()
   m_commandBuffer->close();
 
   GraphicAPI.executeCommandBuffers({ m_commandBuffer });
+
+  m_swapChain->signalCurrentFrame(++m_fenceValue);
+
   GraphicAPI.present(0, 0);
-  GraphicAPI.moveToNextFrame();
-  GraphicAPI.waitGPU();
 }
 } // namespace chEngineSDK

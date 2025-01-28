@@ -224,4 +224,12 @@ VulkanGPUCommandBuffer::_internalResourceBarrierSwapChain(const chGPUDesc::GPUBa
   barriers;
 }
 
+/*
+*/
+void
+VulkanGPUCommandBuffer::_internalSyncFence(const UnqPtr<Fence>& fence, uint64 value) {
+  throwIfFailed(m_commandBuffer->Signal(fence->m_fence, value));
+  
+}
+
 } // namespace chEngineSDK

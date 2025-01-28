@@ -31,4 +31,5 @@ class VertexBuffer;
 class GPUPipelineState;
 class Sampler;
 class Shader;
+class Fence;
 }

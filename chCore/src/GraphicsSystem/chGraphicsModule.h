@@ -68,12 +68,6 @@ class CH_CORE_EXPORT GraphicsModule: public Module<GraphicsModule>
   executeCommandBuffers(const Vector<SPtr<GPUCommandBuffer>>& commandBuffers);
 
   /**
-   * @brief Presents the swap chain.
-   */
-  void
-  present(int32, int32);
-
-  /**
    * @brief Moves to the next frame.
    */
   void
@@ -97,28 +91,21 @@ class CH_CORE_EXPORT GraphicsModule: public Module<GraphicsModule>
   void
   resetSwapChainAllocator();
 
-  virtual void 
-  createFence() = 0; //TODO: not sure
+  SPtr<Fence>
+  createFence();
+
+  void
+  syncGPU(const WPtr<Fence> fence, uint64 value);
 
 protected:
   virtual void
   _internalInit(WPtr<Screen> screen) = 0;
-
 
   virtual SPtr<GPUCommandBuffer>
   _internalCreateGPUCommandBuffer() = 0;
 
   virtual void
   _internalExecuteCommandBuffers(const Vector<SPtr<GPUCommandBuffer>>& commandBuffers) = 0;
-
-  virtual void
-  _internalPresent(int32, int32) = 0;
-
-  virtual void
-  _internalMoveToNextFrame() = 0;
-
-  virtual void
-  _internalWaitGPU() = 0;
 
   virtual SPtr<GPUPipelineState>
   _internalcreatePipelineState(const PipelineStateDesc& pipelineStateDesc) = 0;
@@ -131,6 +118,12 @@ protected:
 
   virtual void
   _internalResetSwapChainAllocator() = 0;
+
+  virtual SPtr<Fence>
+  _internalCreateFence() = 0;
+
+  virtual void
+  _internalSyncGPU(const WPtr<Fence> fence, uint64 value) = 0;
 
  protected:
   SPtr<SwapChain> m_swapChain;

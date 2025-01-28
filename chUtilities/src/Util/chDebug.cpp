@@ -30,7 +30,7 @@ logIDEConsole(const chEngineSDK::String& msg) {
 
   std::cout << msg << std::endl;
 }
-#elif USING(CH_COMPILER_GNUC)
+#elif USING(CH_PLATFORM_LINUX)
 #include <execinfo.h>
 
 void logIDEConsole(const chEngineSDK::String& msg) 

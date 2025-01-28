@@ -181,6 +181,13 @@ GPUCommandBuffer::setSwapChain() {
   _internalSetSwapChain();
 }
 
+/*
+*/
+void
+GPUCommandBuffer::syncGPU(const UnqPtr<Fence>& fence, uint64 value) {
+  _internalSyncGPU(fence, value);
 }
+
+} // namespace chEngineSDK
 
 

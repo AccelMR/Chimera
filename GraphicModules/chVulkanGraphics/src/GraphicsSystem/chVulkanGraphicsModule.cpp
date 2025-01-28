@@ -18,6 +18,7 @@
 #include "chScreen.h"
 #include "chStringUtils.h"
 
+#include "chVulkanFence.h"
 #include "chVulkanGPUCommandBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanGPUPipelineState.h"
@@ -187,6 +188,7 @@ void setupDebugging(VkInstance instance)
 /*                                                                            */
 namespace chEngineSDK {
 using namespace VulkanUtils;
+using std::static_pointer_cast;
 
 /*
 */
@@ -214,6 +216,24 @@ GraphicsModuleVulkan::createDescriptorSetLayout(const BindingGroup& bindingGroup
     }
 
     return descriptorSetLayout;
+}
+
+/*
+*/
+uint32
+GraphicsModuleVulkan::findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties) {
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+  for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) {
+    if ((typeFilter & (1 << i)) && 
+        (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+      return i;
+    }
+  }
+
+  LOG_ERROR("Failed to find suitable memory type.");
+  return INVALID_INDEX;
 }
 
 /*
@@ -527,6 +547,34 @@ GraphicsModuleVulkan::createDevice()
                                &deviceCreateInfo, 
                                nullptr, 
                                &m_device));
+
+  // Get the graphics queue
+  if (m_graphicsQueueFamilyIndex != INVALID_INDEX) {
+    LOG_INFO("Graphics queue family index: " + StringUtils::toString(m_graphicsQueueFamilyIndex));
+    vkGetDeviceQueue(m_device, 
+                     m_graphicsQueueFamilyIndex, 
+                     0, 
+                     &m_graphicsQueue);
+  }
+
+  // Get the compute queue
+  if (m_computeQueueFamilyIndex != INVALID_INDEX) {
+    LOG_INFO("Compute queue family index: " + StringUtils::toString(m_computeQueueFamilyIndex));
+    vkGetDeviceQueue(m_device, 
+                     m_computeQueueFamilyIndex, 
+                     0, 
+                     &m_computeQueue);
+  }
+
+  // Get the transfer queue
+  if (m_transferQueueFamilyIndex != INVALID_INDEX) {
+    LOG_INFO("Transfer queue family index: " + StringUtils::toString(m_transferQueueFamilyIndex));
+    vkGetDeviceQueue(m_device, 
+                     m_transferQueueFamilyIndex, 
+                     0, 
+                     &m_transferQueue);
+  }
+
 }
 
 /*
@@ -612,11 +660,6 @@ GraphicsModuleVulkan::onShutDown() {}
 
 /*
 */
-void
-GraphicsModuleVulkan::createFence() {}
-
-/*
-*/
 SPtr<GPUCommandBuffer>
 GraphicsModuleVulkan::_internalCreateGPUCommandBuffer() {
   auto commandBuffer = ch_shared_ptr_new<VulkanGPUCommandBuffer>();
@@ -633,16 +676,6 @@ GraphicsModuleVulkan::_internalExecuteCommandBuffers(const Vector<SPtr<GPUComman
 */
 void
 GraphicsModuleVulkan::_internalPresent(int32, int32) {}
-
-/*
-*/
-void
-GraphicsModuleVulkan::_internalMoveToNextFrame() {}
-
-/*
-*/
-void
-GraphicsModuleVulkan::_internalWaitGPU() {}
 
 /*
 */
@@ -669,6 +702,24 @@ GraphicsModuleVulkan::_internalGetSwapChain() {
 */
 void
 GraphicsModuleVulkan::_internalResetSwapChainAllocator() {}
+
+/*
+*/
+SPtr<Fence>
+GraphicsModuleVulkan::_internalCreateFence() {
+  CH_ASSERT(m_device);
+  return ch_unique_ptr_new<VulkanFence>(m_device);
+}
+
+/*
+*/
+void
+GraphicsModuleVulkan::_internalSyncGPU(const WPtr<Fence> fence, uint64 value) {
+  auto vulkanFence = std::reinterpret_pointer_cast<VulkanFence>(fence.lock());
+  CH_ASSERT(vulkanFence);
+  vkQueueSubmit(m_graphicsQueue, 0, nullptr, vulkanFence->getFence());
+  vulkanFence->wait(value);
+}
 
 /*
  */

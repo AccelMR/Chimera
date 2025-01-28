@@ -66,20 +66,6 @@ GraphicsModule::present(int32 syncInterval, int32 flags) {
 
 /*
 */
-void
-GraphicsModule::moveToNextFrame() {
-  _internalMoveToNextFrame();
-}
-
-/*
-*/
-void
-GraphicsModule::waitGPU() {
-  _internalWaitGPU();
-}
-
-/*
-*/
 SPtr<SwapChain>
 GraphicsModule::getSwapChain() {
   return _internalGetSwapChain();
@@ -94,11 +80,17 @@ GraphicsModule::resetSwapChainAllocator() {
 
 /*
 */
-void
+SPtr<Fence>
 GraphicsModule::createFence() {
-
+  return _internalCreateFence();
 }
 
+/*
+*/
+void
+GraphicsModule::syncGPU(const WPtr<Fence> fence, uint64 value) {
+  _internalSyncGPU(fence, value);
 }
+} // namespace chEngineSDK
 
 

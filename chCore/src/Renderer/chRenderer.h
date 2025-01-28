@@ -36,7 +36,10 @@ class Renderer : public Module<Renderer>
   render();
 
  private:
-    SPtr<GPUCommandBuffer> m_commandBuffer;
-    SPtr<GPUPipelineState> m_pipeline;
+  SPtr<GPUCommandBuffer> m_commandBuffer;
+  SPtr<GPUPipelineState> m_pipeline;
+  SPtr<SwapChain> m_swapChain;
+  SPtr<Fence> m_fence;
+  uint64 m_fenceValue;
 };
 } // schEngineSDK
