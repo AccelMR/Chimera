@@ -44,34 +44,34 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   _internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) override;
 
   virtual void 
-  _internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) override;
+  _internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) override;
   
   virtual void 
-  _internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) override;
+  _internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) override;
 
   virtual void 
-  _internalsetRect(const Box2D& rect) override;
+  _internalSetRect(const Box2D& rect) override;
 
   virtual void 
   _internalSetScissorRect(const Box2D& rect) override;
 
   virtual void 
-  _internalsetRenderTarget(const SPtr<Texture>& rt) override;
+  _internalSetRenderTarget(const SPtr<Texture>& rt) override;
 
   virtual void 
-  _internalsetRenderTargets(const Vector<SPtr<Texture>>& rts) override;
+  _internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) override;
 
   virtual void
-  _internalclearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) override;
+  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) override;
 
   virtual void
-  _internalclearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) override;
+  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) override;
 
   virtual void
-  _internalsetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) override;
+  _internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) override;
 
   virtual void
-  _internalsetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) override;
+  _internalSetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) override;
 
   virtual void
   _internalSetIndexBuffer(const SPtr<IndexBuffer>& indexBuff) override;
@@ -80,7 +80,7 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   _internalSetBindingBufferGroup(const chGPUDesc::BindingGroup& bindingGroup) override;
 
   virtual void
-  _internaldrawInstanced(uint32 vertexCountPerInstance,
+  _internalDrawInstanced(uint32 vertexCountPerInstance,
                          uint32 instanceCount,
                          uint32 startVertexLocation,
                          uint32 startInstanceLocation) override;

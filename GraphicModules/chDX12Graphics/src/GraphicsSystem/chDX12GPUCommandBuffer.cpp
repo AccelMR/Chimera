@@ -81,22 +81,23 @@ DX12GPUCommandBuffer::_internalclose() {
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
+DX12GPUCommandBuffer::_internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
   auto dx12Buff = std::reinterpret_pointer_cast<DX12GPUBuffer>(buff);
   m_commandList->SetGraphicsRootConstantBufferView(slot, dx12Buff->m_buffer->GetGPUVirtualAddress());
 }
 
 /*
-*/
+*/Allerendys
+
 void
-DX12GPUCommandBuffer::_internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) {
+DX12GPUCommandBuffer::_internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) {
   throw std::logic_error("The method or operation is not implemented." );
 }
 
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetRect(const Box2D& rect) {
+DX12GPUCommandBuffer::_internalSetRect(const Box2D& rect) {
   auto size = rect.getSize();
   CD3DX12_VIEWPORT vp(static_cast<float>(rect.minPoint.x),
                       static_cast<float>(rect.minPoint.y),
@@ -119,7 +120,7 @@ DX12GPUCommandBuffer::_internalSetScissorRect(const Box2D& rect) {
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetRenderTarget(const SPtr<Texture>& rt) {
+DX12GPUCommandBuffer::_internalSetRenderTarget(const SPtr<Texture>& rt) {
   auto dx12Text = std::reinterpret_pointer_cast<DX12Texture>(rt);
   m_commandList->OMSetRenderTargets(1, &dx12Text->m_rtv, FALSE, nullptr);
 }
@@ -127,14 +128,14 @@ DX12GPUCommandBuffer::_internalsetRenderTarget(const SPtr<Texture>& rt) {
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetRenderTargets(const Vector<SPtr<Texture>> &rts ) {
+DX12GPUCommandBuffer::_internalSetRenderTargets(const Vector<SPtr<Texture>> &rts ) {
   throw std::logic_error("The method or operation is not implemented." );
 }
 
 /*
 */
 void
-DX12GPUCommandBuffer::_internalclearRenderTarget(const SPtr<Texture>& rt, const LinearColor &color ) {
+DX12GPUCommandBuffer::_internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor &color ) {
   auto dx12Text = std::reinterpret_pointer_cast<DX12Texture>(rt);
   m_commandList->ClearRenderTargetView(dx12Text->m_rtv, color.rgba, 0, nullptr);
 }
@@ -142,21 +143,21 @@ DX12GPUCommandBuffer::_internalclearRenderTarget(const SPtr<Texture>& rt, const 
 /*
 */
 void
-DX12GPUCommandBuffer::_internalclearRenderTargets(const Vector<SPtr<Texture>> &rts, const LinearColor &color ) {
+DX12GPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>> &rts, const LinearColor &color ) {
   throw std::logic_error("The method or operation is not implemented." );
 }
 
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) {
+DX12GPUCommandBuffer::_internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) {
   m_commandList->IASetPrimitiveTopology(static_cast<D3D12_PRIMITIVE_TOPOLOGY>(DX12Translator::get1(topology)));
 }
 
 /*
 */
 void
-DX12GPUCommandBuffer::_internalsetVertexBuffer(uint32 startSlot, 
+DX12GPUCommandBuffer::_internalSetVertexBuffer(uint32 startSlot, 
                                                uint32 numViews, 
                                                const SPtr<VertexBuffer>& vertexBuff) {
   auto dx12VB = std::reinterpret_pointer_cast<DX12VertexBuffer>(vertexBuff);
@@ -166,7 +167,7 @@ DX12GPUCommandBuffer::_internalsetVertexBuffer(uint32 startSlot,
 /*
 */
 void
-DX12GPUCommandBuffer::_internaldrawInstanced(uint32 vertexCountPerInstance, 
+DX12GPUCommandBuffer::_internalDrawInstanced(uint32 vertexCountPerInstance, 
                                              uint32 instanceCount,
                                              uint32 startVertexLocation, 
                                              uint32 startInstanceLocation) {

@@ -51,39 +51,39 @@ class DX12GPUCommandBuffer final: public GPUCommandBuffer {
   _internalclose() override;
   
   void 
-  _internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) override;
+  _internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) override;
   
   void 
-  _internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) override;
+  _internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) override;
   
   void 
-  _internalsetRect(const Box2D& rect) override;
+  _internalSetRect(const Box2D& rect) override;
 
   void
   _internalSetScissorRect(const Box2D& rect) override;
   
   void 
-  _internalsetRenderTarget(const SPtr<Texture>& rt) override;
+  _internalSetRenderTarget(const SPtr<Texture>& rt) override;
   
   void 
-  _internalsetRenderTargets(const Vector<SPtr<Texture>>& rts) override;
+  _internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) override;
   
   void 
-  _internalclearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) override;
+  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) override;
   
   void 
-  _internalclearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) override;
+  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) override;
   
   void 
-  _internalsetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) override;
+  _internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) override;
   
   void 
-  _internalsetVertexBuffer(uint32 startSlot, 
+  _internalSetVertexBuffer(uint32 startSlot, 
                            uint32 numViews, 
                            const SPtr<VertexBuffer>& vertexBuff) override;
 
   void 
-  _internaldrawInstanced(uint32 vertexCountPerInstance, 
+  _internalDrawInstanced(uint32 vertexCountPerInstance, 
                          uint32 instanceCount, 
                          uint32 startVertexLocation,
                          uint32 startInstanceLocation) override;

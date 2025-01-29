@@ -73,13 +73,13 @@ VulkanGPUCommandBuffer::_internalclose() {
 */
 void
 VulkanGPUCommandBuffer::_internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) {
-  pipelineState;
+  
 }
 
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
+VulkanGPUCommandBuffer::_internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
   buff;
   slot;
 }
@@ -87,7 +87,7 @@ VulkanGPUCommandBuffer::_internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint3
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) {
+VulkanGPUCommandBuffer::_internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) {
   buff;
   slot;
 }
@@ -95,7 +95,7 @@ VulkanGPUCommandBuffer::_internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& bu
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetRect(const Box2D& rect) {
+VulkanGPUCommandBuffer::_internalSetRect(const Box2D& rect) {
   rect;
 }
 
@@ -109,21 +109,21 @@ VulkanGPUCommandBuffer::_internalSetScissorRect(const Box2D& rect) {
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetRenderTarget(const SPtr<Texture>& rt) {
+VulkanGPUCommandBuffer::_internalSetRenderTarget(const SPtr<Texture>& rt) {
   rt;
 }
 
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetRenderTargets(const Vector<SPtr<Texture>>& rts) {
+VulkanGPUCommandBuffer::_internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) {
   rts;
 }
 
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalclearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) {
+VulkanGPUCommandBuffer::_internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) {
   rt;
   color;
 }
@@ -131,7 +131,7 @@ VulkanGPUCommandBuffer::_internalclearRenderTarget(const SPtr<Texture>& rt, cons
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalclearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) {
+VulkanGPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) {
   rts;
   color;
 }
@@ -139,7 +139,7 @@ VulkanGPUCommandBuffer::_internalclearRenderTargets(const Vector<SPtr<Texture>>&
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
+VulkanGPUCommandBuffer::_internalSetTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
   VkPrimitiveTopology vkTopology = VulkanTranslator::get(topology);
   vkCmdSetPrimitiveTopology(m_commandBuffer, vkTopology);
 }
@@ -147,7 +147,7 @@ VulkanGPUCommandBuffer::_internalsetTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalsetVertexBuffer(uint32 slot, 
+VulkanGPUCommandBuffer::_internalSetVertexBuffer(uint32 slot, 
                                                  uint32 numBuffers,
                                                  const SPtr<VertexBuffer>& buffer) {
   slot;
@@ -188,7 +188,7 @@ VulkanGPUCommandBuffer::_internalDrawIndexed(uint32 indexCountPerInstance,
 /*
 */
 void
-VulkanGPUCommandBuffer::_internaldrawInstanced(uint32 vertexCountPerInstance,
+VulkanGPUCommandBuffer::_internalDrawInstanced(uint32 vertexCountPerInstance,
                                       uint32 instanceCount,
                                       uint32 startVertexLocation,
                                       uint32 startInstanceLocation) {

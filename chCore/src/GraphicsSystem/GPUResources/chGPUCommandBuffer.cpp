@@ -45,21 +45,21 @@ GPUCommandBuffer::close() {
 */
 void
 GPUCommandBuffer::setGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
-  _internalsetGPUBuffer(buff, slot);
+  _internalSetGPUBuffer(buff, slot);
 }
 
 /*
 */
 void
 GPUCommandBuffer::setGPUBuffers(const Vector<SPtr<GPUBuffer>>& buffs, uint32 slot) {
-  _internalsetGPUBuffers(buffs, slot);
+  _internalSetGPUBuffers(buffs, slot);
 }
 
 /*
 */
 void
 GPUCommandBuffer::setRect(const Box2D& rect) {
-  _internalsetRect(rect);
+  _internalSetRect(rect);
 }
 
 /*
@@ -73,42 +73,42 @@ GPUCommandBuffer::setScissorRect(const Box2D& rect) {
 */
 void
 GPUCommandBuffer::setRenderTarget(const SPtr<Texture>& rt) {
-  _internalsetRenderTarget(rt);
+  _internalSetRenderTarget(rt);
 }
 
 /*
 */
 void
 GPUCommandBuffer::setRenderTargets(const Vector<SPtr<Texture>>& rts) {
-  _internalsetRenderTargets(rts);
+  _internalSetRenderTargets(rts);
 }
 
 /*
 */
 void
 GPUCommandBuffer::clearRenderTarget(const SPtr<Texture>& rt, const LinearColor& colo) {
-  _internalclearRenderTarget(rt, colo);
+  _internalClearRenderTarget(rt, colo);
 }
 
 /*
 */
 void
 GPUCommandBuffer::clearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) {
-  _internalclearRenderTargets(rts, color);
+  _internalClearRenderTargets(rts, color);
 }
 
 /*
 */
 void
 GPUCommandBuffer::setTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
-  _internalsetTopology(topology);
+  _internalSetTopology(topology);
 }
 
 /*
 */
 void
 GPUCommandBuffer::setVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) {
-  _internalsetVertexBuffer(startSlot, numViews, vertexBuff);
+  _internalSetVertexBuffer(startSlot, numViews, vertexBuff);
 }
 
 /*
@@ -132,7 +132,7 @@ GPUCommandBuffer::drawInstanced(uint32 vertexCountPerInstance,
                                 uint32 instanceCount, 
                                 uint32 startVertexLocation, 
                                 uint32 startInstanceLocation) {
-  _internaldrawInstanced(vertexCountPerInstance, 
+  _internalDrawInstanced(vertexCountPerInstance, 
                          instanceCount, 
                          startVertexLocation, 
                          startInstanceLocation);

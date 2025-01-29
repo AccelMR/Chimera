@@ -185,4 +185,4 @@ Renderer::render()
     CH_LOG_ERROR("Failed to present.");
   }
 }
-} // namespace chEngineSDK
+} // namespace chEngineSDK+

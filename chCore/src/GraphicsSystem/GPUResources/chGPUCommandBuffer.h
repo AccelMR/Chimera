@@ -130,34 +130,34 @@ class CH_CORE_EXPORT GPUCommandBuffer
   _internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) = 0;
 
   virtual void 
-  _internalsetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) = 0;
+  _internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) = 0;
   
   virtual void 
-  _internalsetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) = 0;
+  _internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buff, uint32 slot) = 0;
 
   virtual void 
-  _internalsetRect(const Box2D& rect) = 0;
+  _internalSetRect(const Box2D& rect) = 0;
 
   virtual void 
   _internalSetScissorRect(const Box2D& rect) = 0;
 
   virtual void 
-  _internalsetRenderTarget(const SPtr<Texture>& rt) = 0;
+  _internalSetRenderTarget(const SPtr<Texture>& rt) = 0;
 
   virtual void 
-  _internalsetRenderTargets(const Vector<SPtr<Texture>>& rts) = 0;
+  _internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) = 0;
 
   virtual void
-  _internalclearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) = 0;
+  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) = 0;
 
   virtual void
-  _internalclearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) = 0;
+  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) = 0;
 
   virtual void
-  _internalsetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) = 0;
+  _internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) = 0;
 
   virtual void
-  _internalsetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) = 0;
+  _internalSetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) = 0;
 
   virtual void
   _internalSetIndexBuffer(const SPtr<IndexBuffer>& indexBuff) = 0;
@@ -166,7 +166,7 @@ class CH_CORE_EXPORT GPUCommandBuffer
   _internalSetBindingBufferGroup(const chGPUDesc::BindingGroup& bindingGroup) = 0;
 
   virtual void
-  _internaldrawInstanced(uint32 vertexCountPerInstance,
+  _internalDrawInstanced(uint32 vertexCountPerInstance,
                          uint32 instanceCount,
                          uint32 startVertexLocation,
                          uint32 startInstanceLocation) = 0;
