@@ -652,7 +652,7 @@ InputModule::dispatchEvents(const SPtr<ScreenEventHandle>& eventHandler) {
   while (!eventHandler->isInputEventQueueEmpty()) {
     ScreenEvent& screenEvent = eventHandler->frontPopInputEventQueue();
     if (!dispatchInputEvents(screenEvent)) {
-      LOG_ERROR(StringUtils::format("Could not dispatch event : [{0}]  in Input Queue.", screenEvent.getTypeAsString()));
+      CH_LOG_ERROR(StringUtils::format("Could not dispatch event : [{0}]  in Input Queue.", screenEvent.getTypeAsString()));
     }
   }
 }

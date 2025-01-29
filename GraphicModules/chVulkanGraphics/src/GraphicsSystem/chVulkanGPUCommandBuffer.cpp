@@ -16,6 +16,7 @@
 
 #include "chVulkanGraphicsModule.h"
 #include "chVulkanTranslator.h"
+#include "chVulkanSwapChain.h"
 #include "chDebug.h"
 
 namespace chEngineSDK {
@@ -215,21 +216,24 @@ VulkanGPUCommandBuffer::_internalClearSwapChainTexture(const LinearColor& color)
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalSetSwapChain() {}
-
-/*
-*/
-void
 VulkanGPUCommandBuffer::_internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) {
   barriers;
 }
 
 /*
 */
+bool
+VulkanGPUCommandBuffer::_internalPresent(int32 syncInterval, int32 flags) {
+  GraphicsModuleVulkan& rhi = g_VulkanGraphicsModule();
+  auto swapChain = std::reinterpret_pointer_cast<VulkanSwapChain>(rhi.getSwapChain());
+  return swapChain->present(syncInterval, flags, this);
+}
+
+/*
+*/
 void
-VulkanGPUCommandBuffer::_internalSyncFence(const UnqPtr<Fence>& fence, uint64 value) {
-  throwIfFailed(m_commandBuffer->Signal(fence->m_fence, value));
-  
+VulkanGPUCommandBuffer::_internalSetSwapChainTexture(const SPtr<Texture>& rt) {
+  rt;
 }
 
 } // namespace chEngineSDK

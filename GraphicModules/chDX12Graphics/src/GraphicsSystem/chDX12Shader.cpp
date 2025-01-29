@@ -44,7 +44,7 @@ compileShaderDX(const Vector<uint8>& dataStream,
                           &outError );
   if (FAILED(hr)) {
     String error(static_cast<ANSICHAR*>(outError->GetBufferPointer()));
-    LOG_ERROR(StringUtils::format("Can't compile {0}. {1}", name, error));
+    CH_LOG_ERROR(StringUtils::format("Can't compile {0}. {1}", name, error));
     return false;
   }
 

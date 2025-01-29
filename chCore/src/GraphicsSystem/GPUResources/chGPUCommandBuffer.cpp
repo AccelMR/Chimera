@@ -176,18 +176,17 @@ GPUCommandBuffer::clearSwapChainTexture(const LinearColor& color) {
 
 /*
 */
-void
-GPUCommandBuffer::setSwapChain() {
-  _internalSetSwapChain();
+bool
+GPUCommandBuffer::present(int32 syncInterval, int32 flags) {
+  return _internalPresent(syncInterval, flags);
 }
 
 /*
 */
 void
-GPUCommandBuffer::syncGPU(const UnqPtr<Fence>& fence, uint64 value) {
-  _internalSyncGPU(fence, value);
+GPUCommandBuffer::setSwapChainTexture(const SPtr<Texture>& rt) {
+  _internalSetSwapChainTexture(rt);
 }
-
 } // namespace chEngineSDK
 
 

@@ -222,7 +222,7 @@ MemoryDataStream::close() {
 */
 SPtr<DataStream>
 MemoryDataStream::clone() const {
-  return ch_shared_ptr_new<MemoryDataStream>(m_data, m_size, false);
+  return chMakeShared<MemoryDataStream>(m_data, m_size, false);
 }
 
 /*
@@ -305,7 +305,7 @@ FileDataStream::isAtEnd() const {
 */
 SPtr<DataStream>
 FileDataStream::clone() const {
-  return ch_shared_ptr_new<FileDataStream>(m_path, getAccessMode(), true);
+  return chMakeShared<FileDataStream>(m_path, getAccessMode(), true);
 }
 
 /*
@@ -352,19 +352,19 @@ FileDataStream::init() {
 
   if (m_accessMode.isSetAny(ACCESS_MODE::kWRITE)) {
     mode |= std::fstream::out;
-    m_pFStream = ch_shared_ptr_new<std::fstream>();
+    m_pFStream = chMakeShared<std::fstream>();
     m_pFStream->open(m_path.m_path, mode);
     m_pInStream = m_pFStream;
   }
   else {
-    m_pFStreamRO = ch_shared_ptr_new<std::ifstream>();
+    m_pFStreamRO = chMakeShared<std::ifstream>();
     m_pFStreamRO->open(m_path.m_path, mode);
     m_pInStream = m_pFStreamRO;
   }
 
   //Should check ensure open succeeded, in case fail for some reason.
   if (m_pInStream->fail()) {
-    LOG_ERROR(StringUtils::format("Failed to open file: {0}", m_path.toString()));
+    CH_LOG_ERROR(StringUtils::format("Failed to open file: {0}", m_path.toString()));
     return;
   }
 

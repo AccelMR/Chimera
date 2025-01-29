@@ -37,7 +37,7 @@ Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
   m_width = desc.width;
   m_height = desc.height;
 
-  LOG_INFO("Screen created successfully with Vulkan support.");
+  CH_LOG_INFO("Screen created successfully with Vulkan support.");
   return true;
 }
 

@@ -100,11 +100,14 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   _internalClearSwapChainTexture(const LinearColor& color) override;
 
   virtual void
-  _internalSetSwapChain() override;
+  _internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) override;
 
   virtual void
-  _internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) override;
-  
+  _internalSetSwapChainTexture(const SPtr<Texture>& rt) override;
+
+  virtual bool
+  _internalPresent(int32 syncInterval, int32 flags) override;
+
   VkCommandBuffer m_commandBuffer;
   VkCommandPool m_commandPool;
   VkDevice m_device;

@@ -85,7 +85,7 @@ readPixel(const uint8 *buffer, const BPP m_bpp)
     break;
   }
   default:
-    LOG_ERROR("Error: Unsupported BPP format in readPixel.");
+    CH_LOG_ERROR("Error: Unsupported BPP format in readPixel.");
     return Color();
     break;
   }
@@ -103,7 +103,7 @@ BMPImage::create(uint32 width, uint32 height, BPP bpp)
 {
   if (width <= 0 || height <= 0)
   {
-    LOG_ERROR(StringUtils::format("Error: Invalid image size ({0}, {1})", width, height));
+    CH_LOG_ERROR(StringUtils::format("Error: Invalid image size ({0}, {1})", width, height));
     return;
   }
 
@@ -116,7 +116,7 @@ BMPImage::create(uint32 width, uint32 height, BPP bpp)
   m_bytesPerPixel = static_cast<int32>(m_bpp) / 8;
   m_pitch = m_width * m_bytesPerPixel;
 
-  m_data = ch_shared_ptr_new<MemoryDataStream>(m_pitch * m_height);
+  m_data = chMakeShared<MemoryDataStream>(m_pitch * m_height);
 }
 
 /*
@@ -148,7 +148,7 @@ BMPImage::getPixel(uint32 x, uint32 y) const
 {
   if (x >= m_width || y >= m_height)
   {
-    LOG_ERROR(StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+    CH_LOG_ERROR(StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
     return Color();
   }
 
@@ -165,7 +165,7 @@ BMPImage::setPixel(uint32 x, uint32 y, const Color &color)
 {
   if (x >= m_width || y >= m_height)
   {
-    LOG_ERROR(StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+    CH_LOG_ERROR(StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
     return;
   }
 
@@ -205,7 +205,7 @@ BMPImage::decode(const Path &bmpPath)
   Vector<uint8> buffer = FileSystem::fastReadFile(bmpPath);
   if (buffer.empty())
   {
-    LOG_ERROR(StringUtils::format("Error: Unable to read file {0}", bmpPath.toString()));
+    CH_LOG_ERROR(StringUtils::format("Error: Unable to read file {0}", bmpPath.toString()));
     return false;
   }
 
@@ -214,7 +214,7 @@ BMPImage::decode(const Path &bmpPath)
 
   if (header.signature[0] != 'B' || header.signature[1] != 'M')
   {
-    LOG_ERROR("Error: Invalid BMP file format.");
+    CH_LOG_ERROR("Error: Invalid BMP file format.");
     return false;
   }
 
@@ -227,7 +227,7 @@ BMPImage::decode(const Path &bmpPath)
 
   if (buffer.size() < header.dataOffset + lineMemoryWidth * m_height)
   {
-    LOG_ERROR("Error: File too small to contain BMP image data.");
+    CH_LOG_ERROR("Error: File too small to contain BMP image data.");
     return false;
   }
 
@@ -250,7 +250,7 @@ BMPImage::encode(const Path& filename) const
   SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
   if (!file)
   {
-    LOG_ERROR(StringUtils::format("Error: Unable to create file {0}", filename.toString()));
+    CH_LOG_ERROR(StringUtils::format("Error: Unable to create file {0}", filename.toString()));
     return;
   }
 
@@ -337,7 +337,7 @@ BMPImage::bitBlt(const BMPImage& src,
         continue;
       }
 
-      //LOG_DBG(StringUtils::format("Copying pixel ({0}, {1}) <- ({2}, {3})", x, y, srcX, srcY));
+      //CH_LOG_DEBUG(StringUtils::format("Copying pixel ({0}, {1}) <- ({2}, {3})", x, y, srcX, srcY));
       setPixel(dstRectClamped.minPoint.x + x, dstRectClamped.minPoint.y + y, color);
     }
   }
@@ -376,7 +376,7 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y,
     return calculateStretchCoordinates(x, y, srcRect, dstRect, srcX, srcY);
 
   default:
-    LOG_ERROR("Error: Unsupported BMP_TEXTURE_MODE");
+    CH_LOG_ERROR("Error: Unsupported BMP_TEXTURE_MODE");
     return false;
   }
 }
@@ -460,7 +460,7 @@ BMPImage::calculateMirrorCoordinates(int32 x, int32 y,
   if (srcX < 0 || srcX >= static_cast<int32>(widthHeight.x) ||
       srcY < 0 || srcY >= static_cast<int32>(widthHeight.y))
   {
-    LOG_ERROR("Error: Coordinates are out of range.");
+    CH_LOG_ERROR("Error: Coordinates are out of range.");
     return false;
   }
   return true;

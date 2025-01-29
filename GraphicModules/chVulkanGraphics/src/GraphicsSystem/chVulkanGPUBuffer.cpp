@@ -68,7 +68,7 @@ VulkanGPUBuffer::_init(const SIZE_T& size) {
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   if (vkCreateBuffer(device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
-    LOG_ERROR("Failed to create buffer");
+    CH_LOG_ERROR("Failed to create buffer");
   }
 
   VkMemoryRequirements memRequirements;
@@ -83,7 +83,7 @@ VulkanGPUBuffer::_init(const SIZE_T& size) {
                                              physicalDevice);
 
   if (vkAllocateMemory(device, &allocInfo, nullptr, &m_memory) != VK_SUCCESS) {
-    LOG_ERROR("Failed to allocate buffer memory");
+    CH_LOG_ERROR("Failed to allocate buffer memory");
   }
 
   vkBindBufferMemory(device, m_buffer, m_memory, 0);

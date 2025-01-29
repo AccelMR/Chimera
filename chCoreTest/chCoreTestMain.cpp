@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
   }
   catch(const std::exception& e)
   {
-    LOG_ERROR(e.what());
+    CH_LOG_ERROR(e.what());
     
     g_Debug().logBacktrace();
     g_Debug().saveLog("resources/engine/logs/CRASHED_chCoreTestMain.txt");

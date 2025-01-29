@@ -14,6 +14,7 @@
  */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
+#include "chPrerequisitesGraphics.h"
 
 #include "chModule.h"
 
@@ -39,7 +40,5 @@ class Renderer : public Module<Renderer>
   SPtr<GPUCommandBuffer> m_commandBuffer;
   SPtr<GPUPipelineState> m_pipeline;
   SPtr<SwapChain> m_swapChain;
-  SPtr<Fence> m_fence;
-  uint64 m_fenceValue;
 };
 } // schEngineSDK

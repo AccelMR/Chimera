@@ -202,7 +202,7 @@ class TEvent {
   *   Base constructor.
   **/
   FORCEINLINE TEvent() {
-    m_connectionController =  ch_shared_ptr_new<ConnectionController>();
+    m_connectionController =  chMakeShared<ConnectionController>();
   }
 
   /** 

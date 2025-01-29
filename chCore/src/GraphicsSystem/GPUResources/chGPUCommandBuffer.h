@@ -104,12 +104,14 @@ class CH_CORE_EXPORT GPUCommandBuffer
   void
   resourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers);
 
-  
+  void 
+  setSwapChainTexture(const SPtr<Texture>& rt);
+
   void
   clearSwapChainTexture(const LinearColor& color);
 
-  void 
-  setSwapChain();
+  bool
+  present(int32 syncInterval, int32 flags);
 
  protected:
  friend class GraphicsModule;
@@ -169,7 +171,6 @@ class CH_CORE_EXPORT GPUCommandBuffer
                          uint32 startVertexLocation,
                          uint32 startInstanceLocation) = 0;
 
-                         
   virtual void
   _internalDrawIndexed(uint32 indexCountPerInstance,
                        uint32 instanceCount,
@@ -184,10 +185,13 @@ class CH_CORE_EXPORT GPUCommandBuffer
   _internalClearSwapChainTexture(const LinearColor& color) = 0;
 
   virtual void
-  _internalSetSwapChain() = 0;
+  _internalSetSwapChainTexture(const SPtr<Texture>& rt) = 0;
 
   virtual void
   _internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) = 0;
+
+  virtual bool
+  _internalPresent(int32 syncInterval, int32 flags) = 0;
 };
 }
 

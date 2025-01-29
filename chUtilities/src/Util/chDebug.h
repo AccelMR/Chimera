@@ -132,7 +132,7 @@ Debug::getLogger() {
  * MACROS!
  */                                                                     
 /************************************************************************/
-#define LOG_INFO(x) g_Debug().logMessage((x) +                        \
+#define CH_LOG_INFO(x) g_Debug().logMessage((x) +                        \
                                          String("\n\t in ") +         \
                                          __PRETTY_FUNCTION__ +        \
                                          " [" + __FILE__ + ":" +      \
@@ -141,7 +141,7 @@ Debug::getLogger() {
                                          LOG_LEVEL::kINFO);
 
 #if USING(CH_DEBUG_MODE)
-#define LOG_DBG(x) g_Debug().logMessage((x) +                         \
+#define CH_LOG_DEBUG(x) g_Debug().logMessage((x) +                         \
                                          String("\n\t in ") +         \
                                          __PRETTY_FUNCTION__ +        \
                                          " [" + __FILE__ + ":" +      \
@@ -149,11 +149,11 @@ Debug::getLogger() {
                                          "]\n",                       \
                                          LOG_LEVEL::kDEBUG);
 #else
-#define LOG_DBG(x)
+#define CH_LOG_DEBUG(x)
 #endif
 
 
-#define LOG_WARN(x) g_Debug().logMessage((x) +                        \
+#define CH_LOG_WARNING(x) g_Debug().logMessage((x) +                        \
                                          String("\n\t in ") +         \
                                          __PRETTY_FUNCTION__ +        \
                                          " [" + __FILE__ + ":" +      \
@@ -161,7 +161,7 @@ Debug::getLogger() {
                                          "]\n",                       \
                                          LOG_LEVEL::kWARN);
 
-#define LOG_ERROR(x) g_Debug().logMessage((x) +                       \
+#define CH_LOG_ERROR(x) g_Debug().logMessage((x) +                       \
                                          String("\n\t in ") +         \
                                          __PRETTY_FUNCTION__ +        \
                                          " [" + __FILE__ + ":" +      \
@@ -169,7 +169,7 @@ Debug::getLogger() {
                                          "]\n",                       \
                                          LOG_LEVEL::kERROR);
 
-#define LOG_FATAL(x) g_Debug().logMessage((x) +                       \
+#define CH_LOG_FATAL(x) g_Debug().logMessage((x) +                       \
                                          String("\n\t in ") +         \
                                          __PRETTY_FUNCTION__ +        \
                                          " [" + __FILE__ + ":" +      \

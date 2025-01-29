@@ -19,6 +19,8 @@
 #include "chFormats.h"
 
 namespace chEngineSDK {
+class VulkanGPUCommandBuffer;
+
 class VulkanSwapChain final: public SwapChain { 
  public:
   friend class VulkanGPUCommandBuffer;
@@ -39,29 +41,39 @@ class VulkanSwapChain final: public SwapChain {
   /*
   *   Default destructor
   */
-  ~VulkanSwapChain();
+  ~VulkanSwapChain() override;
 
-  void 
-  init(const chGPUDesc::SwapChainDesc & desc);
-  void 
-  cleanup();
+  bool
+  present(uint32 syncInterval, 
+          uint32 flags, 
+          const VulkanGPUCommandBuffer* commandBuffer);
 
- private:
+  void
+  _internalInit(const chGPUDesc::SwapChainDesc& desc) override;
 
-  void 
+  void
+  _internalCleanup() override;
+
+  void
   _internalResize(uint32 width, uint32 height) override;
 
-  uint32 
-  _internalGetCurrentFrameIndex() const override { return m_currentFrame; }
+  bool
+  _internalAcquireNextFrame() override;
 
-  SPtr<Fence> 
-  _internalGetCurrentFrameFence() const override { return m_frameFences[m_currentFrame]; }
+  uint32
+  _internalGetCurrentFrameIndex() const override;
 
-  void 
-  _internalPresent(uint32 syncInterval, uint32 flags) override;
+  SPtr<Texture>
+  _internalGetCurrentFrame() const override;
 
+  FORMAT
+  _internalGetFormat() const override;
 
+  void
+  _internalSetVSyncEnabled(bool enabled) override;
 
+  void
+  _internalWaitForGPU() override;
 
  protected:
   VkDevice m_device = VK_NULL_HANDLE;
@@ -72,8 +84,10 @@ class VulkanSwapChain final: public SwapChain {
   Vector<VkImageView> m_swapChainImageViews;
   uint32 m_currentFrame = 0;
   Vector<SPtr<Fence>> m_frameFences;
-  VkQueue m_presentQueue = VK_NULL_HANDLE;
   FORMAT m_format = FORMAT::kB8G8R8A8_UNORM;
+
+  Vector<VkSemaphore> m_imageAvailableSemaphores;
+  Vector<VkSemaphore> m_renderFinishedSemaphores;
 
   VkExtent2D m_swapChainExtent{};
   VkSurfaceFormatKHR m_surfaceFormat{};

@@ -97,12 +97,12 @@ debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity
 #else
   if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
   {
-    LOG_ERROR(debugMessage.str());
+    CH_LOG_ERROR(debugMessage.str());
   
   }
   else
   {
-    LOG_DBG(debugMessage.str());
+    CH_LOG_DEBUG(debugMessage.str());
   }
   fflush(stdout);
 #endif
@@ -232,7 +232,7 @@ GraphicsModuleVulkan::findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags pr
     }
   }
 
-  LOG_ERROR("Failed to find suitable memory type.");
+  CH_LOG_ERROR("Failed to find suitable memory type.");
   return INVALID_INDEX;
 }
 
@@ -312,7 +312,7 @@ GraphicsModuleVulkan::createInstance()
       if (std::find(m_supportedInstanceExtensions.begin(), 
                     m_supportedInstanceExtensions.end(), 
                     enabledExtension) == m_supportedInstanceExtensions.end()) {
-        LOG_ERROR("Enabled instance extension \"" + String(enabledExtension) + 
+        CH_LOG_ERROR("Enabled instance extension \"" + String(enabledExtension) + 
                   "\" is not present at instance level");
       }
       instanceExtensions.push_back(enabledExtension);
@@ -370,7 +370,7 @@ GraphicsModuleVulkan::createInstance()
       instanceCreateInfo.enabledLayerCount = 1;
     }
     else {
-      LOG_ERROR("Validation layer VK_LAYER_KHRONOS_validation not present, validation is disabled");
+      CH_LOG_ERROR("Validation layer VK_LAYER_KHRONOS_validation not present, validation is disabled");
     }
   }
  throwIfFailed(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
@@ -411,7 +411,7 @@ GraphicsModuleVulkan::createDevice()
   throwIfFailed(vkEnumeratePhysicalDevices(m_instance, &gpuCount, nullptr));
 
   if (gpuCount == 0) {
-    LOG_ERROR("No Vulkan compatible GPU found.");
+    CH_LOG_ERROR("No Vulkan compatible GPU found.");
   }
 
   Vector<VkPhysicalDevice> physicalDevices(gpuCount);
@@ -437,10 +437,10 @@ GraphicsModuleVulkan::createDevice()
     }
   }
 
-  LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", m_deviceProperties.deviceName));
-  LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", m_deviceProperties.vendorID));
-  LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", m_deviceProperties.deviceID));
-  LOG_INFO(StringUtils::format("Total GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
+  CH_LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", m_deviceProperties.deviceName));
+  CH_LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", m_deviceProperties.vendorID));
+  CH_LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", m_deviceProperties.deviceID));
+  CH_LOG_INFO(StringUtils::format("Total GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
 
   CH_ASSERT(m_physicalDevice);
 
@@ -520,7 +520,8 @@ GraphicsModuleVulkan::createDevice()
   if (extCount > 0)
   {
     Vector<VkExtensionProperties> extensions(extCount);
-    if (vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, &extensions.front()) == VK_SUCCESS)
+    if (vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, &extensions.front()) 
+        == VK_SUCCESS)
     {
       for (auto &ext : extensions)
       {
@@ -533,7 +534,7 @@ GraphicsModuleVulkan::createDevice()
     for (const char* enabledExtension : deviceExtensions) {
       // Output message if requested extension is not available
       if (!extensionSupported(enabledExtension)) {
-        LOG_ERROR("Enabled device extension \"" + 
+        CH_LOG_ERROR("Enabled device extension \"" + 
                   String(enabledExtension) + 
                   "\" is not present at device level");
       }
@@ -550,7 +551,7 @@ GraphicsModuleVulkan::createDevice()
 
   // Get the graphics queue
   if (m_graphicsQueueFamilyIndex != INVALID_INDEX) {
-    LOG_INFO("Graphics queue family index: " + StringUtils::toString(m_graphicsQueueFamilyIndex));
+    CH_LOG_INFO("Graphics queue family index: " + StringUtils::toString(m_graphicsQueueFamilyIndex));
     vkGetDeviceQueue(m_device, 
                      m_graphicsQueueFamilyIndex, 
                      0, 
@@ -559,7 +560,7 @@ GraphicsModuleVulkan::createDevice()
 
   // Get the compute queue
   if (m_computeQueueFamilyIndex != INVALID_INDEX) {
-    LOG_INFO("Compute queue family index: " + StringUtils::toString(m_computeQueueFamilyIndex));
+    CH_LOG_INFO("Compute queue family index: " + StringUtils::toString(m_computeQueueFamilyIndex));
     vkGetDeviceQueue(m_device, 
                      m_computeQueueFamilyIndex, 
                      0, 
@@ -568,13 +569,21 @@ GraphicsModuleVulkan::createDevice()
 
   // Get the transfer queue
   if (m_transferQueueFamilyIndex != INVALID_INDEX) {
-    LOG_INFO("Transfer queue family index: " + StringUtils::toString(m_transferQueueFamilyIndex));
+    CH_LOG_INFO("Transfer queue family index: " + StringUtils::toString(m_transferQueueFamilyIndex));
     vkGetDeviceQueue(m_device, 
                      m_transferQueueFamilyIndex, 
                      0, 
                      &m_transferQueue);
   }
 
+  // Get the present queue
+  if (m_presentQueueFamilyIndex != INVALID_INDEX) {
+    CH_LOG_INFO("Present queue family index: " + StringUtils::toString(m_presentQueueFamilyIndex));
+    vkGetDeviceQueue(m_device, 
+                     m_presentQueueFamilyIndex, 
+                     0, 
+                     &m_presentQueue);
+  }
 }
 
 /*
@@ -591,13 +600,13 @@ GraphicsModuleVulkan::createCommandPool()
     CH_EXCEPT(InternalErrorException, "Failed to create command pool.");
   }
 
-  LOG_INFO("Command pool created successfully.");
+  CH_LOG_INFO("Command pool created successfully.");
 }
 
 /*
  */
 void 
-GraphicsModuleVulkan::_internalInit(WPtr<Screen> screen)
+GraphicsModuleVulkan::_internalInit(WeakPtr<Screen> screen)
 {
   CH_ASSERT(screen.lock());
   m_screen = screen;
@@ -621,7 +630,7 @@ GraphicsModuleVulkan::_internalInit(WPtr<Screen> screen)
   createCommandPool();
   CH_ASSERT(commandPool);
 
-  LOG_INFO("Vulkan initialized successfully.");
+  CH_LOG_INFO("Vulkan initialized successfully.");
 }
 
 /*
@@ -642,7 +651,7 @@ GraphicsModuleVulkan::_setupSwapchain(uint32 width, uint32 height) {
     .frameCount = 3,
   };
 
-  SPtr<VulkanSwapChain> vulkanSwapChain = ch_shared_ptr_new<VulkanSwapChain>();
+  auto vulkanSwapChain = chMakeShared<VulkanSwapChain>(m_device, m_surface, m_physicalDevice);
   vulkanSwapChain->init(swapDesc);
   m_swapChain = vulkanSwapChain;
 }
@@ -662,8 +671,7 @@ GraphicsModuleVulkan::onShutDown() {}
 */
 SPtr<GPUCommandBuffer>
 GraphicsModuleVulkan::_internalCreateGPUCommandBuffer() {
-  auto commandBuffer = ch_shared_ptr_new<VulkanGPUCommandBuffer>();
-  return std::static_pointer_cast<GPUCommandBuffer>(commandBuffer);
+  return std::reinterpret_pointer_cast<GPUCommandBuffer>(chMakeShared<VulkanGPUCommandBuffer>());
 }
 
 /*
@@ -674,14 +682,9 @@ GraphicsModuleVulkan::_internalExecuteCommandBuffers(const Vector<SPtr<GPUComman
 
 /*
 */
-void
-GraphicsModuleVulkan::_internalPresent(int32, int32) {}
-
-/*
-*/
 SPtr<GPUPipelineState>
 GraphicsModuleVulkan::_internalcreatePipelineState(const PipelineStateDesc& pipelineStateDesc) {
-  auto ret = ch_shared_ptr_new<VulkanGPUPipelineState>();
+  auto ret = chMakeShared<VulkanGPUPipelineState>();
   ret->_init(pipelineStateDesc);
   return std::reinterpret_pointer_cast<GPUPipelineState>(ret);
 }
@@ -695,7 +698,7 @@ GraphicsModuleVulkan::_internalOnResize(uint32 width, uint32 height) {}
 */
 SPtr<SwapChain>
 GraphicsModuleVulkan::_internalGetSwapChain() {
-  return nullptr;
+  return m_swapChain;
 }
 
 /*
@@ -708,13 +711,13 @@ GraphicsModuleVulkan::_internalResetSwapChainAllocator() {}
 SPtr<Fence>
 GraphicsModuleVulkan::_internalCreateFence() {
   CH_ASSERT(m_device);
-  return ch_unique_ptr_new<VulkanFence>(m_device);
+  return chMakeUnique<VulkanFence>(m_device);
 }
 
 /*
 */
 void
-GraphicsModuleVulkan::_internalSyncGPU(const WPtr<Fence> fence, uint64 value) {
+GraphicsModuleVulkan::_internalSyncGPU(const WeakPtr<Fence> fence, uint64 value) {
   auto vulkanFence = std::reinterpret_pointer_cast<VulkanFence>(fence.lock());
   CH_ASSERT(vulkanFence);
   vkQueueSubmit(m_graphicsQueue, 0, nullptr, vulkanFence->getFence());

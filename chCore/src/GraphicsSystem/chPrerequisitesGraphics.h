@@ -9,6 +9,7 @@
 
 
 #include <chFlags.h>
+
 namespace chEngineSDK {
 namespace chGPUDesc {
   enum class PRIMITIVE_TOPOLOGY_TYPE;
@@ -30,6 +31,7 @@ class IndexBuffer;
 class VertexBuffer;
 class GPUPipelineState;
 class Sampler;
+class SwapChain;
 class Shader;
 class Fence;
 }

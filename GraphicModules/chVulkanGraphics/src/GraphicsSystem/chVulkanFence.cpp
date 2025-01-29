@@ -39,7 +39,7 @@ VulkanFence::~VulkanFence() {
 */
 void
 VulkanFence::_internalWait(uint64 timeout) {
-  throwIfFailed(vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, timeout));
+  vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, timeout);
 }
 
 /*

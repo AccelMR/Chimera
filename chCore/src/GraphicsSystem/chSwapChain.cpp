@@ -26,15 +26,64 @@ SwapChain::SwapChain() {}
 /*
 */
 void
-SwapChain::resize(uint32 frameCount, uint32 width, uint32 height, FORMAT fromat) {
-  _internalResize(frameCount, width, height, fromat);
+SwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
+  _internalInit(desc);
 }
 
 /*
 */
 void
-SwapChain::present(uint32 syncInterval, uint32 flags) {
-  _internalPresent(syncInterval, flags);
+SwapChain::cleanup() {
+  _internalCleanup();
+}
+
+/*
+*/
+void
+SwapChain::resize(uint32 width, uint32 height) {
+  _internalResize(width, height);
+}
+
+/*
+*/
+uint32
+SwapChain::getCurrentFrameIndex() const {
+  return _internalGetCurrentFrameIndex();
+}
+
+/*
+*/
+bool
+SwapChain::acquireNextFrame() {
+  return _internalAcquireNextFrame();
+}
+
+/*
+*/
+SPtr<Texture>
+SwapChain::getCurrentFrame() const {
+  return _internalGetCurrentFrame();
+}
+
+/*
+*/
+FORMAT
+SwapChain::getFormat() const {
+  return _internalGetFormat();
+}
+
+/*
+*/
+void
+SwapChain::setVSyncEnabled(bool enabled) {
+  _internalSetVSyncEnabled(enabled);
+}
+
+/*
+*/
+void
+SwapChain::waitForGPU() {
+  _internalWaitForGPU();
 }
 }
 

@@ -430,7 +430,7 @@ VulkanTranslator::get(const BlendStateDesc &blendState, uint32 renderTargetCount
   blendStateInfo.logicOp = VK_LOGIC_OP_COPY;
 
   if (blendState.renderTargetBlendDesc.empty()) {
-    LOG_WARN("BlendStateDesc does not contain any render target blend descriptions.");
+    CH_LOG_WARNING("BlendStateDesc does not contain any render target blend descriptions.");
     return blendStateInfo;
   }
 
@@ -552,7 +552,7 @@ VulkanTranslator::get(const SWAPCHAIN_EFFECT &presentMode)
     return VK_PRESENT_MODE_IMMEDIATE_KHR;
     break;
   default:
-    LOG_WARN("Unknown swapchain effect. Using default FIFO mode.");
+    CH_LOG_WARNING("Unknown swapchain effect. Using default FIFO mode.");
     return VK_PRESENT_MODE_FIFO_KHR;
     break;
   }

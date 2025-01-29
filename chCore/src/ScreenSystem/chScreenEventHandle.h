@@ -32,7 +32,7 @@ using PlatformCallback = void *;
  *  winDesc.name = "ChimeraCoreUnitTest";
  *  winDesc.title = "Chimera Core Unit Test";
  *
- *  auto Eventhandler = ch_shared_ptr_new<ScreenEventHandle>();
+ *  auto Eventhandler = chMakeShared<ScreenEventHandle>();
  *  auto screen = ScreenModule::instance().createScreen(winDesc, Eventhandler);
  *
  *  bool running = true;

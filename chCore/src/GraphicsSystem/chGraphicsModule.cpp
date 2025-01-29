@@ -59,13 +59,6 @@ GraphicsModule::executeCommandBuffers(const Vector<SPtr<GPUCommandBuffer>>& comm
 
 /*
 */
-void
-GraphicsModule::present(int32 syncInterval, int32 flags) {
-  _internalPresent(syncInterval, flags);
-}
-
-/*
-*/
 SPtr<SwapChain>
 GraphicsModule::getSwapChain() {
   return _internalGetSwapChain();
@@ -88,7 +81,7 @@ GraphicsModule::createFence() {
 /*
 */
 void
-GraphicsModule::syncGPU(const WPtr<Fence> fence, uint64 value) {
+GraphicsModule::syncGPU(const WeakPtr<Fence> fence, uint64 value) {
   _internalSyncGPU(fence, value);
 }
 } // namespace chEngineSDK

@@ -118,7 +118,7 @@ DX12SwapChain::_internalGetCurrentFrameIndex() const {
 */
 SPtr<Texture>
 DX12SwapChain::getCurrentRenderTarget() const {
-    return ch_shared_ptr_new<DX12Texture>(m_renderTargets[g_DX12GraphicsModule().m_frameIndex],
+    return chMakeShared<DX12Texture>(m_renderTargets[g_DX12GraphicsModule().m_frameIndex],
                                           m_rtvHeap);
 }
 

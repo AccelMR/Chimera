@@ -52,7 +52,7 @@ class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryMana
    *  Weak pointer to loaded library. Pointer after lock shall be null if something failed
    *  during the load, please check output for more information.
    **/
-  WPtr<DynamicLibrary>
+  WeakPtr<DynamicLibrary>
   loadDynLibrary(const String& name);
 
   /** 
@@ -62,9 +62,9 @@ class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryMana
    *  Weak pointer to the already loaded library
    **/
   void 
-  unloadDynLibrary(WPtr<DynamicLibrary> library);
+  unloadDynLibrary(WeakPtr<DynamicLibrary> library);
 
-  WPtr<DynamicLibrary> 
+  WeakPtr<DynamicLibrary> 
   getLibrary(const String &name);
 
  private:

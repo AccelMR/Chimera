@@ -38,7 +38,7 @@ DX12GPUResourceModule::_internalCreateTexture(const chGPUDesc::TextureDesc& desc
 */
 SPtr<Shader>
 DX12GPUResourceModule::_internalCreateShader(const chGPUDesc::ShaderDesc& desc) {
-  SPtr<DX12Shader> shader = ch_shared_ptr_new<DX12Shader>();
+  SPtr<DX12Shader> shader = chMakeShared<DX12Shader>();
   shader->_init(desc);
   return std::reinterpret_pointer_cast<Shader>(shader);
 }
@@ -47,7 +47,7 @@ DX12GPUResourceModule::_internalCreateShader(const chGPUDesc::ShaderDesc& desc) 
 */
 SPtr<GPUBuffer>
 DX12GPUResourceModule::_internalCreateBuffer(const SIZE_T& size) {
-  auto dx12Buffer = ch_shared_ptr_new<DX12GPUBuffer>();
+  auto dx12Buffer = chMakeShared<DX12GPUBuffer>();
   dx12Buffer->init(size);
   return std::reinterpret_pointer_cast<GPUBuffer>(dx12Buffer);
 }
@@ -63,7 +63,7 @@ DX12GPUResourceModule::_internalCreateSampler(const chGPUDesc::SamplerDesc& desc
 */
 SPtr<VertexBuffer>
 DX12GPUResourceModule::_internalCreateVertexBuffer(const chGPUDesc::VertexBufferDesc& desc) {
-  auto dx12VertexBuffer = ch_shared_ptr_new<DX12VertexBuffer>();
+  auto dx12VertexBuffer = chMakeShared<DX12VertexBuffer>();
   auto dx12Device = g_DX12GraphicsModule().getDevice();
   dx12VertexBuffer->_init(desc, dx12Device);
   return std::reinterpret_pointer_cast<VertexBuffer>(dx12VertexBuffer);
@@ -73,7 +73,7 @@ DX12GPUResourceModule::_internalCreateVertexBuffer(const chGPUDesc::VertexBuffer
 */
 SPtr<IndexBuffer>
 DX12GPUResourceModule::_internalCreateIndexBuffer(const IndexBufferDesc& desc) {
-  auto dx12IndexBuffer = ch_shared_ptr_new<DX12IndexBuffer>();
+  auto dx12IndexBuffer = chMakeShared<DX12IndexBuffer>();
   dx12IndexBuffer->init(desc);
   return std::reinterpret_pointer_cast<IndexBuffer>(dx12IndexBuffer);
 }

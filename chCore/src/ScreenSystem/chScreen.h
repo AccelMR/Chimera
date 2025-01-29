@@ -53,7 +53,7 @@ struct CH_CORE_EXPORT SCREEN_DESC {
  *  winDesc.name = "ChimeraCoreUnitTest";
  *  winDesc.title = "Chimera Core Unit Test";
  * 
- *  auto Eventhandler = ch_shared_ptr_new<ScreenEventHandle>();
+ *  auto Eventhandler = chMakeShared<ScreenEventHandle>();
  *  auto screen = ScreenModule::instance().createScreen(winDesc, Eventhandler);
  * 
  *  bool running = true;

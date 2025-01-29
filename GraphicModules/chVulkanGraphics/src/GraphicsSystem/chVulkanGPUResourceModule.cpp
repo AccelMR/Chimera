@@ -39,7 +39,7 @@ VulkanResourceModule::_internalCreateTexture(const chGPUDesc::TextureDesc& desc)
 */
 SPtr<Shader>
 VulkanResourceModule::_internalCreateShader(const chGPUDesc::ShaderDesc& desc) {
-  SPtr<VulkanShader> shader = ch_shared_ptr_new<VulkanShader>();
+  SPtr<VulkanShader> shader = chMakeShared<VulkanShader>();
   shader->_init(desc);
   return static_pointer_cast<Shader>(shader);
 }
@@ -48,7 +48,7 @@ VulkanResourceModule::_internalCreateShader(const chGPUDesc::ShaderDesc& desc) {
 */
 SPtr<GPUBuffer>
 VulkanResourceModule::_internalCreateBuffer(const SIZE_T& size) {
-  auto vulkanBuffer = ch_shared_ptr_new<VulkanGPUBuffer>();
+  auto vulkanBuffer = chMakeShared<VulkanGPUBuffer>();
   vulkanBuffer->init(size);
   return static_pointer_cast<GPUBuffer>(vulkanBuffer);
 }
@@ -57,7 +57,7 @@ VulkanResourceModule::_internalCreateBuffer(const SIZE_T& size) {
 */
 SPtr<Sampler>
 VulkanResourceModule::_internalCreateSampler(const chGPUDesc::SamplerDesc& desc) {
-  auto vulkanSampler = ch_shared_ptr_new<VulkanSampler>();
+  auto vulkanSampler = chMakeShared<VulkanSampler>();
   vulkanSampler->init(desc);
   return static_pointer_cast<Sampler>(vulkanSampler);
 }
@@ -66,7 +66,7 @@ VulkanResourceModule::_internalCreateSampler(const chGPUDesc::SamplerDesc& desc)
 */
 SPtr<VertexBuffer>
 VulkanResourceModule::_internalCreateVertexBuffer(const chGPUDesc::VertexBufferDesc& desc) {
-  auto vulkanVertexBuffer = ch_shared_ptr_new<VulkanVertexBuffer>();
+  auto vulkanVertexBuffer = chMakeShared<VulkanVertexBuffer>();
   vulkanVertexBuffer->init(desc);
   return static_pointer_cast<VertexBuffer>(vulkanVertexBuffer);
 }
@@ -75,7 +75,7 @@ VulkanResourceModule::_internalCreateVertexBuffer(const chGPUDesc::VertexBufferD
 */
 SPtr<IndexBuffer>
 VulkanResourceModule::_internalCreateIndexBuffer(const chGPUDesc::IndexBufferDesc& desc) {
-  auto vulkanIndexBuffer = ch_shared_ptr_new<VulkanIndexBuffer>();
+  auto vulkanIndexBuffer = chMakeShared<VulkanIndexBuffer>();
   vulkanIndexBuffer->init(desc);
   return static_pointer_cast<IndexBuffer>(vulkanIndexBuffer);
 }

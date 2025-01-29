@@ -36,7 +36,7 @@ namespace chEngineSDK {
 /*
 */
 BaseApplication::~BaseApplication() {
-  LOG_INFO("Destroying BaseApplication");
+  CH_LOG_INFO("Destroying BaseApplication");
 
   if (m_isInitialized) {
     destroyModules();
@@ -64,7 +64,7 @@ BaseApplication::initPlatform(int argc, char** argv) {
   SIZE_T count = readlink("/proc/self/exe", exePath, 1024);
 
   if (count == -1) {
-    LOG_ERROR("Error: Couldn't get the executable path.");
+    CH_LOG_ERROR("Error: Couldn't get the executable path.");
   }
 
   const String exeDir = String(exePath).substr(0, String(exePath).find_last_of("/"));
@@ -86,7 +86,7 @@ BaseApplication::initPlatform(int argc, char** argv) {
   winDesc.width = std::stoi(commandParser.getParam("Width", "1280"));
   winDesc.height = std::stoi(commandParser.getParam("Height", "720"));
 
-  m_eventhandler = ch_shared_ptr_new<ScreenEventHandle>();
+  m_eventhandler = chMakeShared<ScreenEventHandle>();
   m_screen = ScreenModule::instance().createScreen(winDesc, m_eventhandler);
 }
 
@@ -107,7 +107,7 @@ BaseApplication::initializeGraphics() {
   const String APIName = "ch" + 
     CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan") +
     "Graphics";
-  WPtr<DynamicLibrary> dllGraphics = DynamicLibraryManager::instance().loadDynLibrary(APIName);
+  WeakPtr<DynamicLibrary> dllGraphics = DynamicLibraryManager::instance().loadDynLibrary(APIName);
   if (SPtr<DynamicLibrary> dll = dllGraphics.lock()) {
     auto startUp = reinterpret_cast<void(*)()>(dll->getSymbol("loadPlugin"));
     CH_ASSERT(startUp);
@@ -116,7 +116,7 @@ BaseApplication::initializeGraphics() {
     GraphicsModule::instance().initialize(m_screen);
   }
   else {
-    LOG_ERROR(StringUtils::format("Could not load graphics API: {0}", APIName));
+    CH_LOG_ERROR(StringUtils::format("Could not load graphics API: {0}", APIName));
   }
 
   Renderer::startUp();
@@ -144,7 +144,7 @@ BaseApplication::destroyGraphics() {
 void
 BaseApplication::run() {
 #if USING(CH_DEBUG_MODE)
-  LOG_DBG("Running BaseApplication in Debug mode.");
+  CH_LOG_DEBUG("Running BaseApplication in Debug mode.");
 #endif //CH_DEBUG_MODE
 
  // Make sure the application is initialized.

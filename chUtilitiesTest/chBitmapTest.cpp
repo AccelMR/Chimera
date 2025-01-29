@@ -11,7 +11,7 @@ using namespace chEngineSDK;
 
 int main(int argc, char* argv[])
 {
-  LOG_INFO("BMPImage Test");
+  CH_LOG_INFO("BMPImage Test");
   String resourcePath = "resources/";
   String savePath = "resources/save/tests/";
   String fileName = "test";

@@ -498,14 +498,11 @@ enum class SWAPCHAIN_EFFECT {
   FLIP_DISCARD = 4
 };
 
-
 struct SwapChainDesc {
   uint32 width = 4;
   uint32 height = 4;
   FORMAT format = FORMAT::kR8G8B8A8_UNORM;
   bool stereo = false;
-  //TODO: sample desc
-  //TODO: uint32 bufferUsage
   uint32 frameCount = 3;
   SWAPCHAIN_EFFECT effect = SWAPCHAIN_EFFECT::FLIP_DISCARD;
 };

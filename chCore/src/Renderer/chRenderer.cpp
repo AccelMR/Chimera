@@ -145,27 +145,33 @@ void Renderer::initialize()
   barrierEnd.transition.stateBefore = chGPUDesc::ResourceStates::kRENDER_TARGET;
   barrierEnd.transition.stateAfter = chGPUDesc::ResourceStates::kPRESENT;
 
-  m_fence = GraphicAPI.createFence();
-  m_fenceValue = 1;
+  m_swapChain = GraphicAPI.getSwapChain();
 }
 
 /*
- */
+*/
 void
 Renderer::render()
 {
-  GraphicsModule &GraphicAPI = GraphicsModule::instance();
+  GraphicsModule& GraphicAPI = GraphicsModule::instance();
 
-  m_swapChain->waitForCurrentFrame(m_fenceValue);
+  if (!m_swapChain->acquireNextFrame()) {
+    CH_LOG_ERROR("Failed to acquire next frame.");
+    //recreateSwapChain();
+  }
+
+  SPtr<Texture> currentFrame = m_swapChain->getCurrentFrame();
 
   m_commandBuffer->reset(m_pipeline);
   m_commandBuffer->setPipeLineState(m_pipeline);
-  m_commandBuffer->setSwapChain();
+
+  m_commandBuffer->setSwapChainTexture(currentFrame);
+
   m_commandBuffer->setScissorRect(viewport);
   m_commandBuffer->setRect(viewport);
   m_commandBuffer->resourceBarrierSwapChain(barrierStart);
   m_commandBuffer->setGPUBuffer(MVPBuffer, 0);
-  m_commandBuffer->clearSwapChainTexture(LinearColor::Pink);
+  m_commandBuffer->clearSwapChainTexture(LinearColor::Magenta);
   m_commandBuffer->setTopology(PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   m_commandBuffer->setVertexBuffer(0, 1, vertexBuffer);
   m_commandBuffer->setIndexBuffer(indexBuffer);
@@ -175,8 +181,8 @@ Renderer::render()
 
   GraphicAPI.executeCommandBuffers({ m_commandBuffer });
 
-  m_swapChain->signalCurrentFrame(++m_fenceValue);
-
-  GraphicAPI.present(0, 0);
+  if (!m_commandBuffer->present(1, 0)){
+    CH_LOG_ERROR("Failed to present.");
+  }
 }
 } // namespace chEngineSDK

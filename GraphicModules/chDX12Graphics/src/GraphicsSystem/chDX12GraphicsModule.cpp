@@ -110,17 +110,17 @@ GraphicsModuleDX12::_init() {
   // Create Device
   ThrowIfFailed(D3D12CreateDevice(m_adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)));
 
-  LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", UTF8::fromWide(desc.Description)));
-  LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", desc.VendorId));
-  LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", desc.DeviceId));
-  LOG_INFO(StringUtils::format("System ID: [{0}]", desc.SubSysId));
-  LOG_INFO(StringUtils::format("Revision ID: [{0}]", desc.Revision));
+  CH_LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", UTF8::fromWide(desc.Description)));
+  CH_LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", desc.VendorId));
+  CH_LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", desc.DeviceId));
+  CH_LOG_INFO(StringUtils::format("System ID: [{0}]", desc.SubSysId));
+  CH_LOG_INFO(StringUtils::format("Revision ID: [{0}]", desc.Revision));
 
-  LOG_INFO(StringUtils::format("Dedicated Video Memory: [{0} MB]", desc.DedicatedVideoMemory / BYTE_TO_MB));
+  CH_LOG_INFO(StringUtils::format("Dedicated Video Memory: [{0} MB]", desc.DedicatedVideoMemory / BYTE_TO_MB));
   m_dedicatedVideoMemory = desc.DedicatedVideoMemory;
-  LOG_INFO(StringUtils::format("Dedicated System Memory: [{0} MB]", desc.DedicatedSystemMemory / BYTE_TO_MB));
+  CH_LOG_INFO(StringUtils::format("Dedicated System Memory: [{0} MB]", desc.DedicatedSystemMemory / BYTE_TO_MB));
   m_dedicatedSystemMemory = desc.DedicatedSystemMemory;
-  LOG_INFO(StringUtils::format("Dedicated Shared Memory: [{0} MB]", desc.SharedSystemMemory / BYTE_TO_MB));
+  CH_LOG_INFO(StringUtils::format("Dedicated Shared Memory: [{0} MB]", desc.SharedSystemMemory / BYTE_TO_MB));
   m_sharedSystemMemory = desc.SharedSystemMemory;
 
   m_device->SetName(L"Chimera DX12 Device");
@@ -164,7 +164,7 @@ GraphicsModuleDX12::_init() {
 */
 SPtr<GPUPipelineState>
 GraphicsModuleDX12::_internalcreatePipelineState(const PipelineStateDesc& pipelineStateDesc) {
-  auto ret = ch_shared_ptr_new<DX12GPUPipelineState>();
+  auto ret = chMakeShared<DX12GPUPipelineState>();
   ret->_init(pipelineStateDesc, m_device);
   return std::reinterpret_pointer_cast<GPUPipelineState>(ret);
 }
@@ -239,7 +239,7 @@ GraphicsModuleDX12::_setupSwapchain(uint32 width, uint32 height) {
   swapDesc.height = height;
   swapDesc.format = FORMAT::kB8G8R8A8_UNORM;//TODO
   
-  m_swapChain = ch_shared_ptr_new<DX12SwapChain>();
+  m_swapChain = chMakeShared<DX12SwapChain>();
   m_swapChain->init(swapDesc);
   
   m_frameIndex = m_swapChain->getCurrentFrameIndex();
@@ -267,7 +267,7 @@ GraphicsModuleDX12::onShutDown() {}
 */
 SPtr<GPUCommandBuffer>
 GraphicsModuleDX12::_internalCreateGPUCommandBuffer() {
-  auto dx12cf = ch_shared_ptr_new<DX12GPUCommandBuffer>();
+  auto dx12cf = chMakeShared<DX12GPUCommandBuffer>();
   return std::reinterpret_pointer_cast<GPUCommandBuffer>(dx12cf);
 }
 

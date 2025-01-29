@@ -26,11 +26,11 @@ namespace chEngineSDK{
 const SPtr<Screen>
 ScreenModule::createScreen(SCREEN_DESC screenDesc, SPtr<ScreenEventHandle> eventHandler) {
   if (!m_mainScreen) {
-    m_mainScreen = ch_shared_ptr_new<Screen>();
+    m_mainScreen = chMakeShared<Screen>();
     if (!m_mainScreen->init(screenDesc, eventHandler)) {
       return nullptr;
     }
-    LOG_INFO(StringUtils::format("Main Screen [{0}] has been created.", screenDesc.name));
+    CH_LOG_INFO(StringUtils::format("Main Screen [{0}] has been created.", screenDesc.name));
   }
   return m_mainScreen;
 }

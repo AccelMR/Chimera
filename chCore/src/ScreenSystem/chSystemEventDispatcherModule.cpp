@@ -59,7 +59,7 @@ SystemEventDipatcherModule::dispatchEvents(const SPtr<ScreenEventHandle>& eventH
   while (!eventHandler->isSystemEventQueueEmpty()) {
     ScreenEvent& screenEvent = eventHandler->frontPopSystemEventQueue();
     if (!dispatchInputEvents(screenEvent)) {
-      LOG_ERROR(StringUtils::format("Could not dispatch event : [{0}] in System Queue.", screenEvent.getTypeAsString()));
+      CH_LOG_ERROR(StringUtils::format("Could not dispatch event : [{0}] in System Queue.", screenEvent.getTypeAsString()));
     }
   }
 }

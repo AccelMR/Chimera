@@ -22,6 +22,7 @@
 #include "chStringUtils.h"
 #include "chMath.h"
 #include "chVulkanFence.h"
+#include "chVulkanTexture.h"
 #include "chVulkanTranslator.h"
 #include "chVulkanGraphicsModule.h"
 
@@ -35,24 +36,25 @@ VulkanSwapChain::~VulkanSwapChain() {
 /*
 */
 void
-VulkanSwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
+VulkanSwapChain::_internalInit(const chGPUDesc::SwapChainDesc& desc) {
     // Cleanup any existing resources before reinitializing
-  cleanup();
+  _internalCleanup();
 
-  // Select the surface format
-  VkSurfaceFormatKHR surfaceFormat{};
-  {
-    uint32 formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount, nullptr);
-    if (formatCount == 0) {
-      CH_EXCEPT(RunTimeException, "No available surface formats.");
-    }
+  // // Select the surface format
+  // VkSurfaceFormatKHR surfaceFormat{};
+  // {
+  //   uint32 formatCount;
+  //   vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount, nullptr);
+  //   if (formatCount == 0) {
+  //     CH_EXCEPT(RunTimeException, "No available surface formats.");
+  //   }
 
-    Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount, surfaceFormats.data());
+  //   Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+  //   vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount, surfaceFormats.data());
 
-    surfaceFormat = VulkanTranslator::get(desc.format);
-  }
+  //   surfaceFormat
+  //    = VulkanTranslator::get(desc.format);
+  // }
 
   m_format = desc.format;
 
@@ -79,8 +81,8 @@ VulkanSwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
   swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapChainCreateInfo.surface = m_surface;
   swapChainCreateInfo.minImageCount = imageCount;
-  swapChainCreateInfo.imageFormat = surfaceFormat.format;
-  swapChainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
+  swapChainCreateInfo.imageFormat = VulkanTranslator::get(m_format);
+  swapChainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; // TODO: make this configurable
   swapChainCreateInfo.imageExtent = swapExtent;
   swapChainCreateInfo.imageArrayLayers = desc.stereo ? 2 : 1;
   swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -93,9 +95,6 @@ VulkanSwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
   if (m_graphicsQueueFamilyIndex != m_presentQueueFamilyIndex) {
     swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     swapChainCreateInfo.queueFamilyIndexCount = 2;
-    swapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
-  } else {
-    swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapChainCreateInfo.queueFamilyIndexCount = 0;
     swapChainCreateInfo.pQueueFamilyIndices = nullptr;
   }
@@ -122,7 +121,7 @@ VulkanSwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
     imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     imageViewCreateInfo.image = m_swapChainImages[i];
     imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageViewCreateInfo.format = surfaceFormat.format;
+    imageViewCreateInfo.format = VulkanTranslator::get(m_format);
     imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -138,19 +137,26 @@ VulkanSwapChain::init(const chGPUDesc::SwapChainDesc& desc) {
     }
   }
 
+  VkSemaphoreCreateInfo semaphoreInfo{};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
   // Initialize fences for synchronization
   m_frameFences.resize(imageCount);
-  for (auto& fence : m_frameFences) {
-    fence = ch_shared_ptr_new<VulkanFence>(m_device);
+  m_imageAvailableSemaphores.resize(imageCount);
+  m_renderFinishedSemaphores.resize(imageCount);
+  for (size_t i = 0; i < desc.frameCount; i++) {
+    throwIfFailed(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]));
+    throwIfFailed(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]));
+    m_frameFences[i] = chMakeShared<chEngineSDK::VulkanFence>(m_device);
   }
 
-  LOG_INFO("Vulkan swap chain initialized successfully.");
+  CH_LOG_INFO("Vulkan swap chain initialized successfully.");
 }
 
 /*
 */
 void
-VulkanSwapChain::cleanup() {
+VulkanSwapChain::_internalCleanup() {
   for (auto imageView : m_swapChainImageViews) {
     vkDestroyImageView(m_device, imageView, nullptr);
   }
@@ -170,8 +176,93 @@ VulkanSwapChain::_internalResize(uint32 width, uint32 height) {
 
 /*
 */
+bool
+VulkanSwapChain::present(uint32 syncInterval, 
+                         uint32 flags,
+                         const VulkanGPUCommandBuffer* commandBuffer) {
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.waitSemaphoreCount = 1;
+  submitInfo.pWaitSemaphores = &m_imageAvailableSemaphores[m_currentFrame];
+  VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+  submitInfo.pWaitDstStageMask = waitStages;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = nullptr;
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+
+  VkQueue queue = g_VulkanGraphicsModule().getPresentQueue();
+  throwIfFailed(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+
+  VkPresentInfoKHR presentInfo{};
+  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+  presentInfo.swapchainCount = 1;
+  presentInfo.pSwapchains = &m_swapChain;
+  presentInfo.pImageIndices = &m_currentFrame;
+
+  VkResult result = vkQueuePresentKHR(queue, &presentInfo);
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    return false;
+  }
+
+  return result == VK_SUCCESS;
+}
+
+/*
+*/
+bool
+VulkanSwapChain::_internalAcquireNextFrame() {
+
+  m_frameFences[m_currentFrame]->wait(2);
+  m_frameFences[m_currentFrame]->reset();
+  
+  VkResult result = vkAcquireNextImageKHR(m_device,
+                                          m_swapChain,
+                                          UINT64_MAX,
+                                          m_imageAvailableSemaphores[m_currentFrame],
+                                          VK_NULL_HANDLE, 
+                                          &m_currentFrame);
+  return result == VK_SUCCESS;
+}
+
+/*
+*/
+uint32
+VulkanSwapChain::_internalGetCurrentFrameIndex() const {
+  return m_currentFrame;
+}
+
+/*
+*/
+FORMAT
+VulkanSwapChain::_internalGetFormat() const {
+  return m_format;
+}
+
+/*
+*/
+SPtr<Texture>
+VulkanSwapChain::_internalGetCurrentFrame() const {
+  return  std::static_pointer_cast<Texture>(
+            chMakeShared<VulkanTexture>(m_swapChainImages[m_currentFrame], 
+                                        g_VulkanGraphicsModule().getDevice()));
+}
+
+/*
+*/
 void
-VulkanSwapChain::_internalPresent(uint32 syncInterval, uint32 flags) {
+VulkanSwapChain::_internalSetVSyncEnabled(bool enabled) {
+  // Not supported
+  CH_LOG_WARNING("VSync is not supported in Vulkan.");
+}
+
+/*
+*/
+void
+VulkanSwapChain::_internalWaitForGPU() {
+  vkDeviceWaitIdle(m_device);
 }
 
 } // namespace chEngineSDK
@@ -247,7 +338,7 @@ VulkanSwapChain::_internalPresent(uint32 syncInterval, uint32 flags) {
 //     CH_EXCEPT(InternalErrorException, "Failed to create render pass.");
 //   }
 
-//   LOG_INFO("Basic render pass created successfully.");
+//   CH_LOG_INFO("Basic render pass created successfully.");
 //   return renderPass;
 // }
 // }
@@ -312,7 +403,7 @@ VulkanSwapChain::_internalPresent(uint32 syncInterval, uint32 flags) {
 //         m_frameFences.push_back(rhi.createFence());
 //     }
 
-//     LOG_INFO("Vulkan swapchain successfully initialized.");
+//     CH_LOG_INFO("Vulkan swapchain successfully initialized.");
 // }
 
 // /*
@@ -329,7 +420,7 @@ VulkanSwapChain::_internalPresent(uint32 syncInterval, uint32 flags) {
 //                           &swapChainImageCount,
 //                           m_swapChainImages.data());
 
-//   LOG_INFO(StringUtils::format("Created {0} swapchain images.", swapChainImageCount));
+//   CH_LOG_INFO(StringUtils::format("Created {0} swapchain images.", swapChainImageCount));
 // }
 
 // /*

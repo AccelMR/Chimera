@@ -61,7 +61,7 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
     accessMode.set(ACCESS_MODE::kWRITE);
   }
 
-  return ch_shared_ptr_new<FileDataStream>(fullPath, accessMode, true);
+  return chMakeShared<FileDataStream>(fullPath, accessMode, true);
 }
 
 /**
@@ -77,7 +77,7 @@ FileSystem::createAndOpenFile(const Path& path) {
     FileSystem::createDirectories(parentDir);
   }
 
-  return ch_shared_ptr_new<FileDataStream>(path, ACCESS_MODE::kWRITE, true);
+  return chMakeShared<FileDataStream>(path, ACCESS_MODE::kWRITE, true);
 }
 
 /**
@@ -85,7 +85,7 @@ FileSystem::createAndOpenFile(const Path& path) {
  */
 void
 FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path) {
-  auto fileStream = ch_shared_ptr_new<FileDataStream>(path, memStream);
+  auto fileStream = chMakeShared<FileDataStream>(path, memStream);
 }
 
 /**

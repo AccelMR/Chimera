@@ -91,7 +91,7 @@ Quaternion::toRotator() const
 # if USING(CH_DEBUG_MODE)
   if (R.checkIfNaN()) {
     //TODO FIx this
-    //LOG_WARN("Quaternion::rotator(): Rotator result contains NaN!");
+    //CH_LOG_WARNING("Quaternion::rotator(): Rotator result contains NaN!");
     R = Rotator::ZERO;
 }
 # endif

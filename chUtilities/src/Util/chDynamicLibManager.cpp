@@ -22,7 +22,7 @@ namespace chEngineSDK{
 /*
 */
 void 
-UtilUnloadLibrary(WPtr<DynamicLibrary> library) {
+UtilUnloadLibrary(WeakPtr<DynamicLibrary> library) {
   auto RealPointer = library.lock();
   if (RealPointer) {
     RealPointer->unload();
@@ -31,17 +31,17 @@ UtilUnloadLibrary(WPtr<DynamicLibrary> library) {
 
 /*
 */
-WPtr<DynamicLibrary>
+WeakPtr<DynamicLibrary>
 DynamicLibraryManager::loadDynLibrary(const String& name)
 {
   String fileName = sanitizeName(name);
-  WPtr<DynamicLibrary> lib = getLibrary(fileName);
+  WeakPtr<DynamicLibrary> lib = getLibrary(fileName);
 
   if(lib.lock()){
     return lib;
   }
 
-  SPtr<DynamicLibrary> newLib =  ch_shared_ptr_new<DynamicLibrary>(fileName);
+  SPtr<DynamicLibrary> newLib =  chMakeShared<DynamicLibrary>(fileName);
   m_loadedLibraries.emplace(fileName, newLib);
 
   return newLib;
@@ -50,7 +50,7 @@ DynamicLibraryManager::loadDynLibrary(const String& name)
 /*
 */
 void
-DynamicLibraryManager::unloadDynLibrary(WPtr<DynamicLibrary> library)
+DynamicLibraryManager::unloadDynLibrary(WeakPtr<DynamicLibrary> library)
 {
   auto RealLibrary = library.lock();
   if (!RealLibrary) {
@@ -69,7 +69,7 @@ DynamicLibraryManager::unloadDynLibrary(WPtr<DynamicLibrary> library)
 
 /*
 */
-WPtr<DynamicLibrary>
+WeakPtr<DynamicLibrary>
 DynamicLibraryManager::getLibrary(const String& name) {
   const auto &iterFind = m_loadedLibraries.lower_bound(name);
   if (iterFind != m_loadedLibraries.end() && iterFind->second->getName() == name) {

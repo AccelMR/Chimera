@@ -196,7 +196,7 @@ using SPtr = std::shared_ptr<T>;
  *   Weak pointer used along Chimera.
  **/
 template<typename T>
-using WPtr = std::weak_ptr<T>;
+using WeakPtr = std::weak_ptr<T>;
 
 /** 
  *   Unique pointer used along Chimera.
@@ -209,7 +209,7 @@ using UnqPtr = std::unique_ptr<T, A>;
  */
 template<class T, class... Args>
 SPtr<T>
-ch_shared_ptr_new(Args&&... args) {
+chMakeShared(Args&&... args) {
   return std::allocate_shared<T>(Alloc<T>(),
                                  std::forward<Args>(args)...);
 }
@@ -219,7 +219,7 @@ ch_shared_ptr_new(Args&&... args) {
  */
 template<class T, class... Args>
 UnqPtr<T>
-ch_unique_ptr_new(Args&&... args) {
+chMakeUnique(Args&&... args) {
   return UnqPtr<T>(new T(std::forward<Args>(args)...));
 }
 

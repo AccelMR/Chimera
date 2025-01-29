@@ -76,9 +76,29 @@ class GraphicsModuleVulkan final : public GraphicsModule
   uint32
   findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties);
 
+  VkQueue
+  getGraphicsQueue() const {
+    return m_graphicsQueue;
+  }
+
+  FORCEINLINE VkQueue
+  getComputeQueue() const {
+    return m_computeQueue;
+  }
+
+  FORCEINLINE VkQueue
+  getTransferQueue() const {
+    return m_transferQueue;
+  }
+
+  FORCEINLINE VkQueue
+  getPresentQueue() const {
+    return m_presentQueue;
+  }
+
  protected:
   virtual void
-  _internalInit(WPtr<Screen> screen) override;
+  _internalInit(WeakPtr<Screen> screen) override;
   
   void
   _setupSwapchain(uint32 width, uint32 height);
@@ -110,7 +130,7 @@ class GraphicsModuleVulkan final : public GraphicsModule
   _internalCreateFence() override;
 
   void
-  _internalSyncGPU(const WPtr<Fence> fence, uint64 value) override;
+  _internalSyncGPU(const WeakPtr<Fence> fence, uint64 value) override;
 
   void
   createSurface();
@@ -145,7 +165,6 @@ class GraphicsModuleVulkan final : public GraphicsModule
   VkPhysicalDevice m_physicalDevice;
   VkSurfaceKHR m_surface;
   VkDevice m_device;
-  //SPtr<VulkanSwapChain> m_swapChain;
   VkCommandPool commandPool;
   uint32 m_graphicsQueueFamilyIndex = INVALID_INDEX;
   uint32 m_computeQueueFamilyIndex = INVALID_INDEX;
@@ -156,8 +175,9 @@ class GraphicsModuleVulkan final : public GraphicsModule
   VkQueue m_graphicsQueue;
   VkQueue m_computeQueue;
   VkQueue m_transferQueue;
+  VkQueue m_presentQueue;
 
-  WPtr<Screen> m_screen;
+  WeakPtr<Screen> m_screen;
 
 #if USING(CH_DEBUG_MODE)
   PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT{ nullptr };

@@ -31,31 +31,60 @@ class CH_CORE_EXPORT SwapChain {
   */
   virtual ~SwapChain() = default;
 
-  void
-  resize(uint32 width, uint32 height);
+  void 
+  init(const chGPUDesc::SwapChainDesc& desc);
 
   void
-  present(uint32 syncInterval, uint32 flags);
+  cleanup();
+
+  void
+  resize(uint32 width, uint32 height);
 
   uint32
   getCurrentFrameIndex() const;
 
-  SPtr<Fence>
-  getCurrentFrameFence() const;
+  bool
+  acquireNextFrame();
+
+  SPtr<Texture>
+  getCurrentFrame() const;
+
+  FORMAT
+  getFormat() const;
+
+  void
+  setVSyncEnabled(bool enabled);
+
+  void
+  waitForGPU();
 
  protected:
-  virtual void
-  _internalResize(uint32 width, uint32 height) = 0;
+   virtual void
+  _internalInit(const chGPUDesc::SwapChainDesc& desc) = 0;
 
   virtual void
-  _internalPresent(uint32 syncInterval, uint32 flags) = 0;
+  _internalCleanup() = 0;
+
+  virtual void
+  _internalResize(uint32 width, uint32 height) = 0;
 
   virtual uint32
   _internalGetCurrentFrameIndex() const = 0;
 
-  virtual SPtr<Fence>
-  _internalGetCurrentFrameFence() const = 0;
+  virtual bool
+  _internalAcquireNextFrame() = 0;
 
+  virtual SPtr<Texture>
+  _internalGetCurrentFrame() const = 0;
+
+  virtual FORMAT
+  _internalGetFormat() const = 0;
+
+  virtual void
+  _internalSetVSyncEnabled(bool enabled) = 0;
+
+  virtual void
+  _internalWaitForGPU() = 0;
 };
 }
 

@@ -1181,7 +1181,7 @@ TEST_CASE("chUtilities - Utilities") {
     REQUIRE_THROWS_AS(Submodule::instancePtr(), InternalErrorException);
 
     // DynamicLibraryManager::startUp();
-    // WPtr<DynamicLibrary> TestDll = DynamicLibraryManager::instance().loadDynLibrary("DllTest");
+    // WeakPtr<DynamicLibrary> TestDll = DynamicLibraryManager::instance().loadDynLibrary("DllTest");
     // SPtr<DynamicLibrary> RealPtr = TestDll.lock();
     // REQUIRE(RealPtr);
 
@@ -1191,7 +1191,7 @@ TEST_CASE("chUtilities - Utilities") {
     // REQUIRE(func);
     // func();
 
-    LOG_DBG("Test Message");
+    CH_LOG_DEBUG("Test Message");
 
     Event<int(int, float)> Onsomething;
     HEvent listener1 = Onsomething.connect([](int a, float b)->int {
@@ -1283,7 +1283,7 @@ TEST_CASE("chUtilities - StringAndUTF8") {
 
     REQUIRE(FileSystem::createDirectories(ToCreateMany));
 
-    SPtr<DataStream> memStream = ch_shared_ptr_new<MemoryDataStream>(8);
+    SPtr<DataStream> memStream = chMakeShared<MemoryDataStream>(8);
     REQUIRE(memStream->size() == 8);
 
     int Test1110 = 110;
@@ -1345,9 +1345,9 @@ TEST_CASE("chUtilities - StringAndUTF8") {
 
     /*
     const Path DebugFile("C:/Users/Public/debug.txt");
-    LOG_DBG("TEST");
-    LOG_ERROR("TEST");
-    LOG_WARN("TEST");
+    CH_LOG_DEBUG("TEST");
+    CH_LOG_ERROR("TEST");
+    CH_LOG_WARNING("TEST");
     g_Debug().saveLog(DebugFile);*/
 }
 

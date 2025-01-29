@@ -40,7 +40,7 @@ StringID::setId(const String& newName) {
   auto search = g_hashedNames.find( m_id);
   if (search != g_hashedNames.end()) {
     //TODO: fix this
-    //LOG_ERROR(StringUtils::format("Name {0} has been used before as StringID, same ID created.", newName));
+    //CH_LOG_ERROR(StringUtils::format("Name {0} has been used before as StringID, same ID created.", newName));
   }
   else {
     g_hashedNames.insert(m_id);

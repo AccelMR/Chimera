@@ -95,11 +95,11 @@ class CH_CORE_EXPORT GraphicsModule: public Module<GraphicsModule>
   createFence();
 
   void
-  syncGPU(const WPtr<Fence> fence, uint64 value);
+  syncGPU(const WeakPtr<Fence> fence, uint64 value);
 
 protected:
   virtual void
-  _internalInit(WPtr<Screen> screen) = 0;
+  _internalInit(WeakPtr<Screen> screen) = 0;
 
   virtual SPtr<GPUCommandBuffer>
   _internalCreateGPUCommandBuffer() = 0;
@@ -123,7 +123,7 @@ protected:
   _internalCreateFence() = 0;
 
   virtual void
-  _internalSyncGPU(const WPtr<Fence> fence, uint64 value) = 0;
+  _internalSyncGPU(const WeakPtr<Fence> fence, uint64 value) = 0;
 
  protected:
   SPtr<SwapChain> m_swapChain;

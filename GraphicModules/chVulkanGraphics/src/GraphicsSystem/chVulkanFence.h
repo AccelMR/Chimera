@@ -34,7 +34,7 @@ class VulkanFence final : public Fence
   _internalReset() override;
 
   bool
-  _internalIsSignaled() const override { return false; }
+  _internalIsSignaled() const override;
 
   FORCEINLINE VkFence
   getFence() const {
