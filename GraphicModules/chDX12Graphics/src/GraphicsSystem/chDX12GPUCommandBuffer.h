@@ -48,7 +48,7 @@ class DX12GPUCommandBuffer final: public GPUCommandBuffer {
   _internalReset(const SPtr<GPUPipelineState>& pipelineState) override;
   
   void 
-  _internalclose() override;
+  _internalClose() override;
   
   void 
   _internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) override;

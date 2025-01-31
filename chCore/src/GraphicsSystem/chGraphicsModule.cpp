@@ -40,6 +40,7 @@ GraphicsModule::beginCommandRecording(COMMAND_BUFFER_TYPES commandBufferType,
                                  const SPtr<GPUPipelineState>& pipelineState) {
   SPtr<GPUCommandBuffer> cmdBffr = _internalCreateGPUCommandBuffer();
   cmdBffr->_init(commandBufferType, pipelineState);
+  cmdBffr->begin();
   return cmdBffr;
 }
 

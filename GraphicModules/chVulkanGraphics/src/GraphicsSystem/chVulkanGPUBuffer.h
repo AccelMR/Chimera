@@ -27,6 +27,11 @@ class VulkanGPUBuffer final : public GPUBuffer
   VulkanGPUBuffer() = default;
   ~VulkanGPUBuffer();
 
+  FORCEINLINE VkBuffer
+  getBuffer() const {
+    return m_buffer;
+  }
+
  protected:
  friend class VulkanGPUResourceModule;
 

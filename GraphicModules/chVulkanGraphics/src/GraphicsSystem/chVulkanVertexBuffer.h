@@ -31,6 +31,11 @@ class VulkanVertexBuffer : public VertexBuffer
   _internalUpdate(const chGPUDesc::VertexBufferDesc& desc, 
                   const VertexBufferData data) override;
 
+  FORCEINLINE VkBuffer
+  getBuffer() const {
+    return m_buffer;
+  }
+
  private:
   VkBuffer m_buffer;
   VkDeviceMemory m_bufferMemory;

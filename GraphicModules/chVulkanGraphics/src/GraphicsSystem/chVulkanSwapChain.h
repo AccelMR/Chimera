@@ -49,6 +49,9 @@ class VulkanSwapChain final: public SwapChain {
           const VulkanGPUCommandBuffer* commandBuffer);
 
   void
+  recreateFramebuffers(VkRenderPass renderPass) const;
+
+  void
   _internalInit(const chGPUDesc::SwapChainDesc& desc) override;
 
   void
@@ -64,7 +67,7 @@ class VulkanSwapChain final: public SwapChain {
   _internalGetCurrentFrameIndex() const override;
 
   SPtr<Texture>
-  _internalGetCurrentFrame() const override;
+  _internalGetCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const override;
 
   FORMAT
   _internalGetFormat() const override;
@@ -75,6 +78,11 @@ class VulkanSwapChain final: public SwapChain {
   void
   _internalWaitForGPU() override;
 
+  VkImage
+  getSwapChainImage() const {
+    return m_swapChainImages[m_currentFrame];
+  }
+
  protected:
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
@@ -82,6 +90,7 @@ class VulkanSwapChain final: public SwapChain {
   VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
   Vector<VkImage> m_swapChainImages;
   Vector<VkImageView> m_swapChainImageViews;
+  mutable Vector<VkFramebuffer> m_frameBuffers;
   uint32 m_currentFrame = 0;
   Vector<SPtr<Fence>> m_frameFences;
   FORMAT m_format = FORMAT::kB8G8R8A8_UNORM;

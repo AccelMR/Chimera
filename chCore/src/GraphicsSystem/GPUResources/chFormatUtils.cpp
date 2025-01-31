@@ -160,5 +160,20 @@ toString(const FORMAT format){
   }
 }
 
+/*
+*/
+bool
+isDepthFormat(const FORMAT format) {
+  switch (format) {
+    case FORMAT::kD32_FLOAT:
+    case FORMAT::kD32_FLOAT_S8X24_UINT:
+    case FORMAT::kD24_UNORM_S8_UINT:
+    case FORMAT::kD16_UNORM:
+      return true;
+    default:
+      return false;
+  }
+}
+
 } // namespace chFormatUtils
 } // namespace chEngineSDK

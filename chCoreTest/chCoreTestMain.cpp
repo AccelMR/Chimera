@@ -23,6 +23,9 @@ int main(int argc, char** argv) {
     g_Debug().saveLogAsHtml("resources/engine/logs/CRASHED_chCoreTestMain.html");
     return 0;
   }
+  catch(...) {
+    std::cerr << "Unknown exception caught" << std::endl;
+  }
 
   g_Debug().saveLog("resources/engine/logs/chCoreTestMain.txt");
   return 1;

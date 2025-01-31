@@ -391,32 +391,37 @@ VulkanTranslator::get(VkFormat format) {
  */
 Vector<VkDescriptorSetLayoutBinding>
 VulkanTranslator::get(const BindingGroup &bindingGroup) {
-  Vector<VkDescriptorSetLayoutBinding> bindings;
+  Vector<VkDescriptorSetLayoutBinding> layoutBindings;
 
-  for (const auto &buffer : bindingGroup.buffers) {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = buffer.slot; // El slot especificado
-    binding.descriptorType = (buffer.type == BufferBindingDesc::TYPE::kUNIFORM)
-                                 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-                                 : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    binding.descriptorCount = 1;                               // Por ahora, un solo buffer por slot
-    binding.stageFlags = VulkanTranslator::get(buffer.stages); // Convertir los flags de stages
-    binding.pImmutableSamplers = nullptr;                      // Los buffers no necesitan samplers
-    bindings.push_back(binding);
+  for (const auto& binding : bindingGroup.bindings) {
+    VkDescriptorSetLayoutBinding layoutBinding{};
+    layoutBinding.binding = binding.slot;
+    layoutBinding.stageFlags = VulkanTranslator::get(binding.stages);
+
+    if (std::holds_alternative<SPtr<GPUBuffer>>(binding.resource)) {
+      auto buffer = std::get<SPtr<GPUBuffer>>(binding.resource);
+      layoutBinding.descriptorType = binding.type == DescriptorBinding::TYPE::kUNIFORM_BUFFER
+                                         ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                         : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    } 
+    else if (std::holds_alternative<SPtr<Texture>>(binding.resource)) {
+      layoutBinding.descriptorType = binding.type == DescriptorBinding::TYPE::kSAMPLED_TEXTURE
+                                         ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                         : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    } 
+    else if (std::holds_alternative<SPtr<Sampler>>(binding.resource)) {
+      layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+      
+    } 
+    else {
+      CH_EXCEPT(InternalErrorException, "Invalid DescriptorBinding::TYPE provided for Vulkan translation!");
+    }
+
+    //layoutBindings.descriptorCount = 1;
+    layoutBindings.push_back(layoutBinding);
   }
 
-  // Procesar las texturas
-  for (const auto &texture : bindingGroup.textures) {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = texture.slot;
-    binding.descriptorType = VulkanTranslator::get(texture.type);
-    binding.descriptorCount = 1; // Asumimos una textura por slot
-    binding.stageFlags = VulkanTranslator::get(texture.stages);
-    binding.pImmutableSamplers = nullptr; // Por ahora no usamos samplers inmutables
-    bindings.push_back(binding);
-  }
-
-  return bindings;
+  return layoutBindings;
 }
 
 /*
@@ -462,23 +467,6 @@ VulkanTranslator::get(const BlendStateDesc &blendState, uint32 renderTargetCount
 
   return blendStateInfo;
 }
-
-/*
-*/
-VkSampleCountFlagBits
-VulkanTranslator::get(uint32 count) {
-  switch (count) {
-    case 1: return VK_SAMPLE_COUNT_1_BIT;
-    case 2: return VK_SAMPLE_COUNT_2_BIT;
-    case 4: return VK_SAMPLE_COUNT_4_BIT;
-    case 8: return VK_SAMPLE_COUNT_8_BIT;
-    case 16: return VK_SAMPLE_COUNT_16_BIT;
-    case 32: return VK_SAMPLE_COUNT_32_BIT;
-    case 64: return VK_SAMPLE_COUNT_64_BIT;
-    default: return VK_SAMPLE_COUNT_1_BIT;
-  }
-}
-
 /*
 */
 VkShaderStageFlags
@@ -505,30 +493,20 @@ VulkanTranslator::get(const ShaderStageFlag& stageFlags) {
 /*
 */
 VkDescriptorType
-VulkanTranslator::get(const TextureBindingDesc::TYPE& type) {
+VulkanTranslator::get(const DescriptorBinding::TYPE& type) {
   switch (type) {
-    case TextureBindingDesc::TYPE::kSAMPLED:
+    case DescriptorBinding::TYPE::kUNIFORM_BUFFER:
+      return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case DescriptorBinding::TYPE::kSTORAGE_BUFFER:
+      return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case DescriptorBinding::TYPE::kSAMPLED_TEXTURE:
       return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case TextureBindingDesc::TYPE::kSTORAGE:
+    case DescriptorBinding::TYPE::kSTORAGE_TEXTURE:
       return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    case TextureBindingDesc::TYPE::kRENDER_TARGET_READ:
-      return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    case DescriptorBinding::TYPE::kSAMPLER:
+      return VK_DESCRIPTOR_TYPE_SAMPLER;
     default:
       CH_EXCEPT(InternalErrorException, "Invalid TextureBindingDesc::TYPE provided for Vulkan translation!");
-  }
-}
-
-/*
-*/
-VkDescriptorType
-VulkanTranslator::get(const BufferBindingDesc::TYPE& type) {
-  switch (type) {
-    case BufferBindingDesc::TYPE::kUNIFORM:
-      return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    case BufferBindingDesc::TYPE::kSTORAGE:
-      return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    default:
-      CH_EXCEPT(InternalErrorException, "Invalid BufferBindingDesc::TYPE provided for Vulkan translation!");
   }
 }
 
@@ -591,6 +569,161 @@ VulkanTranslator::get(const TEXTURE_ADDRESS_MODE& addressMode) {
       return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
     default:
       CH_EXCEPT(InternalErrorException, "Invalid TEXTURE_ADDRESS_MODE provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkSampleCountFlagBits
+VulkanTranslator::get(const SampleCountFlag& sampleCountFlags) {
+  if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_1)) {
+    return VK_SAMPLE_COUNT_1_BIT;
+  }
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_2)) {
+    return VK_SAMPLE_COUNT_2_BIT;
+  } 
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_4)) {
+    return VK_SAMPLE_COUNT_4_BIT;
+  } 
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_8)) {
+    return VK_SAMPLE_COUNT_8_BIT;
+  } 
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_16)) {
+    return VK_SAMPLE_COUNT_16_BIT;
+  } 
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_32)) {
+    return VK_SAMPLE_COUNT_32_BIT;
+  } 
+  else if (sampleCountFlags.isSet(chGPUDesc::SAMPLE_COUNT::kSAMPLE_COUNT_64)) {
+    return VK_SAMPLE_COUNT_64_BIT;
+  }
+
+  return VK_SAMPLE_COUNT_1_BIT;
+}
+
+/*
+*/
+VkAttachmentLoadOp
+VulkanTranslator::get(const AttachmentDesc::LOAD_OP& loadOp) {
+  switch (loadOp) {
+    case AttachmentDesc::LOAD_OP::kLOAD:
+      return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case AttachmentDesc::LOAD_OP::kCLEAR:
+      return VK_ATTACHMENT_LOAD_OP_CLEAR;
+    case AttachmentDesc::LOAD_OP::kDONT_CARE:
+      return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid AttachmentDesc::LOAD_OP provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkAttachmentStoreOp
+VulkanTranslator::get(const AttachmentDesc::STORE_OP& storeOp) {
+  switch (storeOp) {
+    case AttachmentDesc::STORE_OP::kSTORE:
+      return VK_ATTACHMENT_STORE_OP_STORE;
+    case AttachmentDesc::STORE_OP::kDONT_CARE:
+      return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid AttachmentDesc::STORE_OP provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkAccessFlags
+VulkanTranslator::get(const chGPUDesc::AccessFlag& accessFlag) {
+  VkAccessFlags vkAccess = 0;
+
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kCOLOR_ATTACHMENT_WRITE)) {
+    vkAccess |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kCOLOR_ATTACHMENT_READ)) {
+    vkAccess |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kDEPTH_STENCIL_WRITE)) {
+    vkAccess |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kDEPTH_STENCIL_READ)) {
+    vkAccess |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kSHADER_READ)) {
+    vkAccess |= VK_ACCESS_SHADER_READ_BIT;
+  }
+
+  return vkAccess;
+}
+
+/*
+*/
+VkPipelineStageFlags
+VulkanTranslator::getPipelineFlags(const chGPUDesc::AccessFlag& accessFlag) {
+  VkPipelineStageFlags vkStage = 0;
+
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kCOLOR_ATTACHMENT_WRITE) ||
+      accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kCOLOR_ATTACHMENT_READ)) {
+    vkStage |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kDEPTH_STENCIL_WRITE) ||
+      accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kDEPTH_STENCIL_READ)) {
+    vkStage |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+               VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  }
+  if (accessFlag.isSet(chGPUDesc::ACCESS_FLAG::kSHADER_READ)) {
+    vkStage |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  }
+
+  return vkStage;
+}
+
+/*
+*/
+VkImageLayout
+VulkanTranslator::get(const chGPUDesc::ResourceStates& state) {
+  switch (state) {
+    case chGPUDesc::ResourceStates::kPRESENT:
+      return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    case chGPUDesc::ResourceStates::kRENDER_TARGET:
+      return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    case chGPUDesc::ResourceStates::kSHADER_RESOURCE:
+      return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    case chGPUDesc::ResourceStates::kUNORDERED_ACCESS:
+      return VK_IMAGE_LAYOUT_GENERAL;
+    case chGPUDesc::ResourceStates::kDEPTH_STENCIL:
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    case chGPUDesc::ResourceStates::kCOPY_DEST:
+      return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    case chGPUDesc::ResourceStates::kCOPY_SOURCE:
+      return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid chGPUDesc::ResourceStates provided for Vulkan translation!");
+  }
+}
+
+/*
+*/
+VkPipelineStageFlags
+VulkanTranslator::getPipelineStageFlags(const chGPUDesc::ResourceStates& state) {
+  switch (state) {
+    case chGPUDesc::ResourceStates::kPRESENT:
+      return VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    case chGPUDesc::ResourceStates::kRENDER_TARGET:
+      return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    case chGPUDesc::ResourceStates::kSHADER_RESOURCE:
+      return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    case chGPUDesc::ResourceStates::kUNORDERED_ACCESS:
+      return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    case chGPUDesc::ResourceStates::kDEPTH_STENCIL:
+      return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+             VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    case chGPUDesc::ResourceStates::kCOPY_DEST:
+      return VK_PIPELINE_STAGE_TRANSFER_BIT;
+    case chGPUDesc::ResourceStates::kCOPY_SOURCE:
+      return VK_PIPELINE_STAGE_TRANSFER_BIT;
+    default:
+      CH_EXCEPT(InternalErrorException, "Invalid chGPUDesc::ResourceStates provided for Vulkan translation!");
   }
 }
 

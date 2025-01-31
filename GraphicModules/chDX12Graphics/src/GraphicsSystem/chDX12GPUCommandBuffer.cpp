@@ -74,7 +74,7 @@ DX12GPUCommandBuffer::_internalReset(const SPtr<GPUPipelineState>& pipelineState
 /*
 */
 void
-DX12GPUCommandBuffer::_internalclose() {
+DX12GPUCommandBuffer::_internalClose() {
   ThrowIfFailed(m_commandList->Close());
 }
 

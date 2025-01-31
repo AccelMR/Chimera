@@ -29,15 +29,15 @@ namespace chGPUDesc {
 /** 
  *   Do not use this as TEXTURE_USAGE since it's a flag. Use TextUsageFlag
  **/
- enum class TEXTURE_USAGE : uint32 {
-   kUSAGE_SAMPLED = 0x1,
-   kUSAGE_STORAGE = 0x2,
-   kUSAGE_DEPTH_STENCIL = 0x4,
-   kUSAGE_RENDER_TARGET = 0x8,
-   kUSAGE_RENDER_TARGET_READ = 0x10,
- };
- CH_FLAGS_OPERATORS_EXT(TEXTURE_USAGE, uint32);
- using TextUsageFlag = Flags<TEXTURE_USAGE, uint32>;
+enum class TEXTURE_USAGE : uint32 {
+  kUSAGE_SAMPLED = 0x1,
+  kUSAGE_STORAGE = 0x2,
+  kUSAGE_DEPTH_STENCIL = 0x4,
+  kUSAGE_RENDER_TARGET = 0x8,
+  kUSAGE_RENDER_TARGET_READ = 0x10,
+};
+CH_FLAGS_OPERATORS_EXT(TEXTURE_USAGE, uint32);
+using TextUsageFlag = Flags<TEXTURE_USAGE, uint32>;
 
 /*
  * Multrisample count, used for sample in pipelines
@@ -85,77 +85,97 @@ using SampleCountFlag = Flags<SAMPLE_COUNT, uint32>;
  CH_FLAGS_OPERATORS_EXT(COLOR_WRITE_ENABLE, uint8);
  using ColorWriteEnableFlag = Flags<COLOR_WRITE_ENABLE, uint8>;
 
- /** 
-  *   Texture descriptor.
-  **/
- struct TextureDesc {
-    enum class TYPE {
-      kTYPE_1D,
-      kTYPE_2D,
-      kTYPE_3D
-    };
-    static constexpr uint32 ALL_MIPS = 0xffffffff;
-
-    TYPE type = TYPE::kTYPE_2D;
-    Vector3I dimensions = Vector3I::UNIT;
-    uint32 mips = ALL_MIPS;
-    uint32 layers = 1;
-    TextUsageFlag usage = TEXTURE_USAGE::kUSAGE_SAMPLED;
-    FORMAT format = FORMAT::kR8G8B8A8_UNORM;
-  };
+ enum class ACCESS_FLAG {
+  kNONE = 0,
+  kCOLOR_ATTACHMENT_WRITE = 0x1,
+  kCOLOR_ATTACHMENT_READ = 0x2,
+  kDEPTH_STENCIL_WRITE = 0x4,
+  kDEPTH_STENCIL_READ = 0x8,
+  kSHADER_READ = 0x10
+};
+CH_FLAGS_OPERATORS_EXT(ACCESS_FLAG, uint32);
+using AccessFlag = Flags<ACCESS_FLAG, uint32>;
 
 /** 
- *   Describes how a texture will be used for shaders.
+ *   Texture descriptor.
  **/
- struct TextureBindingDesc {
+struct TextureDesc {
    enum class TYPE {
-     kSAMPLED,
-     kSTORAGE,
-     kRENDER_TARGET_READ
+     kTYPE_1D,
+     kTYPE_2D,
+     kTYPE_3D
    };
 
-   TYPE type = TYPE::kSAMPLED;
-   ShaderStageFlag stages = SHADER_STAGE::ALL;
-   uint32 slot = 0;
-
-   Vector<SPtr<Texture>> textures;
-   Vector<SPtr<Sampler>> samplers;
+   static constexpr uint32 ALL_MIPS = 0xffffffff;
+   TYPE type = TYPE::kTYPE_2D;
+   Vector3I dimensions = Vector3I::UNIT;
+   uint32 mips = ALL_MIPS;
+   uint32 layers = 1;
+   TextUsageFlag usage = TEXTURE_USAGE::kUSAGE_SAMPLED;
+   FORMAT format = FORMAT::kR8G8B8A8_UNORM;
  };
 
- /** 
-  *   Describes how a buffer will be used for shaders.
-  **/
- struct BufferBindingDesc {
+struct DescriptorBinding{
   enum class TYPE {
-    kUNIFORM,
-    kSTORAGE
+    kUNIFORM_BUFFER,
+    kSTORAGE_BUFFER,
+    kSAMPLED_TEXTURE,
+    kSTORAGE_TEXTURE,
+    kSAMPLER
   };
-  BufferBindingDesc(TYPE _type, 
-                    ShaderStageFlag _stages,
-                    uint32 _slot, 
-                    uint32 _size,
-                    SPtr<GPUBuffer> _buffer) :
+
+  TYPE type = TYPE::kUNIFORM_BUFFER;
+  ShaderStageFlag stages = SHADER_STAGE::ALL;
+  uint32 slot = 0;
+
+  Variant<SPtr<GPUBuffer>, SPtr<Texture>, SPtr<Sampler>> resource;
+
+  DescriptorBinding(TYPE _type, 
+                   ShaderStageFlag _stages,
+                   uint32 _slot, 
+                   SPtr<GPUBuffer> _buffer) :
     type(_type),
     stages(_stages),
     slot(_slot),
-    size(_size),
-    buffer(_buffer) {}
+    resource(_buffer) {}
 
-  TYPE type = TYPE::kUNIFORM;
-  ShaderStageFlag stages = SHADER_STAGE::ALL;
-  uint32 slot = 0;
-  uint32 size;
-  SPtr<GPUBuffer> buffer;
- };
+  DescriptorBinding(TYPE _type, 
+                   ShaderStageFlag _stages,
+                   uint32 _slot, 
+                   SPtr<Texture> _texture) :
+    type(_type),
+    stages(_stages),
+    slot(_slot),
+    resource(_texture) {}
 
- /** 
-  *   Describes the bindings for a shader or group of shader.
-  **/
- struct BindingGroup {
-   uint32 slot = 0;
-   Vector<TextureBindingDesc> textures;
-   Vector<BufferBindingDesc> buffers;
- };
+  DescriptorBinding(TYPE _type, 
+                   ShaderStageFlag _stages,
+                   uint32 _slot, 
+                   SPtr<Sampler> _sampler) :
+    type(_type),
+    stages(_stages),
+    slot(_slot),
+    resource(_sampler) {}
+
+  template<typename T>
+  SPtr<T> getResource() {
+    CH_ASSERT(std::holds_alternative<SPtr<T>>(resource));
+    return std::get<SPtr<T>>(resource);
+  }
+};
+
+/** 
+ *   Describes the bindings for a shader or group of shader.
+**/
+struct BindingGroup {
+  uint32 descriptorSetIndex = 0;
+  Vector<DescriptorBinding> bindings;
+
+  BindingGroup(uint32 _descriptorSetIndex, 
+               std::initializer_list<DescriptorBinding> _bindings) :
+    descriptorSetIndex(_descriptorSetIndex),
+    bindings(_bindings) {}
+};
 
  /** 
   *   Shader inner informations to fill.
@@ -390,15 +410,55 @@ struct MultiSampleDesc {
   SampleCountFlag count = SAMPLE_COUNT::kSAMPLE_COUNT_1;
   bool sampleShadingEnable = false;
   float minSampleShading = 0.0f;
-  Vector<uint32> sampleMask;
+  Vector<uint32> sampleMask = { 0xffffffff };
   bool alphaToCoverageEnable = false;
   bool alphaToOneEnable = false;
 };
 
+struct ViewportDesc {
+  Box2D rect;
+  float minDepth = 0.0f;
+  float maxDepth = 1.0f;
+};
+
+struct AttachmentDesc {
+    enum class LOAD_OP {
+    kLOAD,
+    kCLEAR,
+    kDONT_CARE
+  };
+
+  enum class STORE_OP {
+    kSTORE,
+    kDONT_CARE
+  };
+
+  FORMAT format = FORMAT::kUNKNOWN;
+  SampleCountFlag sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1;
+  LOAD_OP loadOp = LOAD_OP::kCLEAR;
+  STORE_OP storeOp = STORE_OP::kSTORE;
+  bool isResolveAttachment = false;
+};
+
+struct SubpassDesc {
+  Vector<uint32> inputAttachments;
+  Vector<uint32> colorAttachments;
+  Optional<uint32> depthStencilAttachment;
+  Vector<uint32> resolveAttachments;
+};
+
+struct SubpassDependency {
+  uint32 srcSubpass = 0;
+  uint32 dstSubpass = 1;
+
+  AccessFlag srcAccessMask;
+  AccessFlag dstAccessMask;
+};
+
 struct RenderPassDesc {
-  Array<FORMAT, 8> colorAttachments;
-  FORMAT depthStencilAttachment = FORMAT::kD32_FLOAT_S8X24_UINT;
-  uint32 subpassCount = 1;
+  Vector<AttachmentDesc> attachments;
+  Vector<SubpassDesc> subpasses;
+  Vector<SubpassDependency> dependencies;
 };
 
 struct PipelineStateDesc {
@@ -407,16 +467,15 @@ struct PipelineStateDesc {
   SPtr<Shader> CS;
   SPtr<Shader> MS;
   BlendStateDesc blendState;
-  uint32 sampleMask = 0xffffffff;
   RasterizerStateDesc rasterizerStateDesc;
   DepthStencilStateDesc depthStencilStateDesc;
   Vector<VertexBufferBindingDesc> vertexBufferBindingsDesc;
-  BindingGroup bindingGroups;
+  Vector<BindingGroup> bindingGroups;
   PRIMITIVE_TOPOLOGY_TYPE topology = PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  uint32 numRenderTextures = 1;
   RenderPassDesc renderPassDesc;
   MultiSampleDesc sampleDesc;
-  Box2D viewport;
+  Vector<Box2D> viewports;
+  Vector<Box2D> scissorRects;
 };
 
 struct VertexBufferDesc {
@@ -445,34 +504,16 @@ enum class BarrierType {
   kUAV
 };
 
-//TODO: not sure if this should be a flag. For know I just copy paste from DX12 xd 
 enum class ResourceStates {
-//   kCOMMON = 0,
-//   kVERTEX_AND_CONSTANT_BUFFER = 0x1,
-//   kINDEX_BUFFER = 0x2,
-//   kUNORDERED_ACCESS = 0x8,
-//   kDEPTH_WRITE = 0x10,
-//   kDEPTH_READ = 0x20,
-//   kNON_PIXEL_SHADER_RESOURCE = 0x40,
-//   kPIXEL_SHADER_RESOURCE = 0x80,
-//   kSTREAM_OUT = 0x100,
-//   kINDIRECT_ARGUMENT = 0x200,
-//   kCOPY_DEST = 0x400,
-//   kCOPY_SOURCE = 0x800,
-//   kRESOLVE_DEST = 0x1000,
-//   kRESOLVE_SOURCE = 0x2000,
-//   kRAYTRACING_ACCELERATION_STRUCTURE = 0x400000,
-//   kSHADING_RATE_SOURCE = 0x1000000,
-//   kGENERIC_READ = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
   kPRESENT = 0,
-  kPREDICATION = 0x200,
-  kVIDEO_DECODE_READ = 0x10000,
-  kVIDEO_DECODE_WRITE = 0x20000,
-  kVIDEO_PROCESS_READ = 0x40000,
-  kVIDEO_PROCESS_WRITE = 0x80000,
-  kVIDEO_ENCODE_READ = 0x200000,
-  kVIDEO_ENCODE_WRITE = 0x800000,
   kRENDER_TARGET,
+  kSHADER_RESOURCE,
+  kUNORDERED_ACCESS,
+  kDEPTH_STENCIL,
+  kCOPY_DEST,
+  kCOPY_SOURCE,
+
+  kCOUNT
 };
 
 struct ResourceBarrierTransition {
@@ -505,6 +546,7 @@ struct SwapChainDesc {
   bool stereo = false;
   uint32 frameCount = 3;
   SWAPCHAIN_EFFECT effect = SWAPCHAIN_EFFECT::FLIP_DISCARD;
+  bool vsyncEnabled;
 };
 
 }

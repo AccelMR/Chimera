@@ -30,6 +30,11 @@ class VulkanIndexBuffer : public IndexBuffer
   void
   _internalInit(const chGPUDesc::IndexBufferDesc& desc) override;
 
+  FORCEINLINE VkBuffer
+  getBuffer() const {
+    return m_buffer;
+  }
+
  private:
   VkBuffer m_buffer;
   VkDeviceMemory m_bufferMemory;

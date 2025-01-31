@@ -19,7 +19,15 @@
 #include "chGPUResourceDescriptors.h"
 
 namespace chEngineSDK {
-  using namespace chGPUDesc;
+using namespace chGPUDesc;
+
+/*
+*/
+void 
+GPUCommandBuffer::begin() {
+  _internalBegin();
+}
+
 /*
 */
 void
@@ -38,7 +46,7 @@ GPUCommandBuffer::setPipeLineState( const SPtr<GPUPipelineState> &pipelineState 
 */
 void
 GPUCommandBuffer::close() {
-  _internalclose();
+  _internalClose();
 }
 
 /*
@@ -169,23 +177,9 @@ GPUCommandBuffer::resourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barrier)
 
 /*
 */
-void
-GPUCommandBuffer::clearSwapChainTexture(const LinearColor& color) {
-  _internalClearSwapChainTexture(color);
-}
-
-/*
-*/
 bool
 GPUCommandBuffer::present(int32 syncInterval, int32 flags) {
   return _internalPresent(syncInterval, flags);
-}
-
-/*
-*/
-void
-GPUCommandBuffer::setSwapChainTexture(const SPtr<Texture>& rt) {
-  _internalSetSwapChainTexture(rt);
 }
 } // namespace chEngineSDK
 

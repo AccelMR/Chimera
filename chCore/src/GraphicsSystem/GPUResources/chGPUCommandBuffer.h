@@ -34,6 +34,9 @@ class CH_CORE_EXPORT GPUCommandBuffer
   */
   virtual ~GPUCommandBuffer() = default;
 
+  void
+  begin();
+
   //TODO: probably we must rename this as setPipeline or something since this also
   //sets the root signature, or registers for shared memory from GPU
   //Binding groups are in the shader since the shader signs which are their bindings,
@@ -104,12 +107,6 @@ class CH_CORE_EXPORT GPUCommandBuffer
   void
   resourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers);
 
-  void 
-  setSwapChainTexture(const SPtr<Texture>& rt);
-
-  void
-  clearSwapChainTexture(const LinearColor& color);
-
   bool
   present(int32 syncInterval, int32 flags);
 
@@ -120,11 +117,15 @@ class CH_CORE_EXPORT GPUCommandBuffer
   _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType,
         const SPtr<GPUPipelineState> &pipelineState) = 0;
 
+
+  virtual void
+  _internalBegin() = 0;
+
   virtual void
   _internalReset(const SPtr<GPUPipelineState>& pipelineState) = 0;
 
   virtual void 
-  _internalclose() = 0;
+  _internalClose() = 0;
   
   virtual void
   _internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) = 0;
@@ -180,18 +181,27 @@ class CH_CORE_EXPORT GPUCommandBuffer
 
   virtual void
   _internalResourceBarrier(const Vector<chGPUDesc::GPUBarrier>& barriers) = 0;
-  
-  virtual void
-  _internalClearSwapChainTexture(const LinearColor& color) = 0;
-
-  virtual void
-  _internalSetSwapChainTexture(const SPtr<Texture>& rt) = 0;
 
   virtual void
   _internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) = 0;
 
   virtual bool
   _internalPresent(int32 syncInterval, int32 flags) = 0;
+
+//   virtual void 
+//   _internalBeginRenderPass() = 0;
+
+//   virtual void 
+//   _internalEndRenderPass() = 0;
+
+//   virtual void 
+//   _internalDispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ) = 0;
+
+//   virtual void
+//   _internalDrawIndirect(const SPtr<GPUBuffer>& argsBuffer, uint32 argsOffset) = 0;
+
+//   virtual void
+//   _internalDrawIndexedIndirect(const SPtr<GPUBuffer>& argsBuffer, uint32 argsOffset) = 0;
 };
 }
 

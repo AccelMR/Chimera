@@ -78,6 +78,8 @@
 
 #include <execution>
 
+#include <optional>
+#include <variant>
 
 /*****************************************************************************/
 /**
@@ -281,4 +283,13 @@ using RecursiveMutex = std::recursive_mutex;
  * @brief Wrapper for the C++ std::unique_lock<std::recursive_mutex>.
  */
 using RecursiveLock = std::unique_lock<RecursiveMutex>;
+
+template<typename T>
+using Optional = std::optional<T>;
+
+/**
+ * @brief Wrapper for the C++ std::variant.
+ */
+template<typename... Types>
+using Variant = std::variant<Types...>;
 }

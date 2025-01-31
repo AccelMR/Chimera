@@ -360,6 +360,7 @@ GraphicsModuleVulkan::createInstance()
     vkEnumerateInstanceLayerProperties(&instanceLayerCount, instanceLayerProperties.data());
     bool validationLayerPresent = false;
     for (VkLayerProperties &layer : instanceLayerProperties) {
+      CH_LOG_INFO(StringUtils::format("Instance layer: [{0}]", layer.layerName));
       if (strcmp(layer.layerName, validationLayerName) == 0) {
         validationLayerPresent = true;
         break;

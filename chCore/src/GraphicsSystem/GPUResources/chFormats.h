@@ -160,6 +160,16 @@ getFormatSize(const FORMAT format);
 CH_CORE_EXPORT String
 toString(const FORMAT format);
 
+/**
+ * @brief Check if a format is a depth format.
+ * 
+ * @param format The format to check.
+ * @return true If the format is a depth format.
+ * @return false If the format is not a depth format.
+ */
+CH_CORE_EXPORT bool
+isDepthFormat(const FORMAT format);
+
 }
 }
 

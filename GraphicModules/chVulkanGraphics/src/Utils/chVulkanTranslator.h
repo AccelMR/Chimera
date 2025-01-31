@@ -120,24 +120,13 @@ class VulkanTranslator
 
   /*
   */
-  static VkSampleCountFlagBits
-  get(uint32 count);
-
-  /*
-  */
   static VkShaderStageFlags
   get(const ShaderStageFlag& stages);
-
-
-  /*
-  */
-  static VkDescriptorType
-  get(const TextureBindingDesc::TYPE& textureType);
 
   /*
   /*/
   static VkDescriptorType
-  get(const BufferBindingDesc::TYPE& bufferType);
+  get(const DescriptorBinding::TYPE& bufferType);
 
  /*
  */
@@ -153,6 +142,33 @@ class VulkanTranslator
   */
   static VkSamplerAddressMode
   get(const TEXTURE_ADDRESS_MODE& addressMode);
+
+  /*
+  */
+  static VkSampleCountFlagBits
+  get(const SampleCountFlag& sampleCountFlags);
+
+  /*
+  */
+  static VkAttachmentLoadOp
+  get(const AttachmentDesc::LOAD_OP& loadOp);
+
+  /*
+  */
+  static VkAttachmentStoreOp
+  get(const AttachmentDesc::STORE_OP& storeOp);
+
+  static VkAccessFlags
+  get(const chGPUDesc::AccessFlag& accessFlag);
+
+  static VkPipelineStageFlags
+  getPipelineFlags(const chGPUDesc::AccessFlag& accessFlag);
+
+  static VkImageLayout
+  get(const chGPUDesc::ResourceStates& state);
+
+  static VkPipelineStageFlags
+  getPipelineStageFlags(const chGPUDesc::ResourceStates& state);
 };
 
 } // namespace chEngineSDK

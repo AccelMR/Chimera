@@ -23,6 +23,7 @@ namespace chGPUDesc {
   struct ShaderDesc;
   struct SwapChainDesc;
   struct BindingGroup;
+  struct GPUPipelineStateDesc;
 }
 class GPUResource;
 class GPUBuffer;

@@ -61,8 +61,8 @@ SwapChain::acquireNextFrame() {
 /*
 */
 SPtr<Texture>
-SwapChain::getCurrentFrame() const {
-  return _internalGetCurrentFrame();
+SwapChain::getCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const {
+  return _internalGetCurrentFrame(pipeline);
 }
 
 /*

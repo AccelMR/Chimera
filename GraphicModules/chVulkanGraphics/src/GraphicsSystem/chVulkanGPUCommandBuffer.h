@@ -18,13 +18,15 @@
 #include "chGPUCommandBuffer.h"
 
 namespace chEngineSDK {
+class VulkanGPUPipelineState;
+
 class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
  public:
   /*
    *   Default constructor
    */
   VulkanGPUCommandBuffer() = default;
-
+  
   /*
    *   Default destructor
    */
@@ -35,10 +37,13 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
         const SPtr<GPUPipelineState> &pipelineState) override;
 
   virtual void
+  _internalBegin() override;
+
+  virtual void
   _internalReset(const SPtr<GPUPipelineState>& pipelineState) override;
 
   virtual void 
-  _internalclose() override;
+  _internalClose() override;
   
   virtual void
   _internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) override;
@@ -95,21 +100,18 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
 
   virtual void
   _internalResourceBarrier(const Vector<chGPUDesc::GPUBarrier>& barriers) override;
-  
-  virtual void
-  _internalClearSwapChainTexture(const LinearColor& color) override;
 
   virtual void
   _internalResourceBarrierSwapChain(const chGPUDesc::GPUBarrier& barriers) override;
 
-  virtual void
-  _internalSetSwapChainTexture(const SPtr<Texture>& rt) override;
-
   virtual bool
   _internalPresent(int32 syncInterval, int32 flags) override;
 
-  VkCommandBuffer m_commandBuffer;
-  VkCommandPool m_commandPool;
-  VkDevice m_device;
+  VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
+  VkCommandPool m_commandPool = VK_NULL_HANDLE;
+  VkDevice m_device = VK_NULL_HANDLE;
+  SPtr<VulkanGPUPipelineState> m_pipelineState;
+  VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
+  VkRenderPass m_renderPass = VK_NULL_HANDLE;
 };
 } // namespace chEngineSDK

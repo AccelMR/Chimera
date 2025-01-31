@@ -47,7 +47,7 @@ class CH_CORE_EXPORT SwapChain {
   acquireNextFrame();
 
   SPtr<Texture>
-  getCurrentFrame() const;
+  getCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const;
 
   FORMAT
   getFormat() const;
@@ -75,7 +75,7 @@ class CH_CORE_EXPORT SwapChain {
   _internalAcquireNextFrame() = 0;
 
   virtual SPtr<Texture>
-  _internalGetCurrentFrame() const = 0;
+  _internalGetCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const = 0;
 
   virtual FORMAT
   _internalGetFormat() const = 0;
