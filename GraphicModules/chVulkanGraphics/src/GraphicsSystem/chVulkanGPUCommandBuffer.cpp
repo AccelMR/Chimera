@@ -22,6 +22,8 @@
 #include "chVulkanTexture.h"
 #include "chVulkanSwapChain.h"
 #include "chVulkanGPUPipelineState.h"
+#include "chVulkanRenderPass.h"
+#include "chVulkanFrameBuffer.h"
 #include "chDebug.h"
 
 namespace chEngineSDK {
@@ -68,9 +70,21 @@ VulkanGPUCommandBuffer::_internalBegin() {
  */
 void
 VulkanGPUCommandBuffer::_internalReset(const SPtr<GPUPipelineState>& pipelineState) {
-  VkCommandBufferResetFlagBits flags = VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT;
-  vkResetCommandBuffer(m_commandBuffer, flags);
+  CH_ASSERT(m_commandBuffer != VK_NULL_HANDLE);
+  
+  m_renderPass.reset();
+  m_framebuffer.reset();
+
+  m_descriptorSet = VK_NULL_HANDLE;
+  m_pipelineState.reset();
+
+  throwIfFailed(
+    vkResetCommandBuffer(m_commandBuffer, 
+                         VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+
   _internalBegin();
+
+  CH_ASSERT(pipelineState != nullptr);
   _internalSetPipeLineState(pipelineState);
 }
 
@@ -85,11 +99,111 @@ VulkanGPUCommandBuffer::_internalClose() {
 */
 void
 VulkanGPUCommandBuffer::_internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) {
-  m_pipelineState = std::reinterpret_pointer_cast<VulkanGPUPipelineState>(pipelineState);
+  CH_ASSERT(pipelineState != nullptr);
+
+  m_pipelineState = std::static_pointer_cast<VulkanGPUPipelineState>(pipelineState);\
   VkPipeline pipeline = m_pipelineState->getPipeline();
+  CH_ASSERT(pipeline != VK_NULL_HANDLE);
+
+  auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(m_pipelineState->getRenderPass());
+  CH_ASSERT(vulkanRenderPass != nullptr);
+  VkRenderPass renderPass = vulkanRenderPass->getRenderPass();
+
+  auto vulkanFramebuffer = std::static_pointer_cast<VulkanFramebuffer>(m_pipelineState->getFramebuffer());
+  CH_ASSERT(vulkanFramebuffer != nullptr);
+  VkFramebuffer framebuffer = vulkanFramebuffer->getFramebuffer();
+  CH_ASSERT(framebuffer != VK_NULL_HANDLE);
+
+  auto setRenderAndFrame = [&](SPtr<VulkanRenderPass> renderPass, 
+                               SPtr<VulkanFramebuffer> framebuffer) {
+    m_renderPass = renderPass;
+    m_framebuffer = framebuffer;
+  };
+
+  if (m_renderPass && m_renderPass->getRenderPass() != renderPass) {
+    vkCmdEndRenderPass(m_commandBuffer);
+    setRenderAndFrame(vulkanRenderPass, vulkanFramebuffer);
+    Vector<LinearColor> clearColors(m_framebuffer->getAttachments().size());
+    for (size_t i = 0; i < clearColors.size(); ++i) {
+      clearColors[i] = LinearColor::Purple;
+    }
+    _internalBeginRenderPass(m_renderPass, m_framebuffer, clearColors);
+  }
+  else {
+    setRenderAndFrame(vulkanRenderPass, vulkanFramebuffer);
+  }
+
   m_descriptorSet = m_pipelineState->getDescriptorSet();
-  m_renderPass = m_pipelineState->getRenderPass();
+  CH_ASSERT(m_descriptorSet != VK_NULL_HANDLE);
+
   vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+  vkCmdBindDescriptorSets(m_commandBuffer, 
+                          VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                          m_pipelineState->getPipelineLayout(), 
+                          0, 1, &m_descriptorSet, 0, nullptr);
+}
+
+/*
+*/
+void
+VulkanGPUCommandBuffer::_internalBeginRenderPass(const SPtr<RenderPass>& renderPass, 
+                                                 const SPtr<Framebuffer>& frameBuffer,
+                                                 const Vector<LinearColor>& clearColors) {
+  auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(renderPass);
+  CH_ASSERT(vulkanRenderPass != nullptr);
+  auto vulkanFramebuffer = std::static_pointer_cast<VulkanFramebuffer>(frameBuffer);
+  CH_ASSERT(vulkanFramebuffer != nullptr);
+
+  VkRenderPassBeginInfo renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  renderPassInfo.renderPass = vulkanRenderPass->getRenderPass();
+  renderPassInfo.framebuffer = vulkanFramebuffer->getFramebuffer();
+  renderPassInfo.renderArea.offset = {0, 0};
+  renderPassInfo.renderArea.extent = { 
+    vulkanFramebuffer->getWidth(), 
+    vulkanFramebuffer->getHeight() };
+
+  Vector<VkClearValue> clearValues(clearColors.size());
+  for (size_t i = 0; i < clearColors.size(); ++i) {
+    clearValues[i].color = {
+      clearColors[i].r, 
+      clearColors[i].g, 
+      clearColors[i].b,
+      clearColors[i].a
+    };
+  }
+
+  renderPassInfo.renderArea = vulkanFramebuffer->getExtent();
+
+  renderPassInfo.clearValueCount = static_cast<uint32>(clearValues.size());
+  renderPassInfo.pClearValues = clearValues.empty() ?
+                                nullptr :  
+                                clearValues.data();
+
+  vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+/*
+*/
+void
+VulkanGPUCommandBuffer::_internalSetSubpassIndex(uint32 index) {
+  CH_ASSERT(m_renderPass);
+
+  vkCmdEndRenderPass(m_commandBuffer);
+
+  VkRenderPassBeginInfo renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  renderPassInfo.renderPass = m_renderPass->getRenderPass();
+  renderPassInfo.framebuffer = m_framebuffer->getFramebuffer();
+  renderPassInfo.renderArea = m_framebuffer->getExtent();
+  renderPassInfo.clearValueCount = static_cast<uint32>(m_framebuffer->getAttachments().size());
+
+  vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+  for (uint32 i = 0; i < index; ++i) {
+    vkCmdNextSubpass(m_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+  }
 }
 
 /*
@@ -105,6 +219,7 @@ VulkanGPUCommandBuffer::_internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint3
 void
 VulkanGPUCommandBuffer::_internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& buffers, uint32 slot) {
   if (buffers.empty()) {
+    CH_LOG_ERROR("No buffers provided.");
     return;
   }
 
@@ -185,12 +300,12 @@ VulkanGPUCommandBuffer::_internalSetRenderTargets(const Vector<SPtr<Texture>>& r
 
   auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(rts[0]);
   VkFramebuffer framebuffer = vulkanTexture->getFrameBuffer();
-  CH_ASSERT(framebuffer != VK_NULL_HANDLE);
-  CH_ASSERT(m_renderPass != VK_NULL_HANDLE);
+  CH_ASSERT(framebuffer);
+  CH_ASSERT(m_renderPass);
 
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  renderPassInfo.renderPass = m_renderPass;
+  renderPassInfo.renderPass = m_renderPass->getRenderPass();
   renderPassInfo.framebuffer = framebuffer;
   renderPassInfo.renderArea.offset = {0, 0};
   renderPassInfo.renderArea.extent = vulkanTexture->getExtent();
@@ -209,22 +324,24 @@ VulkanGPUCommandBuffer::_internalSetRenderTargets(const Vector<SPtr<Texture>>& r
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) {
-  _internalClearRenderTargets({rt}, color);
+VulkanGPUCommandBuffer::_internalClearRenderTarget(const SPtr<Texture>& rt, 
+                                                   const LinearColor& color, 
+                                                   const bool bIsInRenderPass) {
+  _internalClearRenderTargets({rt}, color, bIsInRenderPass);
 }
 
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) {
+VulkanGPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, 
+                                                    const LinearColor& color, 
+                                                    const bool bIsInRenderPass) {
   if (rts.empty()) {
     CH_LOG_ERROR("No render targets provided.");
     return;
   }
 
-  for (auto& rt : rts) {
-    auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(rt);
-    
+  auto clearColorImage = [&](const SPtr<VulkanTexture>& vulkanTexture) {
     VkClearValue clearValue{};
     clearValue.color = {color.r, color.g, color.b, color.a};
 
@@ -241,6 +358,31 @@ VulkanGPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>>&
                          &clearValue.color, 
                          1, 
                          &subresourceRange);
+  };
+
+  auto  clearColorAttachment = [&](const SPtr<VulkanTexture>& vulkanTexture) {
+    VkClearAttachment clearAttachment{};
+    clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    clearAttachment.colorAttachment = 0;
+    clearAttachment.clearValue = {color.r, color.g, color.b, color.a};
+
+    VkClearRect clearRect{};
+    clearRect.rect.offset = {0, 0};
+    clearRect.rect.extent = vulkanTexture->getExtent();
+    clearRect.baseArrayLayer = 0;
+    clearRect.layerCount = 1;
+
+    vkCmdClearAttachments(m_commandBuffer, 1, &clearAttachment, 1, &clearRect);
+  };
+
+  for (auto& rt : rts) {
+    auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(rt);
+    if (bIsInRenderPass) {
+      clearColorAttachment(vulkanTexture);
+    }
+    else {
+      clearColorImage(vulkanTexture);
+    }
   }
 }
 
@@ -248,6 +390,13 @@ VulkanGPUCommandBuffer::_internalClearRenderTargets(const Vector<SPtr<Texture>>&
 */
 void
 VulkanGPUCommandBuffer::_internalSetTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
+  CH_ASSERT(m_commandBuffer != VK_NULL_HANDLE);
+
+  if (m_pipelineState->getTopology() != PRIMITIVE_TOPOLOGY_TYPE::kDYNAMIC) {
+    CH_LOG_ERROR("Pipeline satate is not set to dynamic topology, cannot set topology.");
+    return;
+  }
+
   VkPrimitiveTopology vkTopology = VulkanTranslator::get(topology);
   vkCmdSetPrimitiveTopology(m_commandBuffer, vkTopology);
 }
@@ -255,14 +404,30 @@ VulkanGPUCommandBuffer::_internalSetTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
 /*
 */
 void
-VulkanGPUCommandBuffer::_internalSetVertexBuffer(uint32 slot, 
-                                                 uint32 numBuffers,
+VulkanGPUCommandBuffer::_internalSetVertexBuffer(uint32 slot,
                                                  const SPtr<VertexBuffer>& buffer) {
-  SPtr<VulkanVertexBuffer> vulkanVertexBuff = 
-    std::reinterpret_pointer_cast<VulkanVertexBuffer>(buffer);
-  VkBuffer vertexBuffer = vulkanVertexBuff->getBuffer();
-  VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(m_commandBuffer, slot, 1, &vertexBuffer, &offset);
+  _internalSetVertexBuffers(slot, {buffer});
+}
+
+/*
+*/
+void
+VulkanGPUCommandBuffer::_internalSetVertexBuffers(uint32 startSlot, 
+                                                  const Vector<SPtr<VertexBuffer>>& buffers) {
+  CH_ASSERT(m_commandBuffer != VK_NULL_HANDLE);
+  CH_ASSERT(!buffers.empty() && "Vertex buffers are empty.");
+
+  Vector<VkBuffer> vertexBuffers(buffers.size());
+  Vector<VkDeviceSize> offsets(buffers.size());
+  for (size_t i = 0; i < buffers.size(); ++i) {
+    auto vulkanVertexBuffer = std::static_pointer_cast<VulkanVertexBuffer>(buffers[i]);
+    vertexBuffers[i] = vulkanVertexBuffer->getBuffer();
+    offsets[i] = 0;
+  }
+
+  vkCmdBindVertexBuffers(m_commandBuffer, startSlot, 
+                         static_cast<uint32>(vertexBuffers.size()), 
+                         vertexBuffers.data(), offsets.data());
 }
 
 /*
@@ -272,7 +437,7 @@ VulkanGPUCommandBuffer::_internalSetIndexBuffer(const SPtr<IndexBuffer>& buffer)
   SPtr<VulkanIndexBuffer> vulkanIndexBuff = 
     std::reinterpret_pointer_cast<VulkanIndexBuffer>(buffer);
   VkBuffer indexBuffer = vulkanIndexBuff->getBuffer();
-  vkCmdBindIndexBuffer(m_commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+  vkCmdBindIndexBuffer(m_commandBuffer, indexBuffer, 0, vulkanIndexBuff->getIndexType());
 }
 
 /*
@@ -286,10 +451,10 @@ VulkanGPUCommandBuffer::_internalSetBindingBufferGroup(const chGPUDesc::BindingG
 */
 void
 VulkanGPUCommandBuffer::_internalDrawIndexed(uint32 indexCountPerInstance,
-                                    uint32 instanceCount,
-                                    uint32 startIndexLocation,
-                                    int32 baseVertexLocation,
-                                    uint32 startIstanceLocation) {
+                                             uint32 instanceCount,
+                                             uint32 startIndexLocation,
+                                             int32 baseVertexLocation,
+                                             uint32 startIstanceLocation) {
   vkCmdDrawIndexed(m_commandBuffer, 
                    indexCountPerInstance, 
                    instanceCount, 

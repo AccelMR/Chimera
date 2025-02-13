@@ -39,6 +39,12 @@ class CH_CORE_EXPORT Texture: public GPUResource
   */
   virtual ~Texture() = default;
 
+  FORCEINLINE int32
+  getWidth() const { return m_width; }
+
+  FORCEINLINE int32
+  getHeight() const { return m_height; }
+
  protected:
   friend class GPUResourceModule;
 
@@ -50,6 +56,9 @@ class CH_CORE_EXPORT Texture: public GPUResource
   virtual void
   _internalInit(const chGPUDesc::TextureDesc& desc) = 0;
 
+ protected:
+  int32 m_width = 0;
+  int32 m_height = 0;
 };
 }
 

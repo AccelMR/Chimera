@@ -25,8 +25,10 @@ namespace chEngineSDK
 /*Delete this!!*/
 struct MatrixViewProj
 {
-  LookAtMatrix View = LookAtMatrix({0.0f, -20.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, Vector3::UP);
-  PerspectiveMatrix Proj = PerspectiveMatrix(Radian(0.7853982f), 1920, 1080, 0.1f, 100.0f);
+  LookAtMatrix View = 
+    LookAtMatrix({0.0f, -20.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, Vector3::UP);
+  PerspectiveMatrix Proj = 
+    PerspectiveMatrix(Radian(0.7853982f), 1920, 1080, 0.1f, 100.0f);
 };
 
 struct Vertex
@@ -37,13 +39,6 @@ struct Vertex
 /*
  */
 using namespace chGPUDesc;
-
-SPtr<IndexBuffer> indexBuffer;
-SPtr<VertexBuffer> vertexBuffer;
-SPtr<GPUBuffer> MVPBuffer;
-Box2D viewport;
-GPUBarrier barrierStart;
-GPUBarrier barrierEnd;
 
 /*
  */
@@ -58,103 +53,141 @@ Renderer::initialize() {
   const float width = std::stof(commandParser.getParam("Width", "1280"));
   const float height = std::stof(commandParser.getParam("Height", "720"));
 
-  Vector<uint8> shaderFile = FileSystem::fastReadFile({"resources/shaders/vertex.spv"});
+  SPtr<Texture> gBufferAlbedo = GPUResourceMngr.createTexture({
+    .dimensions = { static_cast<int32>(width), static_cast<int32>(height), 1},
+    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .format = FORMAT::kB8G8R8A8_UNORM
+  });
+  CH_ASSERT(gBufferAlbedo != nullptr && "Fallo al crear gBufferAlbedo.");
 
-  SPtr<Shader> vertexShader = GPUResourceMngr.createShader({
-    .name = "vertex.vert",
-    .byteCode = shaderFile,
+  SPtr<Texture> gBufferNormals = GPUResourceMngr.createTexture({
+    .dimensions = {static_cast<int32>(width), static_cast<int32>(height), 1},
+    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .format = FORMAT::kR16G16B16A16_FLOAT
+  });
+  CH_ASSERT(gBufferNormals != nullptr && "Fallo al crear gBufferNormals.");
+
+  SPtr<Texture> lightingOutput = GPUResourceMngr.createTexture({
+    .dimensions = {static_cast<int32>(width), static_cast<int32>(height), 1},
+    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .format = FORMAT::kB8G8R8A8_UNORM
+  });
+  CH_ASSERT(lightingOutput != nullptr && "Fallo al crear lightingOutput.");
+
+  RenderPassDesc renderPassDesc;
+  renderPassDesc.attachments = {
+    { FORMAT::kB8G8R8A8_UNORM, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
+      AttachmentDesc::LOAD_OP::kCLEAR, AttachmentDesc::STORE_OP::kSTORE },  // GBuffer Albedo
+    
+    { FORMAT::kR16G16B16A16_FLOAT, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
+      AttachmentDesc::LOAD_OP::kCLEAR, AttachmentDesc::STORE_OP::kSTORE }, // GBuffer Normals
+
+    { FORMAT::kB8G8R8A8_UNORM, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
+      AttachmentDesc::LOAD_OP::kLOAD, AttachmentDesc::STORE_OP::kSTORE }  // Lighting Output
+  };
+
+  renderPassDesc.subpasses = {
+    { {}, {0, 1}, {} },  // Subpass 0: GBuffer (escribe en Albedo + Normales)
+    { {0, 1}, {2}, {} }  // Subpass 1: Iluminación (lee Albedo + Normales, escribe en Lighting Output)
+  };
+
+  renderPassDesc.dependencies = {
+    { 0, 1, ACCESS_FLAG::kCOLOR_ATTACHMENT_WRITE, ACCESS_FLAG::kSHADER_READ }
+  };
+
+  SPtr<RenderPass> renderPass = GraphicAPI.createRenderPass(renderPassDesc);
+  CH_ASSERT(renderPass != nullptr && "Fallo al crear renderPass.");
+
+  SPtr<Framebuffer> framebuffer = GraphicAPI.createFramebuffer({
+    .renderPass = renderPass,
+    .attachments = { gBufferAlbedo, gBufferNormals, lightingOutput }
+  });
+  CH_ASSERT(framebuffer != nullptr && "Fallo al crear framebuffer.");
+
+  PipelineStateDesc gBufferPipelineDesc;
+  gBufferPipelineDesc.VS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile("gbuffer_vertex.spv"),
     .entryFunc = "main"
   });
+  gBufferPipelineDesc.PS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile("gbuffer_pixel.spv"),
+    .entryFunc = "main"
+  });
+  gBufferPipelineDesc.renderPass = renderPass;
+  gBufferPipelineDesc.subPassIndex =  0;
+
+  PipelineStateDesc lightingPipeline;
+  lightingPipeline.VS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile("lighting_vertex.spv"),
+    .entryFunc = "main"
+  });
+  lightingPipeline.PS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile("lighting_pixel.spv"),
+    .entryFunc = "main"
+  });
+  lightingPipeline.renderPass = renderPass;
+  lightingPipeline.subPassIndex = 1;
+
+  m_gBufferPipeline = GraphicAPI.createPipelineState(gBufferPipelineDesc);
+  CH_ASSERT(m_gBufferPipeline != nullptr && "Fallo al crear gBufferPipeline.");
+
+  m_lightingPipeline = GraphicAPI.createPipelineState(lightingPipeline);
+
+  m_renderPass = renderPass;
+  m_frameBuffer = framebuffer;
+  m_albedo = gBufferAlbedo;
+  m_normal = gBufferNormals;
+  m_lightingOutput = lightingOutput;
 
   MatrixViewProj MVP;
-  MVPBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
-  MVPBuffer->update(sizeof(MatrixViewProj), &MVP);
-
-  viewport = Box2D({0.0f, 0.0f}, {width, height});
-
-  PipelineStateDesc pipelineDesc;
-  pipelineDesc.VS = vertexShader;
-  pipelineDesc.rasterizerStateDesc.cullMode = CULL_MODE::kNONE;
-  pipelineDesc.vertexBufferBindingsDesc = {
-    {VERTEX_SEMANTIC::kPOSITION, 0, sizeof(Vertex) , FORMAT::kR32G32B32A32_FLOAT}
-  };
-  pipelineDesc.bindingGroups = { BindingGroup(0, { 
-    DescriptorBinding(DescriptorBinding::TYPE::kUNIFORM_BUFFER, SHADER_STAGE::kVERTEX, 0, MVPBuffer) 
-    }) 
-  };
-  pipelineDesc.renderPassDesc.attachments = {
-    { FORMAT::kB8G8R8A8_UNORM, SAMPLE_COUNT::kSAMPLE_COUNT_1,
-      AttachmentDesc::LOAD_OP::kCLEAR, AttachmentDesc::STORE_OP::kSTORE }
-  };
-  pipelineDesc.renderPassDesc.subpasses = { { {}, {0}, {} } };
-  pipelineDesc.sampleDesc = { SAMPLE_COUNT::kSAMPLE_COUNT_1 };
-  pipelineDesc.viewports = { viewport };
-
-  m_pipeline = GraphicAPI.createPipelineState(pipelineDesc);
-
-  m_commandBuffer = GraphicAPI.beginCommandRecording(COMMAND_BUFFER_TYPES::kDIRECT, m_pipeline);
-
-  const AABox box(-Vector3::UNIT, Vector3::UNIT);
-  Array<Vector4, 8> boxVertices = box.generateVertices4();
-  VertexBufferDesc vertexBuffDesc{
-    .strideInBytes = sizeof(Vertex),
-    .size = static_cast<uint32>(boxVertices.size() * sizeof(Vertex))
-  };
-  vertexBuffer = GPUResourceMngr.createVertexBuffer(vertexBuffDesc);
-  vertexBuffer->update(vertexBuffDesc, &boxVertices[0]);
-
-  Array<uint16, 36> boxIndices = box.getConstIndices();
-  IndexBufferDesc indexBufferDesc = {
-    .format = FORMAT::kR16_UINT,
-    .size = static_cast<uint32>(boxIndices.size() * sizeof(uint16))
-  };
-  indexBuffer = GPUResourceMngr.createIndexBuffer(indexBufferDesc);
-  indexBuffer->update(indexBufferDesc, &boxIndices[0]);
-
-  barrierStart.transition.stateBefore = chGPUDesc::ResourceStates::kPRESENT;
-  barrierStart.transition.stateAfter = chGPUDesc::ResourceStates::kRENDER_TARGET;
-
-  barrierEnd.transition.stateBefore = chGPUDesc::ResourceStates::kRENDER_TARGET;
-  barrierEnd.transition.stateAfter = chGPUDesc::ResourceStates::kPRESENT;
-
-  m_swapChain = GraphicAPI.getSwapChain();
+  m_mvpBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
+  m_mvpBuffer->update(sizeof(MatrixViewProj), &MVP);
 }
-
 
 /*
 */
 void
-Renderer::render()
-{
+Renderer::render() {
   GraphicsModule& GraphicAPI = GraphicsModule::instance();
 
   if (!m_swapChain->acquireNextFrame()) {
     CH_LOG_ERROR("Failed to acquire next frame.");
     //recreateSwapChain();
+    return;
   }
 
-  SPtr<Texture> currentFrame = m_swapChain->getCurrentFrame(m_pipeline);
+  SPtr<Texture> currentFrame = m_swapChain->getCurrentFrame(m_gBufferPipeline);
 
-  m_commandBuffer->reset(m_pipeline);
-  m_commandBuffer->setPipeLineState(m_pipeline);
-  m_commandBuffer->resourceBarrierSwapChain(barrierStart);
-  m_commandBuffer->setRenderTarget(currentFrame);
-  m_commandBuffer->setScissorRect(viewport);
-  m_commandBuffer->setRect(viewport);
+  m_commandBuffer->reset(m_gBufferPipeline);
+  m_commandBuffer->setPipeLineState(m_gBufferPipeline);
 
+  m_commandBuffer->beginRenderPass(m_renderPass, m_frameBuffer, {
+    LinearColor::Black, LinearColor::Black, LinearColor::Black
+  });
 
-  m_commandBuffer->setGPUBuffer(MVPBuffer, 0);
-  m_commandBuffer->clearRenderTarget(currentFrame, LinearColor::Magenta);
-  m_commandBuffer->setTopology(PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  m_commandBuffer->setVertexBuffer(0, 1, vertexBuffer);
-  m_commandBuffer->setIndexBuffer(indexBuffer);
-  m_commandBuffer->drawIndexed(36, 1, 0, 0, 0);
-  m_commandBuffer->resourceBarrierSwapChain(barrierEnd);
-  m_commandBuffer->close(); 
+  m_commandBuffer->setVertexBuffers(0, { m_vertexBuffer } ); // Vector de buffers
+  m_commandBuffer->setIndexBuffer(m_indexBuffer);
+  m_commandBuffer->setGPUBuffer(m_mvpBuffer, 0);
+  m_commandBuffer->drawIndexed(36, 1, 0, 0, 0); //Dar valores default
 
-  GraphicAPI.executeCommandBuffers({ m_commandBuffer });
+  m_commandBuffer->nextSubpass();
+  
+  m_commandBuffer->setPipeLineState(m_lightingPipeline);
+  m_commandBuffer->setGPUBuffer(m_mvpBuffer, 0);
+  m_commandBuffer->drawIndexed(6, 1, 0, 0, 0); //Quad
 
-  if (!m_commandBuffer->present(1, 0)){
+  m_commandBuffer->endRenderPass();
+
+  static GPUBarrier presentBarrier;
+  presentBarrier.flag = BARRIER_FLAG::kNONE;
+  presentBarrier.transition.stateBefore = ResourceStates::kRENDER_TARGET;
+  presentBarrier.transition.stateAfter = ResourceStates::kPRESENT;
+  m_commandBuffer->resourceBarrierSwapChain(presentBarrier);
+
+  m_commandBuffer->close();
+  GraphicAPI.executeCommandBuffers({m_commandBuffer});
+
+  if (!m_commandBuffer->present(1, 0)) {
     CH_LOG_ERROR("Failed to present.");
   }
 }

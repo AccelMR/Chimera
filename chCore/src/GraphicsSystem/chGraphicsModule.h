@@ -20,6 +20,7 @@
  #include "chGPUResourceDescriptors.h"
 
  #include "chGPUCommandBuffer.h"
+ #include "chGPUFramebuffer.h"
  #include "chGPUPipelineState.h"
  #include "chSwapChain.h"
 
@@ -97,6 +98,12 @@ class CH_CORE_EXPORT GraphicsModule: public Module<GraphicsModule>
   void
   syncGPU(const WeakPtr<Fence> fence, uint64 value);
 
+  SPtr<RenderPass>
+  createRenderPass(const RenderPassDesc& renderPassDesc);
+
+  SPtr<Framebuffer>
+  createFramebuffer(const FramebufferDesc& framebufferDesc);
+
 protected:
   virtual void
   _internalInit(WeakPtr<Screen> screen) = 0;
@@ -124,6 +131,12 @@ protected:
 
   virtual void
   _internalSyncGPU(const WeakPtr<Fence> fence, uint64 value) = 0;
+
+  virtual SPtr<RenderPass>
+  _internalCreateRenderPass(const RenderPassDesc& renderPassDesc) = 0;
+
+  virtual SPtr<Framebuffer>
+  _internalCreateFramebuffer(const FramebufferDesc& framebufferDesc) = 0;
 
  protected:
   SPtr<SwapChain> m_swapChain;

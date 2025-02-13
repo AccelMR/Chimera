@@ -23,6 +23,7 @@
 #include "chMath.h"
 #include "chVulkanFence.h"
 #include "chVulkanGPUPipelineState.h"
+#include "chVulkanRenderPass.h"
 #include "chVulkanTexture.h"
 #include "chVulkanTranslator.h"
 #include "chVulkanGraphicsModule.h"
@@ -232,7 +233,10 @@ VulkanSwapChain::_internalGetFormat() const {
 SPtr<Texture>
 VulkanSwapChain::_internalGetCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const {
   auto vulkanPipeline = std::static_pointer_cast<VulkanGPUPipelineState>(pipeline);
-  recreateFramebuffers(vulkanPipeline->getRenderPass());
+  auto vulkanRenderPass = std::reinterpret_pointer_cast<VulkanRenderPass>(vulkanPipeline->getRenderPass());
+  CH_ASSERT(vulkanRenderPass);
+  VkRenderPass renderPass = vulkanRenderPass->getRenderPass();
+  recreateFramebuffers(renderPass);
   return  std::static_pointer_cast<Texture>(
             chMakeShared<VulkanTexture>(m_swapChainImages[m_currentFrame], 
                                         m_swapChainImageViews[m_currentFrame],

@@ -15,12 +15,14 @@
 /*****************************************************************************/
 #include "chPrerequisitesVulkan.h"
 
+#include "chGPUResourceDescriptors.h"
 #include <chGPUPipelineState.h>
 
 namespace chEngineSDK {
+class RenderPass;
+class VulkanRenderPass;
 
-class VulkanGPUPipelineState final : public GPUPipelineState
-{
+class VulkanGPUPipelineState final : public GPUPipelineState {
  public:
   /**
    *   Default constructor
@@ -45,9 +47,19 @@ class VulkanGPUPipelineState final : public GPUPipelineState
     return m_descriptorSets[index];
   }
 
-  FORCEINLINE VkRenderPass
+  FORCEINLINE SPtr<RenderPass>
   getRenderPass() const {
-    return m_renderPass;
+    return std::reinterpret_pointer_cast<RenderPass>(m_renderPass);
+  }
+
+  FORCEINLINE chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE
+  getTopology() const {
+    return m_topology;
+  }
+
+  FORCEINLINE SPtr<Framebuffer>
+  getFramebuffer() const {
+    return m_framebuffer;
   }
 
  protected:
@@ -93,16 +105,18 @@ class VulkanGPUPipelineState final : public GPUPipelineState
                          VkPipelineDepthStencilStateCreateInfo& depthStencilInfo);
 
   void
-  createColorBlendState(const chGPUDesc::PipelineStateDesc& desc, 
-                       VkPipelineColorBlendStateCreateInfo& colorBlendInfo,
-                       Vector<VkPipelineColorBlendAttachmentState>& blendAttachments);
+  createColorBlendState(const chGPUDesc::BlendStateDesc& blendStateDesc);
 
 
  private:
   VkPipeline m_pipeline;
   VkPipelineLayout m_pipelineLayout;
-  VkRenderPass m_renderPass;
-  Vector<VkDescriptorSetLayout> m_descriptorSetLayouts; 
+  VkPipelineColorBlendStateCreateInfo m_blendStateInfo;
+  SPtr<VulkanRenderPass> m_renderPass;
+  SPtr<Framebuffer> m_framebuffer;
+  Vector<VkDescriptorSetLayout> m_descriptorSetLayouts;
+  chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE m_topology = 
+  chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE::kUNDEFINED; 
 
   Vector<VkVertexInputAttributeDescription> m_vertexInputAttributes;
   Vector<VkVertexInputBindingDescription> m_vertexInputBindings;

@@ -19,6 +19,8 @@
 
 namespace chEngineSDK {
 class VulkanGPUPipelineState;
+class VulkanRenderPass;
+class VulkanFramebuffer;
 
 class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
  public:
@@ -38,6 +40,20 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
 
   virtual void
   _internalBegin() override;
+
+    void
+  _internalBeginRenderPass(const SPtr<RenderPass>& renderPass, 
+                           const SPtr<Framebuffer>& frameBuffer,
+                           const Vector<LinearColor>& clearColors) override;
+
+  virtual void
+  _internalSetSubpassIndex(uint32 index) override;
+
+  virtual void
+  _internalNextSubpass() override;
+
+  virtual void
+  _internalEndRenderPass() override;
 
   virtual void
   _internalReset(const SPtr<GPUPipelineState>& pipelineState) override;
@@ -67,16 +83,25 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   _internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) override;
 
   virtual void
-  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) override;
+  _internalClearRenderTarget(const SPtr<Texture>& rt,
+                             const LinearColor& color,
+                             const bool bIsInRenderPass = false) override;
 
   virtual void
-  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) override;
+  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts,
+                              const LinearColor& color, 
+                              const bool bIsInRenderPass = false) override;
 
   virtual void
   _internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) override;
 
   virtual void
-  _internalSetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) override;
+  _internalSetVertexBuffer(uint32 startSlot,
+                           const SPtr<VertexBuffer>& vertexBuff) override;
+
+  virtual void
+  _internalSetVertexBuffers(uint32 startSlot, 
+                            const Vector<SPtr<VertexBuffer>>& vertexBuffs) override;
 
   virtual void
   _internalSetIndexBuffer(const SPtr<IndexBuffer>& indexBuff) override;
@@ -112,6 +137,7 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   VkDevice m_device = VK_NULL_HANDLE;
   SPtr<VulkanGPUPipelineState> m_pipelineState;
   VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
-  VkRenderPass m_renderPass = VK_NULL_HANDLE;
+  SPtr<VulkanRenderPass> m_renderPass;
+  SPtr<VulkanFramebuffer> m_framebuffer;
 };
 } // namespace chEngineSDK

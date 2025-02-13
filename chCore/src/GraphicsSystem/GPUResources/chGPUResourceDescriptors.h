@@ -76,11 +76,11 @@ using SampleCountFlag = Flags<SAMPLE_COUNT, uint32>;
  using BarrierFlag = Flags<BARRIER_FLAG, uint32>;
 
  enum class COLOR_WRITE_ENABLE: uint8 {
-   kCOLOR_WRITE_ENABLE_RED  = 1,
-   kCOLOR_WRITE_ENABLE_GREEN = 2,
-   kCOLOR_WRITE_ENABLE_BLUE = 4,
-   kCOLOR_WRITE_ENABLE_ALPHA = 8,
-   kCOLOR_WRITE_ENABLE_ALL = 15
+   kRED  = 1,
+   kGREEN = 2,
+   kBLUE = 4,
+   kALPHA = 8,
+   kALL = 15
  };
  CH_FLAGS_OPERATORS_EXT(COLOR_WRITE_ENABLE, uint8);
  using ColorWriteEnableFlag = Flags<COLOR_WRITE_ENABLE, uint8>;
@@ -270,56 +270,59 @@ struct ShaderDesc {
    kBLEND_INV_SRC1_ALPHA = 19
  };
 
- enum class BLEND_OP {
-   kBLEND_OP_ADD = 1,
-   kBLEND_OP_SUBTRACT = 2,
-   kBLEND_OP_REV_SUBTRACT = 3,
-   kBLEND_OP_MIN = 4,
-   kBLEND_OP_MAX = 5
- };
+enum class BLEND_OP {
+  kBLEND_OP_ADD = 1,
+  kBLEND_OP_SUBTRACT = 2,
+  kBLEND_OP_REV_SUBTRACT = 3,
+  kBLEND_OP_MIN = 4,
+  kBLEND_OP_MAX = 5
+};
 
- enum class LOGIC_OP {
-   kLOGIC_OP_CLEAR = 0,
-   kLOGIC_OP_SET = (kLOGIC_OP_CLEAR + 1),
-   kLOGIC_OP_COPY = (kLOGIC_OP_SET + 1),
-   kLOGIC_OP_COPY_INVERTED = (kLOGIC_OP_COPY + 1),
-   kLOGIC_OP_NOOP = (kLOGIC_OP_COPY_INVERTED + 1),
-   kLOGIC_OP_INVERT = (kLOGIC_OP_NOOP + 1),
-   kLOGIC_OP_AND = (kLOGIC_OP_INVERT + 1),
-   kLOGIC_OP_NAND = (kLOGIC_OP_AND + 1),
-   kLOGIC_OP_OR = (kLOGIC_OP_NAND + 1),
-   kLOGIC_OP_NOR = (kLOGIC_OP_OR + 1),
-   kLOGIC_OP_XOR = (kLOGIC_OP_NOR + 1),
-   kLOGIC_OP_EQUIV = (kLOGIC_OP_XOR + 1),
-   kLOGIC_OP_AND_REVERSE = (kLOGIC_OP_EQUIV + 1),
-   kLOGIC_OP_AND_INVERTED = (kLOGIC_OP_AND_REVERSE + 1),
-   kLOGIC_OP_OR_REVERSE = (kLOGIC_OP_AND_INVERTED + 1),
-   kLOGIC_OP_OR_INVERTED = (kLOGIC_OP_OR_REVERSE + 1)
- };
+enum class LOGIC_OP {
+  kLOGIC_OP_CLEAR = 0,
+  kLOGIC_OP_SET = (kLOGIC_OP_CLEAR + 1),
+  kLOGIC_OP_COPY = (kLOGIC_OP_SET + 1),
+  kLOGIC_OP_COPY_INVERTED = (kLOGIC_OP_COPY + 1),
+  kLOGIC_OP_NOOP = (kLOGIC_OP_COPY_INVERTED + 1),
+  kLOGIC_OP_INVERT = (kLOGIC_OP_NOOP + 1),
+  kLOGIC_OP_AND = (kLOGIC_OP_INVERT + 1),
+  kLOGIC_OP_NAND = (kLOGIC_OP_AND + 1),
+  kLOGIC_OP_OR = (kLOGIC_OP_NAND + 1),
+  kLOGIC_OP_NOR = (kLOGIC_OP_OR + 1),
+  kLOGIC_OP_XOR = (kLOGIC_OP_NOR + 1),
+  kLOGIC_OP_EQUIV = (kLOGIC_OP_XOR + 1),
+  kLOGIC_OP_AND_REVERSE = (kLOGIC_OP_EQUIV + 1),
+  kLOGIC_OP_AND_INVERTED = (kLOGIC_OP_AND_REVERSE + 1),
+  kLOGIC_OP_OR_REVERSE = (kLOGIC_OP_AND_INVERTED + 1),
+  kLOGIC_OP_OR_INVERTED = (kLOGIC_OP_OR_REVERSE + 1)
+};
 
- struct BlendStateDesc {
-  struct RenderTargetBlendDesc {
-    BLEND srcBlend = BLEND::kBLEND_ONE;
-    BLEND destBlend = BLEND::kBLEND_ZERO;
-    BLEND_OP blendOP = BLEND_OP::kBLEND_OP_ADD;
-    BLEND srcsBlendAlpha = BLEND::kBLEND_ONE;
-    BLEND destBlendAlpha = BLEND::kBLEND_ZERO;
-    BLEND_OP blenOpAlpha = BLEND_OP::kBLEND_OP_ADD;
-    LOGIC_OP logicOP = LOGIC_OP::kLOGIC_OP_CLEAR;
-    ColorWriteEnableFlag renderTargetWritemask =  COLOR_WRITE_ENABLE::kCOLOR_WRITE_ENABLE_ALL;
-  };
-  bool alphaToCoverageEnable = false;
-  bool independentBlendEnable = false;
-  Array<RenderTargetBlendDesc, 8> renderTargetBlendDesc = {};
+struct BlendStateDesc {
+ struct RenderTargetBlendDesc {
+   BLEND srcBlend = BLEND::kBLEND_ONE;
+   BLEND destBlend = BLEND::kBLEND_ZERO;
+   BLEND_OP blendOP = BLEND_OP::kBLEND_OP_ADD;
+   BLEND srcsBlendAlpha = BLEND::kBLEND_ONE;
+   BLEND destBlendAlpha = BLEND::kBLEND_ZERO;
+   BLEND_OP blenOpAlpha = BLEND_OP::kBLEND_OP_ADD;
+   LOGIC_OP logicOP = LOGIC_OP::kLOGIC_OP_CLEAR;
+   ColorWriteEnableFlag renderTargetWritemask =  COLOR_WRITE_ENABLE::kALL;
  };
+ bool alphaToCoverageEnable = false;
+ bool independentBlendEnable = false;
+ Array<RenderTargetBlendDesc, 8> renderTargetBlendDesc = {};
+};
 
- enum class PRIMITIVE_TOPOLOGY_TYPE {
-   kPRIMITIVE_TOPOLOGY_TYPE_UNDEFINED = 0,
-   kPRIMITIVE_TOPOLOGY_TYPE_POINT = 1,
-   kPRIMITIVE_TOPOLOGY_TYPE_LINE = 2,
-   kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE = 3,
-   kPRIMITIVE_TOPOLOGY_TYPE_PATCH = 4
- };
+enum class PRIMITIVE_TOPOLOGY_TYPE {
+  kUNDEFINED = 0,
+  kPOINT,
+  kLINE,
+  kTRIANGLE,
+  kPATCH,
+  kDYNAMIC,
+
+  kCOUNT
+};
 
  enum class DEPTH_WRITE_MASK {
    kZERO = 0,
@@ -437,14 +440,12 @@ struct AttachmentDesc {
   SampleCountFlag sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1;
   LOAD_OP loadOp = LOAD_OP::kCLEAR;
   STORE_OP storeOp = STORE_OP::kSTORE;
-  bool isResolveAttachment = false;
 };
 
 struct SubpassDesc {
   Vector<uint32> inputAttachments;
   Vector<uint32> colorAttachments;
   Optional<uint32> depthStencilAttachment;
-  Vector<uint32> resolveAttachments;
 };
 
 struct SubpassDependency {
@@ -453,6 +454,11 @@ struct SubpassDependency {
 
   AccessFlag srcAccessMask;
   AccessFlag dstAccessMask;
+};
+
+struct FramebufferDesc {
+  SPtr<RenderPass> renderPass;
+  Vector<SPtr<Texture>> attachments;
 };
 
 struct RenderPassDesc {
@@ -471,8 +477,9 @@ struct PipelineStateDesc {
   DepthStencilStateDesc depthStencilStateDesc;
   Vector<VertexBufferBindingDesc> vertexBufferBindingsDesc;
   Vector<BindingGroup> bindingGroups;
-  PRIMITIVE_TOPOLOGY_TYPE topology = PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  RenderPassDesc renderPassDesc;
+  PRIMITIVE_TOPOLOGY_TYPE topology = PRIMITIVE_TOPOLOGY_TYPE::kTRIANGLE;
+  SPtr<RenderPass> renderPass;
+  uint32 subPassIndex = 0;
   MultiSampleDesc sampleDesc;
   Vector<Box2D> viewports;
   Vector<Box2D> scissorRects;
@@ -484,7 +491,7 @@ struct VertexBufferDesc {
 };
 
 struct IndexBufferDesc {
-  FORMAT format;
+  FORMAT format; //Todo: make an index format
   uint32 size;
 };
 

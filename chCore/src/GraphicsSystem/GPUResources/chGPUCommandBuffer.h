@@ -37,6 +37,20 @@ class CH_CORE_EXPORT GPUCommandBuffer
   void
   begin();
 
+  void
+  beginRenderPass(const SPtr<RenderPass>& renderPass, 
+                  const SPtr<Framebuffer>& frameBuffer,
+                  const Vector<LinearColor>& clearColors);
+
+  void
+  setSubpassIndex(uint32 index);
+
+  void
+  nextSubpass();
+
+  void
+  endRenderPass();
+
   //TODO: probably we must rename this as setPipeline or something since this also
   //sets the root signature, or registers for shared memory from GPU
   //Binding groups are in the shader since the shader signs which are their bindings,
@@ -70,16 +84,23 @@ class CH_CORE_EXPORT GPUCommandBuffer
   setRenderTargets(const Vector<SPtr<Texture>>& rts);
 
   void
-  clearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color);
+  clearRenderTarget(const SPtr<Texture>& rt, 
+                    const LinearColor& color, 
+                    const bool bIsInRenderPass = false);
 
   void
-  clearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color);
+  clearRenderTargets(const Vector<SPtr<Texture>>& rts, 
+                     const LinearColor& color, 
+                     const bool bIsInRenderPass = false);
 
   void
   setTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology);
 
   void
-  setVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff);
+  setVertexBuffer(uint32 startSlot, const SPtr<VertexBuffer>& vertexBuff);
+
+  void 
+  setVertexBuffers(uint32 startSlot, const Vector<SPtr<VertexBuffer>>& vertexBuff);
 
   void
   setIndexBuffer(const SPtr<IndexBuffer>& indexBuff);
@@ -121,6 +142,20 @@ class CH_CORE_EXPORT GPUCommandBuffer
   virtual void
   _internalBegin() = 0;
 
+    virtual void
+  _internalBeginRenderPass(const SPtr<RenderPass>& renderPass, 
+                           const SPtr<Framebuffer>& frameBuffer,
+                           const Vector<LinearColor>& clearColors) = 0;
+
+  virtual void
+  _internalSetSubpassIndex(uint32 index) = 0;
+
+  virtual void
+  _internalNextSubpass() = 0;
+
+  virtual void
+  _internalEndRenderPass() = 0;
+
   virtual void
   _internalReset(const SPtr<GPUPipelineState>& pipelineState) = 0;
 
@@ -149,16 +184,19 @@ class CH_CORE_EXPORT GPUCommandBuffer
   _internalSetRenderTargets(const Vector<SPtr<Texture>>& rts) = 0;
 
   virtual void
-  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color) = 0;
+  _internalClearRenderTarget(const SPtr<Texture>& rt, const LinearColor& color, const bool bIsInRenderPass = false) = 0;
 
   virtual void
-  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) = 0;
+  _internalClearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color, const bool bIsInRenderPass = false) = 0;
 
   virtual void
   _internalSetTopology(chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE topology) = 0;
 
   virtual void
-  _internalSetVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) = 0;
+  _internalSetVertexBuffer(uint32 startSlot, const SPtr<VertexBuffer>& vertexBuff) = 0;
+
+  virtual void
+  _internalSetVertexBuffers(uint32 startSlot, const Vector<SPtr<VertexBuffer>>& vertexBuff) = 0;
 
   virtual void
   _internalSetIndexBuffer(const SPtr<IndexBuffer>& indexBuff) = 0;
@@ -187,21 +225,6 @@ class CH_CORE_EXPORT GPUCommandBuffer
 
   virtual bool
   _internalPresent(int32 syncInterval, int32 flags) = 0;
-
-//   virtual void 
-//   _internalBeginRenderPass() = 0;
-
-//   virtual void 
-//   _internalEndRenderPass() = 0;
-
-//   virtual void 
-//   _internalDispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ) = 0;
-
-//   virtual void
-//   _internalDrawIndirect(const SPtr<GPUBuffer>& argsBuffer, uint32 argsOffset) = 0;
-
-//   virtual void
-//   _internalDrawIndexedIndirect(const SPtr<GPUBuffer>& argsBuffer, uint32 argsOffset) = 0;
 };
 }
 

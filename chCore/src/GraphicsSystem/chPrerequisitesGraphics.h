@@ -35,4 +35,6 @@ class Sampler;
 class SwapChain;
 class Shader;
 class Fence;
+class RenderPass;
+class Framebuffer;
 }

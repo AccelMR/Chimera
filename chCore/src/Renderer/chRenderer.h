@@ -38,7 +38,18 @@ class Renderer : public Module<Renderer>
 
  private:
   SPtr<GPUCommandBuffer> m_commandBuffer;
-  SPtr<GPUPipelineState> m_pipeline;
+  SPtr<GPUPipelineState> m_gBufferPipeline;
+  SPtr<GPUPipelineState> m_lightingPipeline;
+  SPtr<RenderPass> m_renderPass;
+  SPtr<Framebuffer> m_frameBuffer;
+  SPtr<Texture> m_albedo;
+  SPtr<Texture> m_normal;
+  SPtr<Texture> m_lightingOutput;
+
+  SPtr<VertexBuffer> m_vertexBuffer;
+  SPtr<IndexBuffer> m_indexBuffer;
+  SPtr<GPUBuffer> m_mvpBuffer;
+
   SPtr<SwapChain> m_swapChain;
 };
 } // schEngineSDK

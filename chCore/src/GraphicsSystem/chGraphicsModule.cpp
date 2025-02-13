@@ -85,6 +85,21 @@ void
 GraphicsModule::syncGPU(const WeakPtr<Fence> fence, uint64 value) {
   _internalSyncGPU(fence, value);
 }
+
+/*
+*/
+SPtr<RenderPass>
+GraphicsModule::createRenderPass(const RenderPassDesc& renderPassDesc) {
+  return _internalCreateRenderPass(renderPassDesc);
+}
+
+/*
+*/
+SPtr<Framebuffer>
+GraphicsModule::createFramebuffer(const FramebufferDesc& framebufferDesc) {
+  return _internalCreateFramebuffer(framebufferDesc);
+}
+
 } // namespace chEngineSDK
 
 

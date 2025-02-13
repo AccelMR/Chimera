@@ -17,9 +17,10 @@
 #include "chDebug.h"
 #include "chFormats.h"
 #include "chVulkanGraphicsModule.h"
-#include "chVulkanTranslator.h"
+#include "chVulkanRenderPass.h"
 #include "chVulkanSampler.h"
 #include "chVulkanShader.h"
+#include "chVulkanTranslator.h"
 
 namespace chEngineSDK {
 using std::reinterpret_pointer_cast;
@@ -77,11 +78,14 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
   createInputAssemblyState(desc, inputAssembly);
 
-  // Crear Viewport & Scissor
-  Vector<VkViewport> vkViewports;
-  Vector<VkRect2D> vkScissors;
+
   VkPipelineViewportStateCreateInfo viewportInfo{};
-  createViewportState(desc, viewportInfo, vkViewports, vkScissors);
+  if (!desc.viewports.empty()) {
+    // Crear Viewport & Scissor
+    Vector<VkViewport> vkViewports;
+    Vector<VkRect2D> vkScissors;
+    createViewportState(desc, viewportInfo, vkViewports, vkScissors);
+  }
 
   // Crear Rasterizer State
   VkPipelineRasterizationStateCreateInfo rasterizerState{};
@@ -94,31 +98,29 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   // Crear Color Blend
   VkPipelineColorBlendStateCreateInfo colorBlending{};
   Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
-  createColorBlendState(desc, colorBlending, blendAttachments);
+  createColorBlendState(desc.blendState);
 
   // Crear Depth-Stencil
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
   createDepthStencilState(desc, depthStencil);
 
-  // Crear RenderPass basado en el descriptor
-  createRenderPass(desc.renderPassDesc);
-  CH_ASSERT(m_renderPass != VK_NULL_HANDLE);
+  m_renderPass = reinterpret_pointer_cast<VulkanRenderPass>(desc.renderPass);
+  CH_ASSERT(m_renderPass);
 
-  // Crear el Pipeline Gráfico
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount = static_cast<uint32>(shaderStages.size());
   pipelineInfo.pStages = shaderStages.data();
   pipelineInfo.pVertexInputState = &vertexInputInfo;
   pipelineInfo.pInputAssemblyState = &inputAssembly;
-  pipelineInfo.pViewportState = &viewportInfo;
+  pipelineInfo.pViewportState = desc.viewports.empty() ? nullptr : &viewportInfo;
   pipelineInfo.pRasterizationState = &rasterizerState;
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.layout = m_pipelineLayout;
-  pipelineInfo.renderPass = m_renderPass;
-  pipelineInfo.subpass = 0;  // using the first subpass by default
+  pipelineInfo.renderPass = m_renderPass->getRenderPass();
+  pipelineInfo.subpass = 0;  // using the first subpass by defaultAnd
 
   throwIfFailed(vkCreateGraphicsPipelines(device, 
                                           VK_NULL_HANDLE, 
@@ -136,57 +138,59 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
 
 /*
 */
-void 
-VulkanGPUPipelineState::createRenderPass(const chGPUDesc::RenderPassDesc& desc) {
-  GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
-  const VkDevice& device = VulkanAPI.getDevice();
+// SPtr<RenderPass>
+// VulkanGPUPipelineState::createRenderPass(const chGPUDesc::RenderPassDesc& desc) {
+//   GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
+//   const VkDevice& device = VulkanAPI.getDevice();
 
-  Vector<VkAttachmentDescription> attachmentDescriptions;
-  Vector<VkAttachmentReference> colorReferences;
-  VkAttachmentReference depthAttachment{};
-  bool hasDepthAttachment = false;
+//   Vector<VkAttachmentDescription> attachmentDescriptions;
+//   Vector<VkAttachmentReference> colorReferences;
+//   VkAttachmentReference depthAttachment{};
+//   bool hasDepthAttachment = false;
 
-  for (uint32 i = 0; i < desc.attachments.size(); ++i) {
-    const auto& attachment = desc.attachments[i];
+//   for (uint32 i = 0; i < desc.attachments.size(); ++i) {
+//     const auto& attachment = desc.attachments[i];
 
-    VkAttachmentDescription vkAttachment{};
-    vkAttachment.format = VulkanTranslator::get(attachment.format);
-    vkAttachment.samples = VulkanTranslator::get(attachment.sampleCount);
-    vkAttachment.loadOp = VulkanTranslator::get(attachment.loadOp);
-    vkAttachment.storeOp = VulkanTranslator::get(attachment.storeOp);
-    vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    vkAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+//     VkAttachmentDescription vkAttachment{};
+//     vkAttachment.format = VulkanTranslator::get(attachment.format);
+//     vkAttachment.samples = VulkanTranslator::get(attachment.sampleCount);
+//     vkAttachment.loadOp = VulkanTranslator::get(attachment.loadOp);
+//     vkAttachment.storeOp = VulkanTranslator::get(attachment.storeOp);
+//     vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+//     vkAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-    if (chFormatUtils::isDepthFormat(attachment.format)) {
-      vkAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-      depthAttachment = { i, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-      hasDepthAttachment = true;
-    } else {
-      vkAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      colorReferences.push_back({ i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-    }
+//     if (chFormatUtils::isDepthFormat(attachment.format)) {
+//       vkAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+//       depthAttachment = { i, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+//       hasDepthAttachment = true;
+//     } else {
+//       vkAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+//       colorReferences.push_back({ i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+//     }
 
-    attachmentDescriptions.push_back(vkAttachment);
-  }
+//     attachmentDescriptions.push_back(vkAttachment);
+//   }
 
-  Vector<VkSubpassDescription> subpasses(desc.subpasses.size());
+//   Vector<VkSubpassDescription> subpasses(desc.subpasses.size());
 
-  for (SIZE_T i = 0; i < desc.subpasses.size(); ++i) {
-    subpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpasses[i].colorAttachmentCount = static_cast<uint32>(colorReferences.size());
-    subpasses[i].pColorAttachments = colorReferences.data();
-    subpasses[i].pDepthStencilAttachment = hasDepthAttachment ? &depthAttachment : nullptr;
-  }
+//   for (SIZE_T i = 0; i < desc.subpasses.size(); ++i) {
+//     subpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+//     subpasses[i].colorAttachmentCount = static_cast<uint32>(colorReferences.size());
+//     subpasses[i].pColorAttachments = colorReferences.data();
+//     subpasses[i].pDepthStencilAttachment = hasDepthAttachment ? &depthAttachment : nullptr;
+//   }
 
-  VkRenderPassCreateInfo renderPassInfo{};
-  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  renderPassInfo.attachmentCount = static_cast<uint32>(attachmentDescriptions.size());
-  renderPassInfo.pAttachments = attachmentDescriptions.data();
-  renderPassInfo.subpassCount = static_cast<uint32>(subpasses.size());
-  renderPassInfo.pSubpasses = subpasses.data();
+//   VkRenderPassCreateInfo renderPassInfo{};
+//   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+//   renderPassInfo.attachmentCount = static_cast<uint32>(attachmentDescriptions.size());
+//   renderPassInfo.pAttachments = attachmentDescriptions.data();
+//   renderPassInfo.subpassCount = static_cast<uint32>(subpasses.size());
+//   renderPassInfo.pSubpasses = subpasses.data();
 
-  throwIfFailed(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_renderPass));
-}
+
+//   VkRenderPass renderPass = m_renderPass->getRenderPass();
+//   throwIfFailed(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+// }
 
 /*
 */
@@ -315,6 +319,7 @@ VulkanGPUPipelineState::createInputAssemblyState(const chGPUDesc::PipelineStateD
   inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   inputAssemblyInfo.topology = VulkanTranslator::get(desc.topology);
   inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+  m_topology = desc.topology;
 }
 
 /*
@@ -359,7 +364,7 @@ VulkanGPUPipelineState::createRasterizerState(const chGPUDesc::PipelineStateDesc
 
   rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizationInfo.depthClampEnable = VK_FALSE;
-  rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
+  rasterizationInfo.rasterizerDiscardEnable = VK_TRUE;
   rasterizationInfo.polygonMode = VulkanTranslator::get(rasterizerState.fillMode);
   rasterizationInfo.cullMode = VulkanTranslator::get(rasterizerState.cullMode);
   rasterizationInfo.frontFace = rasterizerState.frontCounterClockWise ? 
@@ -421,22 +426,44 @@ VulkanGPUPipelineState::createDepthStencilState(const chGPUDesc::PipelineStateDe
 /*
 */
 void 
-VulkanGPUPipelineState::createColorBlendState(
-    const chGPUDesc::PipelineStateDesc& desc,
-    VkPipelineColorBlendStateCreateInfo& colorBlendInfo,
-    Vector<VkPipelineColorBlendAttachmentState>& blendAttachments) {
-  blendAttachments.clear();
-  for (uint32 i = 0; i < desc.renderPassDesc.attachments.size(); ++i) {
-    VkPipelineColorBlendAttachmentState blendAttachment{};
-    blendAttachment.blendEnable = VK_FALSE;
-    blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    blendAttachments.push_back(blendAttachment);
+VulkanGPUPipelineState::createColorBlendState(const chGPUDesc::BlendStateDesc& blendStateDesc) {
+  VkPipelineColorBlendStateCreateInfo blendInfo{};
+  blendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  
+  Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
+  blendAttachments.reserve(blendStateDesc.renderTargetBlendDesc.size());
+
+  size_t numAttachments = blendStateDesc.independentBlendEnable ? 
+                         blendStateDesc.renderTargetBlendDesc.size() : 1;
+
+  for (size_t i = 0; i < numAttachments; ++i) {
+      const auto& rtBlend = blendStateDesc.renderTargetBlendDesc[i];
+      VkPipelineColorBlendAttachmentState blendState{};
+      
+      blendState.blendEnable = (rtBlend.srcBlend != BLEND::kBLEND_ONE || 
+                               rtBlend.destBlend != BLEND::kBLEND_ZERO);
+      
+      blendState.srcColorBlendFactor = VulkanTranslator::get(rtBlend.srcBlend);
+      blendState.dstColorBlendFactor = VulkanTranslator::get(rtBlend.destBlend);
+      blendState.colorBlendOp = VulkanTranslator::get(rtBlend.blendOP);
+      
+      blendState.srcAlphaBlendFactor = VulkanTranslator::get(rtBlend.srcsBlendAlpha);
+      blendState.dstAlphaBlendFactor = VulkanTranslator::get(rtBlend.destBlendAlpha);
+      blendState.alphaBlendOp = VulkanTranslator::get(rtBlend.blenOpAlpha);
+      
+      blendState.colorWriteMask = VulkanTranslator::get(rtBlend.renderTargetWritemask);
+      
+      blendAttachments.push_back(blendState);
   }
 
-  colorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  colorBlendInfo.logicOpEnable = VK_FALSE;
-  colorBlendInfo.attachmentCount = static_cast<uint32>(blendAttachments.size());
-  colorBlendInfo.pAttachments = blendAttachments.data();
+  if (!blendStateDesc.independentBlendEnable) {
+      blendAttachments.resize(8, blendAttachments[0]);
+  }
+
+  blendInfo.attachmentCount = static_cast<uint32>(blendAttachments.size());
+  blendInfo.pAttachments = blendAttachments.data();
+  
+  m_blendStateInfo = blendInfo;
 }
+
 } // namespace chEngineSDK

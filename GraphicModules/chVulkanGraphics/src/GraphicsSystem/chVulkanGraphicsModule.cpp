@@ -22,6 +22,7 @@
 #include "chVulkanGPUCommandBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanGPUPipelineState.h"
+#include "chVulkanRenderPass.h"
 #include "chVulkanTranslator.h"
 #include "chVulkanSwapChain.h"
 
@@ -723,6 +724,15 @@ GraphicsModuleVulkan::_internalSyncGPU(const WeakPtr<Fence> fence, uint64 value)
   CH_ASSERT(vulkanFence);
   vkQueueSubmit(m_graphicsQueue, 0, nullptr, vulkanFence->getFence());
   vulkanFence->wait(value);
+}
+
+/*
+*/
+SPtr<RenderPass>
+GraphicsModuleVulkan::_internalCreateRenderPass(const RenderPassDesc& renderPassDesc) {
+  auto vulkanRenderPass = chMakeShared<VulkanRenderPass>();
+  vulkanRenderPass->init(renderPassDesc);
+  return std::reinterpret_pointer_cast<RenderPass>(vulkanRenderPass);
 }
 
 /*

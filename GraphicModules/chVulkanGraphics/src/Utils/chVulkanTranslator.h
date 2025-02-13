@@ -45,6 +45,11 @@ class VulkanTranslator
 
   /*
   */
+  static VkLogicOp
+  get(const LOGIC_OP& stencilOp);
+
+  /*
+  */
   static VkStencilOpState
   get(const DepthStencilOpDesc& stencilOp);
 
@@ -169,6 +174,9 @@ class VulkanTranslator
 
   static VkPipelineStageFlags
   getPipelineStageFlags(const chGPUDesc::ResourceStates& state);
+
+  static VkColorComponentFlags
+  get(const chGPUDesc::ColorWriteEnableFlag& colorWrite);
 };
 
 } // namespace chEngineSDK

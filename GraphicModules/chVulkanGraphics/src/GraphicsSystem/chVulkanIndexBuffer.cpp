@@ -15,6 +15,7 @@
 #include "chVulkanIndexBuffer.h"
 
 #include "chVulkanGraphicsModule.h"
+#include "chDebug.h"
 
 namespace chEngineSDK {
 
@@ -36,6 +37,18 @@ VulkanIndexBuffer::_internalInit(const chGPUDesc::IndexBufferDesc& desc) {
   bufferInfo.size = desc.size;
   bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  if (desc.format == FORMAT::kR16_UINT) {
+    m_indexType = VK_INDEX_TYPE_UINT16;
+  } 
+  else if (desc.format == FORMAT::kR32_UINT) {
+    m_indexType = VK_INDEX_TYPE_UINT32;
+  } 
+  else {
+    CH_LOG_ERROR("Invalid index format.");
+    CH_ASSERT(false);
+    return;
+  }
 
   if (vkCreateBuffer(device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
     CH_ASSERT(false);

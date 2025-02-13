@@ -31,6 +31,36 @@ GPUCommandBuffer::begin() {
 /*
 */
 void
+GPUCommandBuffer::beginRenderPass(const SPtr<RenderPass>& renderPass, 
+                                  const SPtr<Framebuffer>& frameBuffer,
+                                  const Vector<LinearColor>& clearColors) {
+  _internalBeginRenderPass(renderPass, frameBuffer, clearColors);
+}
+
+/*
+*/
+void
+GPUCommandBuffer::setSubpassIndex(uint32 index) {
+  _internalSetSubpassIndex(index);
+}
+
+/*
+*/
+void
+GPUCommandBuffer::nextSubpass() {
+  _internalNextSubpass();
+}
+
+/*
+*/
+void
+GPUCommandBuffer::endRenderPass() {
+  _internalEndRenderPass();
+}
+
+/*
+*/
+void
 GPUCommandBuffer::reset(const SPtr<GPUPipelineState>& pipelineState) {
   _internalReset(pipelineState);
 }
@@ -94,15 +124,19 @@ GPUCommandBuffer::setRenderTargets(const Vector<SPtr<Texture>>& rts) {
 /*
 */
 void
-GPUCommandBuffer::clearRenderTarget(const SPtr<Texture>& rt, const LinearColor& colo) {
-  _internalClearRenderTarget(rt, colo);
+GPUCommandBuffer::clearRenderTarget(const SPtr<Texture>& rt, 
+                                    const LinearColor& color, 
+                                    const bool bIsInRenderPass) {
+  _internalClearRenderTarget(rt, color, bIsInRenderPass);
 }
 
 /*
 */
 void
-GPUCommandBuffer::clearRenderTargets(const Vector<SPtr<Texture>>& rts, const LinearColor& color) {
-  _internalClearRenderTargets(rts, color);
+GPUCommandBuffer::clearRenderTargets(const Vector<SPtr<Texture>>& rts, 
+                                     const LinearColor& color, 
+                                     const bool bIsInRenderPass) {
+  _internalClearRenderTargets(rts, color, bIsInRenderPass);
 }
 
 /*
@@ -115,8 +149,15 @@ GPUCommandBuffer::setTopology(PRIMITIVE_TOPOLOGY_TYPE topology) {
 /*
 */
 void
-GPUCommandBuffer::setVertexBuffer(uint32 startSlot, uint32 numViews, const SPtr<VertexBuffer>& vertexBuff) {
-  _internalSetVertexBuffer(startSlot, numViews, vertexBuff);
+GPUCommandBuffer::setVertexBuffer(uint32 startSlot, const SPtr<VertexBuffer>& vertexBuff) {
+  _internalSetVertexBuffer(startSlot, vertexBuff);
+}
+
+/*
+*/
+void
+GPUCommandBuffer::setVertexBuffers(uint32 startSlot, const Vector<SPtr<VertexBuffer>>& vertexBuffs) {
+  _internalSetVertexBuffers(startSlot, vertexBuffs);
 }
 
 /*

@@ -132,10 +132,15 @@ class GraphicsModuleVulkan final : public GraphicsModule
   void
   _internalSyncGPU(const WeakPtr<Fence> fence, uint64 value) override;
 
-  void
-  createSurface();
+  SPtr<RenderPass>
+  _internalCreateRenderPass(const RenderPassDesc& renderPassDesc) override;
+
+  SPtr<Framebuffer>
+  _internalCreateFramebuffer(const FramebufferDesc& framebufferDesc) override;
 
  private:
+  void
+  createSurface();
 
   void 
   createInstance();

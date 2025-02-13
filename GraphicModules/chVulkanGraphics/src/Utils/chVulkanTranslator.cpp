@@ -197,13 +197,13 @@ VulkanTranslator::get(const RasterizerStateDesc& rastDesc) {
 VkPrimitiveTopology
 VulkanTranslator::get(const PRIMITIVE_TOPOLOGY_TYPE& topology) {
   switch (topology) {
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_POINT:
+    case PRIMITIVE_TOPOLOGY_TYPE::kPOINT:
       return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_LINE:
+    case PRIMITIVE_TOPOLOGY_TYPE::kLINE:
       return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE:
+    case PRIMITIVE_TOPOLOGY_TYPE::kTRIANGLE:
       return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_PATCH:
+    case PRIMITIVE_TOPOLOGY_TYPE::kPATCH:
       return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
     default:
       CH_EXCEPT(InternalErrorException, "Invalid PRIMITIVE_TOPOLOGY_TYPE provided for Vulkan translation!");
@@ -216,13 +216,13 @@ VulkanTranslator::get(const PRIMITIVE_TOPOLOGY_TYPE& topology) {
 VkPrimitiveTopology
 VulkanTranslator::getTopologyType(const PRIMITIVE_TOPOLOGY_TYPE& topology) {
   switch (topology) {
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_POINT:
+    case PRIMITIVE_TOPOLOGY_TYPE::kPOINT:
       return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_LINE:
+    case PRIMITIVE_TOPOLOGY_TYPE::kLINE:
       return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_TRIANGLE:
+    case PRIMITIVE_TOPOLOGY_TYPE::kTRIANGLE:
       return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case PRIMITIVE_TOPOLOGY_TYPE::kPRIMITIVE_TOPOLOGY_TYPE_PATCH:
+    case PRIMITIVE_TOPOLOGY_TYPE::kPATCH:
       return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
     default:
       CH_EXCEPT(InternalErrorException, "Invalid PRIMITIVE_TOPOLOGY_TYPE provided for Vulkan translation!");
@@ -725,6 +725,26 @@ VulkanTranslator::getPipelineStageFlags(const chGPUDesc::ResourceStates& state) 
     default:
       CH_EXCEPT(InternalErrorException, "Invalid chGPUDesc::ResourceStates provided for Vulkan translation!");
   }
+}
+
+/*
+*/
+VkColorComponentFlags
+VulkanTranslator::get(const chGPUDesc::ColorWriteEnableFlag& writeMask) {
+  VkColorComponentFlags flags = 0;
+  if (writeMask.isSet(COLOR_WRITE_ENABLE::kRED)) {
+    flags |= VK_COLOR_COMPONENT_R_BIT;
+  }
+  if (writeMask.isSet(COLOR_WRITE_ENABLE::kGREEN)) {
+    flags |= VK_COLOR_COMPONENT_G_BIT;
+  }
+  if (writeMask.isSet(COLOR_WRITE_ENABLE::kBLUE)) {
+    flags |= VK_COLOR_COMPONENT_B_BIT;
+  }
+  if (writeMask.isSet(COLOR_WRITE_ENABLE::kALPHA)) {
+    flags |= VK_COLOR_COMPONENT_A_BIT;
+  }
+  return flags;
 }
 
 } // namespace chEngineSDK

@@ -35,9 +35,15 @@ class VulkanIndexBuffer : public IndexBuffer
     return m_buffer;
   }
 
+  FORCEINLINE VkIndexType
+  getIndexType() const {
+    return m_indexType;
+  }
+
  private:
   VkBuffer m_buffer;
   VkDeviceMemory m_bufferMemory;
   VkDevice m_device;
+  VkIndexType m_indexType = VK_INDEX_TYPE_UINT32;
 };
 } // namespace chEngineSDK
