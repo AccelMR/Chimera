@@ -12,10 +12,15 @@
 #include "chVulkanTexture.h"
 
 namespace chEngineSDK {
+namespace chGPUDesc {
+  struct FramebufferDesc;
+}
+
+class VulkanRenderPass;
+
 class VulkanFramebuffer : public Framebuffer {
  public:
-  VulkanFramebuffer(const SPtr<RenderPass>& renderPass, 
-                    const Vector<SPtr<Texture>>& attachments);
+  VulkanFramebuffer(const chGPUDesc::FramebufferDesc& framebufferDesc);
   ~VulkanFramebuffer();
 
   void
@@ -40,6 +45,7 @@ class VulkanFramebuffer : public Framebuffer {
 
  private:
   VkFramebuffer m_framebuffer;
+  SPtr<VulkanRenderPass> m_renderPass;
   VkRect2D m_extent;
 };
 

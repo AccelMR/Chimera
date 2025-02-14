@@ -209,6 +209,20 @@ VulkanGPUCommandBuffer::_internalSetSubpassIndex(uint32 index) {
 /*
 */
 void
+VulkanGPUCommandBuffer::_internalNextSubpass() {
+  vkCmdNextSubpass(m_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+/*
+*/
+void
+VulkanGPUCommandBuffer::_internalEndRenderPass() {
+  vkCmdEndRenderPass(m_commandBuffer);
+} 
+
+/*
+*/
+void
 VulkanGPUCommandBuffer::_internalSetGPUBuffer(const SPtr<GPUBuffer>& buff, uint32 slot) {
   Vector<SPtr<GPUBuffer>> buffers = {buff};
   _internalSetGPUBuffers(buffers, slot);
@@ -251,7 +265,6 @@ VulkanGPUCommandBuffer::_internalSetGPUBuffers(const Vector<SPtr<GPUBuffer>>& bu
                           vulkanPipelineState->getPipelineLayout(),
                           0, 1, &descriptorSet, 0, nullptr);
 }
-
 
 /*
 */

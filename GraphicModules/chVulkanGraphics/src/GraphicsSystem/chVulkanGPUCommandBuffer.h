@@ -41,7 +41,7 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   virtual void
   _internalBegin() override;
 
-    void
+  virtual void
   _internalBeginRenderPass(const SPtr<RenderPass>& renderPass, 
                            const SPtr<Framebuffer>& frameBuffer,
                            const Vector<LinearColor>& clearColors) override;

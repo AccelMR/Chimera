@@ -115,4 +115,12 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
 
   m_subPassCount = static_cast<uint32>(subpasses.size());
 }
+
+/*
+*/
+bool
+VulkanRenderPass::_internalIsValid() const {
+  return m_renderPass != VK_NULL_HANDLE;
+}
+
 } // namespace chEngineSDK

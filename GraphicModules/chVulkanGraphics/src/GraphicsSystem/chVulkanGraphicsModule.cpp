@@ -19,12 +19,13 @@
 #include "chStringUtils.h"
 
 #include "chVulkanFence.h"
+#include "chVulkanFrameBuffer.h"
 #include "chVulkanGPUCommandBuffer.h"
 #include "chVulkanGPUBuffer.h"
 #include "chVulkanGPUPipelineState.h"
 #include "chVulkanRenderPass.h"
-#include "chVulkanTranslator.h"
 #include "chVulkanSwapChain.h"
+#include "chVulkanTranslator.h"
 
 #if USING(CH_SDL_WINDOW)
 #include <SDL3/SDL_vulkan.h>
@@ -733,6 +734,14 @@ GraphicsModuleVulkan::_internalCreateRenderPass(const RenderPassDesc& renderPass
   auto vulkanRenderPass = chMakeShared<VulkanRenderPass>();
   vulkanRenderPass->init(renderPassDesc);
   return std::reinterpret_pointer_cast<RenderPass>(vulkanRenderPass);
+}
+
+/*
+*/
+SPtr<Framebuffer>
+GraphicsModuleVulkan::_internalCreateFramebuffer(const FramebufferDesc& framebufferDesc) {
+  auto vulkanFrameBuffer =  chMakeShared<VulkanFramebuffer>(framebufferDesc);
+  return std::reinterpret_pointer_cast<Framebuffer>(vulkanFrameBuffer);
 }
 
 /*

@@ -14,19 +14,23 @@
 /************************************************************************/
 #include "chVulkanFrameBuffer.h"
 
-#include "chVulkanRenderPass.h"
+#include "chGPUResourceDescriptors.h"
 #include "chVulkanGraphicsModule.h"
+#include "chVulkanRenderPass.h"
 
 namespace chEngineSDK {
-VulkanFramebuffer::VulkanFramebuffer(const SPtr<RenderPass>& renderPass, 
-                                     const Vector<SPtr<Texture>>& attachments) {
-  m_attachments = attachments;
+VulkanFramebuffer::VulkanFramebuffer(const chGPUDesc::FramebufferDesc& framebufferDesc) {
+  m_attachments = framebufferDesc.attachments;
+  CH_ASSERT(!m_attachments.empty());
+  m_renderPass = std::reinterpret_pointer_cast<VulkanRenderPass>(framebufferDesc.renderPass);
+  CH_ASSERT(m_renderPass);
 
-  if (!attachments.empty()) {
-    m_width = attachments[0]->getWidth();
-    m_height = attachments[0]->getHeight();
+
+  if (!m_attachments.empty()) {
+    m_width = m_attachments[0]->getWidth();
+    m_height = m_attachments[0]->getHeight();
     
-    for (const auto& texture : attachments) {
+    for (const auto& texture : m_attachments) {
       if (texture->getWidth() != m_width || texture->getHeight() != m_height) {
         CH_ASSERT(false && "All attachments must have the same dimensions.");
       }
@@ -37,14 +41,14 @@ VulkanFramebuffer::VulkanFramebuffer(const SPtr<RenderPass>& renderPass,
   }
 
   Vector<VkImageView> attachmentViews;
-  for (const auto& texture : attachments) {
+  for (const auto& texture : m_attachments) {
     auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(texture);
     attachmentViews.push_back(vulkanTexture->getImageView());
   }
 
   VkFramebufferCreateInfo framebufferInfo{};
   framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  framebufferInfo.renderPass = std::reinterpret_pointer_cast<VulkanRenderPass>(renderPass)->getRenderPass();
+  framebufferInfo.renderPass = m_renderPass->getRenderPass();
   framebufferInfo.attachmentCount = static_cast<uint32>(attachmentViews.size());
   framebufferInfo.pAttachments = attachmentViews.data();
   framebufferInfo.width = m_width;
