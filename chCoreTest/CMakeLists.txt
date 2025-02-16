@@ -1,5 +1,7 @@
 add_executable(chCoreTest chCoreTestMain.cpp)
 
+find_package(TBB REQUIRED COMPONENTS tbb)
+
 # Asegúrate de que todas las bibliotecas compartidas utilicen -fPIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -11,6 +13,7 @@ target_link_libraries(
   chCoreTest
   chCore
   chUtilities
+  tbb
 )
 
 macro(INCLUDESUBFOLDERS curdir)

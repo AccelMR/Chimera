@@ -24,8 +24,6 @@
 
 
 namespace chEngineSDK{
-
-
 class CH_CORE_EXPORT Texture: public GPUResource
 {
  public:
@@ -45,9 +43,6 @@ class CH_CORE_EXPORT Texture: public GPUResource
   FORCEINLINE int32
   getHeight() const { return m_height; }
 
- protected:
-  friend class GPUResourceModule;
-
   void
   init(const chGPUDesc::TextureDesc& desc);
 
@@ -59,7 +54,9 @@ class CH_CORE_EXPORT Texture: public GPUResource
  protected:
   int32 m_width = 0;
   int32 m_height = 0;
+  uint32 m_mipLevels = 1;
 };
-}
+
+} // namespace chEngineSDK
 
 

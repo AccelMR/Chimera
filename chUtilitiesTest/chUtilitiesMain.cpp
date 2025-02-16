@@ -8,6 +8,7 @@
  * @bug No bug known.
  */
  /************************************************************************/
+#ifdef RUN_UNIT_TESTS
 #include "chMath.h"
 #include "chRadian.h"
 #include "chDegree.h"
@@ -32,7 +33,6 @@
 #include "chRandom.h"
 #include "chCommandParser.h"
 
-#ifdef RUN_UNIT_TESTS
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
@@ -1422,3 +1422,7 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 }
 
 #endif //CH_PLATFORM_WINDOWS
+
+int _main(int argc, char** argv) {
+    return 0;
+}

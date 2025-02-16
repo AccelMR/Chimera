@@ -22,6 +22,8 @@ class VulkanTexture final : public Texture
 {
  public:
 
+  VulkanTexture() = default;
+
   VulkanTexture(VkDevice device) 
     : m_device(device), m_image(nullptr) {}
 
@@ -37,8 +39,12 @@ class VulkanTexture final : public Texture
       m_device(device) {}
 
   ~VulkanTexture() override;
+  
   void
   _internalInit(const chGPUDesc::TextureDesc& desc) override;
+
+  void 
+  createImageView();
 
   FORCEINLINE VkImage
   getImage() const {
@@ -72,6 +78,7 @@ class VulkanTexture final : public Texture
   VkDevice m_device;
   VkFormat m_format;
   VkExtent2D m_extent;
+  VkDeviceMemory m_memory = VK_NULL_HANDLE;
 };
 } // namespace chEngineSDK
 

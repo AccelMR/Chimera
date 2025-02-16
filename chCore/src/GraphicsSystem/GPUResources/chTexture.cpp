@@ -22,6 +22,6 @@ Texture::init(const chGPUDesc::TextureDesc& desc) {
   _internalInit(desc);
 }
 
-}
+} // namespace chEngineSDK
 
 

@@ -76,15 +76,30 @@ Renderer::initialize() {
 
   RenderPassDesc renderPassDesc;
   renderPassDesc.attachments = {
-    { FORMAT::kB8G8R8A8_UNORM, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
-      AttachmentDesc::LOAD_OP::kCLEAR, AttachmentDesc::STORE_OP::kSTORE },  // GBuffer Albedo
-    
-    { FORMAT::kR16G16B16A16_FLOAT, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
-      AttachmentDesc::LOAD_OP::kCLEAR, AttachmentDesc::STORE_OP::kSTORE }, // GBuffer Normals
-
-    { FORMAT::kB8G8R8A8_UNORM, SAMPLE_COUNT::kSAMPLE_COUNT_1, 
-      AttachmentDesc::LOAD_OP::kLOAD, AttachmentDesc::STORE_OP::kSTORE }  // Lighting Output
-  };
+  {
+    .format = FORMAT::kB8G8R8A8_UNORM,
+    .sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1,
+    .loadOp = AttachmentDesc::LOAD_OP::kCLEAR,
+    .storeOp = AttachmentDesc::STORE_OP::kSTORE,
+    .initialLayout = LAYOUT::kUNDEFINED,
+    .finalLayout = LAYOUT::kSHADER_READ_ONLY // For GBuffer Albedo
+  },
+  {
+    .format = FORMAT::kR16G16B16A16_FLOAT,
+    .sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1,
+    .loadOp = AttachmentDesc::LOAD_OP::kCLEAR,
+    .storeOp = AttachmentDesc::STORE_OP::kSTORE,
+    .initialLayout = LAYOUT::kUNDEFINED,
+    .finalLayout = LAYOUT::kSHADER_READ_ONLY // For GBuffer Normals
+  },
+  {
+    .format = FORMAT::kB8G8R8A8_UNORM,
+    .sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1,
+    .loadOp = AttachmentDesc::LOAD_OP::kLOAD,
+    .storeOp = AttachmentDesc::STORE_OP::kSTORE,
+    .initialLayout = LAYOUT::kCOLOR_ATTACHMENT,
+    .finalLayout = LAYOUT::kPRESENT // For Lighting Output
+  }};
 
   renderPassDesc.subpasses = {
     { {}, {0, 1}, {} },  // Subpass 0: GBuffer (escribe en Albedo + Normales)

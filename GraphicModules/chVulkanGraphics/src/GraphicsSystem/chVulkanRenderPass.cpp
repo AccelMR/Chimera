@@ -44,8 +44,9 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
     attachment.storeOp = VulkanTranslator::get(att.storeOp);
     attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachment.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    attachment.initialLayout = VulkanTranslator::get(att.initialLayout);
+    attachment.finalLayout = VulkanTranslator::get(att.finalLayout);
 
     attachments.push_back(attachment);
   }
@@ -79,38 +80,26 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
     VkSubpassDependency dependency{};
     dependency.srcSubpass = dep.srcSubpass;
     dependency.dstSubpass = dep.dstSubpass;
-    dependency.srcAccessMask = 
-      VulkanTranslator::get(dep.srcAccessMask);
-    dependency.dstAccessMask = 
-      VulkanTranslator::get(dep.dstAccessMask);
-    dependency.srcStageMask = 
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstStageMask = 
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dependencyFlags = 
-      VK_DEPENDENCY_BY_REGION_BIT;
-
+    dependency.srcAccessMask = VulkanTranslator::get(dep.srcAccessMask);
+    dependency.dstAccessMask = VulkanTranslator::get(dep.dstAccessMask);
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
     dependencies.push_back(dependency);
   }
 
   VkRenderPassCreateInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  renderPassInfo.attachmentCount = 
-    static_cast<uint32>(attachments.size());
-  renderPassInfo.pAttachments = attachments.empty() ?
-    nullptr : attachments.data();
-  renderPassInfo.subpassCount =
-    static_cast<uint32>(subpasses.size());
-  renderPassInfo.pSubpasses = subpasses.empty() ?
-    nullptr : subpasses.data();
-  renderPassInfo.dependencyCount = 
-    static_cast<uint32>(dependencies.size());
-  renderPassInfo.pDependencies = dependencies.empty() ?
-    nullptr : dependencies.data();
+  renderPassInfo.attachmentCount = static_cast<uint32>(attachments.size());
+  renderPassInfo.pAttachments = attachments.empty() ? nullptr : attachments.data();
+  renderPassInfo.subpassCount = static_cast<uint32>(subpasses.size());
+  renderPassInfo.pSubpasses = subpasses.empty() ? nullptr : subpasses.data();
+  renderPassInfo.dependencyCount = static_cast<uint32>(dependencies.size());
+  renderPassInfo.pDependencies = dependencies.empty() ? nullptr : dependencies.data();
 
-  throwIfFailed(vkCreateRenderPass(device, 
-                                   &renderPassInfo, 
-                                   nullptr, 
+  throwIfFailed(vkCreateRenderPass(device,
+                                   &renderPassInfo,
+                                   nullptr,
                                    &m_renderPass));
 
   m_subPassCount = static_cast<uint32>(subpasses.size());

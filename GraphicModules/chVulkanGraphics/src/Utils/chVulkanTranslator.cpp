@@ -747,4 +747,66 @@ VulkanTranslator::get(const chGPUDesc::ColorWriteEnableFlag& writeMask) {
   return flags;
 }
 
+/*
+*/
+VkImageUsageFlags
+VulkanTranslator::get(const chGPUDesc::TextUsageFlag& usage) {
+  VkImageUsageFlags flags = 0;
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_DEPTH_STENCIL)) {
+    flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  }
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET)) {
+    flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  }
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET_READ)) {
+    flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  return flags;
+}
+
+/*
+*/
+VkImageCreateFlags 
+VulkanTranslator::get(const chGPUDesc::TextureFlags& flags) {
+  VkImageCreateFlags vkFlags = 0;
+
+  if (flags.isSet(TEXTURE_FLAGS::kCUBE_COMPATIBLE)) {
+      vkFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+  }
+  
+  if (flags.isSet(TEXTURE_FLAGS::kSPARSE_BINDING)) {
+      vkFlags |= VK_IMAGE_CREATE_SPARSE_BINDING_BIT;
+  }
+  
+  if (flags.isSet(TEXTURE_FLAGS::kMUTABLE_FORMAT)) {
+      vkFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  }
+  
+  if (flags.isSet(TEXTURE_FLAGS::kPROTECTED)) {
+      vkFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+  }
+
+  return vkFlags;
+}
+
+/*
+*/
+VkImageLayout
+VulkanTranslator::get(const chGPUDesc::LAYOUT& layout) {
+  switch (layout) {
+  case chGPUDesc::LAYOUT::kUNDEFINED:
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+  case chGPUDesc::LAYOUT::kGENERAL:
+    return VK_IMAGE_LAYOUT_GENERAL;
+  case chGPUDesc::LAYOUT::kCOLOR_ATTACHMENT:
+    return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  case chGPUDesc::LAYOUT::kSHADER_READ_ONLY:
+    return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  case chGPUDesc::LAYOUT::kPRESENT:
+    return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  default:
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+}
+
 } // namespace chEngineSDK

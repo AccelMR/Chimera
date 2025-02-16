@@ -177,6 +177,15 @@ class VulkanTranslator
 
   static VkColorComponentFlags
   get(const chGPUDesc::ColorWriteEnableFlag& colorWrite);
+
+  static VkImageUsageFlags
+  get(const chGPUDesc::TextUsageFlag& usage);
+
+  static VkImageCreateFlags
+  get(const chGPUDesc::TextureFlags& flags);
+
+  static VkImageLayout
+  get(const chGPUDesc::LAYOUT& layout);
 };
 
 } // namespace chEngineSDK

@@ -39,6 +39,19 @@ enum class TEXTURE_USAGE : uint32 {
 CH_FLAGS_OPERATORS_EXT(TEXTURE_USAGE, uint32);
 using TextUsageFlag = Flags<TEXTURE_USAGE, uint32>;
 
+enum class TEXTURE_FLAGS : uint32 {
+  kNONE              = 0,
+  kCUBE_COMPATIBLE   = (1 << 0),
+  kLINEAR_TILING     = (1 << 1),
+  kCONCURRENT_SHARING = (1 << 2),
+  kSPARSE_BINDING    = (1 << 3),
+  kMUTABLE_FORMAT    = (1 << 4),
+  kARRAY             = (1 << 5),
+  kPROTECTED         = (1 << 6),
+};
+CH_FLAGS_OPERATORS_EXT(TEXTURE_FLAGS, uint32);
+using TextureFlags = Flags<TEXTURE_FLAGS, uint32>;
+
 /*
  * Multrisample count, used for sample in pipelines
 */
@@ -106,11 +119,12 @@ struct TextureDesc {
      kTYPE_3D
    };
 
-   static constexpr uint32 ALL_MIPS = 0xffffffff;
    TYPE type = TYPE::kTYPE_2D;
    Vector3I dimensions = Vector3I::UNIT;
-   uint32 mips = ALL_MIPS;
+   uint32 mips = 1;
    uint32 layers = 1;
+   uint32 arrayLayers = 1;
+   TextureFlags flags = TEXTURE_FLAGS::kNONE;
    TextUsageFlag usage = TEXTURE_USAGE::kUSAGE_SAMPLED;
    FORMAT format = FORMAT::kR8G8B8A8_UNORM;
  };
@@ -424,6 +438,14 @@ struct ViewportDesc {
   float maxDepth = 1.0f;
 };
 
+enum class LAYOUT {
+  kUNDEFINED = 0,
+  kGENERAL = 1,
+  kCOLOR_ATTACHMENT = 2,
+  kSHADER_READ_ONLY = 3,
+  kPRESENT = 4
+};
+
 struct AttachmentDesc {
     enum class LOAD_OP {
     kLOAD,
@@ -440,6 +462,8 @@ struct AttachmentDesc {
   SampleCountFlag sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1;
   LOAD_OP loadOp = LOAD_OP::kCLEAR;
   STORE_OP storeOp = STORE_OP::kSTORE;
+  LAYOUT initialLayout = LAYOUT::kUNDEFINED;
+  LAYOUT finalLayout = LAYOUT::kUNDEFINED;
 };
 
 struct SubpassDesc {
