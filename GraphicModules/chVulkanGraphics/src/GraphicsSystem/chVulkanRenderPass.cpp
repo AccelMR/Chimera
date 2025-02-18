@@ -103,6 +103,7 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
                                    &m_renderPass));
 
   m_subPassCount = static_cast<uint32>(subpasses.size());
+  m_subpasses.resize(m_subPassCount);
 }
 
 /*
@@ -110,6 +111,14 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
 bool
 VulkanRenderPass::_internalIsValid() const {
   return m_renderPass != VK_NULL_HANDLE;
+}
+
+/*
+*/
+chGPUDesc::SubpassDesc
+VulkanRenderPass::_internalGetSubpassDesc(uint32 index) const {
+  CH_ASSERT(index < m_subPassCount && "Invalid subpass index.");
+  return m_subpasses[index];
 }
 
 } // namespace chEngineSDK

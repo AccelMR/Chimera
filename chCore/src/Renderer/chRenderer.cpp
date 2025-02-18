@@ -22,6 +22,9 @@
 
 namespace chEngineSDK
 {
+const Path m_shaderPath = "resources/shaders/";
+
+
 /*Delete this!!*/
 struct MatrixViewProj
 {
@@ -119,34 +122,82 @@ Renderer::initialize() {
   });
   CH_ASSERT(framebuffer != nullptr && "Fallo al crear framebuffer.");
 
+  SamplerDesc samplerDesc;
+  samplerDesc.minFilter = FILTER::kLINEAR;
+  samplerDesc.magFilter = FILTER::kLINEAR;
+  samplerDesc.addressU = TEXTURE_ADDRESS_MODE::kCLAMP;
+  samplerDesc.addressV = TEXTURE_ADDRESS_MODE::kCLAMP;
+  samplerDesc.addressW = TEXTURE_ADDRESS_MODE::kCLAMP;
+  m_sampler = GPUResourceMngr.createSampler(samplerDesc);
+
+  Vector<BindingGroup> gBufferBindings = {
+    BindingGroup(0, {
+        DescriptorBinding(
+            DescriptorBinding::TYPE::kUNIFORM_BUFFER,
+            SHADER_STAGE::kVERTEX,
+            0,  // slot
+            m_mvpBuffer
+        )
+    })
+  };
+
+  // Bindings para Lighting pipeline (MVP + texturas)
+  Vector<BindingGroup> lightingBindings = {
+      BindingGroup(0, {DescriptorBinding( // MVP Buffer
+                        DescriptorBinding::TYPE::kUNIFORM_BUFFER,
+                        SHADER_STAGE::kVERTEX | SHADER_STAGE::kPIXEL,
+                        0,
+                        m_mvpBuffer),
+                       DescriptorBinding( // Albedo texture
+                        DescriptorBinding::TYPE::kSAMPLED_TEXTURE,
+                        SHADER_STAGE::kPIXEL,
+                        1,
+                        m_albedo),
+                       DescriptorBinding(// Normal texture
+                        DescriptorBinding::TYPE::kSAMPLED_TEXTURE,
+                        SHADER_STAGE::kPIXEL,
+                        2,
+                        m_normal),
+                       DescriptorBinding( // Sampler
+                        DescriptorBinding::TYPE::kSAMPLER,
+                        SHADER_STAGE::kPIXEL,
+                        3,
+                        m_sampler)})};
+
   PipelineStateDesc gBufferPipelineDesc;
   gBufferPipelineDesc.VS = GPUResourceMngr.createShader({
-    .byteCode = FileSystem::fastReadFile("gbuffer_vertex.spv"),
+    .byteCode = FileSystem::fastReadFile(m_shaderPath + "gbuffer_vertex.spv"),
     .entryFunc = "main"
   });
   gBufferPipelineDesc.PS = GPUResourceMngr.createShader({
-    .byteCode = FileSystem::fastReadFile("gbuffer_pixel.spv"),
+    .byteCode = FileSystem::fastReadFile(m_shaderPath + "gbuffer_pixel.spv"),
     .entryFunc = "main"
   });
   gBufferPipelineDesc.renderPass = renderPass;
   gBufferPipelineDesc.subPassIndex =  0;
+  gBufferPipelineDesc.bindingGroups = gBufferBindings;
+  gBufferPipelineDesc.viewports = { { {0, 0}, {width, height} } };
+  gBufferPipelineDesc.scissorRects = { { {0, 0}, {width, height} } };
 
-  PipelineStateDesc lightingPipeline;
-  lightingPipeline.VS = GPUResourceMngr.createShader({
-    .byteCode = FileSystem::fastReadFile("lighting_vertex.spv"),
+  PipelineStateDesc lightingPipelineDesc;
+  lightingPipelineDesc.VS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile(m_shaderPath + "lighting_vertex.spv"),
     .entryFunc = "main"
   });
-  lightingPipeline.PS = GPUResourceMngr.createShader({
-    .byteCode = FileSystem::fastReadFile("lighting_pixel.spv"),
+  lightingPipelineDesc.PS = GPUResourceMngr.createShader({
+    .byteCode = FileSystem::fastReadFile(m_shaderPath + "lighting_pixel.spv"),
     .entryFunc = "main"
   });
-  lightingPipeline.renderPass = renderPass;
-  lightingPipeline.subPassIndex = 1;
+  lightingPipelineDesc.renderPass = renderPass;
+  lightingPipelineDesc.subPassIndex = 1;
+  lightingPipelineDesc.bindingGroups = lightingBindings;
+  lightingPipelineDesc.viewports = { { {0, 0}, {width, height} } };
+  lightingPipelineDesc.scissorRects = { { {0, 0}, {width, height} } };
 
   m_gBufferPipeline = GraphicAPI.createPipelineState(gBufferPipelineDesc);
   CH_ASSERT(m_gBufferPipeline != nullptr && "Fallo al crear gBufferPipeline.");
 
-  m_lightingPipeline = GraphicAPI.createPipelineState(lightingPipeline);
+  m_lightingPipeline = GraphicAPI.createPipelineState(lightingPipelineDesc);
 
   m_renderPass = renderPass;
   m_frameBuffer = framebuffer;

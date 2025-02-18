@@ -14,6 +14,8 @@
 /************************************************************************/
 #include "chRenderPass.h"
 
+#include "chGPUResourceDescriptors.h"
+
 namespace chEngineSDK {
 /*
 */
@@ -35,4 +37,12 @@ bool
 RenderPass::isValid() const {
   return _internalIsValid();
 }
+
+/*
+*/
+chGPUDesc::SubpassDesc
+RenderPass::getSubpassDesc(uint32 index) const {
+  return _internalGetSubpassDesc(index);
+}
+
 } // namespace chEngineSDK

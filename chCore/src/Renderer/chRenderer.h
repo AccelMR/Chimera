@@ -45,6 +45,7 @@ class Renderer : public Module<Renderer>
   SPtr<Texture> m_albedo;
   SPtr<Texture> m_normal;
   SPtr<Texture> m_lightingOutput;
+  SPtr<Sampler> m_sampler;
 
   SPtr<VertexBuffer> m_vertexBuffer;
   SPtr<IndexBuffer> m_indexBuffer;

@@ -112,7 +112,9 @@ class VulkanGPUPipelineState final : public GPUPipelineState {
   VkPipeline m_pipeline;
   VkPipelineLayout m_pipelineLayout;
   VkPipelineColorBlendStateCreateInfo m_blendStateInfo;
+  Vector<VkPipelineColorBlendAttachmentState> m_blendAttachments;
   SPtr<VulkanRenderPass> m_renderPass;
+  int32 m_subPassIndex = INVALID_INDEX;
   SPtr<Framebuffer> m_framebuffer;
   Vector<VkDescriptorSetLayout> m_descriptorSetLayouts;
   chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE m_topology = 
@@ -123,5 +125,6 @@ class VulkanGPUPipelineState final : public GPUPipelineState {
 
   VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
   Vector<VkDescriptorSet> m_descriptorSets;
+
 };
 } // namespace chEngineSDK

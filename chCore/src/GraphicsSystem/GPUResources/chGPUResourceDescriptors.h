@@ -181,7 +181,7 @@ struct DescriptorBinding{
 /** 
  *   Describes the bindings for a shader or group of shader.
 **/
-struct BindingGroup {
+struct  BindingGroup {
   uint32 descriptorSetIndex = 0;
   Vector<DescriptorBinding> bindings;
 

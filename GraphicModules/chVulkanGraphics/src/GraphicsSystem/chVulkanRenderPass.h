@@ -47,9 +47,14 @@ class CH_CORE_EXPORT VulkanRenderPass final : public RenderPass {
   getRenderPass() const {
     return m_renderPass;
   }
+
+
+  chGPUDesc::SubpassDesc
+  _internalGetSubpassDesc(uint32 index) const override;
  
   private:
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
   uint32 m_subPassCount = 0;
+  Vector<chGPUDesc::SubpassDesc> m_subpasses;
 }; 
 } // namespace chEngineSDK

@@ -14,6 +14,7 @@
 /*****************************************************************************/
 #include "chVulkanGPUPipelineState.h"
 
+#include "chCommandParser.h"
 #include "chDebug.h"
 #include "chFormats.h"
 #include "chVulkanGraphicsModule.h"
@@ -80,12 +81,51 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
 
 
   VkPipelineViewportStateCreateInfo viewportInfo{};
+  Vector<VkViewport> vkViewports;
+  Vector<VkRect2D> vkScissors;
+  
+  viewportInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   if (!desc.viewports.empty()) {
-    // Crear Viewport & Scissor
-    Vector<VkViewport> vkViewports;
-    Vector<VkRect2D> vkScissors;
-    createViewportState(desc, viewportInfo, vkViewports, vkScissors);
+      createViewportState(desc, viewportInfo, vkViewports, vkScissors);
+  } 
+  else {
+    CommandParser& commandParser = CommandParser::getInstance();
+    const int32 width = std::stoi(commandParser.getParam("Width", "1280"));
+    const int32 height = std::stoi(commandParser.getParam("Height", "720"));
+
+    VkViewport defaultViewport{};
+    defaultViewport.x = 0.0f;
+    defaultViewport.y = 0.0f;
+    defaultViewport.width = static_cast<float>(width);
+    defaultViewport.height = static_cast<float>(height);
+    defaultViewport.minDepth = 0.0f;
+    defaultViewport.maxDepth = 1.0f;
+    vkViewports.push_back(defaultViewport);
+
+    VkRect2D defaultScissor{};
+    defaultScissor.offset = {0, 0};
+    defaultScissor.extent = {static_cast<uint32>(width), static_cast<uint32>(height)};
+    vkScissors.push_back(defaultScissor);
+
+    viewportInfo.viewportCount = 1;
+    viewportInfo.pViewports = vkViewports.data();
+    viewportInfo.scissorCount = 1;
+    viewportInfo.pScissors = vkScissors.data();
   }
+
+  // Estados dinámicos
+  Vector<VkDynamicState> dynamicStates = {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR
+  };
+
+  VkPipelineDynamicStateCreateInfo dynamicState{};
+  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+  dynamicState.pDynamicStates = dynamicStates.data();
+
+  m_renderPass = reinterpret_pointer_cast<VulkanRenderPass>(desc.renderPass);
+  m_subPassIndex = desc.subPassIndex;
 
   // Crear Rasterizer State
   VkPipelineRasterizationStateCreateInfo rasterizerState{};
@@ -96,9 +136,8 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   createMultisamplingState(desc, multisampling);
 
   // Crear Color Blend
-  VkPipelineColorBlendStateCreateInfo colorBlending{};
-  Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
   createColorBlendState(desc.blendState);
+  m_blendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 
   // Crear Depth-Stencil
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
@@ -113,9 +152,9 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   pipelineInfo.pStages = shaderStages.data();
   pipelineInfo.pVertexInputState = &vertexInputInfo;
   pipelineInfo.pInputAssemblyState = &inputAssembly;
-  pipelineInfo.pViewportState = desc.viewports.empty() ? nullptr : &viewportInfo;
+  pipelineInfo.pViewportState = &viewportInfo; 
   pipelineInfo.pRasterizationState = &rasterizerState;
-  pipelineInfo.pColorBlendState = &colorBlending;
+  pipelineInfo.pColorBlendState = &m_blendStateInfo;
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.layout = m_pipelineLayout;
@@ -135,62 +174,6 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
 
   createDescriptorPool(desc.bindingGroups);
 }
-
-/*
-*/
-// SPtr<RenderPass>
-// VulkanGPUPipelineState::createRenderPass(const chGPUDesc::RenderPassDesc& desc) {
-//   GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
-//   const VkDevice& device = VulkanAPI.getDevice();
-
-//   Vector<VkAttachmentDescription> attachmentDescriptions;
-//   Vector<VkAttachmentReference> colorReferences;
-//   VkAttachmentReference depthAttachment{};
-//   bool hasDepthAttachment = false;
-
-//   for (uint32 i = 0; i < desc.attachments.size(); ++i) {
-//     const auto& attachment = desc.attachments[i];
-
-//     VkAttachmentDescription vkAttachment{};
-//     vkAttachment.format = VulkanTranslator::get(attachment.format);
-//     vkAttachment.samples = VulkanTranslator::get(attachment.sampleCount);
-//     vkAttachment.loadOp = VulkanTranslator::get(attachment.loadOp);
-//     vkAttachment.storeOp = VulkanTranslator::get(attachment.storeOp);
-//     vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-//     vkAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-//     if (chFormatUtils::isDepthFormat(attachment.format)) {
-//       vkAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-//       depthAttachment = { i, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-//       hasDepthAttachment = true;
-//     } else {
-//       vkAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-//       colorReferences.push_back({ i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-//     }
-
-//     attachmentDescriptions.push_back(vkAttachment);
-//   }
-
-//   Vector<VkSubpassDescription> subpasses(desc.subpasses.size());
-
-//   for (SIZE_T i = 0; i < desc.subpasses.size(); ++i) {
-//     subpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-//     subpasses[i].colorAttachmentCount = static_cast<uint32>(colorReferences.size());
-//     subpasses[i].pColorAttachments = colorReferences.data();
-//     subpasses[i].pDepthStencilAttachment = hasDepthAttachment ? &depthAttachment : nullptr;
-//   }
-
-//   VkRenderPassCreateInfo renderPassInfo{};
-//   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-//   renderPassInfo.attachmentCount = static_cast<uint32>(attachmentDescriptions.size());
-//   renderPassInfo.pAttachments = attachmentDescriptions.data();
-//   renderPassInfo.subpassCount = static_cast<uint32>(subpasses.size());
-//   renderPassInfo.pSubpasses = subpasses.data();
-
-
-//   VkRenderPass renderPass = m_renderPass->getRenderPass();
-//   throwIfFailed(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
-// }
 
 /*
 */
@@ -364,7 +347,7 @@ VulkanGPUPipelineState::createRasterizerState(const chGPUDesc::PipelineStateDesc
 
   rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizationInfo.depthClampEnable = VK_FALSE;
-  rasterizationInfo.rasterizerDiscardEnable = VK_TRUE;
+  rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
   rasterizationInfo.polygonMode = VulkanTranslator::get(rasterizerState.fillMode);
   rasterizationInfo.cullMode = VulkanTranslator::get(rasterizerState.cullMode);
   rasterizationInfo.frontFace = rasterizerState.frontCounterClockWise ? 
@@ -427,21 +410,26 @@ VulkanGPUPipelineState::createDepthStencilState(const chGPUDesc::PipelineStateDe
 */
 void 
 VulkanGPUPipelineState::createColorBlendState(const chGPUDesc::BlendStateDesc& blendStateDesc) {
-  VkPipelineColorBlendStateCreateInfo blendInfo{};
-  blendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  
-  Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
-  blendAttachments.reserve(blendStateDesc.renderTargetBlendDesc.size());
+  m_blendStateInfo = {};
+  m_blendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  m_blendStateInfo.logicOpEnable = VK_FALSE;
+ 
+  const auto& subpass = m_renderPass->getSubpassDesc(m_subPassIndex);
+  uint32_t numColorAttachments = static_cast<uint32_t>(subpass.colorAttachments.size());
 
-  size_t numAttachments = blendStateDesc.independentBlendEnable ? 
-                         blendStateDesc.renderTargetBlendDesc.size() : 1;
+  m_blendAttachments.clear();
+  m_blendAttachments.resize(numColorAttachments);
 
-  for (size_t i = 0; i < numAttachments; ++i) {
-      const auto& rtBlend = blendStateDesc.renderTargetBlendDesc[i];
-      VkPipelineColorBlendAttachmentState blendState{};
+  // Configurar los estados de blend para cada attachment
+  for (uint32_t i = 0; i < numColorAttachments; ++i) {
+      VkPipelineColorBlendAttachmentState& blendState = m_blendAttachments[i];
       
+      const auto& rtBlend = i < blendStateDesc.renderTargetBlendDesc.size() ? 
+          blendStateDesc.renderTargetBlendDesc[i] : 
+          blendStateDesc.renderTargetBlendDesc[0];  // usar el primero como default
+
       blendState.blendEnable = (rtBlend.srcBlend != BLEND::kBLEND_ONE || 
-                               rtBlend.destBlend != BLEND::kBLEND_ZERO);
+                             rtBlend.destBlend != BLEND::kBLEND_ZERO);
       
       blendState.srcColorBlendFactor = VulkanTranslator::get(rtBlend.srcBlend);
       blendState.dstColorBlendFactor = VulkanTranslator::get(rtBlend.destBlend);
@@ -452,18 +440,10 @@ VulkanGPUPipelineState::createColorBlendState(const chGPUDesc::BlendStateDesc& b
       blendState.alphaBlendOp = VulkanTranslator::get(rtBlend.blenOpAlpha);
       
       blendState.colorWriteMask = VulkanTranslator::get(rtBlend.renderTargetWritemask);
-      
-      blendAttachments.push_back(blendState);
   }
 
-  if (!blendStateDesc.independentBlendEnable) {
-      blendAttachments.resize(8, blendAttachments[0]);
-  }
-
-  blendInfo.attachmentCount = static_cast<uint32>(blendAttachments.size());
-  blendInfo.pAttachments = blendAttachments.data();
-  
-  m_blendStateInfo = blendInfo;
+  m_blendStateInfo.attachmentCount = static_cast<uint32>(m_blendAttachments.size());
+  m_blendStateInfo.pAttachments = m_blendAttachments.data();
 }
 
 } // namespace chEngineSDK
