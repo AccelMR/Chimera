@@ -178,6 +178,12 @@ Renderer::initialize() {
   gBufferPipelineDesc.bindingGroups = gBufferBindings;
   gBufferPipelineDesc.viewports = { { {0, 0}, {width, height} } };
   gBufferPipelineDesc.scissorRects = { { {0, 0}, {width, height} } };
+  gBufferPipelineDesc.vertexBufferBindingsDesc = {
+    VertexBufferBindingDesc(VERTEX_SEMANTIC::kPOSITION, 
+    0, 
+    sizeof(Vertex), 
+    FORMAT::kR32G32B32A32_FLOAT)
+  };
 
   PipelineStateDesc lightingPipelineDesc;
   lightingPipelineDesc.VS = GPUResourceMngr.createShader({
@@ -193,11 +199,20 @@ Renderer::initialize() {
   lightingPipelineDesc.bindingGroups = lightingBindings;
   lightingPipelineDesc.viewports = { { {0, 0}, {width, height} } };
   lightingPipelineDesc.scissorRects = { { {0, 0}, {width, height} } };
+  lightingPipelineDesc.vertexBufferBindingsDesc = {
+    VertexBufferBindingDesc(
+        VERTEX_SEMANTIC::kPOSITION,
+        0,
+        sizeof(Vector4),
+        FORMAT::kR32G32B32A32_FLOAT
+    )
+  };
 
   m_gBufferPipeline = GraphicAPI.createPipelineState(gBufferPipelineDesc);
   CH_ASSERT(m_gBufferPipeline != nullptr && "Fallo al crear gBufferPipeline.");
 
   m_lightingPipeline = GraphicAPI.createPipelineState(lightingPipelineDesc);
+  CH_ASSERT(m_lightingPipeline != nullptr && "Fallo al crear lightingPipeline.");
 
   m_renderPass = renderPass;
   m_frameBuffer = framebuffer;

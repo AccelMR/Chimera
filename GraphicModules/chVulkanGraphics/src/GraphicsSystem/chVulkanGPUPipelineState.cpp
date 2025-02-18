@@ -413,33 +413,44 @@ VulkanGPUPipelineState::createColorBlendState(const chGPUDesc::BlendStateDesc& b
   m_blendStateInfo = {};
   m_blendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   m_blendStateInfo.logicOpEnable = VK_FALSE;
- 
-  const auto& subpass = m_renderPass->getSubpassDesc(m_subPassIndex);
-  uint32_t numColorAttachments = static_cast<uint32_t>(subpass.colorAttachments.size());
 
-  m_blendAttachments.clear();
+  const chGPUDesc::SubpassDesc& subpass = m_renderPass->getSubpassDesc(m_subPassIndex);
+  size_t numColorAttachments = subpass.colorAttachments.size();
+
   m_blendAttachments.resize(numColorAttachments);
 
-  // Configurar los estados de blend para cada attachment
-  for (uint32_t i = 0; i < numColorAttachments; ++i) {
-      VkPipelineColorBlendAttachmentState& blendState = m_blendAttachments[i];
-      
-      const auto& rtBlend = i < blendStateDesc.renderTargetBlendDesc.size() ? 
-          blendStateDesc.renderTargetBlendDesc[i] : 
-          blendStateDesc.renderTargetBlendDesc[0];  // usar el primero como default
+  for (size_t i = 0; i < numColorAttachments; ++i) {
+    auto& blendState = m_blendAttachments[i];
+
+    if (i < blendStateDesc.renderTargetBlendDesc.size()) {
+      const auto& rtBlend = blendStateDesc.renderTargetBlendDesc[i];
 
       blendState.blendEnable = (rtBlend.srcBlend != BLEND::kBLEND_ONE || 
-                             rtBlend.destBlend != BLEND::kBLEND_ZERO);
-      
+                                rtBlend.destBlend != BLEND::kBLEND_ZERO);
+
       blendState.srcColorBlendFactor = VulkanTranslator::get(rtBlend.srcBlend);
       blendState.dstColorBlendFactor = VulkanTranslator::get(rtBlend.destBlend);
       blendState.colorBlendOp = VulkanTranslator::get(rtBlend.blendOP);
-      
+
       blendState.srcAlphaBlendFactor = VulkanTranslator::get(rtBlend.srcsBlendAlpha);
       blendState.dstAlphaBlendFactor = VulkanTranslator::get(rtBlend.destBlendAlpha);
       blendState.alphaBlendOp = VulkanTranslator::get(rtBlend.blenOpAlpha);
-      
+
       blendState.colorWriteMask = VulkanTranslator::get(rtBlend.renderTargetWritemask);
+    } 
+    else {
+      blendState.blendEnable = VK_FALSE;
+      blendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendState.colorBlendOp = VK_BLEND_OP_ADD;
+      blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendState.alphaBlendOp = VK_BLEND_OP_ADD;
+      blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | 
+                                VK_COLOR_COMPONENT_G_BIT | 
+                                VK_COLOR_COMPONENT_B_BIT | 
+                                VK_COLOR_COMPONENT_A_BIT;
+    }
   }
 
   m_blendStateInfo.attachmentCount = static_cast<uint32>(m_blendAttachments.size());

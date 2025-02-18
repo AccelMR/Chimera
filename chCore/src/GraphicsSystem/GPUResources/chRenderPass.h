@@ -41,7 +41,7 @@ class CH_CORE_EXPORT RenderPass {
   uint32
   getSubPassCount() const;
 
-  chGPUDesc::SubpassDesc
+  const chGPUDesc::SubpassDesc&
   getSubpassDesc(uint32 index) const;
 
   bool
@@ -57,7 +57,7 @@ class CH_CORE_EXPORT RenderPass {
   virtual bool
   _internalIsValid() const = 0;
 
-  virtual chGPUDesc::SubpassDesc
+  virtual const chGPUDesc::SubpassDesc&
   _internalGetSubpassDesc(uint32 index) const = 0;
 
 };

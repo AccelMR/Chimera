@@ -103,7 +103,7 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
                                    &m_renderPass));
 
   m_subPassCount = static_cast<uint32>(subpasses.size());
-  m_subpasses.resize(m_subPassCount);
+  m_subpasses = desc.subpasses;
 }
 
 /*
@@ -115,9 +115,9 @@ VulkanRenderPass::_internalIsValid() const {
 
 /*
 */
-chGPUDesc::SubpassDesc
+const chGPUDesc::SubpassDesc&
 VulkanRenderPass::_internalGetSubpassDesc(uint32 index) const {
-  CH_ASSERT(index < m_subPassCount && "Invalid subpass index.");
+  CH_ASSERT(index < m_subpasses.size() && "Invalid subpass index.");
   return m_subpasses[index];
 }
 

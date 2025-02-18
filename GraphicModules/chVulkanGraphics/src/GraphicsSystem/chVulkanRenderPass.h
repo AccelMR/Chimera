@@ -48,8 +48,7 @@ class CH_CORE_EXPORT VulkanRenderPass final : public RenderPass {
     return m_renderPass;
   }
 
-
-  chGPUDesc::SubpassDesc
+  const chGPUDesc::SubpassDesc&
   _internalGetSubpassDesc(uint32 index) const override;
  
   private:

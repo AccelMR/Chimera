@@ -40,7 +40,7 @@ RenderPass::isValid() const {
 
 /*
 */
-chGPUDesc::SubpassDesc
+const chGPUDesc::SubpassDesc&
 RenderPass::getSubpassDesc(uint32 index) const {
   return _internalGetSubpassDesc(index);
 }
