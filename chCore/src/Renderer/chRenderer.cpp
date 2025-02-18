@@ -19,6 +19,7 @@
 #include "chDebug.h"
 #include "chMatrix4.h"
 #include "chRadian.h"
+#include "chVector3.h"
 
 namespace chEngineSDK
 {
@@ -185,6 +186,20 @@ Renderer::initialize() {
     FORMAT::kR32G32B32A32_FLOAT)
   };
 
+  BlendStateDesc gBufferBlendState;
+  // Set up for albedo
+  gBufferBlendState.renderTargetBlendDesc[0] = {
+      .srcBlend = BLEND::kBLEND_ONE,
+      .destBlend = BLEND::kBLEND_ZERO,
+      .blendOP = BLEND_OP::kBLEND_OP_ADD,
+      .srcsBlendAlpha = BLEND::kBLEND_ONE,
+      .destBlendAlpha = BLEND::kBLEND_ZERO,
+      .blenOpAlpha = BLEND_OP::kBLEND_OP_ADD,
+      .renderTargetWritemask = COLOR_WRITE_ENABLE::kALL};
+  // Set up for normals
+  gBufferBlendState.renderTargetBlendDesc[1] = gBufferBlendState.renderTargetBlendDesc[0];
+  gBufferPipelineDesc.blendState = gBufferBlendState;
+
   PipelineStateDesc lightingPipelineDesc;
   lightingPipelineDesc.VS = GPUResourceMngr.createShader({
     .byteCode = FileSystem::fastReadFile(m_shaderPath + "lighting_vertex.spv"),
@@ -200,13 +215,22 @@ Renderer::initialize() {
   lightingPipelineDesc.viewports = { { {0, 0}, {width, height} } };
   lightingPipelineDesc.scissorRects = { { {0, 0}, {width, height} } };
   lightingPipelineDesc.vertexBufferBindingsDesc = {
-    VertexBufferBindingDesc(
-        VERTEX_SEMANTIC::kPOSITION,
-        0,
-        sizeof(Vector4),
-        FORMAT::kR32G32B32A32_FLOAT
-    )
-  };
+      VertexBufferBindingDesc(
+          VERTEX_SEMANTIC::kPOSITION,
+          0,
+          sizeof(Vector4),
+          FORMAT::kR32G32B32A32_FLOAT)};
+  BlendStateDesc blendStateDesc;
+  blendStateDesc.renderTargetBlendDesc[0] = {
+      .srcBlend = BLEND::kBLEND_ONE,
+      .destBlend = BLEND::kBLEND_ZERO,
+      .blendOP = BLEND_OP::kBLEND_OP_ADD,
+      .srcsBlendAlpha = BLEND::kBLEND_ONE,
+      .destBlendAlpha = BLEND::kBLEND_ZERO,
+      .blenOpAlpha = BLEND_OP::kBLEND_OP_ADD,
+      .renderTargetWritemask = COLOR_WRITE_ENABLE::kALL};
+  lightingPipelineDesc.blendState = blendStateDesc;
+  lightingPipelineDesc.subPassIndex = 1;
 
   m_gBufferPipeline = GraphicAPI.createPipelineState(gBufferPipelineDesc);
   CH_ASSERT(m_gBufferPipeline != nullptr && "Fallo al crear gBufferPipeline.");
@@ -223,6 +247,25 @@ Renderer::initialize() {
   MatrixViewProj MVP;
   m_mvpBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
   m_mvpBuffer->update(sizeof(MatrixViewProj), &MVP);
+
+
+  AABox box(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f));
+  Array<Vector4, 8> vertices = box.generateVertices4();
+
+  chGPUDesc::VertexBufferDesc vertexBufferDesc;
+  vertexBufferDesc.strideInBytes = sizeof(Vector4);
+  vertexBufferDesc.size = sizeof(Vector4) * 8;
+
+  m_vertexBuffer = GPUResourceMngr.createVertexBuffer(vertexBufferDesc);
+  m_vertexBuffer->update(vertexBufferDesc, vertices.data());
+
+  Array<uint16, 36> indices = box.getConstIndices();
+  chGPUDesc::IndexBufferDesc indexBufferDesc;
+  indexBufferDesc.format = FORMAT::kR16_UINT;
+  indexBufferDesc.size = sizeof(uint16) * 36;
+
+  m_indexBuffer = GPUResourceMngr.createIndexBuffer(indexBufferDesc);
+  m_indexBuffer->update(indexBufferDesc, indices.data());
 }
 
 /*

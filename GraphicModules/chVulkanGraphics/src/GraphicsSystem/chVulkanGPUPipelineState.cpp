@@ -50,6 +50,10 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   GraphicsModuleVulkan& VulkanAPI = g_VulkanGraphicsModule();
   const VkDevice& device = VulkanAPI.getDevice();
 
+  m_renderPass = reinterpret_pointer_cast<VulkanRenderPass>(desc.renderPass);
+  CH_ASSERT(m_renderPass);
+  m_subPassIndex = desc.subPassIndex;
+
   Vector<VkPipelineShaderStageCreateInfo> shaderStages;
   auto addShaderStage = [&](const SPtr<VulkanShader>& shader, VkShaderStageFlagBits stage) {
     if (shader) {
@@ -124,9 +128,6 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
   dynamicState.pDynamicStates = dynamicStates.data();
 
-  m_renderPass = reinterpret_pointer_cast<VulkanRenderPass>(desc.renderPass);
-  m_subPassIndex = desc.subPassIndex;
-
   // Crear Rasterizer State
   VkPipelineRasterizationStateCreateInfo rasterizerState{};
   createRasterizerState(desc, rasterizerState);
@@ -143,9 +144,6 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
   createDepthStencilState(desc, depthStencil);
 
-  m_renderPass = reinterpret_pointer_cast<VulkanRenderPass>(desc.renderPass);
-  CH_ASSERT(m_renderPass);
-
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount = static_cast<uint32>(shaderStages.size());
@@ -159,7 +157,7 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.layout = m_pipelineLayout;
   pipelineInfo.renderPass = m_renderPass->getRenderPass();
-  pipelineInfo.subpass = 0;  // using the first subpass by defaultAnd
+  pipelineInfo.subpass = m_subPassIndex;
 
   throwIfFailed(vkCreateGraphicsPipelines(device, 
                                           VK_NULL_HANDLE, 
