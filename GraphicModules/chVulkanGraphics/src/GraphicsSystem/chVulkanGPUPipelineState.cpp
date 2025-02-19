@@ -217,6 +217,7 @@ VulkanGPUPipelineState::createPipelineLayout(const Vector<chGPUDesc::BindingGrou
                                        &m_pipelineLayout));
 
   m_descriptorSetLayouts = descriptorSetLayouts;
+  m_bindingBufferGroup = bindingGroups;
 }
 
 /*

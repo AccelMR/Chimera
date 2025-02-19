@@ -232,17 +232,13 @@ VulkanSwapChain::_internalGetFormat() const {
 */
 SPtr<Texture>
 VulkanSwapChain::_internalGetCurrentFrame(const SPtr<GPUPipelineState>& pipeline) const {
-  auto vulkanPipeline = std::static_pointer_cast<VulkanGPUPipelineState>(pipeline);
-  auto vulkanRenderPass = std::reinterpret_pointer_cast<VulkanRenderPass>(vulkanPipeline->getRenderPass());
-  CH_ASSERT(vulkanRenderPass);
-  VkRenderPass renderPass = vulkanRenderPass->getRenderPass();
-  recreateFramebuffers(renderPass);
-  return  std::static_pointer_cast<Texture>(
-            chMakeShared<VulkanTexture>(m_swapChainImages[m_currentFrame], 
-                                        m_swapChainImageViews[m_currentFrame],
-                                        m_frameBuffers[m_currentFrame],
-                                        m_swapChainExtent,
-                                        g_VulkanGraphicsModule().getDevice()));
+  VkDevice device = g_VulkanGraphicsModule().getDevice();
+  auto vulkanTexture = chMakeShared<VulkanTexture>(m_swapChainImages[m_currentFrame],
+                                                   m_swapChainImageViews[m_currentFrame],
+                                                   VK_NULL_HANDLE,
+                                                   m_swapChainExtent,
+                                                   device);
+  return  std::reinterpret_pointer_cast<Texture>(vulkanTexture);
 }
 
 /*

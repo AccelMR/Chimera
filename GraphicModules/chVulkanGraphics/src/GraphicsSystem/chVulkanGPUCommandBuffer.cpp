@@ -14,17 +14,18 @@
 /************************************************************************/
 #include "chVulkanGPUCommandBuffer.h"
 
-#include "chVulkanVertexBuffer.h"
+#include "chDebug.h"
 #include "chVulkanIndexBuffer.h"
-#include "chVulkanGraphicsModule.h"
+#include "chVulkanFrameBuffer.h"
+#include "chVulkanGPUPipelineState.h"
 #include "chVulkanGPUBuffer.h"
+#include "chVulkanGraphicsModule.h"
 #include "chVulkanTranslator.h"
 #include "chVulkanTexture.h"
-#include "chVulkanSwapChain.h"
-#include "chVulkanGPUPipelineState.h"
 #include "chVulkanRenderPass.h"
-#include "chVulkanFrameBuffer.h"
-#include "chDebug.h"
+#include "chVulkanSwapChain.h"
+#include "chVulkanSampler.h"
+#include "chVulkanVertexBuffer.h"
 
 namespace chEngineSDK {
 /*
@@ -38,8 +39,7 @@ VulkanGPUCommandBuffer::~VulkanGPUCommandBuffer() {
 /*
 */
 void
-VulkanGPUCommandBuffer::_init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType,
-                              const SPtr<GPUPipelineState>& pipelineState) {
+VulkanGPUCommandBuffer::_init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType) {
   m_device = g_VulkanGraphicsModule().getDevice();
   m_commandPool = g_VulkanGraphicsModule().commandPool;
 
@@ -101,47 +101,19 @@ void
 VulkanGPUCommandBuffer::_internalSetPipeLineState(const SPtr<GPUPipelineState>& pipelineState) {
   CH_ASSERT(pipelineState != nullptr);
 
-  m_pipelineState = std::static_pointer_cast<VulkanGPUPipelineState>(pipelineState);\
+  m_pipelineState = std::static_pointer_cast<VulkanGPUPipelineState>(pipelineState);
   VkPipeline pipeline = m_pipelineState->getPipeline();
   CH_ASSERT(pipeline != VK_NULL_HANDLE);
-
-  auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(m_pipelineState->getRenderPass());
-  CH_ASSERT(vulkanRenderPass != nullptr);
-  VkRenderPass renderPass = vulkanRenderPass->getRenderPass();
-
-  auto vulkanFramebuffer = std::static_pointer_cast<VulkanFramebuffer>(m_pipelineState->getFramebuffer());
-  CH_ASSERT(vulkanFramebuffer != nullptr);
-  VkFramebuffer framebuffer = vulkanFramebuffer->getFramebuffer();
-  CH_ASSERT(framebuffer != VK_NULL_HANDLE);
-
-  auto setRenderAndFrame = [&](SPtr<VulkanRenderPass> renderPass, 
-                               SPtr<VulkanFramebuffer> framebuffer) {
-    m_renderPass = renderPass;
-    m_framebuffer = framebuffer;
-  };
-
-  if (m_renderPass && m_renderPass->getRenderPass() != renderPass) {
-    vkCmdEndRenderPass(m_commandBuffer);
-    setRenderAndFrame(vulkanRenderPass, vulkanFramebuffer);
-    Vector<LinearColor> clearColors(m_framebuffer->getAttachments().size());
-    for (size_t i = 0; i < clearColors.size(); ++i) {
-      clearColors[i] = LinearColor::Purple;
-    }
-    _internalBeginRenderPass(m_renderPass, m_framebuffer, clearColors);
-  }
-  else {
-    setRenderAndFrame(vulkanRenderPass, vulkanFramebuffer);
-  }
 
   m_descriptorSet = m_pipelineState->getDescriptorSet();
   CH_ASSERT(m_descriptorSet != VK_NULL_HANDLE);
 
   vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-  vkCmdBindDescriptorSets(m_commandBuffer, 
-                          VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                          m_pipelineState->getPipelineLayout(), 
-                          0, 1, &m_descriptorSet, 0, nullptr);
+  const auto& bindingGroups = m_pipelineState->getBindingGroups();
+  for (uint32 i = 0; i < bindingGroups.size(); ++i) {
+    _internalSetBindingBufferGroup(bindingGroups[i]);
+  }
 }
 
 /*
@@ -152,8 +124,10 @@ VulkanGPUCommandBuffer::_internalBeginRenderPass(const SPtr<RenderPass>& renderP
                                                  const Vector<LinearColor>& clearColors) {
   auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(renderPass);
   CH_ASSERT(vulkanRenderPass != nullptr);
+  m_renderPass = vulkanRenderPass;
   auto vulkanFramebuffer = std::static_pointer_cast<VulkanFramebuffer>(frameBuffer);
   CH_ASSERT(vulkanFramebuffer != nullptr);
+  m_framebuffer = vulkanFramebuffer;
 
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -174,8 +148,6 @@ VulkanGPUCommandBuffer::_internalBeginRenderPass(const SPtr<RenderPass>& renderP
     };
   }
 
-  renderPassInfo.renderArea = vulkanFramebuffer->getExtent();
-
   renderPassInfo.clearValueCount = static_cast<uint32>(clearValues.size());
   renderPassInfo.pClearValues = clearValues.empty() ?
                                 nullptr :  
@@ -189,6 +161,7 @@ VulkanGPUCommandBuffer::_internalBeginRenderPass(const SPtr<RenderPass>& renderP
 void
 VulkanGPUCommandBuffer::_internalSetSubpassIndex(uint32 index) {
   CH_ASSERT(m_renderPass);
+  CH_ASSERT(m_framebuffer);
 
   vkCmdEndRenderPass(m_commandBuffer);
 
@@ -196,7 +169,10 @@ VulkanGPUCommandBuffer::_internalSetSubpassIndex(uint32 index) {
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = m_renderPass->getRenderPass();
   renderPassInfo.framebuffer = m_framebuffer->getFramebuffer();
-  renderPassInfo.renderArea = m_framebuffer->getExtent();
+  renderPassInfo.renderArea.extent = { 
+    m_framebuffer->getWidth(), 
+    m_framebuffer->getHeight() 
+  };
   renderPassInfo.clearValueCount = static_cast<uint32>(m_framebuffer->getAttachments().size());
 
   vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -456,8 +432,95 @@ VulkanGPUCommandBuffer::_internalSetIndexBuffer(const SPtr<IndexBuffer>& buffer)
 /*
  */
 void
-VulkanGPUCommandBuffer::_internalSetBindingBufferGroup(const chGPUDesc::BindingGroup &bindingGroup) {
+VulkanGPUCommandBuffer::_internalSetBindingBufferGroup(const chGPUDesc::BindingGroup& bindingGroup) {
+  VkDescriptorSet descriptorSet = m_pipelineState->getDescriptorSet(bindingGroup.descriptorSetIndex);
+  CH_ASSERT(descriptorSet != VK_NULL_HANDLE);
 
+  Vector<VkWriteDescriptorSet> descriptorWrites;
+  Vector<VkDescriptorBufferInfo> bufferInfos;
+  Vector<VkDescriptorImageInfo> imageInfos;
+
+  descriptorWrites.reserve(bindingGroup.bindings.size());
+  bufferInfos.reserve(bindingGroup.bindings.size());
+  imageInfos.reserve(bindingGroup.bindings.size());
+
+  for (const auto& binding : bindingGroup.bindings) {
+    VkWriteDescriptorSet write = createDescriptorWrite(binding, descriptorSet, 
+                                                      bufferInfos, imageInfos);
+    descriptorWrites.push_back(write);
+  }
+
+  // Actualizar descriptores
+  if (!descriptorWrites.empty()) {
+    vkUpdateDescriptorSets(m_device, 
+                          static_cast<uint32>(descriptorWrites.size()), 
+                          descriptorWrites.data(), 
+                          0, nullptr);
+  }
+
+  // Vincular el descriptor set actualizado
+  vkCmdBindDescriptorSets(m_commandBuffer,
+                         VK_PIPELINE_BIND_POINT_GRAPHICS,
+                         m_pipelineState->getPipelineLayout(),
+                         bindingGroup.descriptorSetIndex,
+                         1, &descriptorSet,
+                         0, nullptr);
+}
+
+/*
+*/
+VkWriteDescriptorSet 
+VulkanGPUCommandBuffer::createDescriptorWrite(const DescriptorBinding& binding,
+                                             VkDescriptorSet descriptorSet,
+                                             Vector<VkDescriptorBufferInfo>& bufferInfos,
+                                             Vector<VkDescriptorImageInfo>& imageInfos) {
+  VkWriteDescriptorSet write{};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.dstSet = descriptorSet;
+  write.dstBinding = binding.slot;
+  write.dstArrayElement = 0;
+  write.descriptorCount = 1;
+
+  if (std::holds_alternative<SPtr<GPUBuffer>>(binding.resource)) {
+    auto buffer = std::get<SPtr<GPUBuffer>>(binding.resource);
+    auto vulkanBuffer = std::static_pointer_cast<VulkanGPUBuffer>(buffer);
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = vulkanBuffer->getBuffer();
+    bufferInfo.offset = 0;
+    bufferInfo.range = VK_WHOLE_SIZE;
+    bufferInfos.push_back(bufferInfo);
+
+    write.descriptorType = binding.type == DescriptorBinding::TYPE::kUNIFORM_BUFFER ?
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &bufferInfos.back();
+  }
+  else if (std::holds_alternative<SPtr<Texture>>(binding.resource)) {
+    auto texture = std::get<SPtr<Texture>>(binding.resource);
+    auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(texture);
+
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = vulkanTexture->getImageView();
+    imageInfos.push_back(imageInfo);
+
+    write.descriptorType = binding.type == DescriptorBinding::TYPE::kSAMPLED_TEXTURE ?
+      VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.pImageInfo = &imageInfos.back();
+  }
+  else if (std::holds_alternative<SPtr<Sampler>>(binding.resource)) {
+    auto sampler = std::get<SPtr<Sampler>>(binding.resource);
+    auto vulkanSampler = std::static_pointer_cast<VulkanSampler>(sampler);
+
+    VkDescriptorImageInfo samplerInfo{};
+    samplerInfo.sampler = vulkanSampler->getSampler();
+    imageInfos.push_back(samplerInfo);
+
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    write.pImageInfo = &imageInfos.back();
+  }
+
+  return write;
 }
 
 /*

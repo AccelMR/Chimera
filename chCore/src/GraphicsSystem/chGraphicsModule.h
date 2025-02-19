@@ -50,11 +50,12 @@ class CH_CORE_EXPORT GraphicsModule: public Module<GraphicsModule>
   OnResize(uint32 width, uint32 height);
 
   /**
-   * @brief Creates a GPU command buffer.
+   * 
+   * @brief Begins the command recording.
+   * @param commandBufferType The type of command buffer.
    */
   SPtr<GPUCommandBuffer>
-  beginCommandRecording(COMMAND_BUFFER_TYPES commandBufferType,
-                        const SPtr<GPUPipelineState>& pipelineState);
+  createCommandBuffer(COMMAND_BUFFER_TYPES commandBufferType);
 
   /**
    * @brief Creates a GPU pipeline state.

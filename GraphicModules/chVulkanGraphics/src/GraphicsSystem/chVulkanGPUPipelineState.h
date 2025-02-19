@@ -118,13 +118,12 @@ class VulkanGPUPipelineState final : public GPUPipelineState {
   SPtr<Framebuffer> m_framebuffer;
   Vector<VkDescriptorSetLayout> m_descriptorSetLayouts;
   chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE m_topology = 
-  chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE::kUNDEFINED; 
+  chGPUDesc::PRIMITIVE_TOPOLOGY_TYPE::kUNDEFINED;
 
   Vector<VkVertexInputAttributeDescription> m_vertexInputAttributes;
   Vector<VkVertexInputBindingDescription> m_vertexInputBindings;
 
   VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
   Vector<VkDescriptorSet> m_descriptorSets;
-
 };
 } // namespace chEngineSDK

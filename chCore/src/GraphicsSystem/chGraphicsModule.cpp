@@ -33,14 +33,11 @@ GraphicsModule::OnResize(uint32 width, uint32 height) {
 }
 
 /*
- *TODO: add command pool?
 */
 SPtr<GPUCommandBuffer>
-GraphicsModule::beginCommandRecording(COMMAND_BUFFER_TYPES commandBufferType, 
-                                 const SPtr<GPUPipelineState>& pipelineState) {
+GraphicsModule::createCommandBuffer(COMMAND_BUFFER_TYPES commandBufferType) {
   SPtr<GPUCommandBuffer> cmdBffr = _internalCreateGPUCommandBuffer();
-  cmdBffr->_init(commandBufferType, pipelineState);
-  cmdBffr->begin();
+  cmdBffr->_init(commandBufferType);
   return cmdBffr;
 }
 

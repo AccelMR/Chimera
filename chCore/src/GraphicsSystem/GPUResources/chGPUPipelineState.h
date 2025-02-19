@@ -19,6 +19,12 @@
 #include "chPrerequisitesGraphics.h"
 
 namespace chEngineSDK{
+
+// Forward declaration
+namespace chGPUDesc {
+  struct BindingGroup;
+} // namespace chGPUDesc
+
 class GPUPipelineState
 {
  public:
@@ -31,6 +37,14 @@ class GPUPipelineState
   *   Default destructor
   */
   virtual ~GPUPipelineState() = default;
+
+  const Vector<chGPUDesc::BindingGroup>&
+  getBindingGroups() const {
+    return m_bindingBufferGroup;
+  }
+
+ protected:
+  Vector<chGPUDesc::BindingGroup> m_bindingBufferGroup;
 };
 }
 

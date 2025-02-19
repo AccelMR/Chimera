@@ -758,6 +758,12 @@ VulkanTranslator::get(const chGPUDesc::TextUsageFlag& usage) {
   if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET)) {
     flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_SAMPLED)) {
+    flags |= VK_IMAGE_USAGE_SAMPLED_BIT;  // Añadir esta línea
+  }
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_STORAGE)) {
+    flags |= VK_IMAGE_USAGE_STORAGE_BIT;  // También es buena idea añadir soporte para storage
+  }
   if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET_READ)) {
     flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }

@@ -28,10 +28,10 @@ class VulkanTexture final : public Texture
     : m_device(device), m_image(nullptr) {}
 
   VulkanTexture(VkImage image, 
-  VkImageView imageView, 
-  VkFramebuffer frameBuffer, 
-  VkExtent2D extent,
-  VkDevice device)
+                VkImageView imageView, 
+                VkFramebuffer frameBuffer, 
+                VkExtent2D extent,
+                VkDevice device)
     : m_image(image),
       m_imageView(imageView),
       m_frameBuffer(frameBuffer),

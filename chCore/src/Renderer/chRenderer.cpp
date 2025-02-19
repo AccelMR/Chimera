@@ -248,7 +248,6 @@ Renderer::initialize() {
   m_mvpBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
   m_mvpBuffer->update(sizeof(MatrixViewProj), &MVP);
 
-
   AABox box(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f));
   Array<Vector4, 8> vertices = box.generateVertices4();
 
@@ -266,6 +265,8 @@ Renderer::initialize() {
 
   m_indexBuffer = GPUResourceMngr.createIndexBuffer(indexBufferDesc);
   m_indexBuffer->update(indexBufferDesc, indices.data());
+
+  m_commandBuffer = GraphicAPI.createCommandBuffer(COMMAND_BUFFER_TYPES::kDIRECT);
 }
 
 /*

@@ -29,8 +29,6 @@ class VulkanFramebuffer : public Framebuffer {
   uint32
   _internalGetWidth() const override { return m_width; }
 
-
-
   uint32 
   _internalGetHeight() const override { return m_height; }
   
@@ -40,13 +38,9 @@ class VulkanFramebuffer : public Framebuffer {
   FORCEINLINE VkFramebuffer 
   getFramebuffer() const { return m_framebuffer; }
 
-  FORCEINLINE VkRect2D
-  getExtent() const { return m_extent; }
-
  private:
   VkFramebuffer m_framebuffer;
   SPtr<VulkanRenderPass> m_renderPass;
-  VkRect2D m_extent;
 };
 
 } // namespace chEngineSDK

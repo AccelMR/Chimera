@@ -22,6 +22,10 @@ class VulkanGPUPipelineState;
 class VulkanRenderPass;
 class VulkanFramebuffer;
 
+namespace chGPUDesc {
+  struct DescriptorBinding;
+}
+
 class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
  public:
   /*
@@ -35,8 +39,7 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
   ~VulkanGPUCommandBuffer();
  
   virtual void
-  _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType,
-        const SPtr<GPUPipelineState> &pipelineState) override;
+  _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType) override;
 
   virtual void
   _internalBegin() override;
@@ -131,6 +134,12 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
 
   virtual bool
   _internalPresent(int32 syncInterval, int32 flags) override;
+
+  VkWriteDescriptorSet
+  createDescriptorWrite(const chGPUDesc::DescriptorBinding& binding, 
+                        VkDescriptorSet descriptorSet,
+                        Vector<VkDescriptorBufferInfo>& bufferInfos,
+                        Vector<VkDescriptorImageInfo>& imageInfos);
 
   VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
   VkCommandPool m_commandPool = VK_NULL_HANDLE;

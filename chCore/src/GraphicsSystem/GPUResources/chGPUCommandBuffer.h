@@ -51,11 +51,6 @@ class CH_CORE_EXPORT GPUCommandBuffer
   void
   endRenderPass();
 
-  //TODO: probably we must rename this as setPipeline or something since this also
-  //sets the root signature, or registers for shared memory from GPU
-  //Binding groups are in the shader since the shader signs which are their bindings,
-  //but those shaders are also kept in the pipeline, so it make sense to me to just set
-  //the root signature here that you also have the pipeline and its shaders.
   void
   reset(const SPtr<GPUPipelineState>& pipelineState);
 
@@ -114,7 +109,6 @@ class CH_CORE_EXPORT GPUCommandBuffer
                 uint32 startVertexLocation,
                 uint32 startInstanceLocation);
 
-
   void
   drawIndexed(uint32 indexCountPerInstance,
               uint32 instanceCount,
@@ -135,8 +129,7 @@ class CH_CORE_EXPORT GPUCommandBuffer
  friend class GraphicsModule;
  
   virtual void
-  _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType,
-        const SPtr<GPUPipelineState> &pipelineState) = 0;
+  _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType) = 0;
 
 
   virtual void
