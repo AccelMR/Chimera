@@ -752,20 +752,17 @@ VulkanTranslator::get(const chGPUDesc::ColorWriteEnableFlag& writeMask) {
 VkImageUsageFlags
 VulkanTranslator::get(const chGPUDesc::TextUsageFlag& usage) {
   VkImageUsageFlags flags = 0;
-  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_DEPTH_STENCIL)) {
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kDEPTH_STENCIL)) {
     flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   }
-  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET)) {
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kRENDER_TARGET)) {
     flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
-  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_SAMPLED)) {
-    flags |= VK_IMAGE_USAGE_SAMPLED_BIT;  // Añadir esta línea
-  }
-  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_STORAGE)) {
-    flags |= VK_IMAGE_USAGE_STORAGE_BIT;  // También es buena idea añadir soporte para storage
-  }
-  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kUSAGE_RENDER_TARGET_READ)) {
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kSAMPLED)) {
     flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  if (usage.isSet(chGPUDesc::TEXTURE_USAGE::kINPUT_ATTACHMENT)) {
+    flags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
   }
   return flags;
 }

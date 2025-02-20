@@ -58,8 +58,9 @@ VulkanGPUBuffer::~VulkanGPUBuffer() {
 */
 void
 VulkanGPUBuffer::_init(const SIZE_T& size) {
-  const VkDevice& device = g_VulkanGraphicsModule().getDevice();
-  const VkPhysicalDevice& physicalDevice = g_VulkanGraphicsModule().getPhysicalDevice();
+  GraphicsModuleVulkan& vulkanGraphicsModule = g_VulkanGraphicsModule();
+  const VkDevice& device = vulkanGraphicsModule.getDevice();
+  const VkPhysicalDevice& physicalDevice = vulkanGraphicsModule.getPhysicalDevice();
 
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -77,10 +78,9 @@ VulkanGPUBuffer::_init(const SIZE_T& size) {
   VkMemoryAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
-                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                             physicalDevice);
+  allocInfo.memoryTypeIndex = vulkanGraphicsModule.findMemoryType(memRequirements.memoryTypeBits,
+                                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
   if (vkAllocateMemory(device, &allocInfo, nullptr, &m_memory) != VK_SUCCESS) {
     CH_LOG_ERROR("Failed to allocate buffer memory");

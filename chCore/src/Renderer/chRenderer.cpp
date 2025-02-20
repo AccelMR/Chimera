@@ -57,26 +57,30 @@ Renderer::initialize() {
   const float width = std::stof(commandParser.getParam("Width", "1280"));
   const float height = std::stof(commandParser.getParam("Height", "720"));
 
-  SPtr<Texture> gBufferAlbedo = GPUResourceMngr.createTexture({
+  MatrixViewProj MVP;
+  m_mvpBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
+  m_mvpBuffer->update(sizeof(MatrixViewProj), &MVP);
+
+  m_albedo = GPUResourceMngr.createTexture({
     .dimensions = { static_cast<int32>(width), static_cast<int32>(height), 1},
-    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .usage = TEXTURE_USAGE::kRENDER_TARGET | TEXTURE_USAGE::kSAMPLED | TEXTURE_USAGE::kINPUT_ATTACHMENT,
     .format = FORMAT::kB8G8R8A8_UNORM
   });
-  CH_ASSERT(gBufferAlbedo != nullptr && "Fallo al crear gBufferAlbedo.");
+  CH_ASSERT(m_albedo != nullptr && "Fallo al crear gBufferAlbedo.");
 
-  SPtr<Texture> gBufferNormals = GPUResourceMngr.createTexture({
+  m_normal = GPUResourceMngr.createTexture({
     .dimensions = {static_cast<int32>(width), static_cast<int32>(height), 1},
-    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .usage = TEXTURE_USAGE::kRENDER_TARGET | TEXTURE_USAGE::kSAMPLED | TEXTURE_USAGE::kINPUT_ATTACHMENT,
     .format = FORMAT::kR16G16B16A16_FLOAT
   });
-  CH_ASSERT(gBufferNormals != nullptr && "Fallo al crear gBufferNormals.");
+  CH_ASSERT(m_normal != nullptr && "Fallo al crear gBufferNormals.");
 
-  SPtr<Texture> lightingOutput = GPUResourceMngr.createTexture({
+  m_lightingOutput = GPUResourceMngr.createTexture({
     .dimensions = {static_cast<int32>(width), static_cast<int32>(height), 1},
-    .usage = TEXTURE_USAGE::kUSAGE_RENDER_TARGET | TEXTURE_USAGE::kUSAGE_SAMPLED,
+    .usage = TEXTURE_USAGE::kRENDER_TARGET | TEXTURE_USAGE::kSAMPLED,
     .format = FORMAT::kB8G8R8A8_UNORM
   });
-  CH_ASSERT(lightingOutput != nullptr && "Fallo al crear lightingOutput.");
+  CH_ASSERT(m_lightingOutput != nullptr && "Fallo al crear lightingOutput.");
 
   RenderPassDesc renderPassDesc;
   renderPassDesc.attachments = {
@@ -106,8 +110,24 @@ Renderer::initialize() {
   }};
 
   renderPassDesc.subpasses = {
-    { {}, {0, 1}, {} },  // Subpass 0: GBuffer (escribe en Albedo + Normales)
-    { {0, 1}, {2}, {} }  // Subpass 1: Iluminación (lee Albedo + Normales, escribe en Lighting Output)
+    // First subpass: GBuffer (writes to Albedo + Normals)
+    {
+      .inputAttachments = {},
+      .colorAttachments = {
+        {0, LAYOUT::kCOLOR_ATTACHMENT},  // Albedo
+        {1, LAYOUT::kCOLOR_ATTACHMENT}   // Normals
+      }
+    },
+    // Second subpass: Lighting (reads Albedo + Normals, writes to Lighting Output)
+    {
+      .inputAttachments = {
+        {0, LAYOUT::kSHADER_READ_ONLY},  // Albedo como input
+        {1, LAYOUT::kSHADER_READ_ONLY}   // Normals como input
+      },
+      .colorAttachments = {
+        {2, LAYOUT::kCOLOR_ATTACHMENT}   // Lighting output
+      }
+    }
   };
 
   renderPassDesc.dependencies = {
@@ -119,7 +139,7 @@ Renderer::initialize() {
 
   SPtr<Framebuffer> framebuffer = GraphicAPI.createFramebuffer({
     .renderPass = renderPass,
-    .attachments = { gBufferAlbedo, gBufferNormals, lightingOutput }
+    .attachments = { m_albedo, m_normal, m_lightingOutput }
   });
   CH_ASSERT(framebuffer != nullptr && "Fallo al crear framebuffer.");
 
@@ -240,13 +260,6 @@ Renderer::initialize() {
 
   m_renderPass = renderPass;
   m_frameBuffer = framebuffer;
-  m_albedo = gBufferAlbedo;
-  m_normal = gBufferNormals;
-  m_lightingOutput = lightingOutput;
-
-  MatrixViewProj MVP;
-  m_mvpBuffer = GPUResourceMngr.createBuffer(sizeof(MatrixViewProj));
-  m_mvpBuffer->update(sizeof(MatrixViewProj), &MVP);
 
   AABox box(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f));
   Array<Vector4, 8> vertices = box.generateVertices4();

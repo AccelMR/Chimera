@@ -52,25 +52,46 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
   }
 
   Vector<VkSubpassDescription> subpasses;
-  Vector<Vector<VkAttachmentReference>> colorAttachments(desc.subpasses.size());
+  Vector<Vector<VkAttachmentReference>> inputAttachmentRefs;
+  Vector<Vector<VkAttachmentReference>> colorAttachmentRefs;
 
   for (uint32 i = 0; i < desc.subpasses.size(); ++i) {
-    auto& subpass = desc.subpasses[i];
-    auto& colorRefs = colorAttachments[i];
-
-    for (uint32 colorIndex: subpass.colorAttachments) {
-      VkAttachmentReference colorRef{};
-      colorRef.attachment = colorIndex;
-      colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      colorRefs.push_back(colorRef);
+    const auto& subpass = desc.subpasses[i];
+    
+    // Input attachments
+    Vector<VkAttachmentReference> inputRefs;
+    for (const auto& input : subpass.inputAttachments) {
+      VkAttachmentReference ref{};
+      ref.attachment = input.attachmentIndex;
+      ref.layout = VulkanTranslator::get(input.layout);
+      inputRefs.push_back(ref);
     }
+    inputAttachmentRefs.push_back(std::move(inputRefs));
+
+    // Color attachments
+    Vector<VkAttachmentReference> colorRefs;
+    for (const auto& color : subpass.colorAttachments) {
+      VkAttachmentReference ref{};
+      ref.attachment = color.attachmentIndex;
+      ref.layout = VulkanTranslator::get(color.layout);
+      colorRefs.push_back(ref);
+    }
+    colorAttachmentRefs.push_back(std::move(colorRefs));
 
     VkSubpassDescription subpassDesc{};
-    subpassDesc.pipelineBindPoint = 
-      VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpassDesc.colorAttachmentCount = 
-      static_cast<uint32>(colorRefs.size());
-    subpassDesc.pColorAttachments = colorRefs.data();
+    subpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    
+    // Set input attachments
+    if (!inputAttachmentRefs[i].empty()) {
+      subpassDesc.inputAttachmentCount = static_cast<uint32>(inputAttachmentRefs[i].size());
+      subpassDesc.pInputAttachments = inputAttachmentRefs[i].data();
+    }
+
+    // Set color attachments
+    if (!colorAttachmentRefs[i].empty()) {
+      subpassDesc.colorAttachmentCount = static_cast<uint32>(colorAttachmentRefs[i].size());
+      subpassDesc.pColorAttachments = colorAttachmentRefs[i].data();
+    }
 
     subpasses.push_back(subpassDesc);
   }
@@ -84,7 +105,7 @@ VulkanRenderPass::_internalInit(const chGPUDesc::RenderPassDesc& desc) {
     dependency.dstAccessMask = VulkanTranslator::get(dep.dstAccessMask);
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT | VK_DEPENDENCY_BY_REGION_BIT;
     dependencies.push_back(dependency);
   }
 

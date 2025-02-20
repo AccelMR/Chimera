@@ -30,11 +30,12 @@ namespace chGPUDesc {
  *   Do not use this as TEXTURE_USAGE since it's a flag. Use TextUsageFlag
  **/
 enum class TEXTURE_USAGE : uint32 {
-  kUSAGE_SAMPLED = 0x1,
-  kUSAGE_STORAGE = 0x2,
-  kUSAGE_DEPTH_STENCIL = 0x4,
-  kUSAGE_RENDER_TARGET = 0x8,
-  kUSAGE_RENDER_TARGET_READ = 0x10,
+  kSAMPLED = 0x1,
+  kSTORAGE = 0x2,
+  kDEPTH_STENCIL = 0x4,
+  kRENDER_TARGET = 0x8,
+  kRENDER_TARGET_READ = 0x10,
+  kINPUT_ATTACHMENT = 0x20
 };
 CH_FLAGS_OPERATORS_EXT(TEXTURE_USAGE, uint32);
 using TextUsageFlag = Flags<TEXTURE_USAGE, uint32>;
@@ -125,7 +126,7 @@ struct TextureDesc {
    uint32 layers = 1;
    uint32 arrayLayers = 1;
    TextureFlags flags = TEXTURE_FLAGS::kNONE;
-   TextUsageFlag usage = TEXTURE_USAGE::kUSAGE_SAMPLED;
+   TextUsageFlag usage = TEXTURE_USAGE::kSAMPLED;
    FORMAT format = FORMAT::kR8G8B8A8_UNORM;
  };
 
@@ -467,8 +468,18 @@ struct AttachmentDesc {
 };
 
 struct SubpassDesc {
-  Vector<uint32> inputAttachments;
-  Vector<uint32> colorAttachments;
+  struct InputAttachmentRef {
+    uint32 attachmentIndex;
+    LAYOUT layout = LAYOUT::kSHADER_READ_ONLY;
+  };
+
+  struct ColorAttachmentRef {
+    uint32 attachmentIndex;
+    LAYOUT layout = LAYOUT::kCOLOR_ATTACHMENT;
+  };
+
+  Vector<InputAttachmentRef> inputAttachments;
+  Vector<ColorAttachmentRef> colorAttachments;
   Optional<uint32> depthStencilAttachment;
 };
 

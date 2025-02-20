@@ -170,7 +170,9 @@ VulkanGPUPipelineState::_init(const chGPUDesc::PipelineStateDesc& desc) {
     vkDestroyShaderModule(device, stage.module, nullptr);
   }
 
+  m_bindingBufferGroup = desc.bindingGroups;
   createDescriptorPool(desc.bindingGroups);
+
 }
 
 /*
@@ -217,7 +219,6 @@ VulkanGPUPipelineState::createPipelineLayout(const Vector<chGPUDesc::BindingGrou
                                        &m_pipelineLayout));
 
   m_descriptorSetLayouts = descriptorSetLayouts;
-  m_bindingBufferGroup = bindingGroups;
 }
 
 /*

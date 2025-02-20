@@ -85,7 +85,7 @@ VulkanGPUCommandBuffer::_internalReset(const SPtr<GPUPipelineState>& pipelineSta
   _internalBegin();
 
   CH_ASSERT(pipelineState != nullptr);
-  _internalSetPipeLineState(pipelineState);
+  //_internalSetPipeLineState(pipelineState);
 }
 
 /*
@@ -471,9 +471,9 @@ VulkanGPUCommandBuffer::_internalSetBindingBufferGroup(const chGPUDesc::BindingG
 */
 VkWriteDescriptorSet 
 VulkanGPUCommandBuffer::createDescriptorWrite(const DescriptorBinding& binding,
-                                             VkDescriptorSet descriptorSet,
-                                             Vector<VkDescriptorBufferInfo>& bufferInfos,
-                                             Vector<VkDescriptorImageInfo>& imageInfos) {
+                                              VkDescriptorSet descriptorSet,
+                                              Vector<VkDescriptorBufferInfo>& bufferInfos,
+                                              Vector<VkDescriptorImageInfo>& imageInfos) {
   VkWriteDescriptorSet write{};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.dstSet = descriptorSet;

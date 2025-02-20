@@ -97,7 +97,7 @@ DX12Texture::createView(uint32 layers, chGPUDesc::TextUsageFlag usage){
   D3D12_DESCRIPTOR_HEAP_TYPE heapType = {};
   rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
   //
-  if(usage.isSetAny(TEXTURE_USAGE::kUSAGE_RENDER_TARGET)){
+  if(usage.isSetAny(TEXTURE_USAGE::kRENDER_TARGET)){
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     ThrowIfFailed(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 
@@ -111,7 +111,7 @@ DX12Texture::createView(uint32 layers, chGPUDesc::TextUsageFlag usage){
     m_rtv = rtv1;
   }
   //
-  if(usage.isSetAny(TEXTURE_USAGE::kUSAGE_SAMPLED)){
+  if(usage.isSetAny(TEXTURE_USAGE::kSAMPLED)){
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
     ThrowIfFailed(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_srvHeap)));
     
@@ -123,7 +123,7 @@ DX12Texture::createView(uint32 layers, chGPUDesc::TextUsageFlag usage){
     m_srv.ptr += (1 * m_srvDescriptorSize);
   }
   //
-  if(usage.isSetAny(TEXTURE_USAGE::kUSAGE_DEPTH_STENCIL)){
+  if(usage.isSetAny(TEXTURE_USAGE::kDEPTH_STENCIL)){
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     ThrowIfFailed(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_dsvHeap)));
 
