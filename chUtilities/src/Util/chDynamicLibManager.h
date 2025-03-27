@@ -38,7 +38,6 @@ using std::less;
 class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryManager>
 {
  public:
-  
   /** 
    *   Loads a Dynamic Library and returns a soft pointer.
    * 

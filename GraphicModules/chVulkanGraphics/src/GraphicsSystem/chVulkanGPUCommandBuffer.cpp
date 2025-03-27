@@ -84,7 +84,7 @@ VulkanGPUCommandBuffer::_internalReset(const SPtr<GPUPipelineState>& pipelineSta
 
   _internalBegin();
 
-  CH_ASSERT(pipelineState != nullptr);
+  //CH_ASSERT(pipelineState != nullptr);
   //_internalSetPipeLineState(pipelineState);
 }
 
@@ -500,12 +500,42 @@ VulkanGPUCommandBuffer::createDescriptorWrite(const DescriptorBinding& binding,
     auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(texture);
 
     VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    if (binding.type == DescriptorBinding::TYPE::kSAMPLED_TEXTURE) {
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    else if (binding.type == DescriptorBinding::TYPE::kSTORAGE_TEXTURE) {
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (binding.type == DescriptorBinding::TYPE::kSAMPLER) {
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    else if (binding.type == DescriptorBinding::TYPE::kINPUT_ATTACHMENT) {
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    else {
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    
     imageInfo.imageView = vulkanTexture->getImageView();
     imageInfos.push_back(imageInfo);
 
-    write.descriptorType = binding.type == DescriptorBinding::TYPE::kSAMPLED_TEXTURE ?
-      VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    switch (binding.type) {
+      case DescriptorBinding::TYPE::kSAMPLED_TEXTURE:
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        break;
+      case DescriptorBinding::TYPE::kSTORAGE_TEXTURE:
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        break;
+      case DescriptorBinding::TYPE::kINPUT_ATTACHMENT:
+        write.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+        break;
+      default:
+        CH_LOG_ERROR("Unsupported texture binding type");
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        break;
+    }
+    
     write.pImageInfo = &imageInfos.back();
   }
   else if (std::holds_alternative<SPtr<Sampler>>(binding.resource)) {
@@ -557,7 +587,76 @@ VulkanGPUCommandBuffer::_internalDrawInstanced(uint32 vertexCountPerInstance,
 */
 void
 VulkanGPUCommandBuffer::_internalResourceBarrier(const Vector<chGPUDesc::GPUBarrier>& barriers) {
-  CH_EXCEPT(NotImplementedException, "VulkanGPUCommandBuffer::_internalResourceBarrier");
+  Vector<VkImageMemoryBarrier> imageBarriers;
+
+  for (const auto& barrier : barriers) {
+    if (barrier.transition.resource) {
+      // Intenta convertir directamente a VulkanTexture, asumiendo que sabes que es una textura
+      auto vulkanTexture = std::static_pointer_cast<VulkanTexture>(barrier.transition.resource);
+    
+      VkImageMemoryBarrier imgBarrier{};
+      imgBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      imgBarrier.oldLayout = VulkanTranslator::get(barrier.transition.stateBefore);
+      imgBarrier.newLayout = VulkanTranslator::get(barrier.transition.stateAfter);
+      imgBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      imgBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      imgBarrier.image = vulkanTexture->getImage();
+      
+      // Determinar aspectMask basado en el formato
+      VkFormat format = vulkanTexture->getFormat();
+      if (format == VK_FORMAT_D32_SFLOAT || 
+          format == VK_FORMAT_D32_SFLOAT_S8_UINT || 
+          format == VK_FORMAT_D24_UNORM_S8_UINT) {
+        imgBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+        if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || 
+          format == VK_FORMAT_D24_UNORM_S8_UINT) {
+          imgBarrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+      }
+      else {
+        imgBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      }
+      
+      imgBarrier.subresourceRange.baseMipLevel = 0;
+      imgBarrier.subresourceRange.levelCount = 1;
+      imgBarrier.subresourceRange.baseArrayLayer = 0;
+      imgBarrier.subresourceRange.layerCount = 1;
+      
+      // Configurar access masks
+      if (barrier.transition.stateBefore == ResourceStates::kRENDER_TARGET) {
+        imgBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      } 
+      else if (barrier.transition.stateBefore == ResourceStates::kSHADER_RESOURCE) {
+        imgBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      } 
+      else if (barrier.transition.stateBefore == ResourceStates::kPRESENT) {
+        imgBarrier.srcAccessMask = 0;
+      }
+      
+      if (barrier.transition.stateAfter == ResourceStates::kRENDER_TARGET) {
+        imgBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      } 
+      else if (barrier.transition.stateAfter == ResourceStates::kSHADER_RESOURCE) {
+        imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      } 
+      else if (barrier.transition.stateAfter == ResourceStates::kPRESENT) {
+        imgBarrier.dstAccessMask = 0;
+      }
+      
+      imageBarriers.push_back(imgBarrier);
+    }
+  }
+  
+  if (!imageBarriers.empty()) {
+    vkCmdPipelineBarrier(m_commandBuffer,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0,
+                         0, nullptr,
+                         0, nullptr,
+                         static_cast<uint32_t>(imageBarriers.size()), imageBarriers.data());
+  }
 }
 
 /*

@@ -505,6 +505,8 @@ VulkanTranslator::get(const DescriptorBinding::TYPE& type) {
       return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     case DescriptorBinding::TYPE::kSAMPLER:
       return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case DescriptorBinding::TYPE::kINPUT_ATTACHMENT:
+      return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
     default:
       CH_EXCEPT(InternalErrorException, "Invalid TextureBindingDesc::TYPE provided for Vulkan translation!");
   }

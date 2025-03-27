@@ -123,7 +123,7 @@
 # endif
 #else
 
-#  define CH_CPP17_OR_LATER              USE_IF(__cplusplus >= 201703L)
+#  define CH_CPP17_OR_LATER              USE_IF(__cplusplus >= 201703L) //  CPP 17
 # define NODISCARD [[nodiscard]]
 # define FORCEINLINE                         __inline
 # ifndef RESTRICT

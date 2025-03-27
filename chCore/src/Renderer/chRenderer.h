@@ -52,5 +52,7 @@ class Renderer : public Module<Renderer>
   SPtr<GPUBuffer> m_mvpBuffer;
 
   SPtr<SwapChain> m_swapChain;
+
+  //Vector<GPUBarrier> m_barriers;
 };
 } // schEngineSDK

@@ -579,6 +579,16 @@ GraphicsModuleVulkan::createDevice()
                      &m_transferQueue);
   }
 
+  VkBool32 presentSupport = VK_FALSE;
+  for (uint32 i = 0; i < m_queueFamilyProperties.size(); ++i) {
+    vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, i, m_surface, &presentSupport);
+    if (presentSupport) {
+      m_presentQueueFamilyIndex = i;
+      break;
+    }
+  }
+  CH_ASSERT(m_presentQueueFamilyIndex != INVALID_INDEX);
+
   // Get the present queue
   if (m_presentQueueFamilyIndex != INVALID_INDEX) {
     CH_LOG_INFO("Present queue family index: " + StringUtils::toString(m_presentQueueFamilyIndex));
@@ -586,6 +596,7 @@ GraphicsModuleVulkan::createDevice()
                      m_presentQueueFamilyIndex, 
                      0, 
                      &m_presentQueue);
+    CH_ASSERT(m_graphicsQueue);
   }
 }
 
@@ -617,16 +628,6 @@ GraphicsModuleVulkan::_internalInit(WeakPtr<Screen> screen)
   createInstance();
   createSurface();
   createDevice();
-
-  VkBool32 presentSupport = VK_FALSE;
-  for (uint32 i = 0; i < m_queueFamilyProperties.size(); ++i) {
-    vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, i, m_surface, &presentSupport);
-    if (presentSupport) {
-      m_presentQueueFamilyIndex = i;
-      break;
-    }
-  }
-  CH_ASSERT(m_presentQueueFamilyIndex != INVALID_INDEX);
 
   _setupSwapchain(screen.lock()->getWidth(), screen.lock()->getHeight());
 

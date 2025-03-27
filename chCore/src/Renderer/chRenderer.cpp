@@ -103,9 +103,9 @@ Renderer::initialize() {
   {
     .format = FORMAT::kB8G8R8A8_UNORM,
     .sampleCount = SAMPLE_COUNT::kSAMPLE_COUNT_1,
-    .loadOp = AttachmentDesc::LOAD_OP::kLOAD,
+    .loadOp = AttachmentDesc::LOAD_OP::kCLEAR,
     .storeOp = AttachmentDesc::STORE_OP::kSTORE,
-    .initialLayout = LAYOUT::kCOLOR_ATTACHMENT,
+    .initialLayout = LAYOUT::kUNDEFINED,
     .finalLayout = LAYOUT::kPRESENT // For Lighting Output
   }};
 
@@ -170,12 +170,12 @@ Renderer::initialize() {
                         0,
                         m_mvpBuffer),
                        DescriptorBinding( // Albedo texture
-                        DescriptorBinding::TYPE::kSAMPLED_TEXTURE,
+                        DescriptorBinding::TYPE::kINPUT_ATTACHMENT,
                         SHADER_STAGE::kPIXEL,
                         1,
                         m_albedo),
                        DescriptorBinding(// Normal texture
-                        DescriptorBinding::TYPE::kSAMPLED_TEXTURE,
+                        DescriptorBinding::TYPE::kINPUT_ATTACHMENT,
                         SHADER_STAGE::kPIXEL,
                         2,
                         m_normal),
@@ -280,6 +280,41 @@ Renderer::initialize() {
   m_indexBuffer->update(indexBufferDesc, indices.data());
 
   m_commandBuffer = GraphicAPI.createCommandBuffer(COMMAND_BUFFER_TYPES::kDIRECT);
+
+  Vector<GPUBarrier> barriers;
+
+  GPUBarrier albedoBarrier;
+  albedoBarrier.flag = BARRIER_FLAG::kNONE;
+  albedoBarrier.transition.resource = m_albedo;
+  albedoBarrier.transition.subresource = 0;
+  albedoBarrier.transition.stateBefore = ResourceStates::kPRESENT;
+  albedoBarrier.transition.stateAfter = ResourceStates::kRENDER_TARGET;
+  barriers.push_back(albedoBarrier);
+
+  GPUBarrier normalBarrier;
+  normalBarrier.flag = BARRIER_FLAG::kNONE;
+  normalBarrier.transition.resource = m_normal;
+  normalBarrier.transition.subresource = 0;
+  normalBarrier.transition.stateBefore = ResourceStates::kPRESENT;
+  normalBarrier.transition.stateAfter = ResourceStates::kRENDER_TARGET;
+  barriers.push_back(normalBarrier);
+
+  GPUBarrier outputBarrier;
+  outputBarrier.flag = BARRIER_FLAG::kNONE;
+  outputBarrier.transition.resource = m_lightingOutput;
+  outputBarrier.transition.subresource = 0;
+  outputBarrier.transition.stateBefore = ResourceStates::kPRESENT;
+  outputBarrier.transition.stateAfter = ResourceStates::kRENDER_TARGET;
+  barriers.push_back(outputBarrier);
+
+  auto tempCmdBuffer = GraphicAPI.createCommandBuffer(COMMAND_BUFFER_TYPES::kDIRECT);
+  auto fence = GraphicAPI.createFence();
+  tempCmdBuffer->reset(nullptr);
+  tempCmdBuffer->resourceBarrier(barriers);
+  tempCmdBuffer->close();
+  GraphicAPI.executeCommandBuffers({tempCmdBuffer});
+
+  fence->wait(10);
 }
 
 /*

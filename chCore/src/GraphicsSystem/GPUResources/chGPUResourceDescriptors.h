@@ -136,7 +136,8 @@ struct DescriptorBinding{
     kSTORAGE_BUFFER,
     kSAMPLED_TEXTURE,
     kSTORAGE_TEXTURE,
-    kSAMPLER
+    kSAMPLER,
+    kINPUT_ATTACHMENT 
   };
 
   TYPE type = TYPE::kUNIFORM_BUFFER;

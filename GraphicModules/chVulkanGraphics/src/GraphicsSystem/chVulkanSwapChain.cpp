@@ -21,6 +21,7 @@
 #include "chScreen.h"
 #include "chStringUtils.h"
 #include "chMath.h"
+#include "chVulkanGPUCommandBuffer.h"
 #include "chVulkanFence.h"
 #include "chVulkanGPUPipelineState.h"
 #include "chVulkanRenderPass.h"
@@ -174,7 +175,8 @@ VulkanSwapChain::present(uint32 syncInterval,
   VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = nullptr;
+  VkCommandBuffer vkCommandBuffer = commandBuffer->getCommandBuffer();
+  submitInfo.pCommandBuffers = &vkCommandBuffer;
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
 

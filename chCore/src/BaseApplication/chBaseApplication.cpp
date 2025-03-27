@@ -59,22 +59,6 @@ BaseApplication::initialize(int argc, char** argv) {
 */
 void
 BaseApplication::initPlatform(int argc, char** argv) {
-#if USING(CH_PLATFORM_LINUX)
-  char exePath[1024];
-  SIZE_T count = readlink("/proc/self/exe", exePath, 1024);
-
-  if (count == -1) {
-    CH_LOG_ERROR("Error: Couldn't get the executable path.");
-  }
-
-  const String exeDir = String(exePath).substr(0, String(exePath).find_last_of("/"));
-  const String apiName = CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan");
-  const String fullApiName = StringUtils::format("ch{0}Graphics", apiName);
-  const String graphicsAPIName = exeDir + "/" + apiName;
-#else
-  const String graphicsAPIName = std::format("ch{0}Graphics", CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan"));
-#endif //USING(CH_PLATFORM_LINUX)
-
   CommandParser& commandParser = CommandParser::getInstance();
   
   // Parse command line arguments.
@@ -104,10 +88,23 @@ BaseApplication::initializeModules() {
 */
 void
 BaseApplication::initializeGraphics() {
-  const String APIName = "ch" + 
-    CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan") +
-    "Graphics";
-  WeakPtr<DynamicLibrary> dllGraphics = DynamicLibraryManager::instance().loadDynLibrary(APIName);
+  #if USING(CH_PLATFORM_LINUX)
+  char exePath[1024];
+  SIZE_T count = readlink("/proc/self/exe", exePath, 1024);
+
+  if (count == -1) {
+    CH_LOG_ERROR("Error: Couldn't get the executable path.");
+  }
+
+  const String exeDir = String(exePath).substr(0, String(exePath).find_last_of("/"));
+  const String fullApiName = "ch" + CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan") + "Graphics";
+  const String graphicsAPIName = exeDir + "/" + fullApiName;
+#else
+  const String graphicsAPIName = std::format("ch{0}Graphics", CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan"));
+#endif //USING(CH_PLATFORM_LINUX)
+
+  CH_LOG_INFO(StringUtils::format("Loading graphics API: {0}", graphicsAPIName));
+  WeakPtr<DynamicLibrary> dllGraphics = DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName);
   if (SPtr<DynamicLibrary> dll = dllGraphics.lock()) {
     auto startUp = reinterpret_cast<void(*)()>(dll->getSymbol("loadPlugin"));
     CH_ASSERT(startUp);
@@ -116,7 +113,7 @@ BaseApplication::initializeGraphics() {
     GraphicsModule::instance().initialize(m_screen);
   }
   else {
-    CH_LOG_ERROR(StringUtils::format("Could not load graphics API: {0}", APIName));
+    CH_LOG_ERROR(StringUtils::format("Could not load graphics API: {0}", graphicsAPIName));
   }
 
   Renderer::startUp();

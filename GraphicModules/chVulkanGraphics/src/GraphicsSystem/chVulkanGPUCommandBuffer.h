@@ -37,6 +37,11 @@ class VulkanGPUCommandBuffer final : public GPUCommandBuffer {
    *   Default destructor
    */
   ~VulkanGPUCommandBuffer();
+
+  FORCEINLINE VkCommandBuffer
+  getCommandBuffer() const {
+    return m_commandBuffer;
+  }
  
   virtual void
   _init(chGPUDesc::COMMAND_BUFFER_TYPES commandBufferType) override;
