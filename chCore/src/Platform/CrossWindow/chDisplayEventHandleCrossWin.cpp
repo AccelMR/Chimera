@@ -59,6 +59,11 @@ DisplayEventHandle::update() {
       case ::xwin::EventType::MouseInput:
       break;
 
+      case ::xwin::EventType::MouseMove:
+        //addEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, event.mouseMove.x, event.mouseMove.y);
+        addEvent(PLATFORM_EVENT_TYPE::kCLOSE);
+      break;
+
       case ::xwin::EventType::Keyboard:
       break;
 

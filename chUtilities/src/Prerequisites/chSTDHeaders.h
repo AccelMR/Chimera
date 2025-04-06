@@ -76,11 +76,11 @@
 #include <mutex>
 #include <thread>
 
-#include <execution>
-
 #include <optional>
 #include <variant>
 #include <bitset>
+
+#include <algorithm>
 
 /*****************************************************************************/
 /**

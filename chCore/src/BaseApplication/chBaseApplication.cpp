@@ -39,8 +39,6 @@ BaseApplication::~BaseApplication() {
   if (m_isInitialized) {
     destroyModules();
   }
-  
-  g_Debug().saveLog(Path("log.txt"));
 }
 
 /*
