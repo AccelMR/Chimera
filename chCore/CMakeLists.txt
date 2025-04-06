@@ -51,15 +51,15 @@ elseif(UNIX)
     find_package(SDL3 REQUIRED)
 
     file(GLOB_RECURSE WAYLANDFILES 
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Linux/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Linux/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Linux/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Linux/*.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.h
     )
     target_sources(chCore PRIVATE ${WAYLANDFILES})
 
     target_include_directories(chCore PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../chUtilities/src/Platform/Linux
+        ${CMAKE_CURRENT_SOURCE_DIR}/../chUtilities/src/Platform/SDL
     )
 
     target_link_libraries(chCore chUtilities SDL3::SDL3)

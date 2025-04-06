@@ -9,15 +9,14 @@
 #pragma once
 
 namespace chEngineSDK{
-class ScreenModule;
-class Screen;
-class ScreenEventHandle;
-class ScreenEvent;
+class DisplayManager;
+class DisplaySurface;
+class DisplayEventHandle;
+class DisplayEvent;
 
 class GPUCommandBuffer;
 class GPUPipelineState;
 
-union ScreenEventData;
 struct MouseMoveData;
 struct KeyBoardData;
 

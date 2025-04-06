@@ -1,12 +1,12 @@
 /************************************************************************/
 /**
- * @file chScreenWin32.cpp
+ * @file chDisplayWin32.cpp
  * @author AccelMR
  * @date 2022/09/11
  *   Window x86 specific creation.
  */
  /************************************************************************/
-#include "chScreen.h"
+#include "chDisplay.h"
 
 #if USING(CH_PLATFORM_WIN32)
 
@@ -19,7 +19,7 @@ using WinProcType = LRESULT (CALLBACK*)(HWND, UINT, WPARAM, LPARAM);
 /*
 */
 NODISCARD bool
-Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
+DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
 
   HINSTANCE hinstance = GetModuleHandle(nullptr);
   
@@ -28,7 +28,7 @@ Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
   wc.hInstance = hinstance;
   wc.lpszClassName = desc.name.c_str();    
   // Reserve space to store the instance pointer
-  wc.cbWndExtra = sizeof(ScreenEventHandle*);
+  wc.cbWndExtra = sizeof(DisplayEventHandle*);
 
   RegisterClass(&wc);
 
@@ -49,7 +49,7 @@ Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
                               NULL);
 
   if (hwnd== NULL) {
-    CH_EXCEPT(InternalErrorException, "Screen.init()");
+    CH_EXCEPT(InternalErrorException, "DisplaySurface.init()");
     return false;
   }
 
@@ -73,7 +73,7 @@ Screen::init(SCREEN_DESC desc, SPtr<ScreenEventHandle> eventHandler) {
 /*
 */
 void
-Screen::close() {
+DisplaySurface::close() {
   DestroyWindow(static_cast<HWND>(m_screenHandle));
 }
 

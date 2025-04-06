@@ -80,6 +80,7 @@
 
 #include <optional>
 #include <variant>
+#include <bitset>
 
 /*****************************************************************************/
 /**
@@ -292,4 +293,10 @@ using Optional = std::optional<T>;
  */
 template<typename... Types>
 using Variant = std::variant<Types...>;
+
+/**
+ * @brief Wrapper for the C++ std::bitset.
+ */
+template<size_t N>
+using BitSet = std::bitset<N>;
 }

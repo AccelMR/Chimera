@@ -16,13 +16,11 @@
 #include "chCommandParser.h"
 #include "chDebug.h"
 #include "chDynamicLibManager.h"
+#include "chDisplayManager.h"
 #include "chEventSystem.h"
-#include "chGraphicsModule.h"
-#include "chInputModule.h"
-#include "chRenderer.h"
-#include "chScreenModule.h"
+#include "chPath.h"
 #include "chStringUtils.h"
-#include "chSystemEventDispatcherModule.h"
+#include "chEventDispatcherManager.h"
 
 #include <chrono>
 
@@ -70,8 +68,12 @@ BaseApplication::initPlatform(int argc, char** argv) {
   winDesc.width = std::stoi(commandParser.getParam("Width", "1280"));
   winDesc.height = std::stoi(commandParser.getParam("Height", "720"));
 
-  m_eventhandler = chMakeShared<ScreenEventHandle>();
-  m_screen = ScreenModule::instance().createScreen(winDesc, m_eventhandler);
+  m_eventhandler = chMakeShared<DisplayEventHandle>();
+  WeakPtr<DisplaySurface> wptrDisplay = DisplayManager::instance().createDisplay(winDesc, m_eventhandler);
+  if (wptrDisplay.expired()) {
+    CH_EXCEPT(InternalErrorException, "Failed to create display.");
+  }
+  m_screen = wptrDisplay.lock();
 }
 
 /*
@@ -79,54 +81,22 @@ BaseApplication::initPlatform(int argc, char** argv) {
 void
 BaseApplication::initializeModules() {
   DynamicLibraryManager::startUp();
-  InputModule::startUp();
-  SystemEventDipatcherModule::startUp();
-  ScreenModule::startUp();
+  EventDispatcherManager::startUp();
+  DisplayManager::startUp();
 }
 
 /*
 */
 void
 BaseApplication::initializeGraphics() {
-  #if USING(CH_PLATFORM_LINUX)
-  char exePath[1024];
-  SIZE_T count = readlink("/proc/self/exe", exePath, 1024);
-
-  if (count == -1) {
-    CH_LOG_ERROR("Error: Couldn't get the executable path.");
-  }
-
-  const String exeDir = String(exePath).substr(0, String(exePath).find_last_of("/"));
-  const String fullApiName = "ch" + CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan") + "Graphics";
-  const String graphicsAPIName = exeDir + "/" + fullApiName;
-#else
-  const String graphicsAPIName = std::format("ch{0}Graphics", CommandParser::getInstance().getParam("GraphicsAPI", "Vulkan"));
-#endif //USING(CH_PLATFORM_LINUX)
-
-  CH_LOG_INFO(StringUtils::format("Loading graphics API: {0}", graphicsAPIName));
-  WeakPtr<DynamicLibrary> dllGraphics = DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName);
-  if (SPtr<DynamicLibrary> dll = dllGraphics.lock()) {
-    auto startUp = reinterpret_cast<void(*)()>(dll->getSymbol("loadPlugin"));
-    CH_ASSERT(startUp);
-    startUp();
-    CH_ASSERT(m_screen);
-    GraphicsModule::instance().initialize(m_screen);
-  }
-  else {
-    CH_LOG_ERROR(StringUtils::format("Could not load graphics API: {0}", graphicsAPIName));
-  }
-
-  Renderer::startUp();
-  Renderer::instance().initialize();
 }
 
 /*
 */
 void
 BaseApplication::destroyModules() {
-  ScreenModule::shutDown();
-  InputModule::shutDown();
-  SystemEventDipatcherModule::shutDown();
+  DisplayManager::shutDown();
+  EventDispatcherManager::shutDown();
   DynamicLibraryManager::shutDown();
 }
 
@@ -147,13 +117,10 @@ BaseApplication::run() {
  // Make sure the application is initialized.
   CH_ASSERT(m_isInitialized);
 
-  auto [inputDispatcher, systemDispatcher, renderer] = 
-    std::tie(InputModule::instance(),
-             SystemEventDipatcherModule::instance(),
-             Renderer::instance());
+  auto& eventDispatcher = EventDispatcherManager::instance();
 
   bool running = true;
-  HEvent OnClose = systemDispatcher.listenOnClose([&]() { m_screen->close();  running = false; } );
+  HEvent OnClose = eventDispatcher.OnClose.connect([&]() { m_screen->close();  running = false; } );
 
   const double fixedTimeStamp = 1.0 / 60.0;
   double accumulator = 0.0;
@@ -167,16 +134,14 @@ BaseApplication::run() {
     previousTime = currentTime;
 
     m_eventhandler->update();
-    systemDispatcher.dispatchEvents(m_eventhandler);
-    inputDispatcher.dispatchEvents(m_eventhandler);
+    eventDispatcher.dispatchEvents(m_eventhandler);
 
     while (accumulator >= fixedTimeStamp) {
       //update();
       accumulator -= fixedTimeStamp;
     }
 
-    // Render
-    renderer.render();
+    eventDispatcher.updateKeyboardState(); 
   }
 }
 } // namespace chEngineSDK

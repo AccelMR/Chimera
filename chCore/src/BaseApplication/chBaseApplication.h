@@ -73,8 +73,8 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
 
  protected:
   bool m_isInitialized = false;
-  SPtr<ScreenEventHandle> m_eventhandler;
-  SPtr<Screen> m_screen;
+  SPtr<DisplayEventHandle> m_eventhandler;
+  SPtr<DisplaySurface> m_screen;
 
 };
 } // namespace chEngineSDK

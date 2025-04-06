@@ -1,9 +1,9 @@
 /************************************************************************/
 /**
- * @file chScreenEventHandleWin32.h
+ * @file chDisplayEventHandleWin32.h
  * @author AccelMR
  * @date 2022/09/12
- * @brief Win32 specific implementation of Screen event handle.
+ * @brief Win32 specific implementation of DisplaySurface event handle.
  */
  /************************************************************************/
 
@@ -12,7 +12,7 @@
  * Includes
  */                                                                     
 /************************************************************************/
-#include "chScreenEventHandle.h"
+#include "chDisplayEventHandle.h"
 
 #if USING(CH_PLATFORM_WIN32)
 #include "Win32/chWindows.h"
@@ -28,7 +28,7 @@ static int32 prevMouseY = 0;
 /*
 */
 void
-mouseMove(ScreenEventHandle* seh, HWND hwnd, LPARAM lParam) {
+mouseMove(DisplayEventHandle* seh, HWND hwnd, LPARAM lParam) {
   MouseMoveData data;
   int x = static_cast<short>(LOWORD(lParam));
   int y = static_cast<short>(HIWORD(lParam));
@@ -46,13 +46,13 @@ mouseMove(ScreenEventHandle* seh, HWND hwnd, LPARAM lParam) {
   prevMouseX = static_cast<uint32>(x);
   prevMouseY = static_cast<uint32>(y);
 
-  seh->addInputEvent(ScreenEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, data));
+  seh->addInputEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, data));
 }
 
 /*
 */
 void
-keyboardButtonChange(ScreenEventHandle* seh, WPARAM wParam, PLATFORM_EVENT_TYPE type) {
+keyboardButtonChange(DisplayEventHandle* seh, WPARAM wParam, PLATFORM_EVENT_TYPE type) {
   KeyBoardData kbData;
   switch (wParam) {
   case VK_ESCAPE:
@@ -321,7 +321,7 @@ keyboardButtonChange(ScreenEventHandle* seh, WPARAM wParam, PLATFORM_EVENT_TYPE 
     break;
   }
 
-  seh->addInputEvent(ScreenEvent(type, kbData));
+  seh->addInputEvent(DisplayEvent(type, kbData));
 }
 
 /*
@@ -329,12 +329,12 @@ keyboardButtonChange(ScreenEventHandle* seh, WPARAM wParam, PLATFORM_EVENT_TYPE 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
   // Retrieve instance pointer
-  auto *screenEventHandler = reinterpret_cast<ScreenEventHandle *>(GetWindowLongPtrW(hwnd, 0));
+  auto *screenEventHandler = reinterpret_cast<DisplayEventHandle *>(GetWindowLongPtrW(hwnd, 0));
 
   switch (msg)  {
   case WM_CLOSE:
     if (nullptr != screenEventHandler) {
-      screenEventHandler->addSystemEvent(ScreenEvent(PLATFORM_EVENT_TYPE::kCLOSE));
+      screenEventHandler->addSystemEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kCLOSE));
     }
     break;
 
@@ -364,7 +364,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ResizeData resizeData;
       resizeData.width = static_cast<uint32>(LOWORD(lParam));
       resizeData.height = static_cast<uint32>(HIWORD(lParam));
-      screenEventHandler->addSystemEvent(ScreenEvent(PLATFORM_EVENT_TYPE::kRESIZE, resizeData));    
+      screenEventHandler->addSystemEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kRESIZE, resizeData));    
     }
     break;
 
@@ -381,7 +381,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 /*
 */
 void
-  ScreenEventHandle::update() {
+  DisplayEventHandle::update() {
   MSG msg = { };
   while ( PeekMessage( &msg, nullptr, 0U, 0U, PM_REMOVE ) ) {
     TranslateMessage( &msg );
@@ -392,7 +392,7 @@ void
 /*
 */
 PlatformCallback*
-ScreenEventHandle::getPlatformCallBack() {
+DisplayEventHandle::getPlatformCallBack() {
   return reinterpret_cast<PlatformCallback*>(WndProc);
 }
 }
