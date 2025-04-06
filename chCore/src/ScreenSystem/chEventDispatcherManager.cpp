@@ -131,7 +131,6 @@ void
 EventDispatcherManager::dispatchKeyEvent(const PLATFORM_EVENT_TYPE& type, const Key& key) {
   switch (type)
   {
-
   // case PLATFORM_EVENT_TYPE::kKEY_DOWN:
   // {
   //   m_currentKeyboardState.set(static_cast<SIZE_T>(key));

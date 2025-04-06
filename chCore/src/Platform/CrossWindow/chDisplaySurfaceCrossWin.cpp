@@ -44,25 +44,57 @@ void cleanupXCB() {
     g_connection = nullptr;
   }
 }
-
-
 #endif //USING(CH_PLATFORM_LINUX)
 
+#if USING(CH_PLATFORM_WIN32)
+static HINSTANCE g_hInstance = nullptr;
+static HINSTANCE g_hPrevInstance = nullptr;
+static LPSTR g_lpCmdLine = nullptr;
+static int g_nCmdShow = 0;
+
+bool initializeWin32(int argc, const char** argv) {
+  g_hInstance = GetModuleHandle(NULL);
+  g_hPrevInstance = nullptr;
+  g_lpCmdLine = GetCommandLineA();
+  g_nCmdShow = SW_SHOWDEFAULT;
+  
+  // Inicializar CrossWindow con estos parámetros
+  xwin::init(g_hInstance, g_hPrevInstance, g_lpCmdLine, g_nCmdShow);
+  
+  return true;
+}
+void cleanupWin32() {
+  // Windows specific cleanup code
+}
+#endif //USING(CH_PLATFORM_WIN32)
+
+bool initializePlatformSpecific(int argc, const char** argv) {
+#if USING(CH_PLATFORM_LINUX)
+  return initializeXCB(argc, argv);
+#elif USING(CH_PLATFORM_WIN32)
+  return initializeWin32(argc, argv);
+#endif //USING(CH_PLATFORM_WIN32)
+}
+void cleanupPlatformSpecific() {
+#if USING(CH_PLATFORM_LINUX)
+  cleanupXCB();
+#elif USING(CH_PLATFORM_WIN32)
+  cleanupWin32();
+#endif //USING(CH_PLATFORM_WIN32)
+}
 
 /*
 */
 NODISCARD bool
 DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
 
-#if USING(CH_PLATFORM_LINUX)
   CommandParser& commandParser = CommandParser::getInstance();
   int argc = static_cast<int>(commandParser.getArgc());
   const char** argv = const_cast<const char**>(commandParser.getArgv());
-  if (!initializeXCB(argc, argv)) {
+  if (!initializePlatformSpecific(argc, argv)) {
     CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - XCB initialization failed.");
     return false;
   }
-#endif //USING(CH_PLATFORM_LINUX)
 
   ::xwin::WindowDesc windowDesc;
   windowDesc.name = desc.name;
@@ -73,13 +105,9 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
 
   m_displayHandle = new ::xwin::Window();
   ::xwin::EventQueue* eventQueue = static_cast<::xwin::EventQueue*>(eventHandler->getPlatformPtr());
-  try {
-    if (!m_displayHandle->create(windowDesc, *eventQueue)) {
-      CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - Window creation failed.");
-      return false;
-    }
-  } 
-  catch (...) {
+
+  if (!m_displayHandle->create(windowDesc, *eventQueue)) {
+    CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - Window creation failed.");
     return false;
   }
 
@@ -100,9 +128,7 @@ DisplaySurface::close() {
     m_displayHandle = nullptr;
   }
 
-#if USING(CH_PLATFORM_LINUX)
-  cleanupXCB();
-#endif //USING(CH_PLATFORM_LINUX)
+  cleanupPlatformSpecific();
 }
 
 } // namespace chEngineSDK
