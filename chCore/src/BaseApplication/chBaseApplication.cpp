@@ -58,7 +58,6 @@ BaseApplication::initialize(int argc, char** argv) {
 void
 BaseApplication::initPlatform(int argc, char** argv) {
   CommandParser& commandParser = CommandParser::getInstance();
-  
   // Parse command line arguments.
   commandParser.parse(static_cast<int32>(argc), argv);
 

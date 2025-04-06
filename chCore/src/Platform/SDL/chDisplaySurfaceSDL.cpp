@@ -24,12 +24,12 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
     return false;
   }
 
-  m_screenHandle = SDL_CreateWindow(desc.title.c_str(),
+  m_displayHandle = SDL_CreateWindow(desc.title.c_str(),
                                     desc.width,
                                     desc.height,
                                     SDL_EVENT_WINDOW_SHOWN);
 
-  if (m_screenHandle == nullptr) {
+  if (m_displayHandle == nullptr) {
     CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - SDL_CreateWindow failed.");
     return false;
   }
@@ -45,7 +45,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
 */
 void
 DisplaySurface::close() {
-  SDL_DestroyWindow(static_cast<SDL_Window*>(m_screenHandle));
+  SDL_DestroyWindow(static_cast<SDL_Window*>(m_displayHandle));
   SDL_Quit();
 }
 

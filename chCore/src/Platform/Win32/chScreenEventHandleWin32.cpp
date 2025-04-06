@@ -391,9 +391,9 @@ void
 
 /*
 */
-PlatformCallback*
-DisplayEventHandle::getPlatformCallBack() {
-  return reinterpret_cast<PlatformCallback*>(WndProc);
+PlatformPtr*
+DisplayEventHandle::getPlatformPtr() {
+  return reinterpret_cast<PlatformPtr*>(WndProc);
 }
 }
 

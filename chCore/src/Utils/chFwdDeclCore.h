@@ -19,13 +19,6 @@ class GPUPipelineState;
 
 struct MouseMoveData;
 struct KeyBoardData;
-
-namespace chGPUDesc {
-struct PipelineStateDesc;
-struct ShaderDesc;
-struct DepthStencilStateDesc;
-struct DepthStencilOpDesc;
-struct VertexBufferBindingDesc;
-struct RenderPassDesc;
-}
+enum class KEYBOARD_STATE : uint32_t;
+enum class KEY_MODIFIER : uint16_t;
 }

@@ -78,3 +78,5 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
 
 };
 } // namespace chEngineSDK
+
+#define CH_BASE_APPLICATION_MAIN 

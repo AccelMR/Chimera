@@ -47,6 +47,7 @@ EventDispatcherManager::EventDispatcherManager()
 NODISCARD bool
 EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   bool dispatched = true;
+  const DisplayEventData& eventData = sEvent.getData();
   switch (sEvent.getType())
   {
   case PLATFORM_EVENT_TYPE::kCLOSE:
@@ -55,7 +56,6 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
 
   case PLATFORM_EVENT_TYPE::kRESIZE:
   {
-    const auto eventData = sEvent.getData();
     if (const auto& resizeData = get_if<ResizeData>(&eventData)) {
       OnResize(resizeData->width, resizeData->height);
     }
@@ -68,7 +68,6 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
 
   case PLATFORM_EVENT_TYPE::kMOUSE_MOVE:
   {
-    const auto eventData = sEvent.getData();
     if (const auto& mouseData = get_if<MouseMoveData>(&eventData)) {
       OnMouseMove(*mouseData);
     }
@@ -79,37 +78,49 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
-  case PLATFORM_EVENT_TYPE::kKEY_DOWN:
-  {
-    const auto eventData = sEvent.getData();
-    if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
-      dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_DOWN, keyData->key);
-    }
-    else {
-      CH_LOG_ERROR("Key data is not valid.");
-      dispatched = false;
-    }
-  }
-  break;
-
-  case PLATFORM_EVENT_TYPE::kKEY_UP:
-  {
-    const auto eventData = sEvent.getData();
-    if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
-      dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_UP, keyData->key);
-    }
-    else {
-      CH_LOG_ERROR("Key data is not valid.");
-      dispatched = false;
-    }
-  }
-  break;
-
   case PLATFORM_EVENT_TYPE::kNONE:
   default:
     dispatched = false;
-    break;
+
   }
+
+  // case PLATFORM_EVENT_TYPE::kKEYBOARD:
+  // {
+  //   const DisplayEventData& eventData = sEvent.getData();
+  //   if (const auto& keyData = get_if<KeyBoardData>(eventData)) {
+  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, keyData->key);
+  //   }
+  //   else {
+  //     CH_LOG_ERROR("Key data is not valid.");
+  //     dispatched = false;
+  //   }
+  // }
+  // break;
+
+  // {
+  //   const auto eventData = sEvent.getData();
+  //   if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
+  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_DOWN, keyData->key);
+  //   }
+  //   else {
+  //     CH_LOG_ERROR("Key data is not valid.");
+  //     dispatched = false;
+  //   }
+  // }
+  // break;
+
+  // case PLATFORM_EVENT_TYPE::kKEY_UP:
+  // {
+  //   const auto eventData = sEvent.getData();
+  //   if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
+  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_UP, keyData->key);
+  //   }
+  //   else {
+  //     CH_LOG_ERROR("Key data is not valid.");
+  //     dispatched = false;
+  //   }
+  // }
+  // break;
   
   return dispatched;
 }
@@ -120,28 +131,29 @@ void
 EventDispatcherManager::dispatchKeyEvent(const PLATFORM_EVENT_TYPE& type, const Key& key) {
   switch (type)
   {
-  case PLATFORM_EVENT_TYPE::kKEY_DOWN:
-  {
-    m_currentKeyboardState.set(static_cast<SIZE_T>(key));
 
-    if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
-      KeyPressedCallbacks.at(key)();
-    }
-    else {
-      KeyDownCallbacks.at(key)();
-    }
-  }
-    break;
+  // case PLATFORM_EVENT_TYPE::kKEY_DOWN:
+  // {
+  //   m_currentKeyboardState.set(static_cast<SIZE_T>(key));
 
-  case PLATFORM_EVENT_TYPE::kKEY_UP:
-  {
-    m_currentKeyboardState.reset(static_cast<SIZE_T>(key));
+  //   if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
+  //     KeyPressedCallbacks.at(key)();
+  //   }
+  //   else {
+  //     KeyDownCallbacks.at(key)();
+  //   }
+  // }
+  //   break;
 
-    if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
-      KeyUpCallbacks.at(key)();
-    }
-  }
-  break;
+  // case PLATFORM_EVENT_TYPE::kKEY_UP:
+  // {
+  //   m_currentKeyboardState.reset(static_cast<SIZE_T>(key));
+
+  //   if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
+  //     KeyUpCallbacks.at(key)();
+  //   }
+  // }
+  // break;
 
   default:
     break;

@@ -17,9 +17,13 @@
 
 #include "chDisplayEventHandle.h"
 
-
+#ifdef CH_CROSS_WINDOW
+namespace xwin{
+  class Window;
+}
+using PlatformDisplay = xwin::Window*;
+#else 
 #define CH_SDL_WINDOW USE_IF(USING(CH_PLATFORM_LINUX))
-
 #if USING(CH_PLATFORM_WIN32)
 struct HWND__;
 using PlatformDisplay = HWND__*;
@@ -27,6 +31,8 @@ using PlatformDisplay = HWND__*;
 struct SDL_Window;
 using PlatformDisplay = SDL_Window*;
 #endif
+
+#endif //CH_CROSS_WINDOW
 
 namespace chEngineSDK{
 /*
@@ -102,7 +108,7 @@ class CH_CORE_EXPORT DisplaySurface
   getHeight() { return m_height; }
 
   FORCEINLINE PlatformDisplay
-  getPlatformHandler() { return m_screenHandle; }
+  getPlatformHandler() { return m_displayHandle; }
 
 protected:
   friend class DisplayManager;
@@ -124,7 +130,7 @@ protected:
 
  private:
  //Pointer to the actual screen.
-  PlatformDisplay m_screenHandle;
+  PlatformDisplay m_displayHandle;
 
   uint32 m_width;
   uint32 m_height;

@@ -17,9 +17,17 @@
 
 #include "chDisplayEvent.h"
 
-namespace chEngineSDK {
+#ifdef CH_CROSS_WINDOW
+namespace xwin{
+  class EventQueue;
+}
+using PlatformPtr = xwin::EventQueue*;
+#else
 //Alias for a platform specific callback.
-using PlatformCallback = void *;
+using PlatformPtr = void *;
+#endif //CH_CROSS_WINDOW
+
+namespace chEngineSDK {
 
 /*
  * Description: 
@@ -61,12 +69,12 @@ class CH_CORE_EXPORT DisplayEventHandle
  /*
   *   Default constructor
   */
-  DisplayEventHandle() = default;
+  DisplayEventHandle();
 
  /*
   *   Default destructor
   */
-  ~DisplayEventHandle() = default;
+  ~DisplayEventHandle();
 
   /** 
    *   Updates queue message from system.
@@ -104,8 +112,8 @@ class CH_CORE_EXPORT DisplayEventHandle
   /** 
    *   Returns callback for platform specific.
    **/
-  PlatformCallback*
-  getPlatformCallBack();
+  PlatformPtr
+  getPlatformPtr();
 
   /** 
    *   Adds a event to the queue.
@@ -119,6 +127,8 @@ class CH_CORE_EXPORT DisplayEventHandle
  private:
  // TODO: create a custom Prealocator for this queue, this way we can avoid fragmentation and reallocation.
   Queue<DisplayEvent> m_eventQueue;
+
+  PlatformPtr m_platformPtr;
 };
 
 /************************************************************************/

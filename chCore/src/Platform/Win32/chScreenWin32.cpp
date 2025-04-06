@@ -24,7 +24,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
   HINSTANCE hinstance = GetModuleHandle(nullptr);
   
   WNDCLASS wc = { };
-  wc.lpfnWndProc = reinterpret_cast<WinProcType>(eventHandler->getPlatformCallBack());
+  wc.lpfnWndProc = reinterpret_cast<WinProcType>(eventHandler->getPlatformPtr());
   wc.hInstance = hinstance;
   wc.lpszClassName = desc.name.c_str();    
   // Reserve space to store the instance pointer
@@ -60,7 +60,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
   // Sets the keyboard focus to the specified window
   SetFocus(hwnd);
 
-  m_screenHandle = hwnd;
+  m_displayHandle = hwnd;
   m_width = desc.width;
   m_height = desc.height;
   
@@ -74,7 +74,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
 */
 void
 DisplaySurface::close() {
-  DestroyWindow(static_cast<HWND>(m_screenHandle));
+  DestroyWindow(static_cast<HWND>(m_displayHandle));
 }
 
 }

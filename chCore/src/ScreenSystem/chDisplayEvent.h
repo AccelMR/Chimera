@@ -25,8 +25,7 @@ namespace chEngineSDK{
 enum class PLATFORM_EVENT_TYPE {
   kNONE = 0,
   kMOUSE_MOVE,
-  kKEY_DOWN,
-  kKEY_UP,
+  kKEYBOARD,
   kCLOSE,
   kRESIZE,
 
@@ -64,7 +63,7 @@ class CH_CORE_EXPORT DisplayEvent
   FORCEINLINE PLATFORM_EVENT_TYPE
   getType() const{ return m_type; }
 
-  FORCEINLINE DisplayEventData
+  FORCEINLINE const DisplayEventData&
   getData() const{ return m_data; }
 
   FORCEINLINE String
@@ -84,11 +83,8 @@ DisplayEvent::getTypeAsString() const {
   case PLATFORM_EVENT_TYPE::kMOUSE_MOVE:
     return "Mouse Move";
     break;
-  case PLATFORM_EVENT_TYPE::kKEY_DOWN:
-    return "Key Down";
-    break;
-  case PLATFORM_EVENT_TYPE::kKEY_UP:
-    return "Key Up";
+  case PLATFORM_EVENT_TYPE::kKEYBOARD:
+    return "Key Board";
     break;
   case PLATFORM_EVENT_TYPE::kCLOSE:
     return "Close";

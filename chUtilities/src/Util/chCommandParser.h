@@ -61,6 +61,23 @@ class CH_UTILITY_EXPORT CommandParser {
   bool 
   isFlagSet(const String& flag);
 
+  /**
+   * @brief Get the number of arguments.
+   * @return The number of arguments.
+   */
+  int32
+  getArgc() const {
+    return m_argc;
+  }
+  /**
+   * @brief Get the arguments.
+   * @return The arguments.
+   */
+  char**
+  getArgv() const {
+    return m_argv;
+  }
+
  private:
   /**
    * @brief Private constructor for singleton.
@@ -69,5 +86,8 @@ class CH_UTILITY_EXPORT CommandParser {
 
   UnorderedMap<String, String> params;
   UnorderedSet<String> flags;
+
+  int32  m_argc;
+  char** m_argv;
 };
 }

@@ -24,6 +24,9 @@ using std::tolower;
 */
 void 
 CommandParser::parse(int32 argc, char** argv) {
+  m_argc = argc;
+  m_argv = argv;
+
   for (int i = 1; i < argc; ++i) {
     String arg = argv[i];
     String lowerArg = arg;
