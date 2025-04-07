@@ -19,6 +19,6 @@ class GPUPipelineState;
 
 struct MouseMoveData;
 struct KeyBoardData;
-enum class KEYBOARD_STATE : uint32_t;
-enum class KEY_MODIFIER : uint16_t;
+enum class KEYBOARD_STATE : uint32;
+enum class KEY_MODIFIER : uint16;
 }

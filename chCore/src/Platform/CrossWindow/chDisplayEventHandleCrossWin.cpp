@@ -18,6 +18,43 @@
 #endif //USING(CH_PLATFORM_LINUX)
 
 namespace chCrossWindowHelpers {
+FORCEINLINE chEngineSDK::chKeyBoard::Key
+translateKey(::xwin::Key key) {
+  // This works because the enum values are the same in Chimera and CrossWindow.
+  return static_cast<chEngineSDK::chKeyBoard::Key>(key);
+}
+
+FORCEINLINE chEngineSDK::KEYBOARD_STATE
+translateKeyState(::xwin::ButtonState state) {
+  switch (state) {
+    case ::xwin::ButtonState::Pressed:
+      return chEngineSDK::KEYBOARD_STATE::PRESSED;
+    case ::xwin::ButtonState::Released:
+      return chEngineSDK::KEYBOARD_STATE::RELEASED;
+    default:
+      return chEngineSDK::KEYBOARD_STATE::NONE;
+  }
+}
+
+FORCEINLINE uint16_t
+translateKeyModifier(::xwin::ModifierState modifier) {
+  uint16_t result = 0;
+  if (modifier.ctrl) {
+    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LCTRL);
+  }
+  if (modifier.alt) {
+    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LALT);
+  }
+  if (modifier.shift) {
+    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LSHIFT);
+  }
+  if (modifier.meta) {
+    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LMETA);
+  }
+  return result;
+}
+
+#if USING(CH_PLATFORM_LINUX)
 static std::unordered_map<xcb_keycode_t, chEngineSDK::chKeyBoard::Key> activeKeys;
 
 FORCEINLINE void
@@ -58,43 +95,6 @@ processActiveKeys(std::function<void(chEngineSDK::KeyBoardData)> addEvent) {
   }
 }
 
-FORCEINLINE chEngineSDK::chKeyBoard::Key
-translateKey(::xwin::Key key) {
-  // This works because the enum values are the same in Chimera and CrossWindow.
-  return static_cast<chEngineSDK::chKeyBoard::Key>(key);
-}
-
-FORCEINLINE chEngineSDK::KEYBOARD_STATE
-translateKeyState(::xwin::ButtonState state) {
-  switch (state) {
-    case ::xwin::ButtonState::Pressed:
-      return chEngineSDK::KEYBOARD_STATE::PRESSED;
-    case ::xwin::ButtonState::Released:
-      return chEngineSDK::KEYBOARD_STATE::RELEASED;
-    default:
-      return chEngineSDK::KEYBOARD_STATE::NONE;
-  }
-}
-
-FORCEINLINE uint16_t
-translateKeyModifier(::xwin::ModifierState modifier) {
-  uint16_t result = 0;
-  if (modifier.ctrl) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LCTRL);
-  }
-  if (modifier.alt) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LALT);
-  }
-  if (modifier.shift) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LSHIFT);
-  }
-  if (modifier.meta) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LMETA);
-  }
-  return result;
-}
-
-#if USING(CH_PLATFORM_LINUX)
 FORCEINLINE chEngineSDK::chKeyBoard::Key
 translateXCBKey(xcb_keycode_t keycode, xcb_key_symbols_t* keysyms) {
   xcb_keysym_t keysym = xcb_key_symbols_get_keysym(keysyms, keycode, 0);
@@ -228,8 +228,6 @@ translateXCBKey(xcb_keycode_t keycode, xcb_key_symbols_t* keysyms) {
   }
 }
 #endif // USING(CH_PLATFORM_LINUX)
-
-
 } // namespace chCrossWindowHelpers
 using namespace chCrossWindowHelpers;
 

@@ -25,12 +25,13 @@
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
+  using chKeyBoard::Key;
+  
 using CloseCallback = std::function<void()>;
 using ResizeCallback = std::function<void(uint32,uint32)>;
-using chKeyBoard::Key;
-using KeyDownCallback = std::function<void()>;
-using KeyUpCallback = std::function<void()>;
-using KeyPressedCallback = std::function<void()>;
+using KeyDownCallback = std::function<void(const KeyBoardData&)>;
+using KeyUpCallback = std::function<void(const KeyBoardData&)>;
+using KeyPressedCallback = std::function<void(const KeyBoardData&)>;
 using OnMouseMoveCallback = std::function<void(const MouseMoveData&)>;
 
 class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManager>
@@ -190,8 +191,8 @@ private:
   BitSet<static_cast<uint32_t>(Key::KeysMax)> m_currentKeyboardState;
   BitSet<static_cast<uint32_t>(Key::KeysMax)> m_previousKeyboardState;
 
-  UnorderedMap<Key, Event<void()>> KeyUpCallbacks;
-  UnorderedMap<Key, Event<void()>> KeyPressedCallbacks;
-  UnorderedMap<Key, Event<void()>> KeyDownCallbacks;
+  UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyUpCallbacks;
+  UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyPressedCallbacks;
+  UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyDownCallbacks;
 };
 } // namespace chEngineSDK

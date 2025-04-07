@@ -119,9 +119,18 @@ BaseApplication::run() {
   static int count = 0;
 
   bool running = true;
-  HEvent OnClose = eventDispatcher.OnClose.connect([&]() { m_screen->close();  running = false; } );
-  HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, [&]() 
-    { m_screen->close(); running = false; } );
+  HEvent OnClose = eventDispatcher.OnClose.connect([&]() 
+    { m_screen->close();  running = false; } );
+  HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, 
+    [&](const KeyBoardData& keyData)
+      { m_screen->close(); running = false; });
+
+  HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
+    [&](const KeyBoardData& keyData) {
+      if (keyData.hasModifier(KEY_MODIFIER::LSHIFT)) {
+        CH_LOG_INFO("Key W down with shift");
+      }
+    });
 
   const double fixedTimeStamp = 1.0 / 60.0;
   double accumulator = 0.0;

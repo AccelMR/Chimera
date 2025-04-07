@@ -30,9 +30,9 @@ EventDispatcherManager::EventDispatcherManager()
 {
   for (int i = 0; i < static_cast<int>(Key::KeysMax); ++i) {
     Key key = static_cast<Key>(i);
-    KeyDownCallbacks.emplace(key, Event<void()>());
-    KeyPressedCallbacks.emplace(key, Event<void()>());
-    KeyUpCallbacks.emplace(key, Event<void()>());
+    KeyDownCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
+    KeyPressedCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
+    KeyUpCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
   }
 
   // Initialize the keyboard state
@@ -108,16 +108,16 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
   switch (keyData.state) {
     case KEYBOARD_STATE::PRESSED:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
-      KeyPressedCallbacks.at(keyData.key)();
+      KeyPressedCallbacks.at(keyData.key)(keyData);
       break;
     case KEYBOARD_STATE::DOWN:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
-      KeyDownCallbacks.at(keyData.key)();
+      KeyDownCallbacks.at(keyData.key)(keyData);
       break;
 
     case KEYBOARD_STATE::UP:
       m_currentKeyboardState.reset(static_cast<uint32_t>(keyData.key));
-      KeyUpCallbacks.at(keyData.key)();
+      KeyUpCallbacks.at(keyData.key)(keyData);
       break;
 
     default:
