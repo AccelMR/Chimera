@@ -21,6 +21,7 @@
 #include "chPath.h"
 #include "chStringUtils.h"
 #include "chEventDispatcherManager.h"
+#include "chIGraphicsAPI.h"
 
 #include <chrono>
 
@@ -70,7 +71,7 @@ BaseApplication::initPlatform(int argc, char** argv) {
   if (wptrDisplay.expired()) {
     CH_EXCEPT(InternalErrorException, "Failed to create display.");
   }
-  m_screen = wptrDisplay.lock();
+  m_display = wptrDisplay.lock();
 }
 
 /*
@@ -86,6 +87,32 @@ BaseApplication::initializeModules() {
 */
 void
 BaseApplication::initializeGraphics() {
+
+  DynamicLibraryManager& dynamicLibraryManager = DynamicLibraryManager::instance();
+
+  const String graphicsAPIName = CommandParser::getInstance().getParam("GraphicsAPI", "chVulkan");
+
+  WeakPtr<DynamicLibrary> graphicLibrary = dynamicLibraryManager.loadDynLibrary(graphicsAPIName);
+  if (graphicLibrary.expired()) {
+    CH_EXCEPT(InternalErrorException, "Failed to load graphics API library.");
+  }
+  SPtr<DynamicLibrary> graphicLibraryPtr = graphicLibrary.lock();
+
+  typedef void (*LoadPluginFunc)();
+  LoadPluginFunc loadPlugin = (LoadPluginFunc)graphicLibraryPtr->getSymbol("loadPlugin");
+
+  if (loadPlugin == nullptr) {
+    CH_EXCEPT(InternalErrorException, "Failed to load graphics API plugin.");
+  }
+  loadPlugin();
+
+  // Initialize the graphics API.
+  GraphicsAPIInfo graphicsAPIInfo;
+  graphicsAPIInfo.weakDisplaySurface = m_display;
+  graphicsAPIInfo.width = m_display->getWidth();
+  graphicsAPIInfo.height = m_display->getHeight();
+  
+  IGraphicsAPI::instance().initialize(graphicsAPIInfo);
 }
 
 /*
@@ -115,15 +142,14 @@ BaseApplication::run() {
   CH_ASSERT(m_isInitialized);
 
   auto& eventDispatcher = EventDispatcherManager::instance();
-
-  static int count = 0;
-
+  
   bool running = true;
   HEvent OnClose = eventDispatcher.OnClose.connect([&]() 
-    { m_screen->close();  running = false; } );
+    { m_display->close();  running = false; } );
+
   HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, 
     [&](const KeyBoardData& keyData)
-      { m_screen->close(); running = false; });
+      { m_display->close(); running = false; });
 
   HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
     [&](const KeyBoardData& keyData) {
