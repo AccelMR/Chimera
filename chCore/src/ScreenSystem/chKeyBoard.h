@@ -21,7 +21,9 @@ enum class KEYBOARD_STATE : uint32_t
   UP = 0,
   DOWN,
   PRESSED,
-  RELEASED
+  RELEASED,
+  
+  NONE
 };
 
 enum class KEY_MODIFIER : uint16_t

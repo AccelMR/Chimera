@@ -5,6 +5,7 @@ file(GLOB
      ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
      ${CMAKE_CURRENT_SOURCE_DIR}/src/GraphicsSystem/*/*.h
      ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/externals/crosswindow/*.h
 
 )
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -43,7 +44,12 @@ file(GLOB_RECURSE CROSSWIN_FILES
 )
 target_sources(chCore PRIVATE ${CROSSWIN_FILES})
 
-target_link_libraries(chCore chUtilities CrossWindow)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(chCore PUBLIC chUtilities CrossWindow xcb xcb-keysyms)
+else()
+    target_link_libraries(chCore chUtilities CrossWindow)
+endif()
+
 
 target_include_directories(chCore PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../chUtilities/src/Platform/SDL
@@ -51,7 +57,6 @@ target_include_directories(chCore PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CrossWindow
 )
 
-target_link_libraries(chCore chUtilities CrossWindow)
 
 
 

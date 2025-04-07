@@ -9,17 +9,18 @@
 /************************************************************************/
 #include "chDisplaySurface.h"
 #include "chCommandParser.h"
-#include "chException.h"
-
-#include "CrossWindow/CrossWindow.h"
 
 #ifdef CH_CROSS_WINDOW
+#include "CrossWindow/CrossWindow.h"
+#include "chXCBGlobals.h"
 
 namespace chEngineSDK {
-static xcb_connection_t * g_connection = nullptr;
 
 #if USING(CH_PLATFORM_LINUX)
-bool initializeXCB(int argc, const char** argv) {
+
+
+bool 
+initializeXCB(int argc, const char** argv) {
   int screenNum = 0;
   xcb_connection_t* connection = xcb_connect(nullptr, &screenNum);
   if (xcb_connection_has_error(connection) > 0) {
@@ -31,28 +32,30 @@ bool initializeXCB(int argc, const char** argv) {
     xcb_screen_next(&iter);
   }
   xcb_screen_t* screen = iter.data;
-  g_connection = connection;
 
-  xwin::init(argc, argv, g_connection, screen);
+  if (connection) {
+    setXCBConnection(connection);
+  }
+
+  if (screen) {
+    setXCBScreen(screen);
+  }
+
+  xwin::init(argc, argv, connection, screen);
 
   return true;
-}
-
-void cleanupXCB() {
-  if (g_connection) {
-    xcb_disconnect(g_connection);
-    g_connection = nullptr;
-  }
 }
 #endif //USING(CH_PLATFORM_LINUX)
 
 #if USING(CH_PLATFORM_WIN32)
+
 static HINSTANCE g_hInstance = nullptr;
 static HINSTANCE g_hPrevInstance = nullptr;
 static LPSTR g_lpCmdLine = nullptr;
 static int g_nCmdShow = 0;
 
-bool initializeWin32(int argc, const char** argv) {
+bool 
+initializeWin32(int argc, const char** argv) {
   g_hInstance = GetModuleHandle(NULL);
   g_hPrevInstance = nullptr;
   g_lpCmdLine = GetCommandLineA();
@@ -63,21 +66,28 @@ bool initializeWin32(int argc, const char** argv) {
   
   return true;
 }
-void cleanupWin32() {
+
+void 
+cleanupWin32() {
   // Windows specific cleanup code
 }
 #endif //USING(CH_PLATFORM_WIN32)
 
-bool initializePlatformSpecific(int argc, const char** argv) {
+bool 
+initializePlatformSpecific(int argc, const char** argv) {
 #if USING(CH_PLATFORM_LINUX)
   return initializeXCB(argc, argv);
 #elif USING(CH_PLATFORM_WIN32)
   return initializeWin32(argc, argv);
 #endif //USING(CH_PLATFORM_WIN32)
 }
-void cleanupPlatformSpecific() {
+
+/*
+*/
+void 
+cleanupPlatformSpecific() {
 #if USING(CH_PLATFORM_LINUX)
-  cleanupXCB();
+  chEngineSDK::cleanupXCB();
 #elif USING(CH_PLATFORM_WIN32)
   cleanupWin32();
 #endif //USING(CH_PLATFORM_WIN32)
@@ -92,7 +102,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
   int argc = static_cast<int>(commandParser.getArgc());
   const char** argv = const_cast<const char**>(commandParser.getArgv());
   if (!initializePlatformSpecific(argc, argv)) {
-    CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - XCB initialization failed.");
+    //CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - XCB initialization failed.");
     return false;
   }
 
@@ -107,7 +117,7 @@ DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
   ::xwin::EventQueue* eventQueue = static_cast<::xwin::EventQueue*>(eventHandler->getPlatformPtr());
 
   if (!m_displayHandle->create(windowDesc, *eventQueue)) {
-    CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - Window creation failed.");
+    //CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - Window creation failed.");
     return false;
   }
 

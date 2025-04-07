@@ -53,17 +53,17 @@ struct MouseMoveData
 };
 
 struct KeyBoardData {
-  KeyBoardData() = delete;
+  KeyBoardData() = default;
   KeyBoardData(chKeyBoard::Key _key, 
                 KEYBOARD_STATE _state, 
-                uint8_t _modifiers)
+                uint16_t _modifiers)
     : key(_key), 
       state(_state), 
       modifiers(_modifiers) {}
 
   chKeyBoard::Key key;
   KEYBOARD_STATE state;
-  uint8_t modifiers;
+  uint16_t modifiers;
 
   bool hasModifier(KEY_MODIFIER mod) const {
     return (modifiers & static_cast<uint16_t>(mod) != 0);

@@ -167,10 +167,10 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
 
 private:
   void
-  dispatchKeyEvent(const PLATFORM_EVENT_TYPE& type, const Key& key);
+  dispatchKeyboardEvent(const KeyBoardData& keyData);
   
-  BitSet<static_cast<SIZE_T>(Key::KeysMax)> m_currentKeyboardState;
-  BitSet<static_cast<SIZE_T>(Key::KeysMax)> m_previousKeyboardState;
+  BitSet<static_cast<uint32_t>(Key::KeysMax)> m_currentKeyboardState;
+  BitSet<static_cast<uint32_t>(Key::KeysMax)> m_previousKeyboardState;
 
   UnorderedMap<Key, Event<void()>> KeyUpCallbacks;
   UnorderedMap<Key, Event<void()>> KeyPressedCallbacks;

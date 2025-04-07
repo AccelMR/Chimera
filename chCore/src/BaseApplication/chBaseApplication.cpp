@@ -118,6 +118,8 @@ BaseApplication::run() {
 
   bool running = true;
   HEvent OnClose = eventDispatcher.OnClose.connect([&]() { m_screen->close();  running = false; } );
+  HEvent listenKeyDown = eventDispatcher.listenKeyDown(Key::Escape, [&]() 
+    { m_screen->close(); running = false; } );
 
   const double fixedTimeStamp = 1.0 / 60.0;
   double accumulator = 0.0;

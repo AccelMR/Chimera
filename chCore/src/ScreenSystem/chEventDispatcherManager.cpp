@@ -27,8 +27,6 @@ namespace chEngineSDK{
 using std::get_if;
 
 EventDispatcherManager::EventDispatcherManager()
-  : m_currentKeyboardState(0)
-  , m_previousKeyboardState(0)
 {
   for (int i = 0; i < static_cast<int>(Key::KeysMax); ++i) {
     Key key = static_cast<Key>(i);
@@ -78,49 +76,22 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
+  case PLATFORM_EVENT_TYPE::kKEYBOARD:
+  {
+    if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
+      dispatchKeyboardEvent(*keyData);
+    }
+    else {
+      CH_LOG_ERROR("Key data is not valid.");
+      dispatched = false;
+    }
+  }
+  break;
+
   case PLATFORM_EVENT_TYPE::kNONE:
   default:
     dispatched = false;
-
   }
-
-  // case PLATFORM_EVENT_TYPE::kKEYBOARD:
-  // {
-  //   const DisplayEventData& eventData = sEvent.getData();
-  //   if (const auto& keyData = get_if<KeyBoardData>(eventData)) {
-  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, keyData->key);
-  //   }
-  //   else {
-  //     CH_LOG_ERROR("Key data is not valid.");
-  //     dispatched = false;
-  //   }
-  // }
-  // break;
-
-  // {
-  //   const auto eventData = sEvent.getData();
-  //   if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
-  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_DOWN, keyData->key);
-  //   }
-  //   else {
-  //     CH_LOG_ERROR("Key data is not valid.");
-  //     dispatched = false;
-  //   }
-  // }
-  // break;
-
-  // case PLATFORM_EVENT_TYPE::kKEY_UP:
-  // {
-  //   const auto eventData = sEvent.getData();
-  //   if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
-  //     dispatchKeyEvent(PLATFORM_EVENT_TYPE::kKEY_UP, keyData->key);
-  //   }
-  //   else {
-  //     CH_LOG_ERROR("Key data is not valid.");
-  //     dispatched = false;
-  //   }
-  // }
-  // break;
   
   return dispatched;
 }
@@ -128,34 +99,30 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
 /*
 */
 void 
-EventDispatcherManager::dispatchKeyEvent(const PLATFORM_EVENT_TYPE& type, const Key& key) {
-  switch (type)
-  {
-  // case PLATFORM_EVENT_TYPE::kKEY_DOWN:
-  // {
-  //   m_currentKeyboardState.set(static_cast<SIZE_T>(key));
+EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
+  if (keyData.key >= Key::KeysMax) {
+    CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(keyData.key)));
+    return;
+  }
 
-  //   if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
-  //     KeyPressedCallbacks.at(key)();
-  //   }
-  //   else {
-  //     KeyDownCallbacks.at(key)();
-  //   }
-  // }
-  //   break;
+  switch (keyData.state) {
+    case KEYBOARD_STATE::PRESSED:
+      m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
+      KeyPressedCallbacks.at(keyData.key)();
+      break;
+    case KEYBOARD_STATE::DOWN:
+      m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
+      KeyDownCallbacks.at(keyData.key)();
+      break;
 
-  // case PLATFORM_EVENT_TYPE::kKEY_UP:
-  // {
-  //   m_currentKeyboardState.reset(static_cast<SIZE_T>(key));
+    case KEYBOARD_STATE::UP:
+      m_currentKeyboardState.reset(static_cast<uint32_t>(keyData.key));
+      KeyUpCallbacks.at(keyData.key)();
+      break;
 
-  //   if (m_previousKeyboardState.test(static_cast<SIZE_T>(key))) {
-  //     KeyUpCallbacks.at(key)();
-  //   }
-  // }
-  // break;
-
-  default:
-    break;
+    default:
+      CH_LOG_ERROR("Invalid key state.");
+      break;
   }
 }
 
