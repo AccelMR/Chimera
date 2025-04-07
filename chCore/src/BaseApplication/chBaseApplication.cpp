@@ -29,7 +29,7 @@
 #endif //USING(CH_PLATFORM_LINUX)
 
 namespace chEngineSDK {
-  using namespace std::chrono;
+using namespace std::chrono;
 
 /*
 */
@@ -116,9 +116,11 @@ BaseApplication::run() {
 
   auto& eventDispatcher = EventDispatcherManager::instance();
 
+  static int count = 0;
+
   bool running = true;
   HEvent OnClose = eventDispatcher.OnClose.connect([&]() { m_screen->close();  running = false; } );
-  HEvent listenKeyDown = eventDispatcher.listenKeyDown(Key::Escape, [&]() 
+  HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, [&]() 
     { m_screen->close(); running = false; } );
 
   const double fixedTimeStamp = 1.0 / 60.0;

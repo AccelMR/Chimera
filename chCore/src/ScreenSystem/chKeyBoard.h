@@ -148,8 +148,8 @@ enum class Key : uint32_t
   PgDn,
   Insert,
   Del,
-  LWin,
-  RWin,
+  LMod,
+  RMod,
   Apps,
 
   KeysMax

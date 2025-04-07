@@ -15,12 +15,14 @@
  * Includes
  */                                                                     
 /************************************************************************/
- #include "chPrerequisitesCore.h"
+#include "chPrerequisitesCore.h"
 
-#include "chModule.h"
+#include "chDebug.h"
+#include "chDisplayEvent.h"
 #include "chEventSystem.h"
 #include "chKeyBoard.h"
-#include "chDisplayEvent.h"
+#include "chModule.h"
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 using CloseCallback = std::function<void()>;
@@ -113,6 +115,10 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    **/
   NODISCARD FORCEINLINE bool
   isKeyDown(Key key) const {
+    if (key >= Key::KeysMax) {
+      CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      return false;
+    }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key));
   }
 
@@ -121,6 +127,10 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    **/
   NODISCARD FORCEINLINE bool
   wasKeyDown(Key key) const {
+    if (key >= Key::KeysMax) {
+      CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      return false;
+    }
     return m_previousKeyboardState.test(static_cast<SIZE_T>(key));
   }
 
@@ -129,6 +139,10 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    **/
   NODISCARD FORCEINLINE bool
   isKeyJustPressed(Key key) const {
+    if (key >= Key::KeysMax) {
+      CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      return false;
+    }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 
           !m_previousKeyboardState.test(static_cast<SIZE_T>(key));
   }
@@ -138,6 +152,10 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    **/
   NODISCARD FORCEINLINE bool
   isKeyJustReleased(Key key) const {
+    if (key >= Key::KeysMax) {
+      CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      return false;
+    }
     return !m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 
             m_previousKeyboardState.test(static_cast<SIZE_T>(key));
   }
