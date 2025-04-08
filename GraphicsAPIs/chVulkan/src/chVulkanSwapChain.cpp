@@ -195,6 +195,5 @@ VulkanSwapChain::createSurface(VkPhysicalDevice physicalDevice, WeakPtr<DisplayS
 
   m_colorFormat = selectedFormat.format;
   m_colorSpace = selectedFormat.colorSpace;
-
 }
 } // namespace chEngineSDK

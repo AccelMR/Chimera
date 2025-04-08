@@ -32,10 +32,10 @@ class VulkanAPI : public IGraphicsAPI {
   void
   initialize(const GraphicsAPIInfo& graphicsAPIInfo) override;
 
-  String
+  NODISCARD String
   getAdapterName() const override;
 
-  SPtr<ISwapChain>
+  NODISCARD SPtr<ISwapChain>
   createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) override;
 
   FORCEINLINE VkDevice
@@ -58,8 +58,14 @@ class VulkanAPI : public IGraphicsAPI {
   void
   createInstance(const GraphicsAPIInfo& graphicsAPIInfo);
   
-  void
+  NODISCARD bool
   pickPhysicalDevice();
+
+  NODISCARD bool
+  isDeviceSuitable(VkPhysicalDevice device) const;
+
+  NODISCARD Optional<uint32>
+  findQueueFamily(VkPhysicalDevice device, VkQueueFlags queueFlags) const;
 
   void
   createLogicalDevice();

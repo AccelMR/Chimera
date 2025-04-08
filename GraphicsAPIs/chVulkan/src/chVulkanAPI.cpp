@@ -13,11 +13,11 @@
 #include "chVulkanSwapChain.h"
 
 namespace chVulkanAPIHelpers{
-const std::vector<const char*> VALIDATION_LAYERS = {
+FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
   "VK_LAYER_KHRONOS_validation"
 };
 
-const std::vector<const char*> DEVICE_EXTENSIONS = {
+FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> DEVICE_EXTENSIONS = {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
@@ -117,7 +117,9 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
     setupDebugMessenger(graphicsAPIInfo);
   }
 
-  pickPhysicalDevice();
+  if (!pickPhysicalDevice()){
+    CH_EXCEPT(VulkanErrorException, "Failed to pick a physical device");
+  }
 
   createLogicalDevice();
 
@@ -127,7 +129,7 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
 
 /*
 */
-String
+NODISCARD String
 VulkanAPI::getAdapterName() const {
   if (m_vulkanData->physicalDevice == VK_NULL_HANDLE) {
     return "No physical device selected";
@@ -141,7 +143,7 @@ VulkanAPI::getAdapterName() const {
 
 /*
 */
-SPtr<ISwapChain>
+NODISCARD SPtr<ISwapChain>
 VulkanAPI::createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync) {
   SPtr<VulkanSwapChain> swapChain = chMakeShared<VulkanSwapChain>();
   swapChain->createSurface(m_vulkanData->physicalDevice, display);
@@ -155,17 +157,14 @@ void
 VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
   CH_LOG_DEBUG("Creating Vulkan instance");
 
-  VkApplicationInfo appInfo{};
-  appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  appInfo.pApplicationName = "chEngine Application";
-  appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.pEngineName = "chEngine";
-  appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.apiVersion = VK_API_VERSION_1_2;
-
-  VkInstanceCreateInfo createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  createInfo.pApplicationInfo = &appInfo;
+  VkApplicationInfo appInfo{
+    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    .pApplicationName = "chEngine Application",
+    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+    .pEngineName = "chEngine",
+    .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+    .apiVersion = VK_API_VERSION_1_2
+  };
 
   Vector<const char*> extensions = {
       VK_KHR_SURFACE_EXTENSION_NAME,
@@ -174,37 +173,41 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
       #elif USING(CH_PLATFORM_LINUX)
       VK_KHR_XCB_SURFACE_EXTENSION_NAME
       #endif
-
   };
 
   if (graphicsAPIInfo.enableValidationLayer) {
       extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
 
+  VkInstanceCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+    .pApplicationInfo = &appInfo
+  };
+
   createInfo.enabledExtensionCount = static_cast<uint32>(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
 
-  VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
   if (graphicsAPIInfo.enableValidationLayer) {
-      if (!checkValidationLayerSupport()) {
-          throw std::runtime_error("Validation layers requested but not available");
-      }
-
+    if (!checkValidationLayerSupport()) {
+      CH_EXCEPT (VulkanErrorException, "Validation layers requested but not available");
+    }
+    
     createInfo.enabledLayerCount = static_cast<uint32>(VALIDATION_LAYERS.size());
     createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-
-    debugCreateInfo = {};
-    debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    debugCreateInfo.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    debugCreateInfo.messageType =
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    debugCreateInfo.pfnUserCallback = debugUtilsMessageCallback; // we can add a callback function here
-    debugCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+    
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo,
+      .messageSeverity =
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      .messageType =
+      VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .pfnUserCallback = debugUtilsMessageCallback
+    };
   }
   else {
       createInfo.enabledLayerCount = 0;
@@ -216,30 +219,76 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
 
 /*
 */
-void
+NODISCARD bool
 VulkanAPI::pickPhysicalDevice() {
   uint32 deviceCount = 0;
   vkEnumeratePhysicalDevices(m_vulkanData->instance, &deviceCount, nullptr);
 
   if (deviceCount == 0) {
-    CH_EXCEPT(VulkanErrorException, "Failed to find GPUs with Vulkan support");
+    CH_LOG_ERROR("Failed to find GPUs with Vulkan support");
   }
 
-  std::vector<VkPhysicalDevice> devices(deviceCount);
+  Vector<VkPhysicalDevice> devices(deviceCount);
   vkEnumeratePhysicalDevices(m_vulkanData->instance, &deviceCount, devices.data());
 
-  for (const auto& device : devices) {
-    VkPhysicalDeviceProperties deviceProperties;
-    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+  std::sort(devices.begin(), devices.end(), [](const VkPhysicalDevice& a, const VkPhysicalDevice& b) {
+    VkPhysicalDeviceProperties propertiesA;
+    vkGetPhysicalDeviceProperties(a, &propertiesA);
+    VkPhysicalDeviceProperties propertiesB;
 
-    if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-      m_vulkanData->physicalDevice = device;
-      break;
+    int32 scoreA = 0;
+    int32 scoreB = 0;
+
+    switch (propertiesA.deviceType) {
+      case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: scoreA = 4; break;
+      case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: scoreA = 3; break;
+      case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: scoreA = 2; break;
+      case VK_PHYSICAL_DEVICE_TYPE_CPU: scoreA = 1; break;
+      default: scoreA = 0;
+    }
+
+    switch (propertiesB.deviceType) {
+      case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: scoreB = 4; break;
+      case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: scoreB = 3; break;
+      case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: scoreB = 2; break;
+      case VK_PHYSICAL_DEVICE_TYPE_CPU: scoreB = 1; break;
+      default: scoreB = 0;
+    }
+
+    if (scoreA == scoreB) {
+      VkPhysicalDeviceMemoryProperties memPropsA, memPropsB;
+      vkGetPhysicalDeviceMemoryProperties(a, &memPropsA);
+      vkGetPhysicalDeviceMemoryProperties(b, &memPropsB);
+      
+      VkDeviceSize localMemA = 0, localMemB = 0;
+      for (uint32 i = 0; i < memPropsA.memoryHeapCount; i++) {
+          if (memPropsA.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+              localMemA += memPropsA.memoryHeaps[i].size;
+          }
+      }
+      
+      for (uint32 i = 0; i < memPropsB.memoryHeapCount; i++) {
+          if (memPropsB.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+              localMemB += memPropsB.memoryHeaps[i].size;
+          }
+      }
+      
+      return localMemA > localMemB;
+    }
+  
+    return scoreA > scoreB;
+
+  });
+
+  for (const auto& device : devices) {
+    if (isDeviceSuitable(device)) {
+        m_vulkanData->physicalDevice = device;
+        break;
     }
   }
 
   if (m_vulkanData->physicalDevice == VK_NULL_HANDLE) {
-    m_vulkanData->physicalDevice = devices[0];
+      return false;
   }
 
 
@@ -261,48 +310,102 @@ VulkanAPI::pickPhysicalDevice() {
   CH_LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", deviceProperties.deviceID));
   CH_LOG_INFO(StringUtils::format("target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
 
+  return true;
 }
+
+/*
+*/
+NODISCARD bool
+VulkanAPI::isDeviceSuitable(VkPhysicalDevice device) const {
+    // Check for queue families
+    auto graphicsQueueFamily = findQueueFamily(device, VK_QUEUE_GRAPHICS_BIT);
+    if (!graphicsQueueFamily.has_value()) {
+        return false;
+    }
+    
+    // Check for extension support
+    uint32 extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+    Vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+    
+    Set<String> requiredExtensions(
+        chVulkanAPIHelpers::DEVICE_EXTENSIONS.begin(), 
+        chVulkanAPIHelpers::DEVICE_EXTENSIONS.end()
+    );
+    
+    for (const auto& extension : availableExtensions) {
+        requiredExtensions.erase(extension.extensionName);
+    }
+    
+    if (!requiredExtensions.empty()) {
+        return false;
+    }
+
+    //TODO: Check for swapchain support
+
+    // Additional checks can be added here (e.g., swapchain support if needed)
+    return true;
+}
+
+/*
+*/
+NODISCARD Optional<uint32>
+VulkanAPI::findQueueFamily(VkPhysicalDevice device, VkQueueFlags queueFlags) const {
+  uint32 queueFamilyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+  Vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+  for (uint32 i = 0; i < queueFamilyCount; i++) {
+    if (queueFamilies[i].queueFlags & queueFlags) {
+      return i;
+    }
+  }
+
+  return std::nullopt;
+}
+
 
 /*
 */
 void
 VulkanAPI::createLogicalDevice() {
 
-  VkQueueFlags queueFlags = VK_QUEUE_GRAPHICS_BIT;
-  uint32 queueFamilyCount = 0;
-
-  if (queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-    vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanData->physicalDevice, &queueFamilyCount, nullptr);
-    Vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanData->physicalDevice, &queueFamilyCount, queueFamilies.data());
-
-    for (uint32 i = 0; i < queueFamilyCount; i++) {
-      if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-        m_vulkanData->graphicsQueueFamilyIndex = i;
-        break;
-      }
-    }
+  auto graphicsQueueFamily = findQueueFamily(m_vulkanData->physicalDevice, 
+                                            VK_QUEUE_GRAPHICS_BIT);
+  
+  if (!graphicsQueueFamily.has_value()) {
+    CH_EXCEPT(VulkanErrorException, "Failed to find a suitable queue family");
   }
- 
+
+  m_vulkanData->graphicsQueueFamilyIndex = *graphicsQueueFamily;
+
   // Queue creation info, for now we are using only one queue
   float queuePriority = 1.0f;
-  VkDeviceQueueCreateInfo queueCreateInfo{};
-  queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queueCreateInfo.queueFamilyIndex = m_vulkanData->graphicsQueueFamilyIndex;
-  queueCreateInfo.queueCount = 1;
-  queueCreateInfo.pQueuePriorities = &queuePriority;
+  VkDeviceQueueCreateInfo queueCreateInfo{
+    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    .queueFamilyIndex = m_vulkanData->graphicsQueueFamilyIndex,
+    .queueCount = 1,
+    .pQueuePriorities = &queuePriority
+  };
 
   VkPhysicalDeviceFeatures deviceFeatures{};
 
-  VkDeviceCreateInfo createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  createInfo.pQueueCreateInfos = &queueCreateInfo;
-  createInfo.queueCreateInfoCount = 1;
-  createInfo.pEnabledFeatures = &deviceFeatures;
-  createInfo.enabledExtensionCount = static_cast<uint32>(DEVICE_EXTENSIONS.size());
-  createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
+  VkDeviceCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    .pNext = nullptr,
+    .queueCreateInfoCount = 1,
+    .pQueueCreateInfos = &queueCreateInfo,
+    .enabledExtensionCount = static_cast<uint32>(DEVICE_EXTENSIONS.size()),
+    .ppEnabledExtensionNames = DEVICE_EXTENSIONS.data(),
+    .pEnabledFeatures = &deviceFeatures
+  };
 
-  VK_CHECK (vkCreateDevice(m_vulkanData->physicalDevice, &createInfo, nullptr, &m_vulkanData->device));
+  VK_CHECK (vkCreateDevice(m_vulkanData->physicalDevice, 
+                           &createInfo, 
+                           nullptr,
+                           &m_vulkanData->device));
 
   vkGetDeviceQueue(m_vulkanData->device, 0, 0, &m_vulkanData->graphicsQueue);
 }
@@ -333,9 +436,7 @@ VulkanAPI::setupDebugMessenger(const GraphicsAPIInfo& graphicsAPIInfo) {
   createInfo.pfnUserCallback = debugUtilsMessageCallback; // we can add a callback function here
   createInfo.pUserData = nullptr;
 
-  if (func(m_vulkanData->instance, &createInfo, nullptr, &m_vulkanData->debugMessenger) != VK_SUCCESS) {
-    CH_EXCEPT(VulkanErrorException, "Failed to set up debug messenger");
-  }
+  VK_CHECK(func(m_vulkanData->instance, &createInfo, nullptr, &m_vulkanData->debugMessenger));
 }
 
 /*

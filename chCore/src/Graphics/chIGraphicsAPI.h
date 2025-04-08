@@ -31,11 +31,11 @@ class IGraphicsAPI : public Module<IGraphicsAPI> {
   virtual void
   initialize(const GraphicsAPIInfo& graphicsAPIInfo) = 0;
 
-  virtual String
+  NODISCARD virtual String
   getAdapterName() const = 0;
 
-  virtual SPtr<ISwapChain>
+  NODISCARD virtual SPtr<ISwapChain>
   createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) = 0;
 };
 
-} // namespace chEngineSDK {
+} // namespace chEngineSDK 
