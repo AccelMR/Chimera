@@ -12,6 +12,8 @@
 #include "chPrerequisitesCore.h"
 #include "chModule.h"
 
+#include "chISwapChain.h"
+
 namespace chEngineSDK {
 
 struct GraphicsAPIInfo {
@@ -31,6 +33,9 @@ class IGraphicsAPI : public Module<IGraphicsAPI> {
 
   virtual String
   getAdapterName() const = 0;
+
+  virtual SPtr<ISwapChain>
+  createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) = 0;
 };
 
 } // namespace chEngineSDK {

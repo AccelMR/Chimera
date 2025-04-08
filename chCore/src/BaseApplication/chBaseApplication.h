@@ -76,6 +76,9 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   SPtr<DisplayEventHandle> m_eventhandler;
   SPtr<DisplaySurface> m_display;
 
+
+  //TODO: delete this
+  SPtr<ISwapChain> m_swapChain;
 };
 } // namespace chEngineSDK
 

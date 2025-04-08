@@ -15,6 +15,7 @@
 
 #if USING(CH_PLATFORM_LINUX)
 #include "chXCBGlobals.h"
+using namespace chEngineSDK::XCBGlobals;
 #endif //USING(CH_PLATFORM_LINUX)
 
 namespace chCrossWindowHelpers {
@@ -239,7 +240,7 @@ DisplayEventHandle::DisplayEventHandle() {
 #if USING(CH_PLATFORM_WIN32)
   m_platformPtr = new ::xwin::EventQueue();
 #elif USING(CH_PLATFORM_LINUX)
- 
+  m_platformPtr = nullptr;
 #endif //USING(CH_PLATFORM_LINUX)
 }
 
@@ -262,11 +263,6 @@ DisplayEventHandle::~DisplayEventHandle() {
 */
 PlatformPtr
 DisplayEventHandle::getPlatformPtr() {
-  //TODO: this is awful and should be changed to a better solution.
-  #if USING(CH_PLATFORM_LINUX)
-    initXCBKeySymbols();
-  #endif //USING(CH_PLATFORM_LINUX)
-
   return m_platformPtr;
 }
 

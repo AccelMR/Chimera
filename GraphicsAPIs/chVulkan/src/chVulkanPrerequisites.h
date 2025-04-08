@@ -19,7 +19,7 @@
 
 #if USING(CH_PLATFORM_WIN32)
 #include <vulkan/vulkan_win32.h>
-#elseif USING(CH_PLATFORM_LINUX)
+#elif USING(CH_PLATFORM_LINUX)
 #include <vulkan/vulkan_xcb.h>
 #include <vulkan/vulkan_xlib.h>
 #endif // USING(CH_PLATFORM_LINUX)

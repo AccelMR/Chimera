@@ -113,6 +113,10 @@ BaseApplication::initializeGraphics() {
   graphicsAPIInfo.height = m_display->getHeight();
   
   IGraphicsAPI::instance().initialize(graphicsAPIInfo);
+
+  m_swapChain = IGraphicsAPI::instance().createSwapChain(m_display->getWidth(), 
+                                                         m_display->getHeight(),
+                                                         m_display);
 }
 
 /*

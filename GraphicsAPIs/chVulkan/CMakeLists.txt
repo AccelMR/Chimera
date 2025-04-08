@@ -22,6 +22,9 @@ endmacro()
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src)
+INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src/Platform)
+
+add_compile_definitions(CH_CROSS_WINDOW)
 
 # Configuración específica para XCB en Linux
 if(UNIX AND NOT APPLE)

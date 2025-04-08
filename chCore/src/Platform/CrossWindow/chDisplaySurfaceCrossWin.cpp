@@ -14,6 +14,7 @@
 #include "CrossWindow/CrossWindow.h"
 #include "chXCBGlobals.h"
 
+using namespace chEngineSDK::XCBGlobals;
 namespace chEngineSDK {
 
 #if USING(CH_PLATFORM_LINUX)
@@ -76,7 +77,9 @@ cleanupWin32() {
 bool 
 initializePlatformSpecific(int argc, const char** argv) {
 #if USING(CH_PLATFORM_LINUX)
-  return initializeXCB(argc, argv);
+  const bool bIsXCBinitialized = initializeXCB(argc, argv);
+  const bool bIsXCBKeySymbolinitialized =  initXCBKeySymbols();
+  return bIsXCBinitialized && bIsXCBKeySymbolinitialized;
 #elif USING(CH_PLATFORM_WIN32)
   return initializeWin32(argc, argv);
 #endif //USING(CH_PLATFORM_WIN32)
@@ -87,7 +90,7 @@ initializePlatformSpecific(int argc, const char** argv) {
 void 
 cleanupPlatformSpecific() {
 #if USING(CH_PLATFORM_LINUX)
-  chEngineSDK::cleanupXCB();
+  cleanupXCB();
 #elif USING(CH_PLATFORM_WIN32)
   cleanupWin32();
 #endif //USING(CH_PLATFORM_WIN32)
@@ -139,6 +142,23 @@ DisplaySurface::close() {
   }
 
   cleanupPlatformSpecific();
+}
+
+/*
+*/
+uint32
+DisplaySurface::getPlatformHandlerInt() {
+  #if USING(CH_PLATFORM_LINUX)
+  // For this I had to modify the CrossWindow library to expose mXcbWindowId
+  // if this throws an error, you need to modify the CrossWindow library at XCBWindow.h
+  return m_displayHandle->mXcbWindowId;
+  #elif USING(CH_PLATFORM_WIN32)
+  // If somehting is needed for windows it can go here
+  // but for now we are not using it.
+  // Windows implementation oif the xwin library does expose a lot of things
+  // so we can use it directly.
+  return INVALID_INDEX;
+  #endif //USING(CH_PLATFORM_WIN32)
 }
 
 } // namespace chEngineSDK

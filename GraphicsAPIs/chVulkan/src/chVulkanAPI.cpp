@@ -10,7 +10,9 @@
 #include "chVulkanAPI.h"
 
 #include "chDebug.h"
+#include "chVulkanSwapChain.h"
 
+namespace chVulkanAPIHelpers{
 const std::vector<const char*> VALIDATION_LAYERS = {
   "VK_LAYER_KHRONOS_validation"
 };
@@ -97,6 +99,8 @@ debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity
   // If you instead want to have calls abort, pass in VK_TRUE and the function will return VK_ERROR_VALIDATION_FAILED_EXT
   return VK_FALSE;
 }
+} // namespace chVulkanAPIHelpers
+using namespace chVulkanAPIHelpers;
 
 namespace chEngineSDK {
 
@@ -133,6 +137,16 @@ VulkanAPI::getAdapterName() const {
   vkGetPhysicalDeviceProperties(m_vulkanData->physicalDevice, &deviceProperties);
 
   return deviceProperties.deviceName;
+}
+
+/*
+*/
+SPtr<ISwapChain>
+VulkanAPI::createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync) {
+  SPtr<VulkanSwapChain> swapChain = chMakeShared<VulkanSwapChain>();
+  swapChain->createSurface(m_vulkanData->physicalDevice, display);
+  swapChain->createSwapChain(width, height, vsync);
+  return swapChain;
 }
 
 /*
@@ -245,7 +259,7 @@ VulkanAPI::pickPhysicalDevice() {
   CH_LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", deviceProperties.deviceName));
   CH_LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", deviceProperties.vendorID));
   CH_LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", deviceProperties.deviceID));
-  CH_LOG_INFO(StringUtils::format("Total GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
+  CH_LOG_INFO(StringUtils::format("target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
 
 }
 
@@ -349,6 +363,13 @@ VulkanAPI::checkValidationLayerSupport() const {
     }
   }
 
-  return true;;
+  return true;
+}
+
+
+/*
+*/
+VulkanAPI& g_vulkanAPI() {
+  return reinterpret_cast<VulkanAPI&>(IGraphicsAPI::instance());
 }
 } // namespace chEngineSDK

@@ -10,6 +10,7 @@
  */
 /************************************************************************/
 #pragma once
+
 #include "chPrerequisitesCore.h"
 
 #ifdef CH_CROSS_WINDOW
@@ -19,29 +20,37 @@
 #include <X11/keysym.h>
 
 namespace chEngineSDK {
-  xcb_connection_t* 
+namespace XCBGlobals {
+  CH_CORE_EXPORT xcb_connection_t* 
   getXCBConnection();
 
-  xcb_screen_t* 
+  CH_CORE_EXPORT xcb_screen_t* 
   getXCBScreen();
 
-  void 
+  CH_CORE_EXPORT xcb_window_t
+  getXCBWindow();
+
+  CH_CORE_EXPORT void
+  setXCBWindow(xcb_window_t window);
+
+  CH_CORE_EXPORT void 
   setXCBConnection(xcb_connection_t* connection);
 
-  void 
+  CH_CORE_EXPORT void 
   setXCBScreen(xcb_screen_t* screen);
 
-  xcb_key_symbols_t* 
+  CH_CORE_EXPORT xcb_key_symbols_t* 
   getXCBKeySymbols();
 
-  void 
+  CH_CORE_EXPORT bool 
   initXCBKeySymbols();
 
-  void 
+  CH_CORE_EXPORT void 
   cleanupXCBKeySymbols();
 
-  void
+  CH_CORE_EXPORT void
   cleanupXCB();
-}
+} // namespace XCBGlobals
+} // namespace chEngineSDK
 #endif //USING(CH_PLATFORM_LINUX)
 #endif //CH_CROSS_WINDOW

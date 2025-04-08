@@ -110,6 +110,13 @@ class CH_CORE_EXPORT DisplaySurface
   FORCEINLINE PlatformDisplay
   getPlatformHandler() { return m_displayHandle; }
 
+  /** 
+   *   Do not use unless you know what you are doing.
+   *  This function is used to get very specific platform handler.
+   **/
+  uint32
+  getPlatformHandlerInt();
+
 protected:
   friend class DisplayManager;
 

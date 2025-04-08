@@ -1,3 +1,4 @@
 [submodule "chCore/externals/crosswindow"]
 	path = chCore/externals/crosswindow
-	url = https://github.com/alaingalvan/crosswindow.git
+	url = https://github.com/AccelMR/CrossWindow.git
+	branch = master

@@ -15,6 +15,7 @@
 #if USING(CH_PLATFORM_LINUX)
 
 namespace chEngineSDK {
+namespace XCBGlobals {
 
 static xcb_connection_t* g_connection = nullptr;
 static xcb_screen_t* g_screen = nullptr;
@@ -28,6 +29,11 @@ getXCBConnection() {
 xcb_screen_t*
 getXCBScreen() {
   return g_screen;
+}
+
+xcb_window_t
+getXCBWindow() {
+  return g_screen->root;
 }
 
 void 
@@ -45,11 +51,13 @@ getXCBKeySymbols() {
   return g_keysyms;
 }
 
-void
+bool
 initXCBKeySymbols() {
   if (g_connection && !g_keysyms) {
     g_keysyms = xcb_key_symbols_alloc(g_connection);
+    return g_keysyms != nullptr;
   }
+  return false;
 }
 
 void
@@ -71,7 +79,7 @@ cleanupXCB() {
     g_screen = nullptr;
   }
 }
-
+} // namespace XCBGlobals
 } // namespace chEngineSDK
 
 #endif //USING(CH_PLATFORM_LINUX)

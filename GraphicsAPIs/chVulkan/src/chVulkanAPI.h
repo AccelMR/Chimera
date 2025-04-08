@@ -10,6 +10,7 @@
 #pragma once
 
 #include "chVulkanPrerequisites.h"
+
 #include "chIGraphicsAPI.h"
 
 namespace chEngineSDK {
@@ -34,6 +35,24 @@ class VulkanAPI : public IGraphicsAPI {
   String
   getAdapterName() const override;
 
+  SPtr<ISwapChain>
+  createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) override;
+
+  FORCEINLINE VkDevice
+  getDevice() const {
+    return m_vulkanData->device;
+  }
+
+  FORCEINLINE VkPhysicalDevice
+  getPhysicalDevice() const {
+    return m_vulkanData->physicalDevice;
+  }
+
+  FORCEINLINE VkInstance
+  getInstance() const {
+    return m_vulkanData->instance;
+  }
+
  private:
 
   void
@@ -53,4 +72,7 @@ class VulkanAPI : public IGraphicsAPI {
 
   UnqPtr<VulkanData> m_vulkanData;
 };
+
+CH_CORE_EXPORT VulkanAPI& g_vulkanAPI();
+
 } // namespace chEngineSDK
