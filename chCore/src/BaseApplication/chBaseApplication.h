@@ -71,6 +71,10 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   virtual void 
   destroyGraphics();
 
+  //TODO: delete this
+  void
+  render();
+
  protected:
   bool m_isInitialized = false;
   SPtr<DisplayEventHandle> m_eventhandler;

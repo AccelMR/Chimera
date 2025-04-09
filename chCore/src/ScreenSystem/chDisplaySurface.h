@@ -39,7 +39,7 @@ namespace chEngineSDK{
  * Description: 
  *     Descriptor of how to create a DisplaySurface.
  */
-struct CH_CORE_EXPORT SCREEN_DESC {
+struct CH_CORE_EXPORT ScreenDescriptor {
   String name = "chimeraDefault";
   String title = "chimeraDEfaultTitle";
   uint32 width = 1280;
@@ -55,7 +55,7 @@ struct CH_CORE_EXPORT SCREEN_DESC {
  * 
  *  DisplayManager::startUp();
  * 
- *  SCREEN_DESC winDesc;
+ *  ScreenDescriptor winDesc;
  *  winDesc.name = "ChimeraCoreUnitTest";
  *  winDesc.title = "Chimera Core Unit Test";
  * 
@@ -133,7 +133,7 @@ protected:
    *  True if initialization went good.
    **/
   NODISCARD  bool
-  init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler);
+  init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler);
 
  private:
  //Pointer to the actual screen.

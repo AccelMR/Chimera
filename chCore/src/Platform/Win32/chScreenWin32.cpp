@@ -19,7 +19,7 @@ using WinProcType = LRESULT (CALLBACK*)(HWND, UINT, WPARAM, LPARAM);
 /*
 */
 NODISCARD bool
-DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
+DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler) {
 
   HINSTANCE hinstance = GetModuleHandle(nullptr);
   

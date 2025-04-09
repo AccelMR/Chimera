@@ -24,7 +24,7 @@ namespace chEngineSDK{
 /*
 */
 const WeakPtr<DisplaySurface>
-DisplayManager::createDisplay(SCREEN_DESC screenDesc, SPtr<DisplayEventHandle> eventHandler) {
+DisplayManager::createDisplay(ScreenDescriptor screenDesc, SPtr<DisplayEventHandle> eventHandler) {
   if (!m_mainDisplay) {
     m_mainDisplay = chMakeShared<DisplaySurface>();
     if (!m_mainDisplay->init(screenDesc, eventHandler)) {

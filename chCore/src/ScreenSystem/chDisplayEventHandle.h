@@ -36,7 +36,7 @@ namespace chEngineSDK {
  * Sample usage: *
  *  DisplayManager::startUp();
  *
- *  SCREEN_DESC winDesc;
+ *  ScreenDescriptor winDesc;
  *  winDesc.name = "ChimeraCoreUnitTest";
  *  winDesc.title = "Chimera Core Unit Test";
  *

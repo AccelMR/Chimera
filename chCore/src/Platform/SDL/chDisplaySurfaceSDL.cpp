@@ -18,7 +18,7 @@ namespace chEngineSDK{
 /*
 */
 NODISCARD bool
-DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
+DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler) {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
     CH_EXCEPT(InternalErrorException, "DisplaySurface.init() - SDL_Init failed.");
     return false;

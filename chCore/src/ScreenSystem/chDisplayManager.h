@@ -38,7 +38,7 @@ class CH_CORE_EXPORT DisplayManager: public Module<DisplayManager>
    *    The created screen for specific OS.
    **/
   const WeakPtr<DisplaySurface> 
-  createDisplay(SCREEN_DESC screenDesc, SPtr<DisplayEventHandle> eventHandler);
+  createDisplay(ScreenDescriptor screenDesc, SPtr<DisplayEventHandle> eventHandler);
 
   /** 
    *   Returns shared pointer to main screen.

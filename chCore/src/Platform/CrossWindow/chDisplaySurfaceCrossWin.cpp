@@ -99,7 +99,7 @@ cleanupPlatformSpecific() {
 /*
 */
 NODISCARD bool
-DisplaySurface::init(SCREEN_DESC desc, SPtr<DisplayEventHandle> eventHandler) {
+DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler) {
 
   CommandParser& commandParser = CommandParser::getInstance();
   int argc = static_cast<int>(commandParser.getArgc());

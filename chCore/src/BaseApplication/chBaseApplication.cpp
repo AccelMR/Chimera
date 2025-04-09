@@ -58,11 +58,12 @@ BaseApplication::initPlatform(int argc, char** argv) {
   // Parse command line arguments.
   commandParser.parse(static_cast<int32>(argc), argv);
 
-  SCREEN_DESC winDesc;
-  winDesc.name = commandParser.getParam("AppName", "Chimera Engine");
-  winDesc.title = commandParser.getParam("WindowTitle", "Chimera Engine Base Application");
-  winDesc.width = std::stoi(commandParser.getParam("Width", "1280"));
-  winDesc.height = std::stoi(commandParser.getParam("Height", "720"));
+  ScreenDescriptor winDesc{
+    .name = commandParser.getParam("AppName", "Chimera Engine"),
+    .title = commandParser.getParam("WindowTitle", "Chimera Engine Base Application"),
+    .width = std::stoi(commandParser.getParam("Width", "1280")),
+    .height = std::stoi(commandParser.getParam("Height", "720"))
+  };
 
   m_eventhandler = chMakeShared<DisplayEventHandle>();
   WeakPtr<DisplaySurface> wptrDisplay = DisplayManager::instance().createDisplay(winDesc, m_eventhandler);
@@ -171,8 +172,7 @@ BaseApplication::run() {
   while (running) {
     //Calculate delta time
     auto currentTime = high_resolution_clock::now();
-    duration<double> frameDuration = currentTime - previousTime;
-    double deltaTime = frameDuration.count();
+    auto deltaTime = duration_cast<duration<double>>(currentTime - previousTime).count();
     previousTime = currentTime;
 
     m_eventhandler->update();
@@ -186,4 +186,12 @@ BaseApplication::run() {
     eventDispatcher.updateKeyboardState(); 
   }
 }
+
+/*
+*/
+void
+BaseApplication::render(){
+
+}
+
 } // namespace chEngineSDK
