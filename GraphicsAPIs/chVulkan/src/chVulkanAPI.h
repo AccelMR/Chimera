@@ -20,8 +20,16 @@ struct VulkanData {
   VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
   VkDevice device;
   VkDebugUtilsMessengerEXT debugMessenger;
+
   VkQueue graphicsQueue = VK_NULL_HANDLE;
   uint32 graphicsQueueFamilyIndex = 0;
+
+  VkQueue presentQueue = VK_NULL_HANDLE;
+  uint32 presentQueueFamilyIndex = 0;
+
+  VkSurfaceKHR surface = VK_NULL_HANDLE;
+  VkFormat surfaceFormat = VK_FORMAT_B8G8R8A8_UNORM;
+  VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 };
 
 class VulkanAPI : public IGraphicsAPI {
@@ -36,7 +44,7 @@ class VulkanAPI : public IGraphicsAPI {
   getAdapterName() const override;
 
   NODISCARD SPtr<ISwapChain>
-  createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) override;
+  createSwapChain(uint32 width, uint32 height, bool vsync = false) override;
 
   FORCEINLINE VkDevice
   getDevice() const {
@@ -51,6 +59,21 @@ class VulkanAPI : public IGraphicsAPI {
   FORCEINLINE VkInstance
   getInstance() const {
     return m_vulkanData->instance;
+  }
+
+  FORCEINLINE uint32
+  getGraphicsQueueFamilyIndex() const {
+    return m_vulkanData->graphicsQueueFamilyIndex;
+  }
+
+  FORCEINLINE VkQueue
+  getGraphicsQueue() const {
+    return m_vulkanData->graphicsQueue;
+  }
+
+  FORCEINLINE VkQueue
+  getPresentQueue() const {
+    return m_vulkanData->presentQueue;
   }
 
  private:
@@ -75,6 +98,9 @@ class VulkanAPI : public IGraphicsAPI {
 
   bool
   checkValidationLayerSupport() const;
+
+  void
+  createSurface(WeakPtr<DisplaySurface> display);
 
   UnqPtr<VulkanData> m_vulkanData;
 };

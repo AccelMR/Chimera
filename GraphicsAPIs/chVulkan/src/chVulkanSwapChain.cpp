@@ -13,18 +13,32 @@
 #include "chVulkanSwapChain.h"
 
 #include "chDebug.h"
-#include "chDisplaySurface.h"
+#include "chMath.h"
 #include "chVulkanAPI.h"
 
-
-#if USING(CH_PLATFORM_WIN32)
-#elif USING(CH_PLATFORM_LINUX)
-#include "chXCBGlobals.h"
-#endif // USING(CH_PLATFORM_WIN32)
-
-
 namespace chEngineSDK {
-    /*
+/*
+*/
+VulkanSwapChain::VulkanSwapChain(VkDevice device, 
+                                   VkPhysicalDevice physicalDevice, 
+                                   VkSurfaceKHR surface,
+                                   VkFormat colorFormat,
+                                   VkColorSpaceKHR colorSpace,
+                                   uint32 graphicsFamilyQueueIndex,
+                                   uint32 presentFamilyQueueIndex)
+  : m_device(device),
+    m_physicalDevice(physicalDevice),
+    m_surface(surface),
+    m_colorFormat(colorFormat),
+    m_colorSpace(colorSpace),
+    m_graphicsFamilyQueueIndex(graphicsFamilyQueueIndex),
+    m_presentFamilyQueueIndex(presentFamilyQueueIndex) {
+  CH_ASSERT(m_device != VK_NULL_HANDLE);
+  CH_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
+  CH_ASSERT(m_surface != VK_NULL_HANDLE);
+}
+
+/*
 */
 VulkanSwapChain::~VulkanSwapChain() {
   cleanUp();
@@ -33,20 +47,127 @@ VulkanSwapChain::~VulkanSwapChain() {
 /*
 */
 void
-VulkanSwapChain::createSwapChain(uint32 width, uint32 height, bool vsync) {
-  // Implementation of swap chain creation goes here
-  // This is a placeholder for the actual implementation
-  CH_LOG_DEBUG("Creating Vulkan swap chain with size: " + std::to_string(width) + "x" + std::to_string(height));
+VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
+  cleanUpSwapChain();
+
+  VkSurfaceCapabilitiesKHR capabilities;
+  VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, 
+                                                     m_surface, 
+                                                     &capabilities));
+
+  VkExtent2D swapChainExtent = {};
+  if (capabilities.currentExtent.width == UINT32_MAX) {
+    swapChainExtent.width = Math::clamp(width, 
+                                        capabilities.minImageExtent.width, 
+                                        capabilities.maxImageExtent.width);
+    swapChainExtent.height = Math::clamp(height, 
+                                         capabilities.minImageExtent.height, 
+                                         capabilities.maxImageExtent.height);
+  } 
+  else {
+    swapChainExtent = capabilities.currentExtent;
+  }
+
+  m_width = swapChainExtent.width;
+  m_height = swapChainExtent.height;
+
+  uint32 presentModeCount = 0;
+  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, 
+                                                     m_surface, 
+                                                     &presentModeCount, 
+                                                     nullptr));
+
+  Vector<VkPresentModeKHR> presentModes(presentModeCount);
+  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, 
+                                                     m_surface, 
+                                                     &presentModeCount, 
+                                                     presentModes.data()));
+
+  VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  if (!vsync) {
+    // Prefer MAILBOX (triple buffering) if it is available
+    auto it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_MAILBOX_KHR);
+    if (it != presentModes.end()) {
+      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    } 
+    else {
+      // Fallback to IMMEDIATE (no VSync)
+      it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR);
+      if (it != presentModes.end()) {
+          presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+      }
+    }
+  }
+
+  m_presentMode = presentMode;
+
+  uint32 imageCount = 3; // Triple buffering
+  imageCount = Math::clamp(imageCount, capabilities.minImageCount,
+                           capabilities.maxImageCount > 0 ? 
+                            capabilities.maxImageCount : imageCount); 
+
+  VkSwapchainCreateInfoKHR createInfo = {
+    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .surface = m_surface,
+    .minImageCount = imageCount,
+    .imageFormat = m_colorFormat,
+    .imageColorSpace = m_colorSpace,
+    .imageExtent = swapChainExtent,
+    .imageArrayLayers = 1,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    .preTransform = capabilities.currentTransform,
+    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode = presentMode,
+    .clipped = VK_TRUE
+  };
+
+  if (m_graphicsFamilyQueueIndex != m_presentFamilyQueueIndex) {
+    uint32 queueFamilyIndices[] = { m_graphicsFamilyQueueIndex, m_presentFamilyQueueIndex };
+    createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    createInfo.queueFamilyIndexCount = 2;
+    createInfo.pQueueFamilyIndices = queueFamilyIndices;
+  } 
+  else {
+    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  }
+
+  VK_CHECK(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain));
+  VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_swapChain, &m_imageCount, nullptr));
+  m_images.resize(m_imageCount);
+  VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_swapChain, &m_imageCount, m_images.data()));
+  m_imageViews.resize(m_imageCount);
+
+  createImageViews();
+
+  CH_LOG_DEBUG(StringUtils::format("SweapChain created ({0}x{1}, {2} images, mode {3})", 
+                                    m_width, m_height, m_imageCount, presentMode));
 }
 
 /*
 */
 void
 VulkanSwapChain::present() {
-  // Implementation of presenting the swap chain goes here
-  // This is a placeholder for the actual implementation
-  CH_LOG_DEBUG("Presenting Vulkan swap chain");
-}
+  VkPresentInfoKHR presentInfo = {
+    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+    .waitSemaphoreCount = 0,
+    .pWaitSemaphores = nullptr,
+    .swapchainCount = 1,
+    .pSwapchains = &m_swapChain,
+    .pImageIndices = &m_currentImageIndex,
+    .pResults = nullptr
+  };
+
+  VkQueue presentQueue =  g_vulkanAPI().getGraphicsQueue();
+  VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    // Swap chain is no longer valid, recreate it
+    create(m_width, m_height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
+  } 
+  else if (result != VK_SUCCESS) {
+    CH_LOG_ERROR("Failed to present swap chain image");
+  }
+} 
 
 /*
 */
@@ -70,130 +191,62 @@ VulkanSwapChain::cleanUp() {
 */
 void
 VulkanSwapChain::resize(uint32 width, uint32 height) {
-  // Implementation of resizing the swap chain goes here
-  // This is a placeholder for the actual implementation
-  CH_LOG_DEBUG("Resizing Vulkan swap chain to: " + std::to_string(width) + "x" + std::to_string(height));
+  if (width == 0 || height == 0) {
+    CH_LOG_WARNING("Intento de resize a 0x0 - ignorado");
+    return;
+  }
+  create(width, height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
 }
 
 /*
 */
 void*
 VulkanSwapChain::getNativeHandle() const {
-  return (void*)m_surface;
+  return reinterpret_cast<void*>(m_swapChain);
 }
-
 
 /*
 */
 void
-VulkanSwapChain::createSurface(VkPhysicalDevice physicalDevice, WeakPtr<DisplaySurface> display) {
-#if USING(CH_PLATFORM_WIN32)
-
-  VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
-  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-  surfaceCreateInfo.hinstance = (HINSTANCE)platformHandle;
-  surfaceCreateInfo.hwnd = (HWND)platformWindow;
-  VK_CHECK (vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_surface));
-
-#elif USING(CH_PLATFORM_LINUX)
-
-  CH_LOG_DEBUG("Creating Vulkan surface for Linux");
-
-  if (display.expired()) {
-    CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
+VulkanSwapChain::cleanUpSwapChain() {
+  vkDeviceWaitIdle(m_device);
+  for (auto& imageView : m_imageViews) {
+    vkDestroyImageView(m_device, imageView, nullptr);
   }
-  SPtr<DisplaySurface> displayPtr = display.lock();
-
-  VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {};
-  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-  surfaceCreateInfo.connection = XCBGlobals::getXCBConnection();
-  surfaceCreateInfo.window = displayPtr->getPlatformHandlerInt();
-  VkInstance instance = g_vulkanAPI().getInstance();
-  VK_CHECK (vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_surface));
-
-#endif // USING(CH_PLATFORM_WIN32)
-
-  CH_ASSERT(m_surface != VK_NULL_HANDLE);
-
-  uint32 queueFamilyCount = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-  CH_ASSERT(queueFamilyCount >= 1);
-
-  Vector<VkQueueFamilyProperties> queueProps(queueFamilyCount);
-  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueProps.data());
-
-  Vector<VkBool32> supportsPresent(queueFamilyCount);
-  for (uint32 i = 0; i < queueFamilyCount; i++) {
-    vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_surface, &supportsPresent[i]);
+  m_imageViews.clear();
+  if (m_swapChain != VK_NULL_HANDLE) {
+    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+    m_swapChain = VK_NULL_HANDLE;
   }
-
-  uint32 graphicsQueueFamilyIndex = UINT32_MAX;
-  uint32 presentQueueFamilyIndex = UINT32_MAX;
-  for (uint32 i = 0; i < queueFamilyCount; i++) {
-    if ((queueProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
-
-      if (graphicsQueueFamilyIndex == UINT32_MAX) {
-        graphicsQueueFamilyIndex = i;
-      }
-
-      if (supportsPresent[i] == VK_TRUE) {
-        graphicsQueueFamilyIndex = i;
-        presentQueueFamilyIndex = i;
-        break;
-      }
-    }
-  }
-
-  if (presentQueueFamilyIndex == UINT32_MAX) {
-    for (uint32 i = 0; i < queueFamilyCount; i++) {
-      if (supportsPresent[i] == VK_TRUE) {
-        presentQueueFamilyIndex = i;
-        break;
-      }
-    }
-  }
-
-  if (graphicsQueueFamilyIndex == UINT32_MAX || presentQueueFamilyIndex == UINT32_MAX) {
-    CH_LOG_ERROR("Separate graphics and present queue families");
-  }
-
-  if (graphicsQueueFamilyIndex != presentQueueFamilyIndex) {
-    CH_LOG_ERROR("Separate graphics and present queue families");
-  }
-
-  m_queueNodeIndex = graphicsQueueFamilyIndex;
-
-  uint32 formatCount = 0;
-  VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, 
-                                                 m_surface, 
-                                                 &formatCount, 
-                                                 nullptr));
-  CH_ASSERT(formatCount > 0);
-
-  Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
-  VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, 
-                                                 m_surface, 
-                                                 &formatCount, 
-                                                 surfaceFormats.data()));
-
-  VkSurfaceFormatKHR selectedFormat = surfaceFormats[0];
-  Vector<VkFormat> preferredImageFormats = {
-    VK_FORMAT_B8G8R8A8_UNORM,
-    VK_FORMAT_R8G8B8A8_UNORM, 
-    VK_FORMAT_A8B8G8R8_UNORM_PACK32 
-  };
-
-  for (auto& availableFormat: surfaceFormats) {
-    auto availableFormatIt = std::find(preferredImageFormats.begin(),
-                                       preferredImageFormats.end(),
-                                       availableFormat.format);
-    if (availableFormatIt != preferredImageFormats.end()) {
-      selectedFormat = availableFormat;
-      break;
-    }
-  }
-
-  m_colorFormat = selectedFormat.format;
-  m_colorSpace = selectedFormat.colorSpace;
 }
+
+/*
+*/
+void
+VulkanSwapChain::createImageViews() {
+  m_imageViews.resize(m_imageCount);
+  for (uint32 i = 0; i < m_imageCount; i++) {
+    VkImageViewCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = m_images[i],
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = m_colorFormat,
+      .components = {
+        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .a = VK_COMPONENT_SWIZZLE_IDENTITY
+      },
+      .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1
+      }
+    };
+    VK_CHECK(vkCreateImageView(m_device, &createInfo, nullptr, &m_imageViews[i]));
+  }
+}
+
 } // namespace chEngineSDK

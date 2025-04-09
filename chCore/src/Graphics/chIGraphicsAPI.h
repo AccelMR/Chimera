@@ -35,7 +35,7 @@ class IGraphicsAPI : public Module<IGraphicsAPI> {
   getAdapterName() const = 0;
 
   NODISCARD virtual SPtr<ISwapChain>
-  createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync = false) = 0;
+  createSwapChain(uint32 width, uint32 height, bool vsync = false) = 0;
 };
 
 } // namespace chEngineSDK 

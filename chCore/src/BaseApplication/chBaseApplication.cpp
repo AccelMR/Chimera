@@ -23,8 +23,6 @@
 #include "chEventDispatcherManager.h"
 #include "chIGraphicsAPI.h"
 
-#include <chrono>
-
 #if USING(CH_PLATFORM_LINUX)
 #include <unistd.h>
 #endif //USING(CH_PLATFORM_LINUX)
@@ -115,8 +113,7 @@ BaseApplication::initializeGraphics() {
   IGraphicsAPI::instance().initialize(graphicsAPIInfo);
 
   m_swapChain = IGraphicsAPI::instance().createSwapChain(m_display->getWidth(), 
-                                                         m_display->getHeight(),
-                                                         m_display);
+                                                         m_display->getHeight());
 }
 
 /*
@@ -160,6 +157,11 @@ BaseApplication::run() {
       if (keyData.hasModifier(KEY_MODIFIER::LSHIFT)) {
         CH_LOG_INFO("Key W down with shift");
       }
+    });
+
+    HEvent listenResize = eventDispatcher.OnResize.connect(
+    [&](uint32 width,uint32 height) {
+      m_swapChain->resize(width, height);
     });
 
   const double fixedTimeStamp = 1.0 / 60.0;

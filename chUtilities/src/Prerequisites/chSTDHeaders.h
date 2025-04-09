@@ -81,6 +81,7 @@
 #include <bitset>
 
 #include <algorithm>
+#include <chrono>
 
 /*****************************************************************************/
 /**
@@ -299,4 +300,16 @@ using Variant = std::variant<Types...>;
  */
 template<size_t N>
 using BitSet = std::bitset<N>;
+
+/**
+ * @brief Wrapper for the C++ mutex.
+ */
+using Mutex = std::mutex;
+
+/**
+ * @brief Wrapper for lock_guard.
+ */
+template<typename Mutex>
+using LockGuard = std::lock_guard<Mutex>;
+
 }

@@ -20,7 +20,7 @@ class ISwapChain {
   virtual ~ISwapChain() = default;
 
   virtual void
-  createSwapChain(uint32 width, uint32 height, bool vsync = false) = 0;
+  create(uint32 width, uint32 height, bool vsync = false) = 0;
 
   virtual void
   present() = 0;

@@ -10,7 +10,14 @@
 #include "chVulkanAPI.h"
 
 #include "chDebug.h"
+#include "chDisplaySurface.h"
 #include "chVulkanSwapChain.h"
+
+
+#if USING(CH_PLATFORM_WIN32)
+#elif USING(CH_PLATFORM_LINUX)
+#include "chXCBGlobals.h"
+#endif // USING(CH_PLATFORM_WIN32)
 
 namespace chVulkanAPIHelpers{
 FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
@@ -113,15 +120,18 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
   // Initialize Vulkan instance, physical device, and logical device.
   createInstance( graphicsAPIInfo);
 
+  
   if (graphicsAPIInfo.enableValidationLayer) {
     setupDebugMessenger(graphicsAPIInfo);
   }
-
+  
   if (!pickPhysicalDevice()){
     CH_EXCEPT(VulkanErrorException, "Failed to pick a physical device");
   }
 
   createLogicalDevice();
+
+  createSurface(graphicsAPIInfo.weakDisplaySurface);
 
   CH_LOG_DEBUG("Vulkan API initialized successfully");
   CH_LOG_DEBUG("Using Adapter : " + getAdapterName());
@@ -144,10 +154,16 @@ VulkanAPI::getAdapterName() const {
 /*
 */
 NODISCARD SPtr<ISwapChain>
-VulkanAPI::createSwapChain(uint32 width, uint32 height, WeakPtr<DisplaySurface> display, bool vsync) {
-  SPtr<VulkanSwapChain> swapChain = chMakeShared<VulkanSwapChain>();
-  swapChain->createSurface(m_vulkanData->physicalDevice, display);
-  swapChain->createSwapChain(width, height, vsync);
+VulkanAPI::createSwapChain(uint32 width, uint32 height, bool vsync) {
+  SPtr<VulkanSwapChain> swapChain = 
+    chMakeShared<VulkanSwapChain>(m_vulkanData->device,
+                                  m_vulkanData->physicalDevice,
+                                  m_vulkanData->surface,
+                                  m_vulkanData->surfaceFormat,
+                                  m_vulkanData->colorSpace,
+                                  m_vulkanData->graphicsQueueFamilyIndex,
+                                  m_vulkanData->presentQueueFamilyIndex);
+  swapChain->create(width, height, vsync);
   return swapChain;
 }
 
@@ -380,6 +396,13 @@ VulkanAPI::createLogicalDevice() {
   }
 
   m_vulkanData->graphicsQueueFamilyIndex = *graphicsQueueFamily;
+  // For now we are using the same queue for graphics and present
+  m_vulkanData->presentQueueFamilyIndex = *graphicsQueueFamily;
+
+  // auto computeQueueFamily = findQueueFamily(m_vulkanData->physicalDevice, VK_QUEUE_COMPUTE_BIT);
+  // auto transferQueueFamily = findQueueFamily(m_vulkanData->physicalDevice, VK_QUEUE_TRANSFER_BIT);
+
+  // Set<uint32> uniqueQueueFamilies = { m_vulkanData->graphicsQueueFamilyIndex };
 
   // Queue creation info, for now we are using only one queue
   float queuePriority = 1.0f;
@@ -467,6 +490,65 @@ VulkanAPI::checkValidationLayerSupport() const {
   return true;
 }
 
+/*
+*/
+void
+VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
+  if (m_vulkanData->surface != VK_NULL_HANDLE) {
+    CH_LOG_WARNING("Vulkan surface already created");
+    return;
+  }
+
+#if USING(CH_PLATFORM_WIN32)
+
+  VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
+  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+  surfaceCreateInfo.hinstance = (HINSTANCE)platformHandle;
+  surfaceCreateInfo.hwnd = (HWND)platformWindow;
+  VK_CHECK (vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_surface));
+
+#elif USING(CH_PLATFORM_LINUX)
+
+  CH_LOG_DEBUG("Creating Vulkan surface for Linux");
+
+  if (display.expired()) {
+    CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
+  }
+  SPtr<DisplaySurface> displayPtr = display.lock();
+
+  VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {};
+  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+  surfaceCreateInfo.connection = XCBGlobals::getXCBConnection();
+  surfaceCreateInfo.window = displayPtr->getPlatformHandlerInt();
+  VkInstance instance = g_vulkanAPI().getInstance();
+  VK_CHECK (vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_vulkanData->surface));
+
+#endif // USING(CH_PLATFORM_WIN32)
+
+  VkBool32 presentSupported = VK_FALSE;
+  VK_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR(m_vulkanData->physicalDevice, 
+                                                 m_vulkanData->graphicsQueueFamilyIndex, 
+                                                 m_vulkanData->surface, 
+                                                 &presentSupported));
+  if (presentSupported != VK_TRUE) {
+    CH_EXCEPT(VulkanErrorException, "Failed to create Vulkan surface");
+  }
+
+  uint32 formatCount = 0;
+  VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanData->physicalDevice, 
+                                                 m_vulkanData->surface, 
+                                                 &formatCount, 
+                                                 nullptr));
+
+  Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+  VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanData->physicalDevice, 
+                                                 m_vulkanData->surface, 
+                                                 &formatCount, 
+                                                 surfaceFormats.data()));
+
+  m_vulkanData->surfaceFormat = surfaceFormats[0].format;
+  m_vulkanData->colorSpace = surfaceFormats[0].colorSpace;
+}
 
 /*
 */
