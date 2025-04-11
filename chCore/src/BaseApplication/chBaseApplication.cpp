@@ -23,12 +23,15 @@
 #include "chEventDispatcherManager.h"
 #include "chIGraphicsAPI.h"
 
+#include "chRenderer.h"
+
 #if USING(CH_PLATFORM_LINUX)
 #include <unistd.h>
 #endif //USING(CH_PLATFORM_LINUX)
 
 namespace chEngineSDK {
 using namespace std::chrono;
+using std::stoi;
 
 /*
 */
@@ -59,10 +62,10 @@ BaseApplication::initPlatform(int argc, char** argv) {
   commandParser.parse(static_cast<int32>(argc), argv);
 
   ScreenDescriptor winDesc{
-    .name = commandParser.getParam("AppName", "Chimera Engine"),
-    .title = commandParser.getParam("WindowTitle", "Chimera Engine Base Application"),
-    .width = std::stoi(commandParser.getParam("Width", "1280")),
-    .height = std::stoi(commandParser.getParam("Height", "720"))
+    .name   = commandParser.getParam("AppName", "Chimera Engine"),
+    .title  = commandParser.getParam("WindowTitle", "Chimera Engine Base Application"),
+    .width  = static_cast<uint32>(commandParser.getParamAsInt("Width", 1280)),
+    .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 720))
   };
 
   m_eventhandler = chMakeShared<DisplayEventHandle>();
@@ -80,6 +83,9 @@ BaseApplication::initializeModules() {
   DynamicLibraryManager::startUp();
   EventDispatcherManager::startUp();
   DisplayManager::startUp();
+
+  // Initialize the renderer.
+  Renderer::startUp();
 }
 
 /*
@@ -113,8 +119,10 @@ BaseApplication::initializeGraphics() {
   
   IGraphicsAPI::instance().initialize(graphicsAPIInfo);
 
-  m_swapChain = IGraphicsAPI::instance().createSwapChain(m_display->getWidth(), 
-                                                         m_display->getHeight());
+  Renderer::instance().initialize(m_display, 
+                                  m_display->getWidth(), 
+                                  m_display->getHeight(), 
+                                  CommandParser::getInstance().getParam("VSync", "true") == "true");
 }
 
 /*
@@ -124,6 +132,8 @@ BaseApplication::destroyModules() {
   DisplayManager::shutDown();
   EventDispatcherManager::shutDown();
   DynamicLibraryManager::shutDown();
+
+  Renderer::shutDown();
 }
 
 /*
@@ -160,11 +170,6 @@ BaseApplication::run() {
       }
     });
 
-    HEvent listenResize = eventDispatcher.OnResize.connect(
-    [&](uint32 width,uint32 height) {
-      m_swapChain->resize(width, height);
-    });
-
   const double fixedTimeStamp = 1.0 / 60.0;
   double accumulator = 0.0;
   auto previousTime = high_resolution_clock::now();
@@ -183,6 +188,9 @@ BaseApplication::run() {
       accumulator -= fixedTimeStamp;
     }
 
+    // Render the frame.
+    render();
+
     eventDispatcher.updateKeyboardState(); 
   }
 }
@@ -191,7 +199,7 @@ BaseApplication::run() {
 */
 void
 BaseApplication::render(){
-
+  Renderer::instance().render();
 }
 
 } // namespace chEngineSDK

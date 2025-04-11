@@ -108,7 +108,7 @@ FileSystem::removeAll(const Path& path) {
  * @brief Reads a file into a byte array.
  */
 Vector<uint8>
-FileSystem::fastReadFile(const Path& path) {
+FileSystem::fastRead(const Path& path) {
   Vector<uint8> ret;
 
   auto fileData = FileSystem::openFile(path);

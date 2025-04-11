@@ -28,26 +28,61 @@ class VulkanSwapChain : public ISwapChain {
 
   ~VulkanSwapChain() override;
 
-  void
-  create(uint32 width, uint32 height, bool vsync = false) override;
+  virtual void
+  acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
+                   SPtr<IFence> fence = nullptr) override;
 
-  void
-  present() override;
-
-  void
-  cleanUp() override;
-
-  void
+  virtual void
+  present(const Vector<SPtr<ISemaphore>>& waitSemaphores) override;
+ 
+  virtual void
   resize(uint32 width, uint32 height) override;
 
-  void*
-  getNativeHandle() const override;
+  NODISCARD FORCEINLINE virtual uint32
+  getCurrentImageIndex() const override { return m_currentImageIndex; }
+
+  NODISCARD virtual SPtr<ITexture>
+  getTexture(uint32 index) const override;
+
+  NODISCARD virtual SPtr<ITextureView>
+  getTextureView(uint32 index) const override;
+
+  NODISCARD FORCEINLINE virtual SPtr<IRenderPass>
+  getRenderPass() const override { return m_renderPass; }
+
+  NODISCARD FORCEINLINE virtual SPtr<IFrameBuffer>
+  getFramebuffer(uint32 index) const override { 
+    CH_ASSERT(index < m_framebuffers.size());
+    return m_framebuffers[index]; 
+  }
+
+  NODISCARD FORCEINLINE virtual uint32
+  getTextureCount() const override { return m_currentImageIndex; }
+
+  NODISCARD FORCEINLINE virtual Format
+  getFormat() const override { return vkFormatToChFormat(m_colorFormat); }
+
+  NODISCARD FORCEINLINE virtual uint32
+  getWidth() const override { return m_width; }
+
+  NODISCARD FORCEINLINE virtual uint32
+  getHeight() const override { return m_height; }
+
+  NODISCARD FORCEINLINE virtual VkSwapchainKHR
+  getHandle() const { return m_swapChain; }
+
+ public:
+  void
+  create(uint32 width, uint32 height, bool vsync = false);
 
   void 
   cleanUpSwapChain();
 
   void
   createImageViews();
+
+  void
+  cleanUp();
 
  private:
   VkDevice m_device = VK_NULL_HANDLE;
@@ -57,6 +92,8 @@ class VulkanSwapChain : public ISwapChain {
   uint32 m_graphicsFamilyQueueIndex = UINT32_MAX;
   uint32 m_presentFamilyQueueIndex = UINT32_MAX;
   VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  Vector<SPtr<IFrameBuffer>> m_framebuffers;
+  SPtr<IRenderPass> m_renderPass;
  
   VkFormat m_colorFormat;
   VkColorSpaceKHR m_colorSpace;

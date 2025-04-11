@@ -78,6 +78,11 @@ class CH_UTILITY_EXPORT CommandParser {
     return m_argv;
   }
 
+  FORCEINLINE int32 
+  getParamAsInt(const String& param, int32 defaultValue = 0) {
+    return std::stoi(getParam(param, std::to_string(defaultValue)));
+  }
+
  private:
   /**
    * @brief Private constructor for singleton.

@@ -12,27 +12,49 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
-
+#include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-class ISwapChain {
+class CH_CORE_EXPORT ISwapChain {
  public:
   virtual ~ISwapChain() = default;
 
   virtual void
-  create(uint32 width, uint32 height, bool vsync = false) = 0;
+  acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
+                   SPtr<IFence> fence = nullptr) = 0;
 
   virtual void
-  present() = 0;
-
-  virtual void
-  cleanUp() = 0;
-
+  present(const Vector<SPtr<ISemaphore>>& waitSemaphores) = 0;
+ 
   virtual void
   resize(uint32 width, uint32 height) = 0;
 
-  virtual void*
-  getNativeHandle() const = 0;
+  NODISCARD virtual uint32
+  getCurrentImageIndex() const = 0;
+
+  NODISCARD virtual SPtr<ITexture>
+  getTexture(uint32 index) const = 0;
+
+  NODISCARD virtual SPtr<ITextureView>
+  getTextureView(uint32 index) const = 0;
+
+  NODISCARD virtual SPtr<IRenderPass>
+  getRenderPass() const = 0;
+
+  NODISCARD virtual SPtr<IFrameBuffer>
+  getFramebuffer(uint32 index) const = 0;
+
+  NODISCARD virtual uint32
+  getTextureCount() const = 0;
+
+  NODISCARD virtual Format
+  getFormat() const = 0;
+
+  NODISCARD virtual uint32
+  getWidth() const = 0;
+
+  NODISCARD virtual uint32
+  getHeight() const = 0;
 };
 
 } // namespace chEngineSDK

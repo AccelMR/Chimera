@@ -10,9 +10,10 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+
+#include "chGraphicsTypes.h"
 #include "chModule.h"
 
-#include "chISwapChain.h"
 
 namespace chEngineSDK {
 
@@ -23,7 +24,7 @@ struct GraphicsAPIInfo {
   bool enableValidationLayer = true;
 };
 
-class IGraphicsAPI : public Module<IGraphicsAPI> {
+class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   public:
   IGraphicsAPI() = default;
   virtual ~IGraphicsAPI() = default;
@@ -36,6 +37,39 @@ class IGraphicsAPI : public Module<IGraphicsAPI> {
 
   NODISCARD virtual SPtr<ISwapChain>
   createSwapChain(uint32 width, uint32 height, bool vsync = false) = 0;
+
+  NODISCARD virtual SPtr<IBuffer>
+  createBuffer(const BufferCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<ITexture>
+  createTexture(const TextureCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<ICommandPool>
+  createCommandPool(QueueType queueType, bool transient = false) = 0;
+
+  NODISCARD virtual SPtr<IFence>
+  createFence(bool signaled = false) = 0;
+
+  NODISCARD virtual SPtr<ISemaphore>
+  createSemaphore() = 0;
+
+  NODISCARD virtual SPtr<IShader>
+  createShader(const ShaderCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<IPipeline>
+  createPipeline(const PipelineCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<IRenderPass>
+  createRenderPass(const RenderPassCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<IFrameBuffer>
+  createFrameBuffer(const FrameBufferCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<ICommandQueue>
+  getQueue(QueueType queueType) = 0;
+
+  virtual void
+  waitIdle() = 0;
 };
 
 } // namespace chEngineSDK 

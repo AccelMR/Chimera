@@ -202,7 +202,7 @@ BMPImage::setColor(float u, float v, const Color &color)
 bool 
 BMPImage::decode(const Path &bmpPath)
 {
-  Vector<uint8> buffer = FileSystem::fastReadFile(bmpPath);
+  Vector<uint8> buffer = FileSystem::fastRead(bmpPath);
   if (buffer.empty())
   {
     CH_LOG_ERROR(StringUtils::format("Error: Unable to read file {0}", bmpPath.toString()));

@@ -21,12 +21,6 @@ struct VulkanData {
   VkDevice device;
   VkDebugUtilsMessengerEXT debugMessenger;
 
-  VkQueue graphicsQueue = VK_NULL_HANDLE;
-  uint32 graphicsQueueFamilyIndex = 0;
-
-  VkQueue presentQueue = VK_NULL_HANDLE;
-  uint32 presentQueueFamilyIndex = 0;
-
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   VkFormat surfaceFormat = VK_FORMAT_B8G8R8A8_UNORM;
   VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -46,6 +40,39 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD SPtr<ISwapChain>
   createSwapChain(uint32 width, uint32 height, bool vsync = false) override;
 
+  NODISCARD SPtr<IBuffer>
+  createBuffer(const BufferCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<ITexture>
+  createTexture(const TextureCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<ICommandPool>
+  createCommandPool(QueueType queueType, bool transient = false) override;
+
+  NODISCARD SPtr<IFence>
+  createFence(bool signaled = false) override;
+
+  NODISCARD SPtr<ISemaphore>
+  createSemaphore() override;
+
+  NODISCARD SPtr<IShader>
+  createShader(const ShaderCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<IPipeline>
+  createPipeline(const PipelineCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<IRenderPass>
+  createRenderPass(const RenderPassCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<IFrameBuffer>
+  createFrameBuffer(const FrameBufferCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<ICommandQueue>
+  getQueue(QueueType queueType) override;
+
+  void
+  waitIdle() override;
+
   FORCEINLINE VkDevice
   getDevice() const {
     return m_vulkanData->device;
@@ -63,18 +90,11 @@ class VulkanAPI : public IGraphicsAPI {
 
   FORCEINLINE uint32
   getGraphicsQueueFamilyIndex() const {
-    return m_vulkanData->graphicsQueueFamilyIndex;
+    return m_graphicsQueueFamilyIndex;
   }
 
-  FORCEINLINE VkQueue
-  getGraphicsQueue() const {
-    return m_vulkanData->graphicsQueue;
-  }
-
-  FORCEINLINE VkQueue
-  getPresentQueue() const {
-    return m_vulkanData->presentQueue;
-  }
+  void
+  waitForDeviceIdle();
 
  private:
 
@@ -103,6 +123,12 @@ class VulkanAPI : public IGraphicsAPI {
   createSurface(WeakPtr<DisplaySurface> display);
 
   UnqPtr<VulkanData> m_vulkanData;
+  
+  SPtr<ICommandQueue> m_graphicsQueue;
+  uint32 m_graphicsQueueFamilyIndex = 0;
+
+  SPtr<ICommandQueue> m_presentQueue;
+  uint32 m_presentQueueFamilyIndex = 0;
 };
 
 CH_CORE_EXPORT VulkanAPI& g_vulkanAPI();

@@ -15,6 +15,11 @@
 #include "chDebug.h"
 #include "chMath.h"
 #include "chVulkanAPI.h"
+#include "chVulkanSynchronization.h"
+#include "chVulkanCommandQueue.h"
+#include "chVulkanTexture.h"
+#include "chVulkanTextureView.h"
+#include "chVulkanRenderPass.h"
 
 namespace chEngineSDK {
 /*
@@ -42,6 +47,26 @@ VulkanSwapChain::VulkanSwapChain(VkDevice device,
 */
 VulkanSwapChain::~VulkanSwapChain() {
   cleanUp();
+}
+
+/*
+*/
+void 
+VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence) {
+  auto vulkanSemaphore = std::static_pointer_cast<VulkanSemaphore>(signalSemaphore);
+  
+  VkFence vkFence = VK_NULL_HANDLE;
+  if (fence) {
+      auto vulkanFence = std::static_pointer_cast<VulkanFence>(fence);
+      vkFence = vulkanFence->getHandle();
+  }
+  
+  VK_CHECK(vkAcquireNextImageKHR(m_device, 
+                                 m_swapChain, 
+                                 UINT64_MAX, 
+                                 vulkanSemaphore->getHandle(), 
+                                 vkFence, 
+                                 &m_currentImageIndex));
 }
 
 /*
@@ -145,29 +170,61 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
 /*
 */
-void
-VulkanSwapChain::present() {
-  VkPresentInfoKHR presentInfo = {
+void 
+VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
+  Vector<VkSemaphore> vkSemaphores;
+  for (const auto& sem : waitSemaphores) {
+    auto vulkanSem = std::static_pointer_cast<VulkanSemaphore>(sem);
+    vkSemaphores.push_back(vulkanSem->getHandle());
+  }
+  
+  VkPresentInfoKHR presentInfo{
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-    .waitSemaphoreCount = 0,
-    .pWaitSemaphores = nullptr,
+    .waitSemaphoreCount = static_cast<uint32>(vkSemaphores.size()),
+    .pWaitSemaphores = vkSemaphores.data(),
     .swapchainCount = 1,
     .pSwapchains = &m_swapChain,
-    .pImageIndices = &m_currentImageIndex,
-    .pResults = nullptr
+    .pImageIndices = &m_currentImageIndex
   };
-
-  VkQueue presentQueue =  g_vulkanAPI().getGraphicsQueue();
+  
+  auto vulkanCommandQueue = 
+    std::static_pointer_cast<VulkanCommandQueue>(g_vulkanAPI().getQueue(QueueType::Graphics));
+  CH_ASSERT(vulkanCommandQueue != nullptr);
+  VkQueue presentQueue = vulkanCommandQueue->getHandle();
   VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
-
+  
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // Swap chain is no longer valid, recreate it
-    create(m_width, m_height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
+    resize(m_width, m_height);
   } 
   else if (result != VK_SUCCESS) {
     CH_LOG_ERROR("Failed to present swap chain image");
   }
-} 
+}
+
+/*
+*/
+NODISCARD SPtr<ITexture>
+VulkanSwapChain::getTexture(uint32 index) const {
+  CH_ASSERT(index < m_imageCount);
+  return chMakeShared<VulkanTexture>(m_device, 
+                                     m_physicalDevice, 
+                                     m_images[index], 
+                                     m_colorFormat,
+                                     m_width, m_height, 
+                                     1, 1, 1);
+}
+
+/*
+*/
+NODISCARD SPtr<ITextureView>
+VulkanSwapChain::getTextureView(uint32 index) const {
+  CH_ASSERT(index < m_imageCount);
+  return chMakeShared<VulkanTextureView>(m_device, 
+                                         m_imageViews[index],
+                                         m_colorFormat,
+                                         0, 1, 0, 1,
+                                         TextureViewType::View2D);
+}
 
 /*
 */
@@ -198,12 +255,6 @@ VulkanSwapChain::resize(uint32 width, uint32 height) {
   create(width, height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
 }
 
-/*
-*/
-void*
-VulkanSwapChain::getNativeHandle() const {
-  return reinterpret_cast<void*>(m_swapChain);
-}
 
 /*
 */

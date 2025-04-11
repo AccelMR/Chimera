@@ -130,7 +130,7 @@ class CH_UTILITY_EXPORT FileSystem {
    *  Byte array of the file.
    **/
   static Vector<uint8>
-  fastReadFile(const Path& path);
+  fastRead(const Path& path);
 
   /*
   */

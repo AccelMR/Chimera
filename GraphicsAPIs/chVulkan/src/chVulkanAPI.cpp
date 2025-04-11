@@ -11,7 +11,17 @@
 
 #include "chDebug.h"
 #include "chDisplaySurface.h"
+#include "chVulkanBuffer.h"
+#include "chVulkanCommandBuffer.h"
+#include "chVulkanCommandPool.h"
+#include "chVulkanCommandQueue.h"
+#include "chVulkanFrameBuffer.h"
+#include "chVulkanPipeline.h"
+#include "chVulkanRenderPass.h"
+#include "chVulkanShader.h"
 #include "chVulkanSwapChain.h"
+#include "chVulkanSynchronization.h"
+#include "chVulkanTexture.h"
 
 
 #if USING(CH_PLATFORM_WIN32)
@@ -161,11 +171,109 @@ VulkanAPI::createSwapChain(uint32 width, uint32 height, bool vsync) {
                                   m_vulkanData->surface,
                                   m_vulkanData->surfaceFormat,
                                   m_vulkanData->colorSpace,
-                                  m_vulkanData->graphicsQueueFamilyIndex,
-                                  m_vulkanData->presentQueueFamilyIndex);
+                                  m_graphicsQueueFamilyIndex,
+                                  m_presentQueueFamilyIndex);
   swapChain->create(width, height, vsync);
   return swapChain;
 }
+
+/*
+*/
+NODISCARD SPtr<IBuffer>
+VulkanAPI::createBuffer(const BufferCreateInfo& createInfo) {
+  return chMakeShared<VulkanBuffer>(m_vulkanData->device, 
+                                    m_vulkanData->physicalDevice,
+                                    createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<ITexture>
+VulkanAPI::createTexture(const TextureCreateInfo& createInfo) {
+  return chMakeShared<VulkanTexture>(m_vulkanData->device,
+                                     m_vulkanData->physicalDevice,
+                                     createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<ICommandPool>
+VulkanAPI::createCommandPool(QueueType queueType, bool transient) {
+  uint32 queueFamilyIndex = 0;
+    
+  switch (queueType) {
+    case QueueType::Graphics:
+      queueFamilyIndex = m_graphicsQueueFamilyIndex;
+      break;
+    case QueueType::Present:
+      queueFamilyIndex = m_presentQueueFamilyIndex;
+      break;
+    default:
+      CH_LOG_WARNING("Unsupported queue type, falling back to graphics queue");
+      queueFamilyIndex = m_graphicsQueueFamilyIndex;
+  }
+  
+  return chMakeShared<VulkanCommandPool>(m_vulkanData->device, queueFamilyIndex, transient);
+}
+
+/*
+*/
+NODISCARD SPtr<IFence>
+VulkanAPI::createFence(bool signaled) {
+  return chMakeShared<VulkanFence>(m_vulkanData->device, signaled);
+}
+
+/*
+*/
+NODISCARD SPtr<ISemaphore>
+VulkanAPI::createSemaphore() {
+  return chMakeShared<VulkanSemaphore>(m_vulkanData->device);
+}
+
+/*
+*/
+NODISCARD SPtr<IShader>
+VulkanAPI::createShader(const ShaderCreateInfo& createInfo) {
+  return chMakeShared<VulkanShader>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<IPipeline>
+VulkanAPI::createPipeline(const PipelineCreateInfo& createInfo) {
+  return chMakeShared<VulkanPipeline>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<IRenderPass>
+VulkanAPI::createRenderPass(const RenderPassCreateInfo& createInfo) {
+  return chMakeShared<VulkanRenderPass>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<IFrameBuffer>
+VulkanAPI::createFrameBuffer(const FrameBufferCreateInfo& createInfo) {
+  return chMakeShared<VulkanFrameBuffer>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<ICommandQueue>
+VulkanAPI::getQueue(QueueType queueType) {
+  switch (queueType) {
+  case QueueType::Graphics:
+    return m_graphicsQueue;
+  default:
+  //TODO: Add more queue types
+    CH_EXCEPT(VulkanErrorException, "Invalid queue type");
+    return nullptr;
+    break;
+  }
+}
+
+
 
 /*
 */
@@ -395,9 +503,9 @@ VulkanAPI::createLogicalDevice() {
     CH_EXCEPT(VulkanErrorException, "Failed to find a suitable queue family");
   }
 
-  m_vulkanData->graphicsQueueFamilyIndex = *graphicsQueueFamily;
+  m_graphicsQueueFamilyIndex = *graphicsQueueFamily;
   // For now we are using the same queue for graphics and present
-  m_vulkanData->presentQueueFamilyIndex = *graphicsQueueFamily;
+  m_presentQueueFamilyIndex = *graphicsQueueFamily;
 
   // auto computeQueueFamily = findQueueFamily(m_vulkanData->physicalDevice, VK_QUEUE_COMPUTE_BIT);
   // auto transferQueueFamily = findQueueFamily(m_vulkanData->physicalDevice, VK_QUEUE_TRANSFER_BIT);
@@ -408,7 +516,7 @@ VulkanAPI::createLogicalDevice() {
   float queuePriority = 1.0f;
   VkDeviceQueueCreateInfo queueCreateInfo{
     .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-    .queueFamilyIndex = m_vulkanData->graphicsQueueFamilyIndex,
+    .queueFamilyIndex = m_graphicsQueueFamilyIndex,
     .queueCount = 1,
     .pQueuePriorities = &queuePriority
   };
@@ -430,7 +538,10 @@ VulkanAPI::createLogicalDevice() {
                            nullptr,
                            &m_vulkanData->device));
 
-  vkGetDeviceQueue(m_vulkanData->device, 0, 0, &m_vulkanData->graphicsQueue);
+  // Get the graphics queue and encapsulate it in a command queue
+  m_graphicsQueue = chMakeShared<VulkanCommandQueue>(m_vulkanData->device,
+                                          m_graphicsQueueFamilyIndex, 
+                                          QueueType::Graphics);
 }
 
 /*
@@ -527,7 +638,7 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 
   VkBool32 presentSupported = VK_FALSE;
   VK_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR(m_vulkanData->physicalDevice, 
-                                                 m_vulkanData->graphicsQueueFamilyIndex, 
+                                                 m_graphicsQueueFamilyIndex, 
                                                  m_vulkanData->surface, 
                                                  &presentSupported));
   if (presentSupported != VK_TRUE) {
@@ -548,6 +659,13 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 
   m_vulkanData->surfaceFormat = surfaceFormats[0].format;
   m_vulkanData->colorSpace = surfaceFormats[0].colorSpace;
+}
+
+/*
+*/
+void
+VulkanAPI::waitIdle() {
+  vkDeviceWaitIdle(m_vulkanData->device);
 }
 
 /*
