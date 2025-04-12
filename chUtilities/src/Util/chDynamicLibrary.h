@@ -18,24 +18,9 @@
 #if USING(CH_PLATFORM_WIN32)
 struct HINSTANCE__;
 using hInstance = struct HINSTANCE__ *;
-
-#elif USING(CH_PLATFORM_LINUX)
-#include <dlfcn.h>
-
-#endif// CH_PLATFORM_WIN32
-
-#if USING(CH_PLATFORM_WIN32)
-# define DYNAMIC_LIBRARY_HANDLE hInstance
-# define DYNAMIC_LIBRARY_LOAD(x) LoadLibraryEx(x, NULL, LOAD_WITH_ALTERED_SEARCH_PATH)
-# define DYNAMIC_LIBRARY_GET_SYMBOL(x, y) GetProcAddress(x, y)
-# define DYNAMIC_LIBRARY_UNLOAD(x) !FreeLibrary(x)
-
+using DynamicLibraryHandle = hInstance;
 #elif USING( CH_PLATFORM_LINUX )
-# define DYNAMIC_LIBRARY_HANDLE void*
-# define DYNAMIC_LIBRARY_LOAD(a) dlopen(a, RTLD_LAZY | RTLD_GLOBAL)
-# define DYNAMIC_LIBRARY_GET_SYMBOL(a, b) dlsym(a, b)
-# define DYNAMIC_LIBRARY_UNLOAD(a) dlclose(a)
-
+using DynamicLibraryHandle = void*;
 #endif
 
 namespace chEngineSDK{
@@ -106,7 +91,7 @@ public:
 
 protected:
   String m_name;
-  DYNAMIC_LIBRARY_HANDLE m_dynLibHandler; 
+  DynamicLibraryHandle m_dynLibHandler; 
 
 };
 
