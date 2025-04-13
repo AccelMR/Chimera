@@ -33,7 +33,8 @@ class VulkanTextureView : public ITextureView {
     m_mipLevelCount(mipLevelCount),
     m_baseArrayLayer(baseArrayLayer),
     m_arrayLayerCount(arrayLayerCount),
-    m_viewType(chTextureViewTypeToVkTextureViewType(viewType)) {
+    m_viewType(chTextureViewTypeToVkTextureViewType(viewType)),
+    m_bShouldDestroy(false) {
     CH_ASSERT(m_device != VK_NULL_HANDLE);
     CH_ASSERT(m_imageView != VK_NULL_HANDLE);
   }
@@ -41,7 +42,7 @@ class VulkanTextureView : public ITextureView {
   ~VulkanTextureView() override;
 
   NODISCARD VkImageView
-  getHandle() const;
+  getHandle() const { return m_imageView; }
 
   NODISCARD FORCEINLINE virtual Format 
   getFormat() const override { return vkFormatToChFormat(m_format); }
@@ -70,6 +71,7 @@ class VulkanTextureView : public ITextureView {
   uint32 m_baseArrayLayer = 0;
   uint32 m_arrayLayerCount = 1;
   VkFormat m_format = VK_FORMAT_UNDEFINED;
+  bool m_bShouldDestroy = true;
 
   // TODO: this should be a weak pointer
   ITexture* m_texture;

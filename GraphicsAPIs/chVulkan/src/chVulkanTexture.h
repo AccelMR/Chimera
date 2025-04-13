@@ -33,7 +33,8 @@ class VulkanTexture : public ITexture {
     m_width(width), m_height(height),
     m_depth(depth), m_mipLevels(mipLevels),
     m_arrayLayers(arrayLayers), m_format(vkFormatToChFormat(format)),
-    m_type(TextureType::Texture2D), m_image(image), m_memory(VK_NULL_HANDLE) {}
+    m_type(TextureType::Texture2D), m_image(image), m_memory(VK_NULL_HANDLE),
+    m_bShouldDestroy(false) {}
 
   ~VulkanTexture() override;
 
@@ -77,5 +78,6 @@ class VulkanTexture : public ITexture {
   uint32 m_arrayLayers = 0;
   Format m_format = Format::Unknown;
   TextureType m_type = TextureType::Texture2D;
+  bool m_bShouldDestroy = true;
 };
 } // namespace chEngineSDK

@@ -16,6 +16,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chDisplayEvent.h"
+#include "chResizeDebouncer.h"
 
 #ifdef CH_CROSS_WINDOW
 namespace xwin{
@@ -69,7 +70,7 @@ class CH_CORE_EXPORT DisplayEventHandle
  /*
   *   Default constructor
   */
-  DisplayEventHandle();
+  DisplayEventHandle(uint32 width = 0, uint32 height = 0);
 
  /*
   *   Default destructor
@@ -129,6 +130,11 @@ class CH_CORE_EXPORT DisplayEventHandle
   Queue<DisplayEvent> m_eventQueue;
 
   PlatformPtr m_platformPtr;
+
+  uint32 m_previousWidth;
+  uint32 m_previousHeight;
+
+  ResizeDebouncer m_resizeBound;
 };
 
 /************************************************************************/

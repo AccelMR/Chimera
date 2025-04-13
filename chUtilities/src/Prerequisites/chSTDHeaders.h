@@ -82,6 +82,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <atomic>
 
 /*****************************************************************************/
 /**
@@ -311,5 +312,16 @@ using Mutex = std::mutex;
  */
 template<typename Mutex>
 using LockGuard = std::lock_guard<Mutex>;
+
+/**
+ * @brief Wrapper for the C++ std::atomic.
+ */
+template<typename T>
+using Atomic = std::atomic<T>;
+
+/**
+ * @brief Wrapper for the C++ std::thread.
+ */
+using Thread = std::thread;
 
 }

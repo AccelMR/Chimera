@@ -12,7 +12,7 @@
 
 #include "chVulkanBuffer.h"
 
-#include "chDebug.h"
+#include "chICommandQueue.h"
 #include "chVulkanAPI.h"
 
 namespace chEngineSDK {
@@ -40,8 +40,8 @@ using namespace chVulkanBufferUtils;
 /*
 */
 VulkanBuffer::VulkanBuffer(VkDevice device,
-                             VkPhysicalDevice physicalDevice, 
-                             const BufferCreateInfo& createInfo)
+                           VkPhysicalDevice physicalDevice, 
+                           const BufferCreateInfo& createInfo)
     : m_device(device), m_size(createInfo.size) {
   VkBufferUsageFlags usage = 0;
   if (createInfo.usage.isSet(BufferUsage::VertexBuffer)) {
@@ -119,17 +119,27 @@ VulkanBuffer::VulkanBuffer(VkDevice device,
 /*
 */
 VulkanBuffer::~VulkanBuffer() {
-  if (m_mappedData) {
+  if (m_device == VK_NULL_HANDLE) {
+    return;
+  }
+  VkResult result = vkDeviceWaitIdle(m_device);
+  if (result != VK_SUCCESS) {
+    CH_LOG_ERROR("VulkanBuffer::Destructor: Failed to wait for device idle.");
+  }
+  
+  if (m_buffer != VK_NULL_HANDLE) {
+    vkDestroyBuffer(m_device, m_buffer, nullptr);
+    m_buffer = VK_NULL_HANDLE;
+  }
+
+  if (m_mappedData && m_mappable) {
     vkUnmapMemory(m_device, m_memory);
     m_mappedData = nullptr;
   }
-  if (m_memory) {
+
+  if (m_memory != VK_NULL_HANDLE) {
     vkFreeMemory(m_device, m_memory, nullptr);
     m_memory = VK_NULL_HANDLE;
-  }
-  if (m_buffer) {
-    vkDestroyBuffer(m_device, m_buffer, nullptr);
-    m_buffer = VK_NULL_HANDLE;
   }
 }
 

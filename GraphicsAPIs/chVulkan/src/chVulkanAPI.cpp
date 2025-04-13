@@ -9,7 +9,6 @@
 /************************************************************************/
 #include "chVulkanAPI.h"
 
-#include "chDebug.h"
 #include "chDisplaySurface.h"
 #include "chVulkanBuffer.h"
 #include "chVulkanCommandBuffer.h"
@@ -273,8 +272,6 @@ VulkanAPI::getQueue(QueueType queueType) {
   }
 }
 
-
-
 /*
 */
 void
@@ -318,20 +315,6 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
     
     createInfo.enabledLayerCount = static_cast<uint32>(VALIDATION_LAYERS.size());
     createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-    
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-      .pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo,
-      .messageSeverity =
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-      .messageType =
-      VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-      .pfnUserCallback = debugUtilsMessageCallback
-    };
   }
   else {
       createInfo.enabledLayerCount = 0;
@@ -490,7 +473,6 @@ VulkanAPI::findQueueFamily(VkPhysicalDevice device, VkQueueFlags queueFlags) con
   return std::nullopt;
 }
 
-
 /*
 */
 void
@@ -557,18 +539,19 @@ VulkanAPI::setupDebugMessenger(const GraphicsAPIInfo& graphicsAPIInfo) {
       CH_EXCEPT(VulkanErrorException, "Failed to load debug messenger extension");
   }
 
-  VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-  createInfo.messageSeverity =
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-  createInfo.messageType =
-      VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-  createInfo.pfnUserCallback = debugUtilsMessageCallback; // we can add a callback function here
-  createInfo.pUserData = nullptr;
+  VkDebugUtilsMessengerCreateInfoEXT createInfo{
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    .messageSeverity =
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+    .messageType =
+    VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+    .pfnUserCallback = debugUtilsMessageCallback,
+    .pUserData = nullptr,
+  };
 
   VK_CHECK(func(m_vulkanData->instance, &createInfo, nullptr, &m_vulkanData->debugMessenger));
 }
@@ -665,7 +648,10 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 */
 void
 VulkanAPI::waitIdle() {
-  vkDeviceWaitIdle(m_vulkanData->device);
+   VkResult res =  vkDeviceWaitIdle(m_vulkanData->device);
+    if (res != VK_SUCCESS) {
+      std::cout << res << std::endl;
+    }
 }
 
 /*

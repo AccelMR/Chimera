@@ -24,8 +24,7 @@ class VulkanCommandQueue : public ICommandQueue {
   getQueueType() const override { return m_queueType; }
 
   void 
-  submit(const Vector<SPtr<ICommandBuffer>>& commandBuffers, 
-         const SPtr<IFence>& fence) override;
+  submit(const SubmitInfo& submitInfo, const SPtr<IFence>& fence) override;
 
   void 
   waitIdle() override;

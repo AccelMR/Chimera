@@ -22,14 +22,15 @@ namespace chEngineSDK {
 VulkanTextureView::VulkanTextureView(VkDevice device,
                                        ITexture* texture)
     : m_device(device),
-      m_texture(texture) {
+      m_texture(texture),
+      m_bShouldDestroy(true) {
   CH_ASSERT(m_texture != nullptr);
 }
 
 /*
 */
 VulkanTextureView::~VulkanTextureView() {
-  if (m_imageView != VK_NULL_HANDLE) {
+  if (m_bShouldDestroy && m_imageView != VK_NULL_HANDLE) {
     vkDestroyImageView(m_device, m_imageView, nullptr);
     m_imageView = VK_NULL_HANDLE;
   }

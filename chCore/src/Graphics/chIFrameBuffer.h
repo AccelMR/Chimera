@@ -23,5 +23,14 @@ class CH_CORE_EXPORT IFrameBuffer {
   
   NODISCARD virtual uint32 
   getHeight() const = 0;
+
+  NODISCARD virtual uint32
+  getLayers() const = 0;
+
+  NODISCARD virtual SPtr<IRenderPass>
+  getRenderPass() const = 0;
+
+  NODISCARD virtual const Vector<SPtr<ITextureView>>&
+  getAttachments() const = 0;
 };
 } // namespace chEngineSDK

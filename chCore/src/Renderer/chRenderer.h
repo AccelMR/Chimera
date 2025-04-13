@@ -15,11 +15,10 @@
 namespace chEngineSDK {
 class CH_CORE_EXPORT Renderer : public Module<Renderer> {
  public:
-  virtual ~Renderer() = default;
+  virtual ~Renderer();
 
   void 
-  initialize(WeakPtr<DisplaySurface> displaySurface,
-             uint32 width, 
+  initialize(uint32 width, 
              uint32 height, 
              bool vsync = false);
 
@@ -34,6 +33,10 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   initializeRenderResources();
 
  private:
+  void
+  resizeSwapChain();
+
+ private:
   SPtr<ISwapChain> m_swapChain;
 
   SPtr<ICommandPool> m_commandPool;
@@ -45,8 +48,14 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   Vector<SPtr<ISemaphore>> m_imageAvailableSemaphores;
   Vector<SPtr<ISemaphore>> m_renderFinishedSemaphores;
   Vector<SPtr<IFence>> m_inFlightFences;
+
+  SPtr<IShader> m_vertexShader;
+  SPtr<IShader> m_fragmentShader;
   
   uint32 m_currentFrame = 0;
   static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
+
+  uint32 m_width = 0;
+  uint32 m_height = 0;
 };
 } // namespace chEngineSDK

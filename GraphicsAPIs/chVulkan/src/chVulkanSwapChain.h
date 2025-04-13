@@ -28,7 +28,7 @@ class VulkanSwapChain : public ISwapChain {
 
   ~VulkanSwapChain() override;
 
-  virtual void
+  virtual bool
   acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
                    SPtr<IFence> fence = nullptr) override;
 
@@ -57,7 +57,7 @@ class VulkanSwapChain : public ISwapChain {
   }
 
   NODISCARD FORCEINLINE virtual uint32
-  getTextureCount() const override { return m_currentImageIndex; }
+  getTextureCount() const override { return m_imageCount; }
 
   NODISCARD FORCEINLINE virtual Format
   getFormat() const override { return vkFormatToChFormat(m_colorFormat); }
@@ -84,6 +84,12 @@ class VulkanSwapChain : public ISwapChain {
   void
   cleanUp();
 
+  void
+  createRenderPass();
+
+  void
+  createFramebuffers();
+
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
@@ -92,6 +98,7 @@ class VulkanSwapChain : public ISwapChain {
   uint32 m_graphicsFamilyQueueIndex = UINT32_MAX;
   uint32 m_presentFamilyQueueIndex = UINT32_MAX;
   VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
+
   Vector<SPtr<IFrameBuffer>> m_framebuffers;
   SPtr<IRenderPass> m_renderPass;
  

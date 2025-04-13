@@ -236,11 +236,16 @@ namespace chEngineSDK{
 
 /*
 */
-DisplayEventHandle::DisplayEventHandle() {
+DisplayEventHandle::DisplayEventHandle(uint32 width, uint32 height) :
+  m_previousWidth(width),
+  m_previousHeight(height) {
 #if USING(CH_PLATFORM_WIN32)
   m_platformPtr = new ::xwin::EventQueue();
 #elif USING(CH_PLATFORM_LINUX)
   m_platformPtr = nullptr;
+  m_resizeBound.setCallback([this](uint32 width, uint32 height) {
+    addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData(width, height));
+  });
 #endif //USING(CH_PLATFORM_LINUX)
 }
 
@@ -255,6 +260,8 @@ DisplayEventHandle::~DisplayEventHandle() {
   }
 #elif USING(CH_PLATFORM_LINUX)
   cleanupXCBKeySymbols();
+  m_resizeBound.stopDebounce();
+
 #endif //USING(CH_PLATFORM_LINUX)
 
 }
@@ -266,6 +273,7 @@ DisplayEventHandle::getPlatformPtr() {
   return m_platformPtr;
 }
 
+static bool isResizing = false;
 /*
 */
 void
@@ -365,6 +373,18 @@ DisplayEventHandle::update() {
             }
             break;
         }
+
+        case XCB_BUTTON_RELEASE:
+        {
+          xcb_button_release_event_t* buttonEvent = reinterpret_cast<xcb_button_release_event_t*>(event);
+          // if (buttonEvent->detail == XCB_BUTTON_INDEX_2 && isResizing) {
+          //   isResizing = false;
+          //   addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData(
+          //     static_cast<uint32>(buttonEvent->event_x),
+          //     static_cast<uint32>(buttonEvent->event_y)));
+          // }
+        }
+        break;
         
         case XCB_KEY_RELEASE: {
             xcb_key_release_event_t* keyEvent = reinterpret_cast<xcb_key_release_event_t*>(event);
@@ -404,9 +424,16 @@ DisplayEventHandle::update() {
           
           case XCB_CONFIGURE_NOTIFY: {
             xcb_configure_notify_event_t* configEvent = reinterpret_cast<xcb_configure_notify_event_t*>(event);
-            addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData{
-                     static_cast<uint32>(configEvent->width),
-                     static_cast<uint32>(configEvent->height)});
+            if (configEvent->width != m_previousWidth || configEvent->height != m_previousHeight) {
+              m_previousWidth = configEvent->width;
+              m_previousHeight = configEvent->height;
+              // addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData{
+              //   static_cast<uint32>(configEvent->width),
+              //   static_cast<uint32>(configEvent->height)});
+              m_resizeBound.onResize(
+                static_cast<uint32>(configEvent->width),
+                static_cast<uint32>(configEvent->height));
+            }
             break;
           }
         }

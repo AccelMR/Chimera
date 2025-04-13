@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
     auto& app = BaseApplication::instance();
     app.initialize(argc, argv);
     app.run();
+    //g_Debug().saveLog("resources/engine/logs/chCoreTestMain.txt");
     BaseApplication::shutDown();
   }
   catch(const std::exception& e)
@@ -26,7 +27,5 @@ int main(int argc, char** argv) {
   catch(...) {
     std::cerr << "Unknown exception caught" << std::endl;
   }
-
-  g_Debug().saveLog("resources/engine/logs/chCoreTestMain.txt");
   return 1;
 }

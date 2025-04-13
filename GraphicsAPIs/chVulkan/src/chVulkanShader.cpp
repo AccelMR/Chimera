@@ -12,6 +12,8 @@
 
 #include "chVulkanShader.h"
 
+#include "chStringUtils.h"
+
 namespace chEngineSDK {
 /*
 */

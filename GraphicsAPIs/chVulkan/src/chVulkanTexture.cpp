@@ -11,7 +11,6 @@
 /************************************************************************/
 #include "chVulkanTexture.h"
 
-#include "chDebug.h"
 #include "chVulkanTextureView.h"
 
 namespace chEngineSDK {
@@ -25,7 +24,8 @@ VulkanTexture::VulkanTexture(VkDevice device,
       m_width(createInfo.width), m_height(createInfo.height),
       m_depth(createInfo.depth), m_mipLevels(createInfo.mipLevels),
       m_arrayLayers(createInfo.arrayLayers), m_format(createInfo.format),
-      m_type(createInfo.type) {
+      m_type(createInfo.type),
+      m_bShouldDestroy(true) {
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = static_cast<VkImageType>(createInfo.type);
@@ -70,6 +70,10 @@ VulkanTexture::VulkanTexture(VkDevice device,
 /*
 */
 VulkanTexture::~VulkanTexture() {
+  if (!m_bShouldDestroy) {
+    return;
+  }
+
   if (m_memory != VK_NULL_HANDLE) {
     vkFreeMemory(m_device, m_memory, nullptr);
     m_memory = VK_NULL_HANDLE;

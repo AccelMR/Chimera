@@ -11,6 +11,7 @@
 
 #include "chVulkanCommandBuffer.h"
 
+#include "chICommandQueue.h"
 #include "chVulkanAPI.h"
 #include "chVulkanBuffer.h"
 #include "chVulkanRenderPass.h"
@@ -35,7 +36,14 @@ VulkanCommandBuffer::VulkanCommandBuffer(VkDevice device, VkCommandPool commandP
 /*
 */
 VulkanCommandBuffer::~VulkanCommandBuffer() {
-  vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
+  if (m_commandBuffer != VK_NULL_HANDLE) {
+    // VkResult result = vkDeviceWaitIdle(m_device);
+    // g_vulkanAPI().getQueue(QueueType::Graphics)->waitIdle();
+    //if (result == VK_SUCCESS) {
+      vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
+      m_commandBuffer = VK_NULL_HANDLE;
+    //}
+  }
 }
 
 /*
@@ -46,7 +54,7 @@ VulkanCommandBuffer::begin() {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
   };
-
+  
   VK_CHECK(vkBeginCommandBuffer(m_commandBuffer, &beginInfo));
   m_state = CommandBufferState::Recording;
 }

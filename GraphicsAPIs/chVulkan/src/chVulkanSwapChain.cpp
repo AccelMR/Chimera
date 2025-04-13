@@ -12,7 +12,6 @@
 /************************************************************************/
 #include "chVulkanSwapChain.h"
 
-#include "chDebug.h"
 #include "chMath.h"
 #include "chVulkanAPI.h"
 #include "chVulkanSynchronization.h"
@@ -41,6 +40,9 @@ VulkanSwapChain::VulkanSwapChain(VkDevice device,
   CH_ASSERT(m_device != VK_NULL_HANDLE);
   CH_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
   CH_ASSERT(m_surface != VK_NULL_HANDLE);
+  m_imageViews.clear();
+  m_images.clear();
+  m_framebuffers.clear();
 }
 
 /*
@@ -51,7 +53,7 @@ VulkanSwapChain::~VulkanSwapChain() {
 
 /*
 */
-void 
+bool 
 VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence) {
   auto vulkanSemaphore = std::static_pointer_cast<VulkanSemaphore>(signalSemaphore);
   
@@ -61,12 +63,24 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
       vkFence = vulkanFence->getHandle();
   }
   
-  VK_CHECK(vkAcquireNextImageKHR(m_device, 
-                                 m_swapChain, 
-                                 UINT64_MAX, 
-                                 vulkanSemaphore->getHandle(), 
-                                 vkFence, 
-                                 &m_currentImageIndex));
+  VkResult result = vkAcquireNextImageKHR(m_device, 
+                                          m_swapChain, 
+                                          UINT64_MAX, 
+                                          vulkanSemaphore->getHandle(), 
+                                          vkFence, 
+                                          &m_currentImageIndex);
+
+  // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+  //   resize(m_width, m_height);
+  // }
+
+  if (result != VK_SUCCESS) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+      return false;
+    }
+    CH_LOG_ERROR("Failed to acquire next image from swap chain");
+  }
+  return true;
 }
 
 /*
@@ -126,15 +140,18 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
   m_presentMode = presentMode;
 
-  uint32 imageCount = 3; // Triple buffering
-  imageCount = Math::clamp(imageCount, capabilities.minImageCount,
-                           capabilities.maxImageCount > 0 ? 
-                            capabilities.maxImageCount : imageCount); 
+  constexpr uint32 imageDefaultCount = 3; // Triple buffering
+  if (capabilities.maxImageCount == 0) {
+    m_imageCount = Math::max(imageDefaultCount, capabilities.minImageCount);
+  } 
+  else {
+    m_imageCount = Math::clamp(imageDefaultCount, capabilities.minImageCount, capabilities.maxImageCount);
+  }
 
   VkSwapchainCreateInfoKHR createInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
     .surface = m_surface,
-    .minImageCount = imageCount,
+    .minImageCount = m_imageCount,
     .imageFormat = m_colorFormat,
     .imageColorSpace = m_colorSpace,
     .imageExtent = swapChainExtent,
@@ -163,6 +180,9 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
   m_imageViews.resize(m_imageCount);
 
   createImageViews();
+
+  createRenderPass();
+  createFramebuffers();
 
   CH_LOG_DEBUG(StringUtils::format("SweapChain created ({0}x{1}, {2} images, mode {3})", 
                                     m_width, m_height, m_imageCount, presentMode));
@@ -252,6 +272,9 @@ VulkanSwapChain::resize(uint32 width, uint32 height) {
     CH_LOG_WARNING("Intento de resize a 0x0 - ignorado");
     return;
   }
+
+  vkDeviceWaitIdle(m_device);
+  
   create(width, height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
 }
 
@@ -261,14 +284,26 @@ VulkanSwapChain::resize(uint32 width, uint32 height) {
 void
 VulkanSwapChain::cleanUpSwapChain() {
   vkDeviceWaitIdle(m_device);
+
+  m_framebuffers.clear();
+
+  if (m_renderPass) {
+    m_renderPass.reset();
+  }
+
   for (auto& imageView : m_imageViews) {
-    vkDestroyImageView(m_device, imageView, nullptr);
+    if (imageView != VK_NULL_HANDLE){
+      vkDestroyImageView(m_device, imageView, nullptr);
+      imageView = VK_NULL_HANDLE;
+    }
   }
   m_imageViews.clear();
+
   if (m_swapChain != VK_NULL_HANDLE) {
     vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
     m_swapChain = VK_NULL_HANDLE;
   }
+
 }
 
 /*
@@ -300,4 +335,64 @@ VulkanSwapChain::createImageViews() {
   }
 }
 
+/*
+*/
+void 
+VulkanSwapChain::createRenderPass() {
+  AttachmentDescription colorAttachment{
+      .format = vkFormatToChFormat(m_colorFormat),
+      .loadOp = LoadOp::Clear,
+      .storeOp = StoreOp::Store,
+      .initialLayout = TextureLayout::Undefined,
+      .finalLayout = TextureLayout::PresentSrc
+  };
+  
+  AttachmentReference colorRef{
+      .attachment = 0,
+      .layout = TextureLayout::ColorAttachment
+  };
+  
+  SubpassDescription subpass{
+      .pipelineBindPoint = PipelineBindPoint::Graphics,
+      .colorAttachments = {colorRef}
+  };
+  
+  SubpassDependency dependency{
+      .srcSubpass = SUBPASS_EXTERNAL,
+      .dstSubpass = 0,
+      .srcStageMask = PipelineStage::ColorAttachmentOutput,
+      .dstStageMask = PipelineStage::ColorAttachmentOutput,
+      .srcAccessMask = Access::NoAccess,
+      .dstAccessMask = Access::ColorAttachmentWrite
+  };
+  
+  RenderPassCreateInfo renderPassInfo{
+      .attachments = {colorAttachment},
+      .subpasses = {subpass},
+      .dependencies = {dependency}
+  };
+  
+  m_renderPass = g_vulkanAPI().createRenderPass(renderPassInfo);
+}
+
+/*
+*/
+void 
+VulkanSwapChain::createFramebuffers() {
+  m_framebuffers.resize(m_imageCount);
+  
+  for (uint32 i = 0; i < m_imageCount; i++) {
+    auto textureView = getTextureView(i);
+    
+    FrameBufferCreateInfo framebufferInfo{
+      .renderPass = m_renderPass,
+      .attachments = {textureView},
+      .width = m_width,
+      .height = m_height,
+      .layers = 1
+    };
+    
+    m_framebuffers[i] = g_vulkanAPI().createFrameBuffer(framebufferInfo);
+  }
+}
 } // namespace chEngineSDK

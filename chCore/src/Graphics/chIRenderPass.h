@@ -15,7 +15,6 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-
 class CH_CORE_EXPORT IRenderPass {
  public:
   virtual ~IRenderPass() = default;

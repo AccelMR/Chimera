@@ -19,7 +19,7 @@ class CH_CORE_EXPORT ISwapChain {
  public:
   virtual ~ISwapChain() = default;
 
-  virtual void
+  virtual bool
   acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
                    SPtr<IFence> fence = nullptr) = 0;
 

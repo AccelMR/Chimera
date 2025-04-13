@@ -15,6 +15,8 @@
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
+constexpr uint32 SUBPASS_EXTERNAL = ~0u;
+
 enum class QueueType : uint32 {
   Graphics = 0,
   Compute,
@@ -67,6 +69,7 @@ enum class IndexType : uint32 {
 enum class Format : uint32 {
   Unknown = 0,
   R8G8B8A8_UNORM,
+  B8G8R8A8_SRGB,
   R16G16B16A16_SFLOAT,
   D32_SFLOAT,
   D24_UNORM_S8_UINT,
@@ -165,6 +168,83 @@ enum class MemoryUsage {
   GpuToCpu
 };
 
+enum class TextureLayout {
+  Undefined,                
+  General,                  
+  ColorAttachment,          
+  DepthStencilAttachment,   
+  DepthStencilReadOnly,     
+  ShaderReadOnly,           
+  TransferSrc,              
+  TransferDst,              
+  PresentSrc,               
+  // Otros layouts específicos...
+};
+
+enum class PipelineBindPoint {
+  Graphics,
+  Compute
+};
+
+enum class PipelineStage : uint32 {
+  None                    = 0,
+  TopOfPipe               = 1 << 0,
+  DrawIndirect            = 1 << 1,
+  VertexInput             = 1 << 2,
+  VertexShader            = 1 << 3,
+  FragmentShader          = 1 << 4,
+  ColorAttachmentOutput   = 1 << 5,
+  ComputeShader           = 1 << 6,
+  Transfer                = 1 << 7,
+  BottomOfPipe            = 1 << 8,
+  AllGraphics             = 1 << 9,
+  AllCommands             = 1 << 10
+};
+CH_FLAGS_OPERATORS_EXT(PipelineStage, uint32);
+using PipelineStageFlags = Flags<PipelineStage, uint32>;
+
+enum class Access : uint32 {
+  NoAccess                      = 0,
+  ShaderRead                = 1 << 0,
+  ShaderWrite               = 1 << 1,
+  ColorAttachmentRead       = 1 << 2,
+  ColorAttachmentWrite      = 1 << 3,
+  DepthStencilAttachmentRead = 1 << 4,
+  DepthStencilAttachmentWrite = 1 << 5,
+  TransferRead              = 1 << 6,
+  TransferWrite             = 1 << 7,
+  HostRead                  = 1 << 8,
+  HostWrite                 = 1 << 9,
+  MemoryRead                = 1 << 10,
+  MemoryWrite               = 1 << 11
+};
+CH_FLAGS_OPERATORS_EXT(Access, uint32);
+using AccessFlags = Flags<Access, uint32>;
+
+struct AttachmentReference {
+  uint32 attachment = ~0u;
+  TextureLayout layout = TextureLayout::Undefined;
+};
+
+struct SubpassDescription {
+  PipelineBindPoint pipelineBindPoint = PipelineBindPoint::Graphics;
+  Vector<AttachmentReference> inputAttachments;
+  Vector<AttachmentReference> colorAttachments;
+  Vector<AttachmentReference> resolveAttachments;
+  Optional<AttachmentReference> depthStencilAttachment;
+  Vector<uint32> preserveAttachments;
+};
+
+struct SubpassDependency {
+  uint32 srcSubpass = ~0u;
+  uint32 dstSubpass = ~0u;
+  PipelineStage srcStageMask = PipelineStage::ColorAttachmentOutput;
+  PipelineStage dstStageMask = PipelineStage::ColorAttachmentOutput;
+  AccessFlags srcAccessMask = Access::ColorAttachmentWrite;
+  AccessFlags dstAccessMask = Access::ColorAttachmentWrite;
+  bool byRegion = false;
+};
+
 struct TextureCreateInfo {
   TextureType type = TextureType::Texture2D;
   Format format = Format::R8G8B8A8_UNORM;
@@ -210,10 +290,7 @@ struct VertexPosColor {
   float color[4];
   
   static VertexLayout getLayout() {
-    VertexLayout layout;
-    layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
-    layout.addAttribute(VertexAttributeType::Color, VertexFormat::Float4);
-    return layout;
+    return VertexLayout::createPostionColorLayout();
   }
 };
 
@@ -258,21 +335,28 @@ struct BufferCreateInfo {
   SIZE_T initialDataSize = 0;
 };
 
-struct AtachmentDescription {
+struct AttachmentDescription {
   Format format;
   LoadOp loadOp;
   StoreOp storeOp;
-  // TODO: Add more fields for stencil, initial layout, final layout, etc.
+  LoadOp stencilLoadOp;
+  StoreOp stencilStoreOp;
+  TextureLayout initialLayout;
+  TextureLayout finalLayout;
 };
 
 struct RenderPassCreateInfo {
-  Vector<AtachmentDescription> attachments;
-  // TODO: Add more fields for subpasses, dependencies, etc.
+  Vector<AttachmentDescription> attachments;
+  Vector<SubpassDescription> subpasses;
+  Vector<SubpassDependency> dependencies;
 };
 
 struct FrameBufferCreateInfo {
   SPtr<IRenderPass> renderPass;
-  Vector<SPtr<ITexture>> attachments;
+  Vector<SPtr<ITextureView>> attachments;
+  uint32 width;
+  uint32 height;
+  uint32 layers = 1;
 };
 
 struct RenderPassBeginInfo {
@@ -282,9 +366,10 @@ struct RenderPassBeginInfo {
 };
 
 struct SubmitInfo {
-  Vector<SPtr<ISemaphore>> waitSemaphores;
-  Vector<SPtr<ISemaphore>> signalSemaphores;
   Vector<SPtr<ICommandBuffer>> commandBuffers;
+  Vector<SPtr<ISemaphore>> waitSemaphores;
+  Vector<PipelineStageFlags> waitStages;
+  Vector<SPtr<ISemaphore>> signalSemaphores;
 };
 
 } // namespace chEngineSDK

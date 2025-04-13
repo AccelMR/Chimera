@@ -27,12 +27,29 @@ class VulkanFrameBuffer : public IFrameBuffer {
   NODISCARD FORCEINLINE uint32
   getHeight() const override { return m_height; }
 
+  NODISCARD FORCEINLINE uint32
+  getLayers() const override { return 1; } // TODO: Support layers
+
   NODISCARD FORCEINLINE VkFramebuffer
   getHandle() const { return m_framebuffer; }
+
+  NODISCARD FORCEINLINE SPtr<IRenderPass>
+  getRenderPass() const override { return m_renderPass; }
+
+  NODISCARD FORCEINLINE const Vector<SPtr<ITextureView>>&
+  getAttachments() const override { return m_attachments; }
+
+  // NODISCARD FORCEINLINE const Vector<SPtr<ITextureView>>&
+  // getDepthStencilAttachments() const override { return m_depthStencilAttachments; }
 
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
+
+  SPtr<IRenderPass> m_renderPass = nullptr;
+  Vector<SPtr<ITextureView>> m_attachments;
+  Vector<SPtr<ITextureView>> m_colorAttachments;
+
 
   uint32 m_width = 0;
   uint32 m_height = 0;

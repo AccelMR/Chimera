@@ -24,8 +24,8 @@ class CH_CORE_EXPORT ICommandQueue {
   NODISCARD virtual 
   QueueType getQueueType() const = 0;
 
-  virtual void submit(const Vector<SPtr<ICommandBuffer>>& commandBuffers, 
-                      const SPtr<IFence>& fence) = 0;
+  virtual void 
+  submit(const SubmitInfo& submitInfo, const SPtr<IFence>& fence = nullptr) = 0;
 
   virtual void waitIdle() = 0;
 };

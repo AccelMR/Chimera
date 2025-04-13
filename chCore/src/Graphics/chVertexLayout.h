@@ -82,13 +82,18 @@ class CH_CORE_EXPORT VertexLayout {
   NODISCARD FORCEINLINE const Vector<VertexAttributeDesc>&
   getAttributes() const { return m_attributes; }
 
-  NODISCARD FORCEINLINE uint32 
-  getStrinde(uint32 binding = 0) const {
+  NODISCARD FORCEINLINE uint32
+  getVertexSize() const { return m_vertexSize; }
+
+  NODISCARD FORCEINLINE uint32
+  getStride(uint32 binding = 0) const {
     return binding < m_strides.size() ? m_strides[binding] : 0;
   }
 
   NODISCARD FORCEINLINE uint32
-  getVertexSize() const { return m_vertexSize; }
+  getBindingCount() const {
+    return static_cast<uint32>(m_strides.size());
+  }
 
  private:
   

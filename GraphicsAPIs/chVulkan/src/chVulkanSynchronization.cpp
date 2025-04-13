@@ -10,8 +10,9 @@
  */
 /************************************************************************/
 
-
 #include "chVulkanSynchronization.h"
+
+#include "chVulkanAPI.h"
 
 namespace chEngineSDK {
 /*
@@ -27,7 +28,8 @@ VulkanSemaphore::VulkanSemaphore(VkDevice device)
 /*
 */
 VulkanSemaphore::~VulkanSemaphore() {
-  if (m_semaphore != VK_NULL_HANDLE) {
+  if (m_semaphore != VK_NULL_HANDLE && m_device != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(m_device);
     vkDestroySemaphore(m_device, m_semaphore, nullptr);
     m_semaphore = VK_NULL_HANDLE;
   }

@@ -36,10 +36,11 @@ using std::stoi;
 /*
 */
 BaseApplication::~BaseApplication() {
-  CH_LOG_INFO("Destroying BaseApplication");
+  //CH_LOG_INFO("Destroying BaseApplication");
 
   if (m_isInitialized) {
     destroyModules();
+    destroyGraphics();
   }
 }
 
@@ -61,14 +62,16 @@ BaseApplication::initPlatform(int argc, char** argv) {
   // Parse command line arguments.
   commandParser.parse(static_cast<int32>(argc), argv);
 
+  uint32 width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1280));
+  uint32 height = static_cast<uint32>(commandParser.getParamAsInt("Height", 720));
   ScreenDescriptor winDesc{
     .name   = commandParser.getParam("AppName", "Chimera Engine"),
     .title  = commandParser.getParam("WindowTitle", "Chimera Engine Base Application"),
-    .width  = static_cast<uint32>(commandParser.getParamAsInt("Width", 1280)),
-    .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 720))
+    .width  = width,
+    .height = height
   };
 
-  m_eventhandler = chMakeShared<DisplayEventHandle>();
+  m_eventhandler = chMakeShared<DisplayEventHandle>(width, height);
   WeakPtr<DisplaySurface> wptrDisplay = DisplayManager::instance().createDisplay(winDesc, m_eventhandler);
   if (wptrDisplay.expired()) {
     CH_EXCEPT(InternalErrorException, "Failed to create display.");
@@ -119,9 +122,8 @@ BaseApplication::initializeGraphics() {
   
   IGraphicsAPI::instance().initialize(graphicsAPIInfo);
 
-  Renderer::instance().initialize(m_display, 
-                                  m_display->getWidth(), 
-                                  m_display->getHeight(), 
+  Renderer::instance().initialize(m_display->getWidth(),
+                                  m_display->getHeight(),
                                   CommandParser::getInstance().getParam("VSync", "true") == "true");
 }
 
@@ -129,17 +131,19 @@ BaseApplication::initializeGraphics() {
 */
 void
 BaseApplication::destroyModules() {
-  DisplayManager::shutDown();
-  EventDispatcherManager::shutDown();
-  DynamicLibraryManager::shutDown();
-
   Renderer::shutDown();
+
+  EventDispatcherManager::shutDown();
+  DisplayManager::shutDown();
+
+  DynamicLibraryManager::shutDown();
 }
 
 /*
 */
 void
 BaseApplication::destroyGraphics() {
+  IGraphicsAPI::shutDown();
 }
 
 /*
@@ -157,11 +161,11 @@ BaseApplication::run() {
   
   bool running = true;
   HEvent OnClose = eventDispatcher.OnClose.connect([&]() 
-    { m_display->close();  running = false; } );
+    { running = false; } );
 
   HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, 
     [&](const KeyBoardData& keyData)
-      { m_display->close(); running = false; });
+      { running = false; });
 
   HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
     [&](const KeyBoardData& keyData) {
@@ -182,6 +186,7 @@ BaseApplication::run() {
 
     m_eventhandler->update();
     eventDispatcher.dispatchEvents(m_eventhandler);
+    if (!running) { break; }
 
     while (accumulator >= fixedTimeStamp) {
       //update();

@@ -11,8 +11,10 @@
 /************************************************************************/
 
 #include "chVulkanPipeline.h"
+
 #include "chVulkanShader.h"
 #include "chVulkanRenderPass.h"
+#include "chVertexLayout.h"
 
 namespace chEngineSDK {
 /*
@@ -21,17 +23,19 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
     : m_device(device) {
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = 0,
-      .pSetLayouts = nullptr,
-      .pushConstantRangeCount = 0,
-      .pPushConstantRanges = nullptr,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    .setLayoutCount = 0,
+    .pSetLayouts = nullptr,
+    .pushConstantRangeCount = 0,
+    .pPushConstantRanges = nullptr,
   };
 
   VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 
-  Vector<VkPipelineShaderStageCreateInfo> shaderStages;
+  Vector<VkPipelineShaderStageCreateInfo> shaderStages(createInfo.shaders.size());
 
+  SIZE_T index = 0;
+  Vector<String> entryPointCopies(createInfo.shaders.size());
   for (const auto& [stage, shader] : createInfo.shaders) {
     auto vulkanShader = std::static_pointer_cast<VulkanShader>(shader);
 
@@ -43,18 +47,45 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
       case ShaderStage::Geometry: vkStage = VK_SHADER_STAGE_GEOMETRY_BIT; break;
       default: continue;
     }
-    VkPipelineShaderStageCreateInfo stageInfo = {
+    entryPointCopies[index] = vulkanShader->getEntryPoint();
+    shaderStages[index++] = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = vkStage,
       .module = vulkanShader->getHandle(),
-      .pName = vulkanShader->getEntryPoint().c_str(),
+      .pName = entryPointCopies[index - 1].c_str(),
     };
+  }
 
-    shaderStages.push_back(stageInfo);
+  Vector<VkVertexInputBindingDescription> bindingDescriptions;
+  Vector<VkVertexInputAttributeDescription> attributeDescriptions;
+
+  const auto &layout = createInfo.vertexLayout;
+
+  for (uint32 i = 0; i < layout.getBindingCount(); i++) {
+    VkVertexInputBindingDescription bindingDesc = {
+      .binding = i,
+      .stride = layout.getStride(i),
+      .inputRate = VK_VERTEX_INPUT_RATE_VERTEX 
+    };
+    bindingDescriptions.push_back(bindingDesc);
+  }
+
+  uint32 location = 0;
+  for (const auto &attribute : layout.getAttributes()) {
+    VkVertexInputAttributeDescription attrDesc = {
+      .location = location++,
+      .binding = attribute.binding,
+      .format = convertVertexFormatToVkFormat(attribute.format),
+      .offset = attribute.offset};
+    attributeDescriptions.push_back(attrDesc);
   }
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount = static_cast<uint32>(bindingDescriptions.size()),
+    .pVertexBindingDescriptions = bindingDescriptions.data(),
+    .vertexAttributeDescriptionCount = static_cast<uint32>(attributeDescriptions.size()),
+    .pVertexAttributeDescriptions = attributeDescriptions.data()
   };
 
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -113,6 +144,10 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
   };
 
   auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(createInfo.renderPass);
+  if (!vulkanRenderPass) {
+    CH_LOG_ERROR("VulkanRenderPass is null");
+    return;
+  }
 
   VkGraphicsPipelineCreateInfo pipelineInfo{
     .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,

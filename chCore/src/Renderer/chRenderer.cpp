@@ -21,86 +21,47 @@
 
 namespace chEngineSDK {
 
-  /*
+/*
 */
-void
-Renderer::initialize(WeakPtr<DisplaySurface> displaySurface,
-                       uint32 width, 
-                       uint32 height, 
-                       bool vsync) {
+Renderer::~Renderer() {
+  auto& graphicsAPI = IGraphicsAPI::instance();
 
-  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
-  CH_ASSERT(displaySurface.expired());
-  CH_ASSERT(IGraphicsAPI::instancePtr() != nullptr);
+  graphicsAPI.getQueue(QueueType::Graphics)->waitIdle();
 
-  m_swapChain = IGraphicsAPI::instance().createSwapChain(width, height, vsync);
-  
-  HEvent listenResize = eventDispatcher.OnResize.connect(
-    [&](uint32 width,uint32 height) {
-      m_swapChain->resize(width, height);
-  });
+  graphicsAPI.waitIdle();
 
-  initializeRenderResources();
+  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    if (m_inFlightFences[i]){
+      m_inFlightFences[i]->wait();
+    }
+  }
+
+  m_commandBuffers.clear();
+  m_commandPool->reset();
+
+  m_imageAvailableSemaphores.clear();
+  m_renderFinishedSemaphores.clear();
+  m_inFlightFences.clear();
+
+  m_vertexBuffer.reset();
+  m_vertexShader.reset();
+  m_fragmentShader.reset();
+  m_pipeline.reset();
+
+  m_swapChain.reset();
 }
 
 /*
 */
 void
-Renderer::render(){
-  auto& graphicsAPI = IGraphicsAPI::instance();
-    
-  // Esperar a que el frame anterior termine
-  m_inFlightFences[m_currentFrame]->wait();
-  m_inFlightFences[m_currentFrame]->reset();
-  
-  // Adquirir la siguiente imagen del swapchain
-  m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame]);
-  
-  uint32 imageIndex = m_swapChain->getCurrentImageIndex();
-  
-  // Reestablecer y grabar el command buffer
-  auto& cmdBuffer = m_commandBuffers[imageIndex];
-  cmdBuffer->begin();
-  
-  // Comenzar render pass
-  RenderPassBeginInfo renderPassInfo{
-      .renderPass = m_swapChain->getRenderPass(),
-      .framebuffer = m_swapChain->getFramebuffer(imageIndex),
-      .clearValues = { {0.0f, 0.0f, 0.0f, 1.0f} } // Negro transparente
-  };
-  
-  cmdBuffer->beginRenderPass(renderPassInfo);
-  
-  // Configurar viewport y scissor
-  cmdBuffer->setViewport(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
-  cmdBuffer->setScissor(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
-  
-  // Vincular pipeline y recursos
-  cmdBuffer->bindPipeline(m_pipeline);
-  cmdBuffer->bindVertexBuffer(m_vertexBuffer);
-  
-  // Dibujar triángulo
-  cmdBuffer->draw(3);
-  
-  cmdBuffer->endRenderPass();
-  cmdBuffer->end();
-  
-  // Enviar el command buffer
-  Vector<SPtr<ICommandBuffer>> submitBuffers = { cmdBuffer };
-  
-  SubmitInfo submitInfo{
-      .waitSemaphores = { m_imageAvailableSemaphores[m_currentFrame] },
-      .signalSemaphores = { m_renderFinishedSemaphores[m_currentFrame] },
-      .commandBuffers = submitBuffers
-  };
-  
-  graphicsAPI.getQueue(QueueType::Graphics)->submit(submitBuffers, m_inFlightFences[m_currentFrame]);
-  
-  // Presentar
-  m_swapChain->present({ m_renderFinishedSemaphores[m_currentFrame] });
-  
-  // Avanzar al siguiente frame
-  m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+Renderer::initialize(uint32 width, 
+                     uint32 height, 
+                     bool vsync) {
+  CH_ASSERT(IGraphicsAPI::instancePtr() != nullptr);
+
+  m_swapChain = IGraphicsAPI::instance().createSwapChain(width, height, vsync);
+
+  initializeRenderResources();
 }
 
 /*
@@ -166,13 +127,13 @@ Renderer::initializeRenderResources() {
     .defines = { /* Preprocessor defines */ }
   };
 
-  auto vertexShader = graphicsAPI.createShader(shaderCreateInfo);
-  auto fragmentShader = graphicsAPI.createShader(fragmentShaderCreateInfo);
+  m_vertexShader  = graphicsAPI.createShader(shaderCreateInfo);
+  m_fragmentShader= graphicsAPI.createShader(fragmentShaderCreateInfo);
 
   PipelineCreateInfo pipelineCreateInfo{
     .shaders = {
-      { ShaderStage::Vertex, vertexShader },
-      { ShaderStage::Fragment, fragmentShader }
+      { ShaderStage::Vertex, m_vertexShader },
+      { ShaderStage::Fragment, m_fragmentShader }
     },
     .vertexLayout = VertexPosColor::getLayout(),
     .topology = PrimitiveTopology::TriangleList,
@@ -180,5 +141,84 @@ Renderer::initializeRenderResources() {
   };
 
   m_pipeline = graphicsAPI.createPipeline(pipelineCreateInfo);
+
+  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
+  HEvent listenResize = eventDispatcher.OnResize.connect(
+    [&](uint32 width,uint32 height) {
+      m_width = width;
+      m_height = height;
+      resizeSwapChain();
+  });
+}
+
+/*
+*/
+void
+Renderer::render(){
+  auto& graphicsAPI = IGraphicsAPI::instance();
+  
+  m_inFlightFences[m_currentFrame]->wait(2);
+  m_inFlightFences[m_currentFrame]->reset();
+  
+  if (!m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame])){
+    resizeSwapChain();
+    return;
+  }
+  uint32 imageIndex = m_swapChain->getCurrentImageIndex();
+  if (imageIndex >= m_commandBuffers.size()) {
+    return;
+  }
+  
+  auto& cmdBuffer = m_commandBuffers[imageIndex];
+  cmdBuffer->begin();
+  
+  RenderPassBeginInfo renderPassInfo{
+    .renderPass = m_swapChain->getRenderPass(),
+    .framebuffer = m_swapChain->getFramebuffer(imageIndex),
+    .clearValues = { LinearColor::Purple }
+  };
+  
+  cmdBuffer->beginRenderPass(renderPassInfo);
+  
+  cmdBuffer->setViewport(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
+  cmdBuffer->setScissor(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
+  
+  cmdBuffer->bindPipeline(m_pipeline);
+  cmdBuffer->bindVertexBuffer(m_vertexBuffer);
+  
+  cmdBuffer->draw(3);
+  
+  cmdBuffer->endRenderPass();
+  cmdBuffer->end();
+  
+  Vector<SPtr<ICommandBuffer>> submitBuffers = { cmdBuffer };
+  
+  SubmitInfo submitInfo{
+    .commandBuffers = { m_commandBuffers[imageIndex] },
+    .waitSemaphores = { m_imageAvailableSemaphores[m_currentFrame] },
+    .waitStages = { PipelineStage::ColorAttachmentOutput },
+    .signalSemaphores = { m_renderFinishedSemaphores[m_currentFrame] },
+  };
+
+  graphicsAPI.getQueue(QueueType::Graphics)->submit(submitInfo, m_inFlightFences[m_currentFrame]);
+  
+  m_swapChain->present({ m_renderFinishedSemaphores[m_currentFrame] });
+  
+  m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+/*
+*/
+void
+Renderer::resizeSwapChain() {
+  m_swapChain->resize(m_width, m_height);
+    
+  IGraphicsAPI::instance().getQueue(QueueType::Graphics)->waitIdle();
+
+  m_commandBuffers.clear();
+  m_commandBuffers.resize(m_swapChain->getTextureCount());
+  for (auto& commandBuffer : m_commandBuffers) {
+    commandBuffer = m_commandPool->allocateCommandBuffer();
+  }
 }
 } // namespace chEngineSDK
