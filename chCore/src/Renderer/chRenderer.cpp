@@ -153,11 +153,12 @@ Renderer::initializeRenderResources() {
 
 /*
 */
+static constexpr uint64 MAX_WAIT_TIME = 1000000000; // 1 second
 void
 Renderer::render() {
   auto& graphicsAPI = IGraphicsAPI::instance();
   
-  m_inFlightFences[m_currentFrame]->wait(2);
+  m_inFlightFences[m_currentFrame]->wait(MAX_WAIT_TIME);
   m_inFlightFences[m_currentFrame]->reset();
   
   if (!m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame])){
@@ -214,9 +215,14 @@ Renderer::render() {
 */
 void
 Renderer::resizeSwapChain() {
-  m_swapChain->resize(m_width, m_height);
-    
   IGraphicsAPI::instance().getQueue(QueueType::Graphics)->waitIdle();
+
+  m_imageAvailableSemaphores.clear();
+  m_renderFinishedSemaphores.clear();
+
+  m_swapChain->resize(m_width, m_height);
+
+  createSyncObjects();
 
   m_commandBuffers.clear();
   m_commandBuffers.resize(m_swapChain->getTextureCount());
