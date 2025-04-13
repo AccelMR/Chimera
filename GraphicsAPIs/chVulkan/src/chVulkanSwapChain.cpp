@@ -70,15 +70,11 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
                                           vkFence, 
                                           &m_currentImageIndex);
 
-  // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-  //   resize(m_width, m_height);
-  // }
-
   if (result != VK_SUCCESS) {
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
       return false;
     }
-    CH_LOG_ERROR("Failed to acquire next image from swap chain");
+    CH_LOG_WARNING("Failed to acquire next image from swap chain");
   }
   return true;
 }
@@ -145,7 +141,9 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     m_imageCount = Math::max(imageDefaultCount, capabilities.minImageCount);
   } 
   else {
-    m_imageCount = Math::clamp(imageDefaultCount, capabilities.minImageCount, capabilities.maxImageCount);
+    m_imageCount = Math::clamp(imageDefaultCount, 
+                               capabilities.minImageCount, 
+                               capabilities.maxImageCount);
   }
 
   VkSwapchainCreateInfoKHR createInfo = {
@@ -184,8 +182,8 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
   createRenderPass();
   createFramebuffers();
 
-  CH_LOG_DEBUG(StringUtils::format("SweapChain created ({0}x{1}, {2} images, mode {3})", 
-                                    m_width, m_height, m_imageCount, presentMode));
+  // CH_LOG_DEBUG(StringUtils::format("SweapChain created ({0}x{1}, {2} images, mode {3})", 
+  //                                   m_width, m_height, m_imageCount, presentMode));
 }
 
 /*

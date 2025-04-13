@@ -154,7 +154,7 @@ Renderer::initializeRenderResources() {
 /*
 */
 void
-Renderer::render(){
+Renderer::render() {
   auto& graphicsAPI = IGraphicsAPI::instance();
   
   m_inFlightFences[m_currentFrame]->wait(2);
@@ -165,7 +165,10 @@ Renderer::render(){
     return;
   }
   uint32 imageIndex = m_swapChain->getCurrentImageIndex();
+
+  //TODO: might need to fix this
   if (imageIndex >= m_commandBuffers.size()) {
+    CH_LOG_WARNING("Image index out of range, swapchain may be resized. Deferring to next frame.");
     return;
   }
   
