@@ -41,65 +41,43 @@ void logIDEConsole(const chEngineSDK::String& msg)
 
 namespace chHTMLDebugConstants{
   static const char* style = R"(
-  <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #000;
-      color: #fff;
-      margin: 0;
-      padding: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #fff;
+        margin: 0;
+        padding: 0;
     }
     .wrapper {
-      padding: 20px;
+        padding: 20px;
     }
     h1 {
-      text-align: center;
-      color: #ccc;
+        text-align: center;
+        color: #ccc;
     }
     .table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
     }
     .table .header {
-      background-color: #0073e6;
-      color: #fff;
-      border-radius: 8px 8px 0 0;
+        background-color: #0073e6;
+        color: #fff;
+        border-radius: 8px 8px 0 0;
     }
     .table .row {
-      display: flex;
-      margin-bottom: 5px;
-      border-radius: 8px;
-      overflow: hidden;
+        display: flex;
+        margin-bottom: 5px;
+        border-radius: 8px;
+        overflow: hidden;
     }
     .table .cell {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #444;
-      text-align: center;
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #444;
+        text-align: center;
     }
-    .row.red {
-      background-color:rgba(163, 19, 19, 0.81);
-      color: #ff9999;
-    }
-    .row.red_dark {
-      background-color: #800000;
-      color: #ff9999;
-    }    
-    .row.yellow {
-      background-color: #806600;
-      color: #fff799;
-    }
-    .row.green {
-      background-color: #004d00;
-      color: #99ff99;
-    }
-    .row.light_gray {
-      background-color: #333;
-      color: #ccc;
-    }
-  </style>
-  )";
+    )";
 
   static const char* htmlHeader = R"(
   <!DOCTYPE html>
@@ -117,22 +95,69 @@ namespace chHTMLDebugConstants{
 }
 
 namespace chEngineSDK{
-const Array<String, static_cast<SIZE_T>(LOG_LEVEL::kCOUNT)> LOG_LEVEL_NAMES = {
-  "FATAL",
-  "ERROR",
-  "WARN",
-  "INFO",
-  "DEBUG"
-};
+const LogLevel* LogLevel::FATAL = nullptr;
+const LogLevel* LogLevel::ERROR = nullptr;
+const LogLevel* LogLevel::WARN = nullptr;
+const LogLevel* LogLevel::INFO = nullptr;
+const LogLevel* LogLevel::DEBUG = nullptr;
+
+#define CH_DEFAULT_FATAL_STYLE   ".row.fatal { background-color: #800000; color: #ff9999; }"
+#define CH_DEFAULT_ERROR_STYLE   ".row.error { background-color: #a31313; color: #ff9999; }"
+#define CH_DEFAULT_WARN_STYLE    ".row.warning { background-color: #806600; color: #fff799; }"
+#define CH_DEFAULT_INFO_STYLE    ".row.info { background-color: #333; color: #ccc; }"
+#define CH_DEFAULT_DEBUG_STYLE   ".row.debug { background-color: #004d00; color: #99ff99; }"
+
 
 /*
 */
-void
-Debug::logMessage(const String& msg, LOG_LEVEL level) {
-  m_log.logMsg(msg, level);
+Debug::Debug() {
+  LogLevel::FATAL = registerLogLevel("FATAL", "Fatal", CH_DEFAULT_FATAL_STYLE, 0);
+  LogLevel::ERROR = registerLogLevel("ERROR", "Error", CH_DEFAULT_ERROR_STYLE, 1);
+  LogLevel::WARN = registerLogLevel("WARN", "Warning", CH_DEFAULT_WARN_STYLE, 2);
+  LogLevel::INFO = registerLogLevel("INFO", "Info", CH_DEFAULT_INFO_STYLE, 3);
+  LogLevel::DEBUG = registerLogLevel("DEBUG", "Debug", CH_DEFAULT_DEBUG_STYLE, 4);
+}
+
+/*
+*/
+const LogLevel*
+Debug::registerLogLevel(const String& name, 
+                        const String& displayName, 
+                        const String& htmlStyle,
+                        uint32 severity) {
+  auto it = m_logLevels.find(name);
+  if (it != m_logLevels.end()) {
+    return it->second.get();
+  }
+  
+  auto newLevel = std::make_unique<LogLevel>(name, displayName, htmlStyle, severity);
+  auto* ptr = newLevel.get();
+  m_logLevels[name] = std::move(newLevel);
+  return ptr;
+}
+
+/*
+*/
+void 
+Debug::logMessage(String&& msg, const LogLevel* level) {
+#if USING(CH_DEBUG_MODE)
   logIDEConsole(StringUtils::format("[{0}] {1}", 
-                                    LOG_LEVEL_NAMES[static_cast<int32>(level)], 
+                                    level->getDisplayName(), 
                                     msg));
+#endif // USING(CH_DEBUG_MODE)
+  m_log.logMsg(std::move(msg), level);
+}
+
+/*
+*/
+void 
+Debug::logMessage(const char* msg, const LogLevel* level) {
+#if USING(CH_DEBUG_MODE)
+  logIDEConsole(StringUtils::format("[{0}] {1}", 
+                                    level->getDisplayName(), 
+                                    msg));
+#endif // USING(CH_DEBUG_MODE)
+  m_log.logMsg(msg, level);
 }
 
 /*
@@ -143,7 +168,7 @@ Debug::saveLog(const Path& path) const {
   CH_ASSERT(fileStream);
   for (const LogEntry& logEntry : m_log.getAllEntries()) {
   String msg = StringUtils::format("[{0}] {1}",
-                                   LOG_LEVEL_NAMES[static_cast<int32>(logEntry.getLevel())], 
+                                   logEntry.getLevel()->getDisplayName(), 
                                    logEntry.getLogMessage());
     fileStream << msg << "\n";
   }
@@ -159,55 +184,67 @@ Debug::saveLogAsHtml(const Path& path) const {
 
   // Start HTML file
   stream << htmlHeader;
-  stream << style;
-  stream << R"(</head><body>)";
+  stream << "<style>\n";
+  stream << style; // Base styles
 
-  // Header section
-  stream << R"(<div class="wrapper">)";
-  stream << R"(<h1>Chimera Engine Log</h1>)";
-  stream << R"(<p>Chimera Engine version: )";
-  stream << CH_VERSION_MAJOR << "." << CH_VERSION_MINIOR << "." << CH_VERSION_PATCH;
-  stream << R"(</p>)";
-
-  // Log entries table
-  stream << R"(<h2>Log Entries</h2>)";
-  stream << R"(<div class="table">)";
-  stream << R"(<div class="row header">)";
-  stream << R"(<div class="cell">Type</div><div class="cell">Description</div></div>)";
-
+  // Collect all unique styles
+  UnorderedSet<String> addedStyles;
   for (const LogEntry& entry : m_log.getAllEntries()) {
-    LOG_LEVEL logChannel = entry.getLevel();
+      const LogLevel* level = entry.getLevel();
+      const String& cssStyle = level->getCssStyle();
 
-    // Start row with appropriate color based on log level
-    if (logChannel == LOG_LEVEL::kERROR) {
-      stream << R"(<div class="row red">)";
-      stream << R"(<div class="cell">Error</div>)";
-    } 
-    else if (logChannel == LOG_LEVEL::kFATAL) {
-      stream << R"(<div class="row red_dark">)";
-      stream << R"(<div class="cell">Fatal</div>)";
-    }
-    else if (logChannel == LOG_LEVEL::kWARN) {
-      stream << R"(<div class="row yellow">)";
-      stream << R"(<div class="cell">Warning</div>)";
-    } 
-    else if (logChannel == LOG_LEVEL::kDEBUG) {
-      stream << R"(<div class="row green">)";
-      stream << R"(<div class="cell">Debug</div>)";
-    }
-    else {
-      stream << R"(<div class="row light_gray">)";
-      stream << R"(<div class="cell">Info</div>)";
-    }
-
-    // Escape and format the log message
-    String parsedMessage = StringUtils::replaceAllSubStr(entry.getLogMessage(), "\n", "<br>");
-
-    stream << R"(<div class="cell">)" << parsedMessage << R"(</div>)";
-    stream << R"(</div>)";
+      if (addedStyles.find(cssStyle) == addedStyles.end()) {
+          stream << cssStyle << "\n";
+          addedStyles.insert(cssStyle);
+      }
   }
 
-  stream << R"(</div></div></div>)";
+  stream << "</style>\n";
+  stream << "</head>\n";
+  stream << "<body>\n";
+
+  // Header section
+  stream << "<div class=\"wrapper\">\n";
+  stream << "<h1>Chimera Engine Log</h1>\n";
+  stream << "<p>Chimera Engine version: ";
+  stream << CH_VERSION_MAJOR << "." << CH_VERSION_MINIOR << "." << CH_VERSION_PATCH;
+  stream << "</p>\n";
+
+  // Log entries table
+  stream << "<h2>Log Entries</h2>\n";
+  stream << "<div class=\"table\">\n";
+  stream << "<div class=\"row header\">\n";
+  stream << "<div class=\"cell\">Type</div>\n";
+  stream << "<div class=\"cell\">Description</div>\n";
+  stream << "</div>\n"; // Close header row
+
+  for (const LogEntry& entry : m_log.getAllEntries()) {
+    const LogLevel* level = entry.getLevel();
+
+    // Extract class name from CSS
+    String className = "row";
+    size_t start = level->getCssStyle().find(".row.");
+    if (start != String::npos) {
+      start += 5; // Skip ".row."
+      size_t end = level->getCssStyle().find_first_of(" {", start);
+      if (end != String::npos) {
+        className += " " + level->getCssStyle().substr(start, end - start);
+      }
+    }
+
+    // Format message with HTML line breaks
+    String formattedMsg = StringUtils::replaceAllSubStr(entry.getLogMessage(), "\n", "<br>");
+
+    // Log entry row
+    stream << "<div class=\"" << className << "\">\n";
+    stream << "<div class=\"cell\">" << level->getDisplayName() << "</div>\n";
+    stream << "<div class=\"cell\">" << formattedMsg << "</div>\n";
+    stream << "</div>\n"; // Close row
+  }
+
+  // Close all containers
+  stream << "</div>\n"; // Close table
+  stream << "</div>\n"; // Close wrapper
   stream << htmlFooter;
 
   // Write to file
@@ -217,60 +254,75 @@ Debug::saveLogAsHtml(const Path& path) const {
 
 /*
 */
-void
-Debug::logBacktrace(LOG_LEVEL level) {
+void 
+Debug::logBacktrace(const LogLevel* level) {
 #if USING(CH_ENABLE_BACKTRACE)
   constexpr int MAX_FRAMES = 128;
-#  if USING(CH_COMPILER_MSVC)
+  if (!level) level = LogLevel::ERROR; // Default level if null
+      
+#if USING(CH_COMPILER_MSVC)
   void* callstack[MAX_FRAMES];
   HANDLE process = GetCurrentProcess();
   SymInitialize(process, NULL, TRUE);
-
+  
   WORD frames = CaptureStackBackTrace(0, MAX_FRAMES, callstack, NULL);
-
+  
   String backtraceStr = "Backtrace:\n";
   for (WORD i = 0; i < frames; ++i) {
     DWORD64 address = reinterpret_cast<DWORD64>(callstack[i]);
-    
-    SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(malloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char)));
+      
+    SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(
+      malloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char)));
     symbol->MaxNameLen = 255;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 
     DWORD64 displacement = 0;
     if (SymFromAddr(process, address, &displacement, symbol)) {
-      backtraceStr += StringUtils::format("{0}: {1} - 0x{2:X}\n", i, symbol->Name, symbol->Address);
-    } else {
-      backtraceStr += StringUtils::format("{0}: [Symbol not found] - 0x{1:X}\n", i, address);
+      backtraceStr += StringUtils::format("{0}: {1} - 0x{2:X}\n", 
+                                          i, symbol->Name, symbol->Address);
+    } 
+    else {
+      backtraceStr += StringUtils::format("{0}: [Symbol not found] - 0x{1:X}\n", 
+                                          i, address);
     }
-
+  
     free(symbol);
   }
-
-  logMessage(backtraceStr, level);
-
+  
+  logMessage(std::move(backtraceStr), level);
   SymCleanup(process);
-
-#  elif USING(CH_COMPILER_CLANG)
-    void* callstack[MAX_FRAMES];
-    int frames = backtrace(callstack, MAX_FRAMES);
-    char** strs = backtrace_symbols(callstack, frames);
-
-    String backtraceStr = "Backtrace:\n";
-    for (int i = 0; i < frames; ++i) {
-      backtraceStr += StringUtils::format("{0}: {1}\n", i, strs[i]);
-    }
-    logMessage(backtraceStr, level);
-    free(strs);
+  
+#elif USING(CH_COMPILER_CLANG)
+  void* callstack[MAX_FRAMES];
+  int frames = backtrace(callstack, MAX_FRAMES);
+  char** strs = backtrace_symbols(callstack, frames);
+  
+  String backtraceStr = "Backtrace:\n";
+  for (int i = 0; i < frames; ++i) {
+    backtraceStr += StringUtils::format("{0}: {1}\n", i, strs[i]);
+  }
+  logMessage(std::move(backtraceStr), level);
+  free(strs);
 #endif // USING(CH_COMPILER_MSVC)
 #endif // USING(CH_BACKTRACE)
 }
 
 /*
 */
+Debug& 
+Debug::getInstance() {
+  static Debug* m_instance = nullptr;
+  if (!m_instance) {
+    m_instance = new Debug();
+  }
+  return *m_instance;
+}
+
+/*
+*/
 CH_UTILITY_EXPORT Debug&
 g_Debug() {
-  static Debug debug;
-  return debug;
+  return Debug::getInstance();
 }
 
 } // namespace chEngineSDK

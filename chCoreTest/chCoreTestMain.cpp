@@ -12,7 +12,8 @@ int main(int argc, char** argv) {
     auto& app = BaseApplication::instance();
     app.initialize(argc, argv);
     app.run();
-    //g_Debug().saveLog("resources/engine/logs/chCoreTestMain.txt");
+    g_Debug().saveLog("resources/engine/logs/chCoreTestMain.txt");
+    g_Debug().saveLogAsHtml("resources/engine/logs/chCoreTestMain.html");
     BaseApplication::shutDown();
   }
   catch(const std::exception& e)

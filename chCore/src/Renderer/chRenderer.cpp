@@ -96,9 +96,9 @@ Renderer::initializeRenderResources() {
   createSyncObjects();
 
   VertexPosColor triangleVerices[] = {
-    { {  0.0f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } }, // Red
-    { { -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } }, // Green
-    { {  0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }  // Blue
+    { {  0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } }, // Red
+    { {  0.5f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }, // Blue
+    { { -0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } }, // Green
   };
 
   BufferCreateInfo bufferCreateInfo{
@@ -177,9 +177,10 @@ Renderer::render() {
   cmdBuffer->begin();
   
   RenderPassBeginInfo renderPassInfo{
+    
     .renderPass = m_swapChain->getRenderPass(),
     .framebuffer = m_swapChain->getFramebuffer(imageIndex),
-    .clearValues = { LinearColor::Purple }
+    .clearValues = { LinearColor::Pink }
   };
   
   cmdBuffer->beginRenderPass(renderPassInfo);

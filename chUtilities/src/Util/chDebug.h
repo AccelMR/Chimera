@@ -18,26 +18,9 @@
 #include "chLog.h"
 
 namespace chEngineSDK{
-/*
- * Description: 
- *     Debug global class.
- * You should NEVER call a constructor for this class. Instead you should use 
- * g_debug() so you can get the ONLY Debug object that should exist. 
- *
- * Sample usage:
- *  g_Deug().registerLogger("NewLogger);
- *  g_Debug().logMesg("NewLogger", msg, loggerType);   or
- *  CH_UTIL_DEBUG(msg, loggerType);
- */
 class CH_UTILITY_EXPORT Debug
 {
  public:
- /*
-  *  Default constructor.
-  *   DO NOT USE THIS CONSTRUCTOR!!!
-  *   To use Debug you'll need to call g_Debug() and get the global debugger.  
-  */
-  Debug() = default;
 
  /*
   *   Default destructor
@@ -47,23 +30,20 @@ class CH_UTILITY_EXPORT Debug
   */
   ~Debug() = default;
 
-  /** 
-   *   Logs a message to the given Log type and with its respective level.
-   * 
-   * @param type
-   *  Type of logger to be used. This type needs to be created before calling this
-   *  or you'll get an error.
-   * 
-   * @param msg
-   *  The message to be logged.
-   * 
-   * @param level
-   *    Message's level to log this entry. 
-   * 
-   * @param 
-   **/
+  NODISCARD const LogLevel* 
+  registerLogLevel(const String& name, 
+                   const String& displayName, 
+                   const String& htmlStyle,
+                   uint32 severity);
+
   void
-  logMessage(const String& msg, LOG_LEVEL level);
+  logMessage(String&& msg, const LogLevel* level);
+
+  void
+  logMessage(const char* msg, const LogLevel* level);
+
+  // void
+  // logMessage(const String& msg, const LogLevel* level);
 
   /** 
    *   Returns a const pointer to the logger specified.
@@ -74,8 +54,8 @@ class CH_UTILITY_EXPORT Debug
    * @return Logger* 
    *  Pointer to the logger.
    **/
-  FORCEINLINE Logger&
-  getLogger();
+  NODISCARD FORCEINLINE Logger& 
+  getLogger() { return m_log; }
 
   /**
    *     Saves a log about the current state of the application to the
@@ -101,13 +81,16 @@ class CH_UTILITY_EXPORT Debug
    *   Logs a backtrace of the current state of the application.
   */
   void 
-  logBacktrace(LOG_LEVEL level = LOG_LEVEL::kFATAL);
+  logBacktrace(const LogLevel* level = LogLevel::FATAL);
+
+  static Debug& 
+  getInstance();
 
  private:
-  /** 
-   *   Map that holds pointer to any created logger.
-   **/
+  Debug();
+
   Logger m_log;
+  UnorderedMap<String, std::unique_ptr<LogLevel>> m_logLevels;
 };
 
 /** 
@@ -118,63 +101,40 @@ g_Debug();
 
 /************************************************************************/
 /*
- * Implementations
- */                                                                     
-/************************************************************************/
-
-FORCEINLINE Logger&
-Debug::getLogger() {
-  return m_log;
-}
-
-/************************************************************************/
-/*
  * MACROS!
  */                                                                     
 /************************************************************************/
-#define CH_LOG_INFO(x) g_Debug().logMessage((x) +                        \
-                                         String("\n\t in ") +         \
-                                         __PRETTY_FUNCTION__ +        \
-                                         " [" + __FILE__ + ":" +      \
-                                         std::to_string(__LINE__) +   \
-                                         "]\n",                       \
-                                         LOG_LEVEL::kINFO);
+// Macro base optimizada con movimiento
+#define CH_LOG_BASE(level, x) do { \
+  auto&& _log_msg = String(x) + String("\n\t in ") + \
+                   __PRETTY_FUNCTION__ + \
+                   " [" + __FILE__ + ":" + \
+                   std::to_string(__LINE__) + "]\n"; \
+  chEngineSDK::g_Debug().logMessage(std::move(_log_msg), level); \
+} while(0)
 
+// Macros específicas por nivel
+#define CH_LOG_FATAL(x)   CH_LOG_BASE(chEngineSDK::LogLevel::FATAL, x)
+#define CH_LOG_ERROR(x)   CH_LOG_BASE(chEngineSDK::LogLevel::ERROR, x)
+#define CH_LOG_WARNING(x) CH_LOG_BASE(chEngineSDK::LogLevel::WARN, x)
+#define CH_LOG_INFO(x)    CH_LOG_BASE(chEngineSDK::LogLevel::INFO, x)
+
+// Debug solo en modo debug
 #if USING(CH_DEBUG_MODE)
-#define CH_LOG_DEBUG(x) g_Debug().logMessage((x) +                         \
-                                         String("\n\t in ") +         \
-                                         __PRETTY_FUNCTION__ +        \
-                                         " [" + __FILE__ + ":" +      \
-                                         std::to_string(__LINE__) +   \
-                                         "]\n",                       \
-                                         LOG_LEVEL::kDEBUG);
+#define CH_LOG_DEBUG(x) CH_LOG_BASE(chEngineSDK::LogLevel::DEBUG, x)
 #else
-#define CH_LOG_DEBUG(x)
+#define CH_LOG_DEBUG(x) 
 #endif
 
+// Macro para niveles personalizados
+#define CH_LOG_CUSTOM(level, x) CH_LOG_BASE(level, x)
 
-#define CH_LOG_WARNING(x) g_Debug().logMessage((x) +                        \
-                                         String("\n\t in ") +         \
-                                         __PRETTY_FUNCTION__ +        \
-                                         " [" + __FILE__ + ":" +      \
-                                         std::to_string(__LINE__) +   \
-                                         "]\n",                       \
-                                         LOG_LEVEL::kWARN);
-
-#define CH_LOG_ERROR(x) g_Debug().logMessage((x) +                       \
-                                         String("\n\t in ") +         \
-                                         __PRETTY_FUNCTION__ +        \
-                                         " [" + __FILE__ + ":" +      \
-                                         std::to_string(__LINE__) +   \
-                                         "]\n",                       \
-                                         LOG_LEVEL::kERROR);
-
-#define CH_LOG_FATAL(x) g_Debug().logMessage((x) +                       \
-                                         String("\n\t in ") +         \
-                                         __PRETTY_FUNCTION__ +        \
-                                         " [" + __FILE__ + ":" +      \
-                                         std::to_string(__LINE__) +   \
-                                         "]\n",                       \
-                                         LOG_LEVEL::kFATAL);
-
-}
+// Macro para registrar nuevos niveles
+#define CH_REGISTER_LOG_LEVEL(name, displayName, cssStyle, severity) \
+    static const chEngineSDK::LogLevel* name = \
+        []() -> const chEngineSDK::LogLevel* { \
+            static const auto _level = chEngineSDK::g_Debug().registerLogLevel( \
+                #name, displayName, cssStyle, severity); \
+            return _level; \
+        }()
+} // namespace chEngineSDK
