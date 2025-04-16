@@ -24,7 +24,7 @@
 #include "chModule.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
-#include "chDebug.h"
+#include "chLogger.h"
 #include "chUnicode.h"
 #include "chStringUtils.h"
 #include "chEventSystem.h"

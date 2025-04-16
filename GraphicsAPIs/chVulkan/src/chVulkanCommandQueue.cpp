@@ -87,7 +87,7 @@ VulkanCommandQueue::submit(const SubmitInfo& submitInfo, const SPtr<IFence>& fen
 void
 VulkanCommandQueue::waitIdle() {
   if (m_queue == VK_NULL_HANDLE) {
-      CH_LOG_ERROR("VulkanCommandQueue::waitIdle: Queue is null.");
+      CH_LOG_ERROR(Vulkan, "VulkanCommandQueue::waitIdle: Queue is null.");
       return;
   }
   VK_CHECK(vkQueueWaitIdle(m_queue));

@@ -19,6 +19,7 @@
 
 #define INVALID_INDEX -1
 
+
 //DLL export
 #if USING(CH_PLATFORM_WIN32)
 # if USING(CH_COMPILER_MSVC)

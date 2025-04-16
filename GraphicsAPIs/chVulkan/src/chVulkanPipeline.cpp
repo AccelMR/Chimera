@@ -145,7 +145,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
 
   auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(createInfo.renderPass);
   if (!vulkanRenderPass) {
-    CH_LOG_ERROR("VulkanRenderPass is null");
+    CH_LOG_ERROR(Vulkan, "VulkanRenderPass is null");
     return;
   }
 

@@ -11,7 +11,7 @@
 #if USING(CH_PLATFORM_WIN32)
 
 #include "Win32/chWindows.h"
-#include "chDebug.h"
+#include "chLogger.h"
 
 namespace chEngineSDK{
 using WinProcType = LRESULT (CALLBACK*)(HWND, UINT, WPARAM, LPARAM);

@@ -169,7 +169,7 @@ Renderer::render() {
 
   //TODO: might need to fix this
   if (imageIndex >= m_commandBuffers.size()) {
-    CH_LOG_WARNING("Image index out of range, swapchain may be resized. Deferring to next frame.");
+    CH_LOG_WARNING(Core, "Image index out of range, swapchain may be resized. Deferring to next frame.");
     return;
   }
   

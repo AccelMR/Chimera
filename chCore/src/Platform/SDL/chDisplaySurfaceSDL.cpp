@@ -11,7 +11,7 @@
 #if USING(CH_SDL_WINDOW)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include "chDebug.h"
+#include "chLogger.h"
 
 namespace chEngineSDK{
 
@@ -37,7 +37,7 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
   m_width = desc.width;
   m_height = desc.height;
 
-  CH_LOG_INFO("DisplaySurface created successfully with Vulkan support.");
+  CH_LOG_INFO(Core, "DisplaySurface created successfully with Vulkan support.");
   return true;
 }
 

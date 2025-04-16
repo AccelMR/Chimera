@@ -124,7 +124,7 @@ VulkanBuffer::~VulkanBuffer() {
   }
   VkResult result = vkDeviceWaitIdle(m_device);
   if (result != VK_SUCCESS) {
-    CH_LOG_ERROR("VulkanBuffer::Destructor: Failed to wait for device idle.");
+    CH_LOG_ERROR(Vulkan, "VulkanBuffer::Destructor: Failed to wait for device idle.");
   }
   
   if (m_buffer != VK_NULL_HANDLE) {
@@ -157,7 +157,7 @@ VulkanBuffer::update(const void* data, SIZE_T size, uint32 offset) {
     vkUnmapMemory(m_device, m_memory);
   }
   else {
-    CH_LOG_ERROR("Buffer is not mappable");
+    CH_LOG_ERROR(Vulkan, "Buffer is not mappable");
   }
 }
 } // namespace chEngineSDK

@@ -14,7 +14,7 @@
 /************************************************************************/
 #include "chDisplayManager.h"
 
-#include "chDebug.h"
+#include "chLogger.h"
 #include "chStringUtils.h"
 
 #include "chDisplaySurface.h"
@@ -30,7 +30,7 @@ DisplayManager::createDisplay(ScreenDescriptor screenDesc, SPtr<DisplayEventHand
     if (!m_mainDisplay->init(screenDesc, eventHandler)) {
       return WeakPtr<DisplaySurface>();
     }
-    CH_LOG_INFO(StringUtils::format("Main DisplaySurface [{0}] has been created.", screenDesc.name));
+    CH_LOG_INFO(Core, StringUtils::format("Main DisplaySurface [{0}] has been created.", screenDesc.name));
   }
   return m_mainDisplay;
 }

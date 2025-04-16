@@ -74,7 +74,7 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
       return false;
     }
-    CH_LOG_WARNING("Failed to acquire next image from swap chain");
+    CH_LOG_WARNING(Vulkan, "Failed to acquire next image from swap chain");
   }
   return true;
 }
@@ -215,7 +215,7 @@ VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
     resize(m_width, m_height);
   } 
   else if (result != VK_SUCCESS) {
-    CH_LOG_ERROR("Failed to present swap chain image");
+    CH_LOG_ERROR(Vulkan, "Failed to present swap chain image");
   }
 }
 
@@ -267,7 +267,7 @@ VulkanSwapChain::cleanUp() {
 void
 VulkanSwapChain::resize(uint32 width, uint32 height) {
   if (width == 0 || height == 0) {
-    CH_LOG_WARNING("Intento de resize a 0x0 - ignorado");
+    CH_LOG_WARNING(Vulkan, "Intento de resize a 0x0 - ignorado");
     return;
   }
 

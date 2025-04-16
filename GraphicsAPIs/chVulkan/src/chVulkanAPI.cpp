@@ -100,12 +100,12 @@ debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity
 #else
   if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
   {
-    CH_LOG_ERROR(debugMessage.str());
+    CH_LOG_ERROR(Vulkan, debugMessage.str());
   
   }
   else
   {
-    CH_LOG_DEBUG(debugMessage.str());
+    CH_LOG_DEBUG(Vulkan, debugMessage.str());
   }
   fflush(stdout);
 #endif
@@ -124,7 +124,7 @@ namespace chEngineSDK {
 */
 void
 VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
-  CH_LOG_DEBUG("Initializing Vulkan API");
+  CH_LOG_DEBUG(Vulkan, "Initializing Vulkan API");
 
   // Initialize Vulkan instance, physical device, and logical device.
   createInstance( graphicsAPIInfo);
@@ -142,8 +142,8 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
 
   createSurface(graphicsAPIInfo.weakDisplaySurface);
 
-  CH_LOG_DEBUG("Vulkan API initialized successfully");
-  CH_LOG_DEBUG("Using Adapter : " + getAdapterName());
+  CH_LOG_DEBUG(Vulkan, "Vulkan API initialized successfully");
+  CH_LOG_DEBUG(Vulkan, "Using Adapter : " + getAdapterName());
 }
 
 /*
@@ -208,7 +208,7 @@ VulkanAPI::createCommandPool(QueueType queueType, bool transient) {
       queueFamilyIndex = m_presentQueueFamilyIndex;
       break;
     default:
-      CH_LOG_WARNING("Unsupported queue type, falling back to graphics queue");
+      CH_LOG_WARNING(Vulkan, "Unsupported queue type, falling back to graphics queue");
       queueFamilyIndex = m_graphicsQueueFamilyIndex;
   }
   
@@ -276,7 +276,7 @@ VulkanAPI::getQueue(QueueType queueType) {
 */
 void
 VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
-  CH_LOG_DEBUG("Creating Vulkan instance");
+  CH_LOG_DEBUG(Vulkan, "Creating Vulkan instance");
 
   VkApplicationInfo appInfo{
     .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -332,7 +332,7 @@ VulkanAPI::pickPhysicalDevice() {
   vkEnumeratePhysicalDevices(m_vulkanData->instance, &deviceCount, nullptr);
 
   if (deviceCount == 0) {
-    CH_LOG_ERROR("Failed to find GPUs with Vulkan support");
+    CH_LOG_ERROR(Vulkan, "Failed to find GPUs with Vulkan support");
   }
 
   Vector<VkPhysicalDevice> devices(deviceCount);
@@ -412,10 +412,10 @@ VulkanAPI::pickPhysicalDevice() {
     }
   }
 
-  CH_LOG_INFO(StringUtils::format("Adapter descriptor: [{0}]", deviceProperties.deviceName));
-  CH_LOG_INFO(StringUtils::format("GPU Vendor ID:  [{0}]", deviceProperties.vendorID));
-  CH_LOG_INFO(StringUtils::format("GPU Device ID:  [{0}]", deviceProperties.deviceID));
-  CH_LOG_INFO(StringUtils::format("target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
+  CH_LOG_INFO(Vulkan, StringUtils::format("Adapter descriptor: [{0}]", deviceProperties.deviceName));
+  CH_LOG_INFO(Vulkan, StringUtils::format("GPU Vendor ID:  [{0}]", deviceProperties.vendorID));
+  CH_LOG_INFO(Vulkan, StringUtils::format("GPU Device ID:  [{0}]", deviceProperties.deviceID));
+  CH_LOG_INFO(Vulkan, StringUtils::format("target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
 
   return true;
 }
@@ -589,7 +589,7 @@ VulkanAPI::checkValidationLayerSupport() const {
 void
 VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
   if (m_vulkanData->surface != VK_NULL_HANDLE) {
-    CH_LOG_WARNING("Vulkan surface already created");
+    CH_LOG_WARNING(Vulkan, "Vulkan surface already created");
     return;
   }
 
@@ -603,7 +603,7 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 
 #elif USING(CH_PLATFORM_LINUX)
 
-  CH_LOG_DEBUG("Creating Vulkan surface for Linux");
+  CH_LOG_DEBUG(Vulkan, "Creating Vulkan surface for Linux");
 
   if (display.expired()) {
     CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");

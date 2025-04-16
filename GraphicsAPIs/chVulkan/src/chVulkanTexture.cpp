@@ -98,7 +98,7 @@ VulkanTexture::uploadData(const void* data, SIZE_T size){
   CH_ASSERT(data != nullptr);
   CH_ASSERT(size > 0);
 
-  CH_LOG_ERROR("VulkanTexture::uploadData not implemented");
+  CH_LOG_ERROR(Vulkan, "VulkanTexture::uploadData not implemented");
 }
 
 } // namespace chEngineSDK

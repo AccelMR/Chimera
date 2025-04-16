@@ -15,7 +15,7 @@
 /************************************************************************/
 #include "chFileStream.h"
 
-#include "chDebug.h"
+#include "chLogger.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
 
@@ -364,7 +364,7 @@ FileDataStream::init() {
 
   //Should check ensure open succeeded, in case fail for some reason.
   if (m_pInStream->fail()) {
-    CH_LOG_ERROR(StringUtils::format("Failed to open file: {0}", m_path.toString()));
+    CH_LOG_ERROR(Utilities, StringUtils::format("Failed to open file: {0}", m_path.toString()));
     return;
   }
 

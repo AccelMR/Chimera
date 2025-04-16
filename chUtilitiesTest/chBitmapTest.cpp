@@ -1,6 +1,6 @@
 // #include "chBMPImage.h"
 // #include "chBox2D.h"
-// #include "chDebug.h"
+// #include "chLogger.h"
 // #include "chFileSystem.h"
 // #include "chPath.h"
 

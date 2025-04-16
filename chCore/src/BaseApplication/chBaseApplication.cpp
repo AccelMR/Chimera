@@ -14,7 +14,6 @@
 #include "chBaseApplication.h"
 
 #include "chCommandParser.h"
-#include "chDebug.h"
 #include "chDynamicLibManager.h"
 #include "chDisplayManager.h"
 #include "chEventSystem.h"
@@ -33,10 +32,12 @@ namespace chEngineSDK {
 using namespace std::chrono;
 using std::stoi;
 
+CH_LOG_DEFINE_CATEGORY_SHARED(Core, All);
+
 /*
 */
 BaseApplication::~BaseApplication() {
-  //CH_LOG_INFO("Destroying BaseApplication");
+  //CH_LOG_INFO(Core, "Destroying BaseApplication");
 
   if (m_isInitialized) {
     destroyModules();
@@ -151,7 +152,7 @@ BaseApplication::destroyGraphics() {
 void
 BaseApplication::run() {
 #if USING(CH_DEBUG_MODE)
-  CH_LOG_DEBUG("Running BaseApplication in Debug mode.");
+  CH_LOG_DEBUG(Core, "Running BaseApplication in Debug mode.");
 #endif //CH_DEBUG_MODE
 
  // Make sure the application is initialized.
@@ -170,7 +171,7 @@ BaseApplication::run() {
   HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
     [&](const KeyBoardData& keyData) {
       if (keyData.hasModifier(KEY_MODIFIER::LSHIFT)) {
-        CH_LOG_INFO("Key W down with shift");
+        CH_LOG_INFO(Core, "Key W down with shift");
       }
     });
 

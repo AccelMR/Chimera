@@ -16,7 +16,7 @@
 /************************************************************************/
 #include "chEventDispatcherManager.h"
 
-#include "chDebug.h"
+#include "chLogger.h"
 
 #include "chDisplayEvent.h"
 #include "chDisplayEventHandle.h"
@@ -58,7 +58,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
       OnResize(resizeData->width, resizeData->height);
     }
     else {
-      CH_LOG_ERROR("Resize data is not valid.");
+      CH_LOG_DEBUG(Core, "Resize data is not valid.");
       dispatched = false;
     }
   }
@@ -70,7 +70,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
       OnMouseMove(*mouseData);
     }
     else {
-      CH_LOG_ERROR("Mouse data is not valid.");
+      CH_LOG_DEBUG(Core, "Mouse data is not valid.");
       dispatched = false;
     }
   }
@@ -82,7 +82,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
       dispatchKeyboardEvent(*keyData);
     }
     else {
-      CH_LOG_ERROR("Key data is not valid.");
+      CH_LOG_DEBUG(Core, "Key data is not valid.");
       dispatched = false;
     }
   }
@@ -101,7 +101,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
 void 
 EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
   if (keyData.key >= Key::KeysMax) {
-    CH_LOG_ERROR(StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(keyData.key)));
+    CH_LOG_DEBUG(Core, StringUtils::format("Key out of range: {0}", static_cast<uint32_t>(keyData.key)));
     return;
   }
 
@@ -121,7 +121,7 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
       break;
 
     default:
-      CH_LOG_ERROR("Invalid key state.");
+      CH_LOG_DEBUG(Core, "Invalid key state.");
       break;
   }
 }
@@ -133,7 +133,7 @@ EventDispatcherManager::dispatchEvents(const SPtr<DisplayEventHandle>& eventHand
   while (!eventHandler->isEventQueueEmpty()) {
     DisplayEvent& screenEvent = eventHandler->frontPopEventQueue();
     if (!dispatchInputEvents(screenEvent)) {
-      CH_LOG_ERROR(StringUtils::format("Could not dispatch event : [{0}] in System Queue.", screenEvent.getTypeAsString()));
+      CH_LOG_DEBUG(Core, StringUtils::format("Could not dispatch event : [{0}] in System Queue.", screenEvent.getTypeAsString()));
     }
   }
 }

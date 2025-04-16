@@ -15,7 +15,7 @@
 #include "chException.h"
 #include "chStringUtils.h"
 #include "chGraphicsTypes.h"
-#include "chDebug.h"
+#include "chLogger.h"
 #include "chVertexLayout.h"
 
 #include <vulkan/vulkan.h>
@@ -28,6 +28,7 @@
 #endif // USING(CH_PLATFORM_LINUX)
 
 namespace chEngineSDK {
+CH_LOG_DECLARE_EXTERN(Vulkan);
 class VulkanErrorException : public Exception
 {
 public:
