@@ -293,14 +293,25 @@ getVerbosityName(LogVerbosity verbosity);
                       chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 // Actual logging macros
-#define CH_LOG(Category, Verbosity, Format, ...) \
-do { \
-  if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
-    (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
-      std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)), \
-      nullptr, 0, nullptr); \
-  } \
-} while(0)
+#if USING(CH_DEBUG_MODE)
+  #define CH_LOG(Category, Verbosity, Format, ...) \
+    do { \
+      if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
+        (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
+          std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)), \
+          __FILE__, __LINE__, __PRETTY_FUNCTION__); \
+      } \
+    } while(0)
+#else
+  #define CH_LOG(Category, Verbosity, Format, ...) \
+    do { \
+      if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
+        (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
+          std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)), \
+          nullptr, 0, nullptr); \
+      } \
+    } while(0)
+#endif
 
 // Common logging helpers
 #define CH_LOG_FATAL(Category, Format, ...) CH_LOG(Category, Fatal, Format, ##__VA_ARGS__)
