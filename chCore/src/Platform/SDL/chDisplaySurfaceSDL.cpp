@@ -37,7 +37,6 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
   m_width = desc.width;
   m_height = desc.height;
 
-  CH_LOG_INFO(Core, "DisplaySurface created successfully with Vulkan support.");
   return true;
 }
 

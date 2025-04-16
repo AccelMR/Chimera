@@ -20,23 +20,10 @@
 
 #include "chModule.h"
 #include "chStringUtils.h"
+#include "chLogDeclaration.h"
 
 namespace chEngineSDK {
 class DataStream;
-
-/**
- * @brief Log verbosity levels
- */
-enum class LogVerbosity : uint8 {
-  NoLogging = 0, // No logging messages
-  Fatal,         // Fatal error, program will crash
-  Error,         // Error, program may recover
-  Warning,       // Warning, operation completed but with issues
-  Info,          // Informational message
-  Debug,         // Debug information (disabled in shipping)
-  Trace,         // Detailed trace information (disabled in shipping)
-  All = Trace    // Enable all logs
-};
 
 /**
  * @brief Configuration options for log categories
@@ -295,7 +282,7 @@ getVerbosityName(LogVerbosity verbosity);
 /**
  * @brief Declare an extern log category to use in a .cpp file
  */
-#define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
+//#define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
 
 /**
  * @brief Declare a static log category for use in a single .cpp file
@@ -322,11 +309,3 @@ do { \
 #define CH_LOG_INFO(Category, Format, ...) CH_LOG(Category, Info, Format, ##__VA_ARGS__)
 #define CH_LOG_DEBUG(Category, Format, ...) CH_LOG(Category, Debug, Format, ##__VA_ARGS__)
 #define CH_LOG_TRACE(Category, Format, ...) CH_LOG(Category, Trace, Format, ##__VA_ARGS__)
-
-
-namespace chEngineSDK
-{
-  CH_LOG_DECLARE_EXTERN(Utilities);
-
-  CH_LOG_DECLARE_EXTERN(Core);
-} // namespac chEngineSDK

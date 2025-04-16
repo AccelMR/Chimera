@@ -6,11 +6,9 @@ using namespace chEngineSDK;
 
 CH_EXTERN CH_PLUGIN_EXPORT void
 loadPlugin() {
-  CH_LOG_INFO(Vulkan, "Loading Vulkan Plugin");
+  CH_LOG_DEBUG(Vulkan, "Loading Vulkan Plugin...");
 
   IGraphicsAPI::startUp<VulkanAPI>();
-  
-  CH_LOG_INFO(Vulkan, "Vulkan plugin loaded.");
 }
 
 

@@ -18,8 +18,12 @@
 #include "chModule.h"
 
 #include "chDisplaySurface.h"
+#include "chLogDeclaration.h"
+
 
 namespace chEngineSDK{
+CH_LOG_DECLARE_EXTERN(DisplaySystem);
+
 class CH_CORE_EXPORT DisplayManager: public Module<DisplayManager>
 {
  public:

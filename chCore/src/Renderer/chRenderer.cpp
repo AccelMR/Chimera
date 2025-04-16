@@ -18,8 +18,17 @@
 #include "chISynchronization.h"
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
+#include "chLogger.h"
 
 namespace chEngineSDK {
+
+#if USING(CH_DEBUG_MODE)
+#define CH_RENDERER_LOG_LEVEL All
+#else
+#define CH_RENDERER_LOG_LEVEL Info
+#endif //USING(CH_DEBUG_MODE)
+
+CH_LOG_DECLARE_STATIC(RendererSystem, CH_RENDERER_LOG_LEVEL);
 
 /*
 */
@@ -169,7 +178,7 @@ Renderer::render() {
 
   //TODO: might need to fix this
   if (imageIndex >= m_commandBuffers.size()) {
-    CH_LOG_ERROR(Core, "Image index out of range, swapchain may be resized. Deferring to next frame.");
+    CH_LOG_ERROR(RendererSystem, "Image index out of range, swapchain may be resized. Deferring to next frame.");
     return;
   }
   

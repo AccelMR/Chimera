@@ -85,7 +85,6 @@ readPixel(const uint8 *buffer, const BPP m_bpp)
     break;
   }
   default:
-    CH_LOG_ERROR(Utilities, "Error: Unsupported BPP format in readPixel.");
     return Color();
     break;
   }
@@ -101,9 +100,7 @@ BMPImage::~BMPImage() {}
 void
 BMPImage::create(uint32 width, uint32 height, BPP bpp)
 {
-  if (width <= 0 || height <= 0)
-  {
-    CH_LOG_ERROR(Utilities, "Error: Invalid image size ({0}, {1})", width, height);
+  if (width <= 0 || height <= 0) {
     return;
   }
 
@@ -147,7 +144,6 @@ Color
 BMPImage::getPixel(uint32 x, uint32 y) const
 {
   if (x >= m_width || y >= m_height) {
-    CH_LOG_ERROR(Utilities, "Error: Invalid pixel coordinates ({0}, {1})", x, y);
     return Color();
   }
 
@@ -163,7 +159,6 @@ void
 BMPImage::setPixel(uint32 x, uint32 y, const Color &color)
 {
   if (x >= m_width || y >= m_height) {
-    CH_LOG_ERROR(Utilities, "Error: Invalid pixel coordinates ({0}, {1})", x, y);
     return;
   }
 
@@ -202,7 +197,6 @@ BMPImage::decode(const Path &bmpPath)
 {
   Vector<uint8> buffer = FileSystem::fastRead(bmpPath);
   if (buffer.empty()) {
-    CH_LOG_ERROR(Utilities, "Error: Unable to read file {0}", bmpPath.toString());
     return false;
   }
 
@@ -210,7 +204,6 @@ BMPImage::decode(const Path &bmpPath)
   std::memcpy(&header, buffer.data(), sizeof(BMPHeader));
 
   if (header.signature[0] != 'B' || header.signature[1] != 'M') {
-    CH_LOG_ERROR(Utilities, "Error: Invalid BMP file format.");
     return false;
   }
 
@@ -222,7 +215,6 @@ BMPImage::decode(const Path &bmpPath)
   const int32 lineMemoryWidth = m_pitch + (m_pitch % 4 ? 4 - m_pitch % 4 : 0);
 
   if (buffer.size() < header.dataOffset + lineMemoryWidth * m_height) {
-    CH_LOG_ERROR(Utilities, "Error: File too small to contain BMP image data.");
     return false;
   }
 
@@ -243,7 +235,6 @@ BMPImage::encode(const Path& filename) const
 {
   SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
   if (!file) {
-    CH_LOG_ERROR(Utilities, "Error: Unable to create file {0}", filename.toString());
     return;
   }
 
@@ -368,7 +359,6 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y,
     return calculateStretchCoordinates(x, y, srcRect, dstRect, srcX, srcY);
 
   default:
-    CH_LOG_ERROR(Utilities, "Error: Unsupported BMP_TEXTURE_MODE");
     return false;
   }
 }
@@ -450,9 +440,7 @@ BMPImage::calculateMirrorCoordinates(int32 x, int32 y,
   }
 
   if (srcX < 0 || srcX >= static_cast<int32>(widthHeight.x) ||
-      srcY < 0 || srcY >= static_cast<int32>(widthHeight.y))
-  {
-    CH_LOG_ERROR(Utilities, "Error: Coordinates are out of range.");
+      srcY < 0 || srcY >= static_cast<int32>(widthHeight.y)) {
     return false;
   }
   return true;

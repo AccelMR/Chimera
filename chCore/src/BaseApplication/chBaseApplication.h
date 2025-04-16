@@ -26,11 +26,13 @@ class Renderer;
  */
 class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
  public:
+  
+
   /*
    * Description: 
    *     Default constructor.
    */
-  BaseApplication() = default;
+  BaseApplication();
 
   /*
    * Description: 

@@ -21,6 +21,14 @@
 
 namespace chEngineSDK{
 
+#if USING(CH_DEBUG_MODE)
+#define CH_DISPLAY_MANAGER_LOG_LEVEL All
+#else
+#define CH_DISPLAY_MANAGER_LOG_LEVEL Info
+#endif //USING(CH_DEBUG_MODE)
+
+CH_LOG_DEFINE_CATEGORY_SHARED(DisplaySystem, CH_DISPLAY_MANAGER_LOG_LEVEL);
+
 /*
 */
 const WeakPtr<DisplaySurface>
@@ -30,7 +38,7 @@ DisplayManager::createDisplay(ScreenDescriptor screenDesc, SPtr<DisplayEventHand
     if (!m_mainDisplay->init(screenDesc, eventHandler)) {
       return WeakPtr<DisplaySurface>();
     }
-    CH_LOG_INFO(Core, "Main DisplaySurface [{0}] has been created.", screenDesc.name);
+    CH_LOG_INFO(DisplaySystem, "Main DisplaySurface [{0}] has been created.", screenDesc.name);
   }
   return m_mainDisplay;
 }

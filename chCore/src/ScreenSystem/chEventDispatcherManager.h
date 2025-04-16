@@ -25,14 +25,15 @@
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
-  using chKeyBoard::Key;
-  
+using chKeyBoard::Key;
 using CloseCallback = std::function<void()>;
 using ResizeCallback = std::function<void(uint32,uint32)>;
 using KeyDownCallback = std::function<void(const KeyBoardData&)>;
 using KeyUpCallback = std::function<void(const KeyBoardData&)>;
 using KeyPressedCallback = std::function<void(const KeyBoardData&)>;
 using OnMouseMoveCallback = std::function<void(const MouseMoveData&)>;
+
+CH_LOG_DECLARE_EXTERN(InputSystem);
 
 class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManager>
 {
@@ -117,7 +118,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyDown(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
+      CH_LOG_WARNING(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key));
@@ -129,7 +130,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   wasKeyDown(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
+      CH_LOG_WARNING(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_previousKeyboardState.test(static_cast<SIZE_T>(key));
@@ -141,7 +142,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyJustPressed(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
+      CH_LOG_WARNING(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 
@@ -154,7 +155,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyJustReleased(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
+      CH_LOG_WARNING(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return !m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 

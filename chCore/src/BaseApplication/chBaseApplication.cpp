@@ -21,7 +21,7 @@
 #include "chStringUtils.h"
 #include "chEventDispatcherManager.h"
 #include "chIGraphicsAPI.h"
-
+#include "chLogger.h"
 #include "chRenderer.h"
 
 #if USING(CH_PLATFORM_LINUX)
@@ -32,12 +32,34 @@ namespace chEngineSDK {
 using namespace std::chrono;
 using std::stoi;
 
-CH_LOG_DEFINE_CATEGORY_SHARED(Core, All);
+#if USING(CH_DEBUG_MODE)
+#define CH_BASE_APPLICATION_LOG_LEVEL All
+#else
+#define CH_BASE_APPLICATION_LOG_LEVEL Info
+#endif //USING(CH_DEBUG_MODE)
+
+
+CH_LOG_DECLARE_STATIC(BaseApp, CH_BASE_APPLICATION_LOG_LEVEL);
+
+/*
+*/
+BaseApplication::BaseApplication() {
+  #if USING(CH_DEBUG_MODE)
+  CH_LOG_DEBUG(BaseApp, "BaseApplication initalized in Debug mode.");
+  if (!Logger::isStarted()){
+    Logger::startUp();
+    Logger::instance().setConsoleOutput(true);
+    Logger::instance().setFileOutput(true, "resources/engine/logs/chimeraBaseApp.log");
+    CH_LOG_ERROR(BaseApp, "Logger was not started before BaseApplication if you want \
+      to use it outside you'll need to call Logger::startUp() before BaseApplication.");
+  }
+  #endif //CH_DEBUG_MODE
+}
 
 /*
 */
 BaseApplication::~BaseApplication() {
-  CH_LOG_INFO(Core, "Destroying BaseApplication");
+  CH_LOG_INFO(BaseApp, "Destroying BaseApplication");
 
   if (m_isInitialized) {
     destroyModules();
@@ -151,10 +173,6 @@ BaseApplication::destroyGraphics() {
  */
 void
 BaseApplication::run() {
-#if USING(CH_DEBUG_MODE)
-  CH_LOG_DEBUG(Core, "Running BaseApplication in Debug mode.");
-#endif //CH_DEBUG_MODE
-
  // Make sure the application is initialized.
   CH_ASSERT(m_isInitialized);
 
@@ -171,7 +189,7 @@ BaseApplication::run() {
   HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
     [&](const KeyBoardData& keyData) {
       if (keyData.hasModifier(KEY_MODIFIER::LSHIFT)) {
-        CH_LOG_INFO(Core, "Key W down with shift");
+        CH_LOG_INFO(BaseApp, "Key W down with shift");
       }
     });
 

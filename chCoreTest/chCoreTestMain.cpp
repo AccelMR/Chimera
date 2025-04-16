@@ -4,14 +4,17 @@
 
 #include <format>
 
+
 using namespace chEngineSDK;
+
+CH_LOG_DECLARE_STATIC(CoreTestMain, All);
 
 int main(int argc, char** argv) {
   try {
     Logger::startUp();
     BaseApplication::startUp();
-    chEngineSDK::Logger::instance().setConsoleOutput(true);
-    chEngineSDK::Logger::instance().setFileOutput(true, "resources/engine/log.log");
+    Logger::instance().setConsoleOutput(true);
+    Logger::instance().setFileOutput(true, "resources/engine/logs/chimeraTest.log");
 
     auto& app = BaseApplication::instance();
     app.initialize(argc, argv);
@@ -23,7 +26,7 @@ int main(int argc, char** argv) {
   }
   catch(const std::exception& e)
   {
-    CH_LOG_ERROR(Utilities, e.what());
+    CH_LOG_ERROR(CoreTestMain, e.what());
     
     // g_Debug().logBacktrace();
     // g_Debug().saveLog("resources/engine/logs/CRASHED_chCoreTestMain.txt");

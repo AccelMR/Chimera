@@ -57,8 +57,6 @@ getVerbosityName(LogVerbosity verbosity) {
     return "INFO";
   case LogVerbosity::Debug:
     return "DEBUG";
-  case LogVerbosity::Trace:
-    return "TRACE";
   case LogVerbosity::NoLogging:
   default:
     return "NONE";
@@ -84,8 +82,6 @@ getVerbosityColor(LogVerbosity verbosity) {
     return "\033[0m"; // Default
   case LogVerbosity::Debug:
     return "\033[36m"; // Cyan
-  case LogVerbosity::Trace:
-    return "\033[90m"; // Bright Black (Gray)
   case LogVerbosity::NoLogging:
   default:
     return "\033[0m"; // Default
