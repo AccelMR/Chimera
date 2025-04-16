@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     Logger::startUp();
     BaseApplication::startUp();
     chEngineSDK::Logger::instance().setConsoleOutput(true);
-    chEngineSDK::Logger::instance().setFileOutput(true, "engine/log.log");
+    chEngineSDK::Logger::instance().setFileOutput(true, "resources/engine/log.log");
 
     auto& app = BaseApplication::instance();
     app.initialize(argc, argv);

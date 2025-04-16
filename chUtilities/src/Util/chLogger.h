@@ -116,7 +116,23 @@ class CH_UTILITY_EXPORT LogCategory
    * @param function Function name
    */
   void
-  log(LogVerbosity verbosity, const String& message, const char* file = nullptr, int line = 0,
+  log(LogVerbosity verbosity, 
+      const String& message, 
+      const char* file = nullptr, int line = 0,
+      const char* function = nullptr) const;
+
+  /**
+   * @brief Log a message with this category
+   * @param verbosity Verbosity level
+   * @param message Message to log
+   * @param file Source file
+   * @param line Line number
+   * @param function Function name
+   */
+  void
+  log(LogVerbosity verbosity, 
+      const String&& message, 
+      const char* file = nullptr, int line = 0,
       const char* function = nullptr) const;
 
  private:
@@ -199,6 +215,23 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
                   int line = 0, 
                   const char* function = nullptr);
 
+  /**
+   * @brief Write a message to all enabled outputs
+   * @param category Log category
+   * @param verbosity Verbosity level
+   * @param message Message to log
+   * @param file Source file
+   * @param line Line number
+   * @param function Function name
+   */
+  void
+  writeLogMessage(const LogCategory& category, 
+                  LogVerbosity verbosity, 
+                  String&& message,
+                  const char* file = nullptr, 
+                  int line = 0, 
+                  const char* function = nullptr);
+
  protected:
   /**
    * @brief Constructor
@@ -273,16 +306,14 @@ getVerbosityName(LogVerbosity verbosity);
                       chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 // Actual logging macros
-#define CH_LOG(Category, Verbosity, Format, ...)                                              \
-  do                                                                                          \
-  {                                                                                           \
-    if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity))                           \
-    {                                                                                         \
-      (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__), nullptr, 0,     \
-                     nullptr);                                                                \
-    }                                                                                         \
-  } while (0)
+#define CH_LOG(Category, Verbosity, Format, ...) \
+  do { \
+    if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
+      (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
+        std::move(chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__)), \
+        __FILE__, __LINE__, __PRETTY_FUNCTION__); \
+    } \
+  } while(0)
 
 // Common logging helpers
 #define CH_LOG_FATAL(Category, Format, ...) CH_LOG(Category, Fatal, Format, ##__VA_ARGS__)

@@ -120,6 +120,21 @@ LogCategory::log(LogVerbosity verbosity, const String& message, const char* file
   Logger::instance().writeLogMessage(*this, verbosity, message, file, line, function);
 }
 
+/*
+*/
+void
+LogCategory::log(LogVerbosity verbosity, 
+                 const String&& message, 
+                 const char* file, 
+                 int line,
+                 const char* function) const
+{
+  if (!isEnabled(verbosity)) {
+    return;
+  }
+
+  Logger::instance().writeLogMessage(*this, verbosity, std::move(message), file, line, function);
+}
 //--------------------------------------------------------------------------
 // Logger Implementation
 //--------------------------------------------------------------------------
@@ -262,7 +277,59 @@ Logger::writeLogMessage(const LogCategory& category, LogVerbosity verbosity,
   if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
     formattedMessage += "\n";
     m_logFile->write(formattedMessage.data(), formattedMessage.size());
-    m_logFile->close();
+    //m_logFile->close();
+  }
+}
+
+/*
+*/
+void
+Logger::writeLogMessage(const LogCategory& category, 
+                        LogVerbosity verbosity, 
+                        String&& message,
+                        const char* file, 
+                        int line, 
+                        const char* function)
+{
+  RecursiveLock lock(m_mutex);
+
+  String timestamp = getCurrentTimeString();
+  String verbosityStr = getVerbosityName(verbosity);
+  String sourceLocation;
+
+  if (file != nullptr && line > 0) {
+    String shortFile = file;
+    size_t lastSlash = shortFile.find_last_of("/\\");
+    if (lastSlash != String::npos) {
+      shortFile = shortFile.substr(lastSlash + 1);
+    }
+
+    sourceLocation = StringUtils::format(" [{0}:{1}]", shortFile, line);
+
+    if (function != nullptr) {
+      sourceLocation += StringUtils::format(" {0}", function);
+    }
+  }
+
+  String formattedMessage =
+      StringUtils::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
+                          category.getName(), sourceLocation, std::move(message));
+
+  // Write to console if enabled
+  if (m_consoleOutput) {
+    String colorCode = getVerbosityColor(verbosity);
+    std::cout << colorCode << formattedMessage << COLOR_RESET << std::endl;
+
+    // For fatal errors, also write to stderr
+    if (verbosity == LogVerbosity::Fatal) {
+      std::cerr << colorCode << formattedMessage << COLOR_RESET << std::endl;
+    }
+  }
+
+  // Write to file if enabled
+  if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
+    formattedMessage += "\n";
+    m_logFile->write(formattedMessage.data(), formattedMessage.size());
   }
 }
 
