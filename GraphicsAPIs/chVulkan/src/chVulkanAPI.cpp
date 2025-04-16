@@ -412,10 +412,10 @@ VulkanAPI::pickPhysicalDevice() {
     }
   }
 
-  CH_LOG_INFO(Vulkan, chString::format("Adapter descriptor: [{0}]", deviceProperties.deviceName));
-  CH_LOG_INFO(Vulkan, chString::format("GPU Vendor ID:  [{0}]", deviceProperties.vendorID));
-  CH_LOG_INFO(Vulkan, chString::format("GPU Device ID:  [{0}]", deviceProperties.deviceID));
-  CH_LOG_INFO(Vulkan, chString::format("target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024)));
+  CH_LOG_INFO(Vulkan, "Adapter descriptor: [{0}]", deviceProperties.deviceName);
+  CH_LOG_INFO(Vulkan, "GPU Vendor ID:  [{0}]", deviceProperties.vendorID);
+  CH_LOG_INFO(Vulkan, "GPU Device ID:  [{0}]", deviceProperties.deviceID);
+  CH_LOG_INFO(Vulkan, "target_link_librariesTotal GPU Memory: [{0} MB]", totalMemory / (1024 * 1024));
 
   return true;
 }

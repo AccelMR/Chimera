@@ -364,7 +364,7 @@ FileDataStream::init() {
 
   //Should check ensure open succeeded, in case fail for some reason.
   if (m_pInStream->fail()) {
-    CH_LOG_ERROR(Utilities, chString::format("Failed to open file: {0}", m_path.toString()));
+    CH_LOG_ERROR(Utilities, "Failed to open file: {0}", m_path.toString());
     return;
   }
 

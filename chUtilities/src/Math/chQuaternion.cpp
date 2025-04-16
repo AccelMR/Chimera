@@ -19,6 +19,7 @@
 #include "chRotator.h"
 #include "chMatrix4.h"
 #include "chRadian.h"
+#include "chLogger.h"
 
 namespace chEngineSDK {
 
@@ -91,7 +92,7 @@ Quaternion::toRotator() const
 # if USING(CH_DEBUG_MODE)
   if (R.checkIfNaN()) {
     //TODO FIx this
-    //CH_LOG_WARNING("Quaternion::rotator(): Rotator result contains NaN!");
+    CH_LOG_WARNING(Utilities, "Quaternion::rotator(): Rotator result contains NaN!");
     R = Rotator::ZERO;
 }
 # endif

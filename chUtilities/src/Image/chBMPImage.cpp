@@ -146,9 +146,8 @@ BMPImage::clear(const Color &color)
 Color 
 BMPImage::getPixel(uint32 x, uint32 y) const
 {
-  if (x >= m_width || y >= m_height)
-  {
-    CH_LOG_ERROR(Utilities, chString::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+  if (x >= m_width || y >= m_height) {
+    CH_LOG_ERROR(Utilities, "Error: Invalid pixel coordinates ({0}, {1})", x, y);
     return Color();
   }
 
@@ -163,9 +162,8 @@ BMPImage::getPixel(uint32 x, uint32 y) const
 void 
 BMPImage::setPixel(uint32 x, uint32 y, const Color &color)
 {
-  if (x >= m_width || y >= m_height)
-  {
-    CH_LOG_ERROR(Utilities, chString::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+  if (x >= m_width || y >= m_height) {
+    CH_LOG_ERROR(Utilities, "Error: Invalid pixel coordinates ({0}, {1})", x, y);
     return;
   }
 
@@ -203,17 +201,15 @@ bool
 BMPImage::decode(const Path &bmpPath)
 {
   Vector<uint8> buffer = FileSystem::fastRead(bmpPath);
-  if (buffer.empty())
-  {
-    CH_LOG_ERROR(Utilities, chString::format("Error: Unable to read file {0}", bmpPath.toString()));
+  if (buffer.empty()) {
+    CH_LOG_ERROR(Utilities, "Error: Unable to read file {0}", bmpPath.toString());
     return false;
   }
 
   BMPHeader header;
   std::memcpy(&header, buffer.data(), sizeof(BMPHeader));
 
-  if (header.signature[0] != 'B' || header.signature[1] != 'M')
-  {
+  if (header.signature[0] != 'B' || header.signature[1] != 'M') {
     CH_LOG_ERROR(Utilities, "Error: Invalid BMP file format.");
     return false;
   }
@@ -225,16 +221,14 @@ BMPImage::decode(const Path &bmpPath)
 
   const int32 lineMemoryWidth = m_pitch + (m_pitch % 4 ? 4 - m_pitch % 4 : 0);
 
-  if (buffer.size() < header.dataOffset + lineMemoryWidth * m_height)
-  {
+  if (buffer.size() < header.dataOffset + lineMemoryWidth * m_height) {
     CH_LOG_ERROR(Utilities, "Error: File too small to contain BMP image data.");
     return false;
   }
 
   uint8* pixelInit = m_data->getStartPtr();
 
-  for (int32 y = m_height - 1; y >= 0; --y)
-  {
+  for (int32 y = m_height - 1; y >= 0; --y) {
     uint8* imageData = buffer.data() + header.dataOffset + y * lineMemoryWidth;
     std::memcpy(pixelInit + m_pitch * (m_height - 1 - y), imageData, m_pitch);
   }
@@ -248,9 +242,8 @@ void
 BMPImage::encode(const Path& filename) const
 {
   SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
-  if (!file)
-  {
-    CH_LOG_ERROR(Utilities, chString::format("Error: Unable to create file {0}", filename.toString()));
+  if (!file) {
+    CH_LOG_ERROR(Utilities, "Error: Unable to create file {0}", filename.toString());
     return;
   }
 
@@ -337,7 +330,6 @@ BMPImage::bitBlt(const BMPImage& src,
         continue;
       }
 
-      //CH_LOG_DEBUG(chString::format("Copying pixel ({0}, {1}) <- ({2}, {3})", x, y, srcX, srcY));
       setPixel(dstRectClamped.minPoint.x + x, dstRectClamped.minPoint.y + y, color);
     }
   }

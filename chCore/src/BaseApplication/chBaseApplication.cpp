@@ -37,7 +37,7 @@ CH_LOG_DEFINE_CATEGORY_SHARED(Core, All);
 /*
 */
 BaseApplication::~BaseApplication() {
-  //CH_LOG_INFO(Core, "Destroying BaseApplication");
+  CH_LOG_INFO(Core, "Destroying BaseApplication");
 
   if (m_isInitialized) {
     destroyModules();

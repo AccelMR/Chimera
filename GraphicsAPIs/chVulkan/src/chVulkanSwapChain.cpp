@@ -181,9 +181,6 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
   createRenderPass();
   createFramebuffers();
-
-  // CH_LOG_DEBUG(chString::format("SweapChain created ({0}x{1}, {2} images, mode {3})", 
-  //                                   m_width, m_height, m_imageCount, presentMode));
 }
 
 /*

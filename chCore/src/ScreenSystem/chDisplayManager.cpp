@@ -30,7 +30,7 @@ DisplayManager::createDisplay(ScreenDescriptor screenDesc, SPtr<DisplayEventHand
     if (!m_mainDisplay->init(screenDesc, eventHandler)) {
       return WeakPtr<DisplaySurface>();
     }
-    CH_LOG_INFO(Core, chString::format("Main DisplaySurface [{0}] has been created.", screenDesc.name));
+    CH_LOG_INFO(Core, "Main DisplaySurface [{0}] has been created.", screenDesc.name);
   }
   return m_mainDisplay;
 }

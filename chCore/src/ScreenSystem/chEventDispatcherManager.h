@@ -117,7 +117,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyDown(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_DEBUG(Core, chString::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key));
@@ -129,7 +129,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   wasKeyDown(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_DEBUG(Core, chString::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_previousKeyboardState.test(static_cast<SIZE_T>(key));
@@ -141,7 +141,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyJustPressed(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_DEBUG(Core, chString::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 
@@ -154,7 +154,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   NODISCARD FORCEINLINE bool
   isKeyJustReleased(Key key) const {
     if (key >= Key::KeysMax) {
-      CH_LOG_DEBUG(Core, chString::format("Key out of range: {0}", static_cast<uint32_t>(key)));
+      CH_LOG_WARNING(Core, "Key out of range: {0}", static_cast<uint32_t>(key));
       return false;
     }
     return !m_currentKeyboardState.test(static_cast<SIZE_T>(key)) && 
