@@ -18,9 +18,9 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include "chLogDeclaration.h"
 #include "chModule.h"
 #include "chStringUtils.h"
-#include "chLogDeclaration.h"
 
 #ifdef CH_ENABLE_LOG_VERBOSE
 #define CH_LOG_VERBOSE USE_IF(USING(CH_DEBUG_MODE))
@@ -34,8 +34,7 @@ class DataStream;
 /**
  * @brief Configuration options for log categories
  */
-struct LogCategoryConfig
-{
+struct LogCategoryConfig {
   // Should this log category be compiled in non-debug builds
   bool compileInNonDebug = true;
 
@@ -64,9 +63,8 @@ class CH_UTILITY_EXPORT LogCategory
    * @brief Gets the name of this log category
    * @return The category name
    */
-  FORCEINLINE const String&
-  getName() const
-  {
+  NODISCARD FORCEINLINE const String&
+  getName() const {
     return m_name;
   }
 
@@ -75,9 +73,8 @@ class CH_UTILITY_EXPORT LogCategory
    * @param verbosity Verbosity level to check
    * @return True if logging is enabled for this verbosity
    */
-  FORCEINLINE bool
-  isEnabled(LogVerbosity verbosity) const
-  {
+  NODISCARD FORCEINLINE bool
+  isEnabled(LogVerbosity verbosity) const {
     return verbosity <= m_config.runtimeVerbosity;
   }
 
@@ -86,8 +83,7 @@ class CH_UTILITY_EXPORT LogCategory
    * @param verbosity New verbosity level
    */
   FORCEINLINE void
-  setVerbosity(LogVerbosity verbosity)
-  {
+  setVerbosity(LogVerbosity verbosity) {
     m_config.runtimeVerbosity = verbosity;
   }
 
@@ -95,8 +91,7 @@ class CH_UTILITY_EXPORT LogCategory
    * @brief Reset the runtime verbosity to the default
    */
   FORCEINLINE void
-  resetVerbosity()
-  {
+  resetVerbosity() {
     m_config.runtimeVerbosity = m_config.defaultVerbosity;
   }
 
@@ -109,10 +104,11 @@ class CH_UTILITY_EXPORT LogCategory
    * @param function Function name
    */
   void
-  log(LogVerbosity verbosity, 
-      const String& message, 
-      const char* file = nullptr, int line = 0,
-      const char* function = nullptr) const;
+  log(LogVerbosity verbosity, const 
+      String& message, 
+      const ANSICHAR* file = nullptr, 
+      int32 line = 0,
+      const ANSICHAR* function = nullptr) const;
 
   /**
    * @brief Log a message with this category
@@ -125,8 +121,9 @@ class CH_UTILITY_EXPORT LogCategory
   void
   log(LogVerbosity verbosity, 
       const String&& message, 
-      const char* file = nullptr, int line = 0,
-      const char* function = nullptr) const;
+      const ANSICHAR* file = nullptr, 
+      int32 line = 0,
+      const ANSICHAR* function = nullptr) const;
 
  private:
   String m_name;
@@ -155,14 +152,14 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @param name Category name
    * @return Pointer to category or nullptr if not found
    */
-  LogCategory*
+  NODISCARD LogCategory*
   findCategory(const String& name);
 
   /**
    * @brief Get all registered categories
    * @return Vector of registered categories
    */
-  FORCEINLINE const Vector<LogCategory*>&
+  NODISCARD FORCEINLINE const Vector<LogCategory*>&
   getCategories() const {
     return m_categories;
   }
@@ -201,12 +198,8 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @param function Function name
    */
   void
-  writeLogMessage(const LogCategory& category, 
-                  LogVerbosity verbosity, 
-                  const String& message,
-                  const char* file = nullptr, 
-                  int line = 0, 
-                  const char* function = nullptr);
+  writeLogMessage(const LogCategory& category, LogVerbosity verbosity, const String& message,
+                  const ANSICHAR* file = nullptr, int32 line = 0, const ANSICHAR* function = nullptr);
 
   /**
    * @brief Write a message to all enabled outputs
@@ -218,12 +211,8 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @param function Function name
    */
   void
-  writeLogMessage(const LogCategory& category, 
-                  LogVerbosity verbosity, 
-                  String&& message,
-                  const char* file = nullptr, 
-                  int line = 0, 
-                  const char* function = nullptr);
+  writeLogMessage(const LogCategory& category, LogVerbosity verbosity, String&& message,
+                  const ANSICHAR* file = nullptr, int32 line = 0, const ANSICHAR* function = nullptr);
 
  protected:
   /**
@@ -288,7 +277,7 @@ getVerbosityName(LogVerbosity verbosity);
 /**
  * @brief Declare an extern log category to use in a .cpp file
  */
-//#define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
+// #define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
 
 /**
  * @brief Declare a static log category for use in a single .cpp file
@@ -300,23 +289,23 @@ getVerbosityName(LogVerbosity verbosity);
 
 // Actual logging macros
 #if USING(CH_LOG_VERBOSE)
-  #define CH_LOG(Category, Verbosity, Format, ...) \
-    do { \
-      if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
-        (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
-          std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)), \
-          __FILE__, __LINE__, __PRETTY_FUNCTION__); \
-      } \
-    } while(0)
+#define CH_LOG(Category, Verbosity, Format, ...)                                              \
+  do {                                                                                        \
+    if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
+      (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
+                     std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)),         \
+                     __FILE__, __LINE__, __PRETTY_FUNCTION__);                                \
+    }                                                                                         \
+  } while (0)
 #else
-  #define CH_LOG(Category, Verbosity, Format, ...) \
-    do { \
-      if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \
-        (Category).log(chEngineSDK::LogVerbosity::Verbosity, \
-          std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)), \
-          nullptr, 0, nullptr); \
-      } \
-    } while(0)
+#define CH_LOG(Category, Verbosity, Format, ...)                                              \
+  do {                                                                                        \
+    if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
+      (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
+                     std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)),         \
+                     nullptr, 0, nullptr);                                                    \
+    }                                                                                         \
+  } while (0)
 #endif
 
 // Common logging helpers

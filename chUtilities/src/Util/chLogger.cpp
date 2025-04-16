@@ -15,8 +15,8 @@
 #include "chLogger.h"
 
 #include "chFileSystem.h"
-#include "chStringUtils.h"
 #include "chPath.h"
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 
@@ -24,7 +24,7 @@ namespace chEngineSDK {
  * @brief Get current timestamp string
  * @return Formatted timestamp
  */
-static String
+NODISCARD static String
 getCurrentTimeString() {
   auto now = std::chrono::system_clock::now();
   auto time = std::chrono::system_clock::to_time_t(now);
@@ -43,10 +43,9 @@ getCurrentTimeString() {
  * @param verbosity Verbosity level
  * @return String representation
  */
-String
+NODISCARD String
 getVerbosityName(LogVerbosity verbosity) {
-  switch (verbosity)
-  {
+  switch (verbosity) {
   case LogVerbosity::Fatal:
     return "FATAL";
   case LogVerbosity::Error:
@@ -68,10 +67,9 @@ getVerbosityName(LogVerbosity verbosity) {
  * @param verbosity Verbosity level
  * @return ANSI color code
  */
-static String
+NODISCARD static String
 getVerbosityColor(LogVerbosity verbosity) {
-  switch (verbosity)
-  {
+  switch (verbosity) {
   case LogVerbosity::Fatal:
     return "\033[1;31m"; // Bold Red
   case LogVerbosity::Error:
@@ -98,17 +96,11 @@ static const String COLOR_RESET = "\033[0m";
 //--------------------------------------------------------------------------
 
 LogCategory::LogCategory(const String& name, const LogCategoryConfig& config)
- : m_name(name), 
-   m_config(config) {
-  if (Logger::isStarted()) {
-    Logger::instance().registerCategory(*this);
-  }
-}
+ : m_name(name), m_config(config) {}
 
 void
-LogCategory::log(LogVerbosity verbosity, const String& message, const char* file, int line,
-                 const char* function) const
-{
+LogCategory::log(LogVerbosity verbosity, const String& message, const ANSICHAR* file, int32 line,
+                 const ANSICHAR* function) const {
   if (!isEnabled(verbosity)) {
     return;
   }
@@ -117,19 +109,16 @@ LogCategory::log(LogVerbosity verbosity, const String& message, const char* file
 }
 
 /*
-*/
+ */
 void
-LogCategory::log(LogVerbosity verbosity, 
-                 const String&& message, 
-                 const char* file, 
-                 int line,
-                 const char* function) const
-{
+LogCategory::log(LogVerbosity verbosity, const String&& message, const ANSICHAR* file, int32 line,
+                 const ANSICHAR* function) const {
   if (!isEnabled(verbosity)) {
     return;
   }
 
-  Logger::instance().writeLogMessage(*this, verbosity, std::move(message), file, line, function);
+  Logger::instance().writeLogMessage(*this, verbosity, std::move(message), file, line,
+                                     function);
 }
 //--------------------------------------------------------------------------
 // Logger Implementation
@@ -187,8 +176,7 @@ Logger::findCategory(const String& name) {
 }
 
 void
-Logger::setGlobalVerbosity(LogVerbosity verbosity)
-{
+Logger::setGlobalVerbosity(LogVerbosity verbosity) {
   RecursiveLock lock(m_mutex);
 
   for (auto* category : m_categories) {
@@ -211,7 +199,7 @@ Logger::setFileOutput(bool enabled, const String& filename) {
     m_logFilename = filename;
 
     try {
-      Path path (m_logFilename);
+      Path path(m_logFilename);
       m_logFile = FileSystem::createAndOpenFile(path);
 
       if (!m_logFile) {
@@ -231,9 +219,12 @@ Logger::setFileOutput(bool enabled, const String& filename) {
 }
 
 void
-Logger::writeLogMessage(const LogCategory& category, LogVerbosity verbosity,
-                        const String& message, const char* file, int line,
-                        const char* function) {
+Logger::writeLogMessage(const LogCategory& category, 
+                        LogVerbosity verbosity,
+                        const String& message, 
+                        const ANSICHAR* file, 
+                        int32 line,
+                        const ANSICHAR* function) {
   RecursiveLock lock(m_mutex);
 
   String timestamp = getCurrentTimeString();
@@ -256,7 +247,7 @@ Logger::writeLogMessage(const LogCategory& category, LogVerbosity verbosity,
 
   String formattedMessage =
       chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
-                          category.getName(), sourceLocation, message);
+                       category.getName(), sourceLocation, message);
 
   // Write to console if enabled
   if (m_consoleOutput) {
@@ -273,20 +264,18 @@ Logger::writeLogMessage(const LogCategory& category, LogVerbosity verbosity,
   if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
     formattedMessage += "\n";
     m_logFile->write(formattedMessage.data(), formattedMessage.size());
-    //m_logFile->close();
   }
 }
 
 /*
-*/
+ */
 void
-Logger::writeLogMessage(const LogCategory& category, 
+Logger::writeLogMessage(const LogCategory& category, \
                         LogVerbosity verbosity, 
                         String&& message,
-                        const char* file, 
-                        int line, 
-                        const char* function)
-{
+                        const ANSICHAR* file, 
+                        int32 line, 
+                        const ANSICHAR* function) {
   RecursiveLock lock(m_mutex);
 
   String timestamp = getCurrentTimeString();
@@ -309,7 +298,7 @@ Logger::writeLogMessage(const LogCategory& category,
 
   String formattedMessage =
       chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
-                          category.getName(), sourceLocation, std::move(message));
+                       category.getName(), sourceLocation, std::move(message));
 
   // Write to console if enabled
   if (m_consoleOutput) {

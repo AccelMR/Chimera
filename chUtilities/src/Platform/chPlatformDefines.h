@@ -186,6 +186,15 @@
 # define GCC_ALIGN(n)                     __attribute__( (__aligned__(n)) )
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define DEPRECATED __attribute__((deprecated))
+#elif defined(_MSC_VER)
+#define DEPRECATED __declspec(deprecated)
+#else
+#pragma message("WARNING: You need to implement DEPRECATED for this compiler")
+#define DEPRECATED
+#endif
+
 /************************************************************************/
 /**
  * For throw override (deprecated on c++11 but VS does not have handle )

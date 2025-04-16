@@ -12,11 +12,11 @@ AccessModifierOffset: -1
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterClass: true
-  AfterFunction: true
+  AfterFunction: false
   AfterNamespace: false
-  AfterStruct: true
-  AfterControlStatement: true
-  BeforeElse: true
+  AfterStruct: false
+  AfterControlStatement: false
+  BeforeElse: false
 # Place the return type on a separate line
 AlwaysBreakAfterReturnType: All
 # Align parameters with first parameter when wrapped
