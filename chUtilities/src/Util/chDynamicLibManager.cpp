@@ -89,6 +89,11 @@ DynamicLibraryManager::sanitizeName(const String& libName) {
   const String extension = String( "." ) + DynamicLibrary::EXTENSION;
   const SIZE_T extLength = extension.length();
 
+  #if USING(CH_DEBUG_MODE)
+  //Add the debug suffix if necessary.
+  filename.append("d");
+  #endif //USING(CH_DEBUG_MODE)
+
   if ( length <= extLength || filename.substr( length - extLength ) != extension ) {
     filename.append( extension );
   }

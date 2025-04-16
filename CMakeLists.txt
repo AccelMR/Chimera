@@ -31,7 +31,3 @@ endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
   add_subdirectory(GraphicsAPIs/chVulkan)
 endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(_DEBUG)
-endif()

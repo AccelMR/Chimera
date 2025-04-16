@@ -22,6 +22,12 @@
 #include "chStringUtils.h"
 #include "chLogDeclaration.h"
 
+#ifdef CH_ENABLE_LOG_VERBOSE
+#define CH_LOG_VERBOSE USE_IF(USING(CH_DEBUG_MODE))
+#else
+#define CH_LOG_VERBOSE NOT_IN_USE
+#endif
+
 namespace chEngineSDK {
 class DataStream;
 
@@ -293,7 +299,7 @@ getVerbosityName(LogVerbosity verbosity);
                       chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 // Actual logging macros
-#if USING(CH_DEBUG_MODE)
+#if USING(CH_LOG_VERBOSE)
   #define CH_LOG(Category, Verbosity, Format, ...) \
     do { \
       if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) { \

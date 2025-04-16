@@ -2,6 +2,7 @@ file(GLOB SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
 
+set(CMAKE_DEBUG_POSTFIX "d")
 add_library(chVulkan SHARED ${SOURCE_FILES})
 
 set_target_properties(chVulkan PROPERTIES 

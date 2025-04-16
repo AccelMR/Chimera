@@ -1,7 +1,10 @@
+set(CMAKE_DEBUG_POSTFIX "d")
+
 add_executable(chCoreTest chCoreTestMain.cpp)
 
 # Asegúrate de que todas las bibliotecas compartidas utilicen -fPIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 
 # Establecer -Wl,-Bsymbolic para asegurar que los símbolos estáticos se resuelvan dentro de la biblioteca
 #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-Bsymbolic")
