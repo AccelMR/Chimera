@@ -103,7 +103,7 @@ BMPImage::create(uint32 width, uint32 height, BPP bpp)
 {
   if (width <= 0 || height <= 0)
   {
-    CH_LOG_ERROR(Utilities, StringUtils::format("Error: Invalid image size ({0}, {1})", width, height));
+    CH_LOG_ERROR(Utilities, "Error: Invalid image size ({0}, {1})", width, height);
     return;
   }
 
@@ -148,7 +148,7 @@ BMPImage::getPixel(uint32 x, uint32 y) const
 {
   if (x >= m_width || y >= m_height)
   {
-    CH_LOG_ERROR(Utilities, StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+    CH_LOG_ERROR(Utilities, chString::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
     return Color();
   }
 
@@ -165,7 +165,7 @@ BMPImage::setPixel(uint32 x, uint32 y, const Color &color)
 {
   if (x >= m_width || y >= m_height)
   {
-    CH_LOG_ERROR(Utilities, StringUtils::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
+    CH_LOG_ERROR(Utilities, chString::format("Error: Invalid pixel coordinates ({0}, {1})", x, y));
     return;
   }
 
@@ -205,7 +205,7 @@ BMPImage::decode(const Path &bmpPath)
   Vector<uint8> buffer = FileSystem::fastRead(bmpPath);
   if (buffer.empty())
   {
-    CH_LOG_ERROR(Utilities, StringUtils::format("Error: Unable to read file {0}", bmpPath.toString()));
+    CH_LOG_ERROR(Utilities, chString::format("Error: Unable to read file {0}", bmpPath.toString()));
     return false;
   }
 
@@ -250,7 +250,7 @@ BMPImage::encode(const Path& filename) const
   SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
   if (!file)
   {
-    CH_LOG_ERROR(Utilities, StringUtils::format("Error: Unable to create file {0}", filename.toString()));
+    CH_LOG_ERROR(Utilities, chString::format("Error: Unable to create file {0}", filename.toString()));
     return;
   }
 
@@ -337,7 +337,7 @@ BMPImage::bitBlt(const BMPImage& src,
         continue;
       }
 
-      //CH_LOG_DEBUG(StringUtils::format("Copying pixel ({0}, {1}) <- ({2}, {3})", x, y, srcX, srcY));
+      //CH_LOG_DEBUG(chString::format("Copying pixel ({0}, {1}) <- ({2}, {3})", x, y, srcX, srcY));
       setPixel(dstRectClamped.minPoint.x + x, dstRectClamped.minPoint.y + y, color);
     }
   }

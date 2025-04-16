@@ -251,15 +251,15 @@ Logger::writeLogMessage(const LogCategory& category, LogVerbosity verbosity,
       shortFile = shortFile.substr(lastSlash + 1);
     }
 
-    sourceLocation = StringUtils::format(" [{0}:{1}]", shortFile, line);
+    sourceLocation = chString::format(" [{0}:{1}]", shortFile, line);
 
     if (function != nullptr) {
-      sourceLocation += StringUtils::format(" {0}", function);
+      sourceLocation += chString::format(" {0}", function);
     }
   }
 
   String formattedMessage =
-      StringUtils::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
+      chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
                           category.getName(), sourceLocation, message);
 
   // Write to console if enabled
@@ -304,15 +304,15 @@ Logger::writeLogMessage(const LogCategory& category,
       shortFile = shortFile.substr(lastSlash + 1);
     }
 
-    sourceLocation = StringUtils::format(" [{0}:{1}]", shortFile, line);
+    sourceLocation = chString::format(" [{0}:{1}]", shortFile, line);
 
     if (function != nullptr) {
-      sourceLocation += StringUtils::format(" {0}", function);
+      sourceLocation += chString::format(" {0}", function);
     }
   }
 
   String formattedMessage =
-      StringUtils::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
+      chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
                           category.getName(), sourceLocation, std::move(message));
 
   // Write to console if enabled

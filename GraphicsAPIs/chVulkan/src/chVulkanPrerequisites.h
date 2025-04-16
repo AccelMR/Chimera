@@ -42,7 +42,7 @@ VulkanErrorException(const String& inDescription,
 static void 
 throwVkResult(VkResult result, const char* file, int line) {
   if (result != VK_SUCCESS) {
-    CH_EXCEPT(VulkanErrorException, StringUtils::format("Vulkan error: {0} at {1}:{2}", result, file, line));
+    CH_EXCEPT(VulkanErrorException, chString::format("Vulkan error: {0} at {1}:{2}", result, file, line));
   }
 }
 
@@ -60,7 +60,7 @@ vkFormatToChFormat(VkFormat format) {
     case VK_FORMAT_B8G8R8A8_SRGB:
       return Format::B8G8R8A8_SRGB;
     default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan format: {0}", format));
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", format));
   }
   return Format::Unknown;
 }
@@ -79,7 +79,7 @@ chFormatToVkFormat(Format format) {
     case Format::B8G8R8A8_SRGB:
       return VK_FORMAT_B8G8R8A8_SRGB;
     default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan format: {0}", static_cast<uint32>(format)));
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", static_cast<uint32>(format)));
   }
   return VK_FORMAT_UNDEFINED;
 }
@@ -96,7 +96,7 @@ vkTextureViewTypeToChTextureViewType(VkImageViewType viewType) {
     case VK_IMAGE_VIEW_TYPE_CUBE:
       return TextureViewType::ViewCube;
     default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan image view type: {0}", viewType));
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan image view type: {0}", viewType));
   }
   return TextureViewType::View1D;
 }
@@ -114,7 +114,7 @@ chTextureViewTypeToVkTextureViewType(TextureViewType viewType) {
       return VK_IMAGE_VIEW_TYPE_CUBE;
     default:
       CH_EXCEPT(VulkanErrorException, 
-                StringUtils::format("Unsupported Vulkan image view type: {0}", 
+                chString::format("Unsupported Vulkan image view type: {0}", 
                                     static_cast<uint32>(viewType)));
   }
   return VK_IMAGE_VIEW_TYPE_1D;
@@ -276,7 +276,7 @@ convertVertexFormatToVkFormat(VertexFormat format) {
     case VertexFormat::Short4Normalized:
       return VK_FORMAT_R16G16B16A16_SNORM;
     default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported vertex format: {0}", static_cast<uint32>(format)));
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported vertex format: {0}", static_cast<uint32>(format)));
   }
   return VK_FORMAT_UNDEFINED;
 }

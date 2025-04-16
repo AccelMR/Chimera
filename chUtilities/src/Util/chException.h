@@ -151,6 +151,20 @@ public:
     : Exception("RunTimeException", inDescription, inSource, inFile, inLine) {}
 };
 
+/**
+ * @brief	Exception for signaling an invalid parameters error, normally when a parameter
+ *        is invalid or outside of the specified range.
+ */
+class InvalidArgumentException : public Exception
+{
+public:
+  InvalidArgumentException(const String& inDescription,
+                           const String& inSource,
+                           const char* inFile,
+                           long inLine)
+    : Exception("InvalidArgumentException", inDescription, inSource, inFile, inLine) {}
+};
+
 
 #define CH_EXCEPT(type, desc)                                                   \
 {                                                                               \

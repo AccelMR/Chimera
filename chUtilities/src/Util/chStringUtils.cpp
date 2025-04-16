@@ -21,12 +21,12 @@ using std::tolower;
 
 /*
 */
-const String StringUtils::WHITESPACE = " \n\r\t\f\v";
+const String chString::WHITESPACE = " \n\r\t\f\v";
 
 /*
 */
 String
-StringUtils::replaceAllChars(const String& toReplace, const char& from, const char& to) {
+chString::replaceAllChars(const String& toReplace, const char& from, const char& to) {
   String output = toReplace;
   for(auto& c: output) {
     if (c == from) {
@@ -39,7 +39,7 @@ StringUtils::replaceAllChars(const String& toReplace, const char& from, const ch
 /*
 */
 String
-StringUtils::replaceAllSubStr(const String& toReplace, 
+chString::replaceAllSubStr(const String& toReplace, 
                               const String& from, 
                               const String& to) {
   String output = toReplace;
@@ -55,7 +55,7 @@ StringUtils::replaceAllSubStr(const String& toReplace,
 /*
 */
 Vector<String>
-StringUtils::splitString(const String& toSplit, const char& separator) {
+chString::splitString(const String& toSplit, const char& separator) {
   Vector<String> ret;
   String tempWord;
   for (auto& c: toSplit) {
@@ -78,7 +78,7 @@ StringUtils::splitString(const String& toSplit, const char& separator) {
 /*
 */
 Vector<String>
-StringUtils::splitString(const String& toSplit, const String& separator) {  
+chString::splitString(const String& toSplit, const String& separator) {  
   Vector<String> ret = {};
   SIZE_T prevPos = 0;
   SIZE_T currentPos = 0;
@@ -99,7 +99,7 @@ StringUtils::splitString(const String& toSplit, const String& separator) {
 /*
 */
 String
-StringUtils::join(const Vector<String>& toJoin, const String& separator) {
+chString::join(const Vector<String>& toJoin, const String& separator) {
   String out;
   for (auto& word : toJoin) {
     out += word;
@@ -113,7 +113,7 @@ StringUtils::join(const Vector<String>& toJoin, const String& separator) {
 /*
 */
 String
-StringUtils::toLower(const String& str) {
+chString::toLower(const String& str) {
   String ret = str;
   for (auto& c : ret) {
     c = std::tolower(c, std::locale());
@@ -124,7 +124,7 @@ StringUtils::toLower(const String& str) {
 /*
 */
 String
-StringUtils::toUpper( const String &str ) {
+chString::toUpper( const String &str ) {
   String ret = str;
   for (auto& c : ret) {
     c = std::toupper(c, std::locale());
@@ -135,7 +135,7 @@ StringUtils::toUpper( const String &str ) {
 /*
 */
 String
-StringUtils::lTrim(const String& str) {
+chString::lTrim(const String& str) {
   SIZE_T start = str.find_first_not_of(WHITESPACE);
   return (start == std::string::npos) ? "" : str.substr(start);
 }
@@ -143,7 +143,7 @@ StringUtils::lTrim(const String& str) {
 /*
 */
 String
-StringUtils::rTrim(const String& str) {
+chString::rTrim(const String& str) {
   SIZE_T end = str.find_last_not_of(WHITESPACE);
   return (end == std::string::npos) ? "" : str.substr(0, end + 1);
 }
@@ -151,7 +151,7 @@ StringUtils::rTrim(const String& str) {
 /*
 */
 String
-StringUtils::trim(const String& str) {
+chString::trim(const String& str) {
   return rTrim(lTrim(str));
 }
 

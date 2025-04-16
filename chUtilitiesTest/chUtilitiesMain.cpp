@@ -1237,19 +1237,19 @@ TEST_CASE("chUtilities - StringAndUTF8") {
 
     const String ReplaceTestString("Test-string-that-should-replace-all-hyphens");
     const String WellPerformedReplacing("Test string that should replace all hyphens");
-    REQUIRE(StringUtils::replaceAllChars(ReplaceTestString, '-', ' ') == WellPerformedReplacing);
+    REQUIRE(chString::replaceAllChars(ReplaceTestString, '-', ' ') == WellPerformedReplacing);
 
     const String ReplaceSubStringtest("Test that asdfg contains asdfg some asdfg substrings to erase");
     const String WellPerformedSubStrReplace("Test that sd contains sd some sd substrings to erase");
-    REQUIRE(StringUtils::replaceAllSubStr(ReplaceSubStringtest, "asdfg", "sd") == WellPerformedSubStrReplace);
+    REQUIRE(chString::replaceAllSubStr(ReplaceSubStringtest, "asdfg", "sd") == WellPerformedSubStrReplace);
 
     const String ToSplitChar("This-is-a-test-that-should-split-by-hyphens");
-    REQUIRE(StringUtils::splitString(ToSplitChar, '-').size() == 9);
+    REQUIRE(chString::splitString(ToSplitChar, '-').size() == 9);
 
     const String ToSplitString("This123is123a123test123that123should123split123by123hyphen");
-    REQUIRE(StringUtils::splitString(ToSplitString, "123").size() == 9);
+    REQUIRE(chString::splitString(ToSplitString, "123").size() == 9);
 
-    String Formated = StringUtils::format("hello world, {0}, {0}, {1}, {2}, {3}",
+    String Formated = chString::format("hello world, {0}, {0}, {1}, {2}, {3}",
         123, 1.23, "123", String("123"));
 
     const String Anwser("hello world, 123, 123, 1.230000, 123, 123");

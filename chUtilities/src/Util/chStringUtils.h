@@ -29,7 +29,7 @@ namespace chEngineSDK{
  * // Where replaced = "Ateststring";
  *"%{wks.location}/
  */
-class CH_UTILITY_EXPORT StringUtils
+class CH_UTILITY_EXPORT chString
 {
  public:
   
@@ -120,19 +120,19 @@ class CH_UTILITY_EXPORT StringUtils
   template<typename... Args>
   static String
   format(const String& _format, Args&&... args);
+  
+  template<typename Arg>
+  static String
+  format(const String& _format, Arg&& arg);
 
-  /** 
-   *   Converts a value to a string.
-   * 
-   * @param value
-   *    The value to be converted.
-   * 
-   * @return String
-   *    The new created string.
-   **/
+  FORCEINLINE static String 
+  format(const String& _format) {
+      return _format;
+  }
+
   template<typename T>
   static String
-  toString(const T& value);
+  toString(T&& value);
 
   /** 
    *   Creates a new all characters in a string to lower case.
@@ -192,53 +192,118 @@ class CH_UTILITY_EXPORT StringUtils
 
 /*
 */
-// template<typename... Args>
-// String
-// StringUtils::format(const String& _format, Args... args) {
-//   //static_assert((std::is_convertible_v<Args, const char*> && ...), "All arguments must be convertible to const char*");
-//   //return std::format(_format.c_str(), std::forward<Args>(args)...);
-//   std::stringstream ss;
-//   ((ss << args), ...);
-//   return ss.str();
-//   //chExternals::SFormat(_format.c_str(), std::forward<Args>(args)...);
-// }
-
-/*
-*/
-template<typename T>
+template <typename T>
 String
-StringUtils::toString(const T& value) {
-    std::ostringstream oss;
-    if constexpr (std::is_floating_point_v<T>) {
-        oss.precision(6); // Matches the default precision of std::to_string
-        oss << std::fixed; // Use fixed-point notation
+chString::toString(T&& value)
+{
+  // Para strings, permitir movimiento directo
+  if constexpr (std::is_same_v<std::decay_t<T>, String> ||
+                std::is_same_v<std::decay_t<T>, std::string>) {
+    if constexpr (std::is_lvalue_reference_v<T> && std::is_const_v<std::remove_reference_t<T>>) {
+      return value;
     }
+    else if constexpr (std::is_lvalue_reference_v<T>) {
+      return value;
+    }
+    else {
+      return std::move(value);
+    }
+  }
+  else if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
+    return std::to_string(static_cast<std::decay_t<T>>(value));
+  }
+  else {
+    std::ostringstream oss;
     oss << value;
     return oss.str();
+  }
 }
 
-/*
-*/
-template<typename... Args>
+template <typename... Args>
 String
-StringUtils::format(const String& _format, Args&&... args) {
-    Vector<std::string> arguments{toString(std::forward<Args>(args))...};
-    String result = _format;
-    std::regex placeholderRegex("\\{(\\d+)\\}");
-    std::smatch match;
+chString::format(const String& _format, Args&&... args) {
+  if (_format.find('{') == String::npos) {
+    return _format; 
+  }
 
-    while (std::regex_search(result, match, placeholderRegex)) {
-        size_t index = std::stoi(match[1].str());
-        if (index >= arguments.size()) {
-            throw std::out_of_range("Placeholder index out of range");
-        }
+  Array<String, sizeof...(Args)> arguments{toString(std::forward<Args>(args))...};
 
-        // Replace the placeholder with the corresponding argument
-        result.replace(match.position(0), match.length(0), arguments[index]);
+  SIZE_T estimatedSize = _format.size();
+  for (const auto& arg : arguments) {
+    estimatedSize += arg.size();
+  }
+
+  estimatedSize = std::min(estimatedSize, _format.size() * 3);
+
+  String result;
+  result.reserve(estimatedSize);
+
+  SIZE_T lastPos = 0;
+  SIZE_T pos = 0;
+
+  while ((pos = _format.find('{', lastPos)) != String::npos) {
+    result.append(_format, lastPos, pos - lastPos);
+
+    SIZE_T closePos = _format.find('}', pos);
+    if (closePos == String::npos) {
+      result.append(_format, pos, String::npos);
+      break;
     }
 
-    return result;
+    if (closePos == pos + 1) {
+      CH_EXCEPT(InvalidArgumentException, "Empty placeholder in format string");
+    }
+
+    SIZE_T index = 0;
+    bool validIndex = true;
+    for (SIZE_T i = pos + 1; i < closePos; ++i) {
+      char c = _format[i];
+      if (c >= '0' && c <= '9') {
+        index = index * 10 + (c - '0');
+      }
+      else {
+        validIndex = false;
+        break;
+      }
+    }
+
+    if (!validIndex) {
+      result.append(_format, pos, closePos - pos + 1);
+    }
+    else if (index >= arguments.size()) {
+      throw std::out_of_range("Placeholder index out of range");
+    }
+    else {
+      result.append(arguments[index]);
+    }
+
+    lastPos = closePos + 1;
+  }
+
+  if (lastPos < _format.size()) {
+    result.append(_format, lastPos, String::npos);
+  }
+
+  return result;
 }
 
+template<typename Arg>
+String 
+chString::format(const String& _format, Arg&& arg) {
+  SIZE_T pos = _format.find("{0}");
+  if (pos == String::npos) {
+    return _format;
+  }
+  
+  String argStr = toString(std::forward<Arg>(arg));
+  String result;
+  result.reserve(_format.size() + argStr.size());
+  
+  result.append(_format, 0, pos);
+  result.append(argStr);
+  result.append(_format, pos + 3, String::npos);
+  
+  return result;
+}
 }
 
