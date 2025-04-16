@@ -1,0 +1,44 @@
+---
+Language: Cpp
+# Use 2 spaces for indentation
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+# No indentation for namespaces
+NamespaceIndentation: None
+# Access modifiers are indented with 1 space
+AccessModifierOffset: -1
+# Braces on new lines for functions and classes
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterControlStatement: true
+  BeforeElse: true
+# Place the return type on a separate line
+AlwaysBreakAfterReturnType: All
+# Align parameters with first parameter when wrapped
+AlignAfterOpenBracket: Align
+# Line length limits
+ColumnLimit: 95
+# Space between condition and brace
+SpaceBeforeParens: ControlStatements
+SpaceAfterTemplateKeyword: true
+SpaceBeforeInheritanceColon: true
+# No spaces inside parentheses
+SpacesInParentheses: false
+# No spaces around pointers/references
+PointerAlignment: Left
+# Constructor initializer lists
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 1
+# Allow short if statements on a single line
+AllowShortIfStatementsOnASingleLine: true
+# Ensure proper spacing for operators
+SpaceBeforeAssignmentOperators: true
+# Always use braces for control statements
+InsertBraces: true
+---
