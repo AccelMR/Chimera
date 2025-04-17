@@ -35,8 +35,6 @@ class DataStream;
  * @brief Configuration options for log categories
  */
 struct LogCategoryConfig {
-  // Should this log category be compiled in non-debug builds
-  bool compileInNonDebug = true;
 
   // Default verbosity level
   LogVerbosity defaultVerbosity = LogVerbosity::Info;
@@ -263,7 +261,7 @@ getVerbosityName(LogVerbosity verbosity);
  */
 #define CH_LOG_DEFINE_CATEGORY(CategoryName, DefaultVerbosity)                                \
   chEngineSDK::LogCategory CategoryName(#CategoryName,                                        \
-                                        {true, chEngineSDK::LogVerbosity::DefaultVerbosity,   \
+                                        {chEngineSDK::LogVerbosity::DefaultVerbosity,   \
                                          chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 /**
@@ -271,7 +269,7 @@ getVerbosityName(LogVerbosity verbosity);
  */
 #define CH_LOG_DEFINE_CATEGORY_SHARED(CategoryName, DefaultVerbosity)                         \
   chEngineSDK::LogCategory CategoryName(#CategoryName,                                        \
-                                        {true, chEngineSDK::LogVerbosity::DefaultVerbosity,   \
+                                        {chEngineSDK::LogVerbosity::DefaultVerbosity,   \
                                          chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 /**
@@ -284,7 +282,7 @@ getVerbosityName(LogVerbosity verbosity);
  */
 #define CH_LOG_DECLARE_STATIC(CategoryName, DefaultVerbosity)                                 \
   static chEngineSDK::LogCategory CategoryName(                                               \
-      #CategoryName, {true, chEngineSDK::LogVerbosity::DefaultVerbosity,                      \
+      #CategoryName, {chEngineSDK::LogVerbosity::DefaultVerbosity,                      \
                       chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 // Actual logging macros

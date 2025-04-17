@@ -246,7 +246,7 @@ Logger::writeLogMessage(const LogCategory& category,
   }
 
   String formattedMessage =
-      chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
+      chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}", timestamp, verbosityStr,
                        category.getName(), sourceLocation, message);
 
   // Write to console if enabled
@@ -297,7 +297,7 @@ Logger::writeLogMessage(const LogCategory& category, \
   }
 
   String formattedMessage =
-      chString::format("[{0}] [{1}] [{2}]{3}: {4}", timestamp, verbosityStr,
+      chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}", timestamp, verbosityStr,
                        category.getName(), sourceLocation, std::move(message));
 
   // Write to console if enabled
