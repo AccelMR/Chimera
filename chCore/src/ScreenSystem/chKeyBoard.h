@@ -16,7 +16,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK{
-enum class KEYBOARD_STATE : uint32
+enum class KeyBoardState : uint32
 {
   UP = 0,
   DOWN,
@@ -26,7 +26,7 @@ enum class KEYBOARD_STATE : uint32
   NONE
 };
 
-enum class KEY_MODIFIER : uint16
+enum class KeyBoardModifier : uint16
 {
   NONE = 0,
   LSHIFT    = 1 << 0,
@@ -156,5 +156,26 @@ enum class Key : uint32
 };
 } // namespace chKeyBoard
 
+enum class MouseButton : uint16 {
+  Left = 0,
+  Right,
+  Middle,
+  MouseButton4,
+  MouseButton5,
+  MouseButton6,
+  MouseButton7,
+  MouseButton8,
+
+  MouseButtonsMax
+};
+
+enum class MouseState : uint16 {
+  Up = 0,
+  Down,
+  Pressed,
+  Released,
+
+  NoneMouse
+};
 } // namespace chEngineSDK
 

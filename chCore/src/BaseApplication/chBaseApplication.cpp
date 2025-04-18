@@ -192,7 +192,7 @@ BaseApplication::run() {
 
   HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
     [&](const KeyBoardData& keyData) {
-      if (keyData.hasModifier(KEY_MODIFIER::LSHIFT)) {
+      if (keyData.hasModifier(KeyBoardModifier::LSHIFT)) {
         CH_LOG_INFO(BaseApp, "Key W down with shift");
       }
     });
@@ -219,11 +219,11 @@ BaseApplication::run() {
     // Render the frame.
     render(deltaTime);
 
-    eventDispatcher.updateKeyboardState(); 
+    eventDispatcher.updateStates();
   }
 }
 
-/*
+/*`
 */
 void
 BaseApplication::render(const float deltaTime){

@@ -54,6 +54,7 @@ float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
 Radian g_halfFOV(Degree(45.0f) * .5f);
 float g_cameraSpeed = 0.01f;
+float g_cameraRotationSpeed = 0.01f;
 
 /*
 */
@@ -275,65 +276,44 @@ Renderer::initializeRenderResources() {
   });
 
   HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
-    bool bCameraMovement = false;
-    if (keydata.key == Key::W) {
-      cameraPosition += Vector3::FORWARD * g_cameraSpeed;
-      lookAtPos += Vector3::FORWARD * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::S) {
-      cameraPosition -= Vector3::FORWARD * g_cameraSpeed;
-      lookAtPos -= Vector3::FORWARD * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::A) {
-      cameraPosition -= Vector3::RIGHT * g_cameraSpeed;
-      lookAtPos -= Vector3::RIGHT * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::D) {
-      cameraPosition += Vector3::RIGHT * g_cameraSpeed;
-      lookAtPos += Vector3::RIGHT * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::Q) {
-      cameraPosition += Vector3::UP * g_cameraSpeed;
-      lookAtPos += Vector3::UP * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::E) {
-      cameraPosition -= Vector3::UP * g_cameraSpeed;
-      lookAtPos -= Vector3::UP * g_cameraSpeed;
-      bCameraMovement = true;
-    }
-    else if (keydata.key == Key::R) {
-      cameraPosition = Vector3(-5.0f, 0.0f, 0.0f);
-      lookAtPos = Vector3::ZERO;
-      bCameraMovement = true;
-    }
+    Vector3 cameraDir = (lookAtPos - cameraPosition).getNormalized(); // Adjusted to align with forward direction
+    Vector3 right = cameraDir.cross(Vector3::UP).getNormalized(); // Corrected to align with right direction
 
-    if (bCameraMovement) {
-      TranslationMatrix translationMatrix(cameraPosition);
-      CH_LOG_INFO(RendererSystem, "Camera position: {0}, {1}, {2}", 
-        cameraPosition.x,
-        cameraPosition.y,
-        cameraPosition.z);
-
-      CH_LOG_INFO(RendererSystem, "LookAt position: {0}, {1}, {2}", 
-          lookAtPos.x,
-          lookAtPos.y,
-          lookAtPos.z);
-      projectionViewMatrix.viewMatrix = LookAtMatrix(cameraPosition, 
-                                                     lookAtPos,
-                                                     Vector3::UP).getTransposed();
+    switch (keydata.key) {
+      case Key::W: cameraPosition += cameraDir * g_cameraSpeed; lookAtPos += cameraDir * g_cameraSpeed; break; // Move forward
+      case Key::S: cameraPosition -= cameraDir * g_cameraSpeed; lookAtPos -= cameraDir * g_cameraSpeed; break; // Move backward
+      case Key::A: cameraPosition -= right * g_cameraSpeed; lookAtPos -= right * g_cameraSpeed; break; // Move left
+      case Key::D: cameraPosition += right * g_cameraSpeed; lookAtPos += right * g_cameraSpeed; break; // Move right
+      case Key::Q: cameraPosition += Vector3::UP * g_cameraSpeed; lookAtPos += Vector3::UP * g_cameraSpeed; break; // Move up
+      case Key::E: cameraPosition -= Vector3::UP * g_cameraSpeed; lookAtPos -= Vector3::UP * g_cameraSpeed; break; // Move down
+      case Key::R: cameraPosition = Vector3(-5.0f, 0.0f, 0.0f); lookAtPos = Vector3::ZERO; break;
+      case Key::P : {
+        // Print camera position and lookAtPos
+        CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+        CH_LOG_INFO(RendererSystem, "LookAt Position: ({0}, {1}, {2})", lookAtPos.x, lookAtPos.y, lookAtPos.z);
+        break;
       }
+      default: return;
+    }
+
+    projectionViewMatrix.viewMatrix = LookAtMatrix(cameraPosition, lookAtPos, Vector3::UP).getTransposed();
   });
 
-  // HEvent listenMouse = eventDispatcher.OnMouseMoved.connect([&](const MouseData& mouseData) {
-  //   CH_LOG_INFO(RendererSystem, "Mouse position: {0}, {1}", 
-  //     mouseData.x,
-  //     mouseData.y);
-  // });
+  HEvent listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
+    if (!eventDispatcher.isMouseButtonDown(MouseButton::Right)) {
+      return;
+    }
+
+    if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
+      //CH_LOG_INFO(RendererSystem, "Mouse moved: ({0}, {1})", mouseData.deltaX, mouseData.deltaY);
+      RotationMatrix rotationMatrix(Rotator(
+        Degree(-mouseData.deltaX * g_cameraRotationSpeed),  // Yaw (rotation around Z axis)
+        Degree(0.0f),                     // Pitch (rotation around X axis - not used)
+        Degree(mouseData.deltaY * g_cameraRotationSpeed)   // Roll (rotation around Y axis)
+    ));
+      projectionViewMatrix.projectionMatrix *= rotationMatrix;
+    }
+  });
 }
 
 /*

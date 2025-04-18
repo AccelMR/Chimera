@@ -22,14 +22,15 @@ namespace chEngineSDK{
  * Description: 
  *     Platform event types used along chimera.
  */
-enum class PLATFORM_EVENT_TYPE {
-  kNONE = 0,
-  kMOUSE_MOVE,
-  kKEYBOARD,
-  kCLOSE,
-  kRESIZE,
+enum class PlatformEventType {
+  NonePlatformEvent = 0,
+  MouseMove,
+  MouseButton,
+  Keyboard,
+  Close,
+  Resize,
 
-  kCOUNT
+  Count
 };
 
 
@@ -44,23 +45,26 @@ class CH_CORE_EXPORT DisplayEvent
  /*
   *   Default constructor
   */
-  DisplayEvent(PLATFORM_EVENT_TYPE _type)
+  DisplayEvent(PlatformEventType _type)
     : m_type(_type), m_data(std::monostate{}) {}
 
-  DisplayEvent(PLATFORM_EVENT_TYPE _type, MouseMoveData mouseData)
+  DisplayEvent(PlatformEventType _type, MouseMoveData mouseData)
     : m_type(_type), m_data(std::move(mouseData)) { }
 
-  DisplayEvent(PLATFORM_EVENT_TYPE _type, KeyBoardData keyBoardData)
+  DisplayEvent(PlatformEventType _type, KeyBoardData keyBoardData)
     : m_type(_type), m_data(std::move(keyBoardData)) { }
 
-  DisplayEvent(PLATFORM_EVENT_TYPE _type, ResizeData resizeData)
+  DisplayEvent(PlatformEventType _type, ResizeData resizeData)
     : m_type(_type), m_data(std::move(resizeData)) { } 
+
+  DisplayEvent(PlatformEventType _type, MouseButtonData mouseButtonData)
+    : m_type(_type), m_data(std::move(mouseButtonData)) { }
  /*
   *  Default destructor.
   */
   ~DisplayEvent() = default;
 
-  FORCEINLINE PLATFORM_EVENT_TYPE
+  FORCEINLINE PlatformEventType
   getType() const{ return m_type; }
 
   FORCEINLINE const DisplayEventData&
@@ -70,7 +74,7 @@ class CH_CORE_EXPORT DisplayEvent
   getTypeAsString() const;
 
  private:
-  PLATFORM_EVENT_TYPE m_type;
+  PlatformEventType m_type;
   DisplayEventData m_data;
 };
 
@@ -80,19 +84,22 @@ String
 DisplayEvent::getTypeAsString() const {
   switch (m_type)
   {
-  case PLATFORM_EVENT_TYPE::kMOUSE_MOVE:
+  case PlatformEventType::MouseMove:
     return "Mouse Move";
     break;
-  case PLATFORM_EVENT_TYPE::kKEYBOARD:
+  case PlatformEventType::Keyboard:
     return "Key Board";
     break;
-  case PLATFORM_EVENT_TYPE::kCLOSE:
+  case PlatformEventType::Close:
     return "Close";
     break;
-  case PLATFORM_EVENT_TYPE::kRESIZE:
+  case PlatformEventType::Resize:
     return "Resize";
     break;
-  case PLATFORM_EVENT_TYPE::kNONE:
+  case PlatformEventType::MouseButton:
+    return "Mouse Button";
+    break;
+  case PlatformEventType::NonePlatformEvent:
   default:
     return "None";
     break;

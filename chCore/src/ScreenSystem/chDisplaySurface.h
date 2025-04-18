@@ -70,7 +70,7 @@ struct CH_CORE_EXPORT ScreenDescriptor {
  *      DisplayEvent event = Eventhandler->frontPop();
  *      switch (event.getType())
  *      {
- *      case PLATFORM_EVENT_TYPE::kCLOSE:
+ *      case PlatformEventType::Close:
  *        screen->close();
  *        running = false;
  *      break;

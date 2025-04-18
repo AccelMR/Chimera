@@ -38,21 +38,21 @@ mouseMove(DisplayEventHandle* seh, HWND hwnd, LPARAM lParam) {
 
   data.x = static_cast<uint32>(area.left <= x && x <= area.right ? x - area.left : 0xFFFFFFFF);
   data.y = static_cast<uint32>(area.top <= y && y <= area.bottom ? y - area.top : 0xFFFFFFFF);
-  data.screenx = static_cast<uint32>(x);
-  data.screeny = static_cast<uint32>(y);
-  data.deltax = static_cast<int32>(x - prevMouseX);
-  data.deltay = static_cast<int32>(y - prevMouseY);
+  data.screenX = static_cast<uint32>(x);
+  data.screenY = static_cast<uint32>(y);
+  data.deltaX = static_cast<int32>(x - prevMouseX);
+  data.deltaY = static_cast<int32>(y - prevMouseY);
 
   prevMouseX = static_cast<uint32>(x);
   prevMouseY = static_cast<uint32>(y);
 
-  seh->addInputEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, data));
+  seh->addInputEvent(DisplayEvent(PlatformEventType::MouseMove, data));
 }
 
 /*
 */
 void
-keyboardButtonChange(DisplayEventHandle* seh, WPARAM wParam, PLATFORM_EVENT_TYPE type) {
+keyboardButtonChange(DisplayEventHandle* seh, WPARAM wParam, PlatformEventType type) {
   KeyBoardData kbData;
   switch (wParam) {
   case VK_ESCAPE:
@@ -334,7 +334,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
   switch (msg)  {
   case WM_CLOSE:
     if (nullptr != screenEventHandler) {
-      screenEventHandler->addSystemEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kCLOSE));
+      screenEventHandler->addSystemEvent(DisplayEvent(PlatformEventType::Close));
     }
     break;
 
@@ -348,14 +348,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
   case WM_CHAR:
   case WM_SYSKEYDOWN:
     if (nullptr != screenEventHandler) {
-      keyboardButtonChange(screenEventHandler, wParam, PLATFORM_EVENT_TYPE::kKEY_DOWN);
+      keyboardButtonChange(screenEventHandler, wParam, PlatformEventType::kKEY_DOWN);
     }
     break;
 
   case WM_KEYUP:
   case WM_SYSKEYUP:
     if (nullptr != screenEventHandler) {
-      keyboardButtonChange(screenEventHandler, wParam, PLATFORM_EVENT_TYPE::kKEY_UP);
+      keyboardButtonChange(screenEventHandler, wParam, PlatformEventType::kKEY_UP);
     }
     break;
 
@@ -364,7 +364,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ResizeData resizeData;
       resizeData.width = static_cast<uint32>(LOWORD(lParam));
       resizeData.height = static_cast<uint32>(HIWORD(lParam));
-      screenEventHandler->addSystemEvent(DisplayEvent(PLATFORM_EVENT_TYPE::kRESIZE, resizeData));    
+      screenEventHandler->addSystemEvent(DisplayEvent(PlatformEventType::Resize, resizeData));    
     }
     break;
 

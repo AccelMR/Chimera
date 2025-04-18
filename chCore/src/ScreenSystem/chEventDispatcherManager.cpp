@@ -44,6 +44,17 @@ EventDispatcherManager::EventDispatcherManager()
   // Initialize the keyboard state
   m_currentKeyboardState.reset();
   m_previousKeyboardState.reset();
+
+  for (uint32 i = 0; i < static_cast<uint32>(MouseButton::MouseButtonsMax); ++i) {
+    MouseButton button = static_cast<MouseButton>(i);
+    MouseButtonDownCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
+    MouseButtonPressedCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
+    MouseButtonUpCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
+  }
+  
+  // Initialize the mouse state
+  m_currentMouseState.reset();
+  m_previousMouseState.reset();
 }
 
 /*
@@ -54,11 +65,11 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   const DisplayEventData& eventData = sEvent.getData();
   switch (sEvent.getType())
   {
-  case PLATFORM_EVENT_TYPE::kCLOSE:
+  case PlatformEventType::Close:
     OnClose();
     break;
 
-  case PLATFORM_EVENT_TYPE::kRESIZE:
+  case PlatformEventType::Resize:
   {
     if (const auto& resizeData = get_if<ResizeData>(&eventData)) {
       OnResize(resizeData->width, resizeData->height);
@@ -70,7 +81,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
-  case PLATFORM_EVENT_TYPE::kMOUSE_MOVE:
+  case PlatformEventType::MouseMove:
   {
     if (const auto& mouseData = get_if<MouseMoveData>(&eventData)) {
       OnMouseMove(*mouseData);
@@ -82,7 +93,19 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
-  case PLATFORM_EVENT_TYPE::kKEYBOARD:
+  case PlatformEventType::MouseButton:
+  {
+    if (const auto& buttonData = get_if<MouseButtonData>(&eventData)) {
+      dispatchMouseButtonEvent(*buttonData);
+    }
+    else {
+      CH_LOG_DEBUG(InputSystem, "Mouse button data is not valid.");
+      dispatched = false;
+    }
+  }
+  break;
+
+  case PlatformEventType::Keyboard:
   {
     if (const auto& keyData = get_if<KeyBoardData>(&eventData)) {
       dispatchKeyboardEvent(*keyData);
@@ -94,7 +117,7 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
-  case PLATFORM_EVENT_TYPE::kNONE:
+  case PlatformEventType::NonePlatformEvent:
   default:
     dispatched = false;
   }
@@ -112,18 +135,18 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
   }
 
   switch (keyData.state) {
-    case KEYBOARD_STATE::PRESSED:
+    case KeyBoardState::PRESSED:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
       KeyPressedCallbacks.at(keyData.key)(keyData);
       OnKeyPressed(keyData);
       break;
-    case KEYBOARD_STATE::DOWN:
+    case KeyBoardState::DOWN:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
       KeyDownCallbacks.at(keyData.key)(keyData);
       OnKeyDown(keyData);
       break;
 
-    case KEYBOARD_STATE::UP:
+    case KeyBoardState::UP:
       m_currentKeyboardState.reset(static_cast<uint32_t>(keyData.key));
       KeyUpCallbacks.at(keyData.key)(keyData);
       OnKeyUp(keyData);
@@ -131,6 +154,34 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
 
     default:
       CH_LOG_DEBUG(InputSystem, "Invalid key state.");
+      break;
+  }
+}
+
+/*
+*/
+void 
+EventDispatcherManager::dispatchMouseButtonEvent(const MouseButtonData& buttonData) {
+  if (buttonData.button >= MouseButton::MouseButtonsMax) {
+    CH_LOG_DEBUG(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(buttonData.button));
+    return;
+  }
+  
+  switch (buttonData.state) {
+    case MouseState::Pressed:
+      m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
+      MouseButtonPressedCallbacks.at(buttonData.button)(buttonData);
+      break;
+    case MouseState::Down:
+      m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
+      MouseButtonDownCallbacks.at(buttonData.button)(buttonData);
+      break;
+    case MouseState::Up:
+      m_currentMouseState.reset(static_cast<uint32_t>(buttonData.button));
+      MouseButtonUpCallbacks.at(buttonData.button)(buttonData);
+      break;
+    default:
+      CH_LOG_DEBUG(InputSystem, "Invalid mouse button state.");
       break;
   }
 }

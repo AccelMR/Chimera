@@ -29,8 +29,8 @@ struct MouseMoveData
                 int32 _deltay)
     : x(_x), 
       y(_y), 
-      screenx(_screenx), screeny(_screeny), 
-      deltax(_deltax), deltay(_deltay) {}
+      screenX(_screenx), screenY(_screeny), 
+      deltaX(_deltax), deltaY(_deltay) {}
 
   // Current x position relative to active window
   uint32 x;
@@ -39,36 +39,49 @@ struct MouseMoveData
   uint32 y;
 
   // Current global x position
-  uint32 screenx;
+  uint32 screenX;
 
   // Current in global y position
-  uint32 screeny;
+  uint32 screenY;
 
   // Change in x relative to previous event, used for FPS motion
-  int32 deltax;
+  int32 deltaX;
 
   // Change in y relative to previous event, used for FPS motion
-  int32 deltay;
+  int32 deltaY;
 
 };
 
 struct KeyBoardData {
   KeyBoardData() = default;
   KeyBoardData(chKeyBoard::Key _key, 
-                KEYBOARD_STATE _state, 
+                KeyBoardState _state, 
                 uint16 _modifiers)
     : key(_key), 
       state(_state), 
       modifiers(_modifiers) {}
 
   chKeyBoard::Key key;
-  KEYBOARD_STATE state;
+  KeyBoardState state;
   uint16 modifiers;
 
-  bool hasModifier(KEY_MODIFIER mod) const {
+  bool hasModifier(KeyBoardModifier mod) const {
     return (modifiers & static_cast<uint16>(mod) != 0);
   }
 
+};
+
+struct MouseButtonData{
+  MouseButtonData() = delete;
+  MouseButtonData(MouseButton _button,
+                  MouseState _state,
+                  uint32 _x, uint32 _y)
+    : button(_button), state(_state), x(_x), y(_y) {}
+
+  MouseButton button;
+  MouseState state;
+  uint32 x;
+  uint32 y;
 };
 
 struct ResizeData {
@@ -79,6 +92,7 @@ struct ResizeData {
 using DisplayEventData = std::variant<std::monostate,
                                       MouseMoveData,
                                       KeyBoardData,
-                                      ResizeData>;
+                                      ResizeData,
+                                      MouseButtonData>;
 
 } // namespace chEngineSDK

@@ -52,7 +52,7 @@ namespace chEngineSDK {
  *      DisplayEvent event = Eventhandler->frontPop();
  *      switch (event.getType())
  *      {
- *      case PLATFORM_EVENT_TYPE::kCLOSE:
+ *      case PlatformEventType::Close:
  *        screen->close();
  *        running = false;
  *      break;
@@ -133,6 +133,10 @@ class CH_CORE_EXPORT DisplayEventHandle
 
   uint32 m_previousWidth;
   uint32 m_previousHeight;
+
+  int32 m_previousMouseX = 0;
+  int32 m_previousMouseY = 0;
+  bool m_firstMouseMove = true;
 
   ResizeDebouncer m_resizeBound;
 };

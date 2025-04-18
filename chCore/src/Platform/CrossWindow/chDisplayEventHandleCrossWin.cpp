@@ -25,15 +25,15 @@ translateKey(::xwin::Key key) {
   return static_cast<chEngineSDK::chKeyBoard::Key>(key);
 }
 
-FORCEINLINE chEngineSDK::KEYBOARD_STATE
+FORCEINLINE chEngineSDK::KeyBoardState
 translateKeyState(::xwin::ButtonState state) {
   switch (state) {
     case ::xwin::ButtonState::Pressed:
-      return chEngineSDK::KEYBOARD_STATE::PRESSED;
+      return chEngineSDK::KeyBoardState::PRESSED;
     case ::xwin::ButtonState::Released:
-      return chEngineSDK::KEYBOARD_STATE::RELEASED;
+      return chEngineSDK::KeyBoardState::RELEASED;
     default:
-      return chEngineSDK::KEYBOARD_STATE::NONE;
+      return chEngineSDK::KeyBoardState::NONE;
   }
 }
 
@@ -41,16 +41,16 @@ FORCEINLINE uint16_t
 translateKeyModifier(::xwin::ModifierState modifier) {
   uint16_t result = 0;
   if (modifier.ctrl) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LCTRL);
+    result |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LCTRL);
   }
   if (modifier.alt) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LALT);
+    result |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LALT);
   }
   if (modifier.shift) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LSHIFT);
+    result |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LSHIFT);
   }
   if (modifier.meta) {
-    result |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LMETA);
+    result |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LMETA);
   }
   return result;
 }
@@ -67,29 +67,29 @@ processActiveKeys(std::function<void(chEngineSDK::KeyBoardData)> addEvent) {
   // Verificar el estado actual de los modificadores
   if (dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::LShift) || 
       dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::RShift)) {
-      modifiers |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LSHIFT);
+      modifiers |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LSHIFT);
   }
   
   if (dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::LControl) || 
       dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::RControl)) {
-      modifiers |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LCTRL);
+      modifiers |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LCTRL);
   }
   
   if (dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::LAlt) || 
       dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::RAlt)) {
-      modifiers |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LALT);
+      modifiers |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LALT);
   }
   
   if (dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::LMod) || 
       dispatcher.isKeyDown(chEngineSDK::chKeyBoard::Key::RMod)) {
-      modifiers |= static_cast<uint16_t>(chEngineSDK::KEY_MODIFIER::LMETA);
+      modifiers |= static_cast<uint16_t>(chEngineSDK::KeyBoardModifier::LMETA);
   }
   
   for (const auto& [keycode, key] : activeKeys) {
       if (dispatcher.isKeyDown(key)) {
           chEngineSDK::KeyBoardData keyData;
           keyData.key = key;
-          keyData.state = chEngineSDK::KEYBOARD_STATE::PRESSED;
+          keyData.state = chEngineSDK::KeyBoardState::PRESSED;
           keyData.modifiers = modifiers; 
           addEvent(keyData);
       }
@@ -244,7 +244,7 @@ DisplayEventHandle::DisplayEventHandle(uint32 width, uint32 height) :
 #elif USING(CH_PLATFORM_LINUX)
   m_platformPtr = nullptr;
   m_resizeBound.setCallback([this](uint32 width, uint32 height) {
-    addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData(width, height));
+    addEvent(PlatformEventType::Resize, ResizeData(width, height));
   });
 #endif //USING(CH_PLATFORM_LINUX)
 }
@@ -299,24 +299,24 @@ DisplayEventHandle::update() {
       break;
 
       case ::xwin::EventType::MouseMove:
-        addEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, MouseMoveData(
+        addEvent(PlatformEventType::MouseMove, MouseMoveData(
                  event.data.mouseMove.x, 
                  event.data.mouseMove.y,
-                 event.data.mouseMove.screenx,
-                 event.data.mouseMove.screeny,
-                 event.data.mouseMove.deltax,
-                 event.data.mouseMove.deltay));
+                 event.data.mouseMove.screenX,
+                 event.data.mouseMove.screenY,
+                 event.data.mouseMove.deltaX,
+                 event.data.mouseMove.deltaY));
       break;
 
       case ::xwin::EventType::Keyboard:
-        addEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, KeyBoardData(
+        addEvent(PlatformEventType::Keyboard, KeyBoardData(
                 translateKey(event.data.keyboard. key),
                 translateKeyState(event.data.keyboard.state),
                 translateKeyModifier(event.data.keyboard.modifiers)));
       break;
 
       case ::xwin::EventType::Close:
-        addEvent(PLATFORM_EVENT_TYPE::kCLOSE);
+        addEvent(PlatformEventType::Close);
       break;
 
       default:
@@ -330,16 +330,16 @@ DisplayEventHandle::update() {
   auto getModifier = [](xcb_key_press_event_t* keyEvent) -> uint16{
     uint16 modifiers = 0;
     if (keyEvent->state & XCB_MOD_MASK_SHIFT){
-      modifiers |= static_cast<uint16>(KEY_MODIFIER::LSHIFT);
+      modifiers |= static_cast<uint16>(KeyBoardModifier::LSHIFT);
     }
     if (keyEvent->state & XCB_MOD_MASK_CONTROL){
-      modifiers |= static_cast<uint16>(KEY_MODIFIER::LCTRL);
+      modifiers |= static_cast<uint16>(KeyBoardModifier::LCTRL);
     }
     if (keyEvent->state & XCB_MOD_MASK_1) {
-      modifiers |= static_cast<uint16>(KEY_MODIFIER::LALT);
+      modifiers |= static_cast<uint16>(KeyBoardModifier::LALT);
     }
     if (keyEvent->state & XCB_MOD_MASK_4) {
-      modifiers |= static_cast<uint16>(KEY_MODIFIER::LMETA);
+      modifiers |= static_cast<uint16>(KeyBoardModifier::LMETA);
     }
     
     return modifiers;
@@ -366,25 +366,13 @@ DisplayEventHandle::update() {
             if (!dispatcher.isKeyDown(key)) {
                 KeyBoardData keyData;
                 keyData.key = key;
-                keyData.state = KEYBOARD_STATE::DOWN;
+                keyData.state = KeyBoardState::DOWN;
                 keyData.modifiers = getModifier(keyEvent);
 
-                addEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, keyData);
+                addEvent(PlatformEventType::Keyboard, keyData);
             }
             break;
         }
-
-        case XCB_BUTTON_RELEASE:
-        {
-          xcb_button_release_event_t* buttonEvent = reinterpret_cast<xcb_button_release_event_t*>(event);
-          // if (buttonEvent->detail == XCB_BUTTON_INDEX_2 && isResizing) {
-          //   isResizing = false;
-          //   addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData(
-          //     static_cast<uint32>(buttonEvent->event_x),
-          //     static_cast<uint32>(buttonEvent->event_y)));
-          // }
-        }
-        break;
         
         case XCB_KEY_RELEASE: {
             xcb_key_release_event_t* keyEvent = reinterpret_cast<xcb_key_release_event_t*>(event);
@@ -392,14 +380,15 @@ DisplayEventHandle::update() {
             auto it = activeKeys.find(keyEvent->detail);
             if (it != activeKeys.end()) {
                 chKeyBoard::Key key = it->second;
-                activeKeys.erase(it);
+                activeKeys.erase(
+                  it);
                 
                 KeyBoardData keyData;
                 keyData.key = key;
-                keyData.state = KEYBOARD_STATE::UP;
+                keyData.state = KeyBoardState::UP;
                 keyData.modifiers = getModifier(keyEvent);
 
-                addEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, keyData);
+                addEvent(PlatformEventType::Keyboard, keyData);
             }
             break;
         }
@@ -407,18 +396,87 @@ DisplayEventHandle::update() {
           
           case XCB_CLIENT_MESSAGE: {
             xcb_client_message_event_t* clientMsg = reinterpret_cast<xcb_client_message_event_t*>(event);
-            addEvent(PLATFORM_EVENT_TYPE::kCLOSE);
+            addEvent(PlatformEventType::Close);
+            break;
+          }
+
+          case XCB_BUTTON_PRESS: {
+            xcb_button_press_event_t* buttonEvent = reinterpret_cast<xcb_button_press_event_t*>(event);
+            
+            MouseButton button;
+            switch (buttonEvent->detail) {
+              case 1: button = MouseButton::Left; break;
+              case 2: button = MouseButton::Middle; break;
+              case 3: button = MouseButton::Right; break;
+              case 4: button = MouseButton::MouseButton4; break;
+              case 5: button = MouseButton::MouseButton5; break;
+              default: continue; // Ignorar botones desconocidos
+            }
+            
+            // Si el botón es 4 o 5, podría ser la rueda del mouse (scroll)
+            // En ese caso, podrías generar un evento de scroll en lugar de un clic
+            if (buttonEvent->detail == 4 || buttonEvent->detail == 5) {
+              // Implementar manejo de la rueda del mouse si lo necesitas
+            } else {
+              // Es un clic normal
+              addEvent(PlatformEventType::MouseButton, MouseButtonData(
+                       button,
+                       MouseState::Down,
+                       static_cast<uint32>(buttonEvent->event_x),
+                       static_cast<uint32>(buttonEvent->event_y)));
+            }
+            break;
+          }
+          
+          case XCB_BUTTON_RELEASE: {
+            xcb_button_release_event_t* buttonEvent = reinterpret_cast<xcb_button_release_event_t*>(event);
+            
+            MouseButton button;
+            switch (buttonEvent->detail) {
+              case 1: button = MouseButton::Left; break;
+              case 2: button = MouseButton::Middle; break;
+              case 3: button = MouseButton::Right; break;
+              case 4: button = MouseButton::MouseButton4; break;
+              case 5: button = MouseButton::MouseButton5; break;
+              default: continue; // Ignorar botones desconocidos
+            }
+            
+            // Solo procesar eventos reales de botón (ignorar rueda del mouse)
+            if (buttonEvent->detail < 4) {
+              addEvent(PlatformEventType::MouseButton, MouseButtonData(
+                       button,
+                       MouseState::Up,
+                       static_cast<uint32>(buttonEvent->event_x),
+                       static_cast<uint32>(buttonEvent->event_y)));
+            }
             break;
           }
           
           case XCB_MOTION_NOTIFY: {
             xcb_motion_notify_event_t* motionEvent = reinterpret_cast<xcb_motion_notify_event_t*>(event);
-            addEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, MouseMoveData(
-                     static_cast<uint32>(motionEvent->event_x),
-                     static_cast<uint32>(motionEvent->event_y),
+  
+            int32 currentX = static_cast<int32>(motionEvent->event_x);
+            int32 currentY = static_cast<int32>(motionEvent->event_y);
+            
+            int32 deltaX = 0;
+            int32 deltaY = 0;
+            
+            if (!m_firstMouseMove) {
+              deltaX = currentX - m_previousMouseX;
+              deltaY = currentY - m_previousMouseY;
+            } else {
+              m_firstMouseMove = false;
+            }
+            
+            m_previousMouseX = currentX;
+            m_previousMouseY = currentY;
+            
+            addEvent(PlatformEventType::MouseMove, MouseMoveData(
+                     static_cast<uint32>(currentX),
+                     static_cast<uint32>(currentY),
                      static_cast<uint32>(motionEvent->root_x),
                      static_cast<uint32>(motionEvent->root_y),
-                     0, 0));
+                     deltaX, deltaY));
             break;
           }
           
@@ -427,7 +485,7 @@ DisplayEventHandle::update() {
             if (configEvent->width != m_previousWidth || configEvent->height != m_previousHeight) {
               m_previousWidth = configEvent->width;
               m_previousHeight = configEvent->height;
-              // addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData{
+              // addEvent(PlatformEventType::Resize, ResizeData{
               //   static_cast<uint32>(configEvent->width),
               //   static_cast<uint32>(configEvent->height)});
               m_resizeBound.onResize(
@@ -444,7 +502,7 @@ DisplayEventHandle::update() {
   }
 
   processActiveKeys([&](KeyBoardData keyData) {
-    addEvent(PLATFORM_EVENT_TYPE::kKEYBOARD, keyData);
+    addEvent(PlatformEventType::Keyboard, keyData);
   });
 #endif //USING(CH_PLATFORM_LINUX)
 

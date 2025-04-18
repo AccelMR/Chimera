@@ -181,8 +181,62 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    *  Update the keyboard state to the current frame.
   */
   FORCEINLINE void
-  updateKeyboardState() {
+  updateStates() {
     m_previousKeyboardState = m_currentKeyboardState;
+    m_previousMouseState = m_currentMouseState;
+  }
+
+  FORCEINLINE HEvent
+  listenMouseButtonDown(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
+    return MouseButtonDownCallbacks.at(button).connect(callback);
+  }
+  
+  FORCEINLINE HEvent
+  listenMouseButtonUp(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
+    return MouseButtonUpCallbacks.at(button).connect(callback);
+  }
+  
+  FORCEINLINE HEvent
+  listenMouseButtonPressed(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
+    return MouseButtonPressedCallbacks.at(button).connect(callback);
+  }
+  
+  NODISCARD FORCEINLINE bool
+  isMouseButtonDown(MouseButton button) const {
+    if (button >= MouseButton::MouseButtonsMax) {
+      CH_LOG_WARNING(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(button));
+      return false;
+    }
+    return m_currentMouseState.test(static_cast<SIZE_T>(button));
+  }
+  
+  NODISCARD FORCEINLINE bool
+  wasMouseButtonDown(MouseButton button) const {
+    if (button >= MouseButton::MouseButtonsMax) {
+      CH_LOG_WARNING(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(button));
+      return false;
+    }
+    return m_previousMouseState.test(static_cast<SIZE_T>(button));
+  }
+  
+  NODISCARD FORCEINLINE bool
+  isMouseButtonJustPressed(MouseButton button) const {
+    if (button >= MouseButton::MouseButtonsMax) {
+      CH_LOG_WARNING(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(button));
+      return false;
+    }
+    return m_currentMouseState.test(static_cast<SIZE_T>(button)) && 
+           !m_previousMouseState.test(static_cast<SIZE_T>(button));
+  }
+  
+  NODISCARD FORCEINLINE bool
+  isMouseButtonJustReleased(MouseButton button) const {
+    if (button >= MouseButton::MouseButtonsMax) {
+      CH_LOG_WARNING(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(button));
+      return false;
+    }
+    return !m_currentMouseState.test(static_cast<SIZE_T>(button)) && 
+           m_previousMouseState.test(static_cast<SIZE_T>(button));
   }
 
  public:
@@ -192,16 +246,27 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   const Event<void(const KeyBoardData&)> OnKeyDown;
   const Event<void(const KeyBoardData&)> OnKeyUp;
   const Event<void(const KeyBoardData&)> OnKeyPressed;
+  const Event<void(const MouseButtonData &data)> OnMouseButton;
 
 private:
   void
   dispatchKeyboardEvent(const KeyBoardData& keyData);
+
+  void
+  dispatchMouseButtonEvent(const MouseButtonData& mouseData);
   
   BitSet<static_cast<uint32_t>(Key::KeysMax)> m_currentKeyboardState;
   BitSet<static_cast<uint32_t>(Key::KeysMax)> m_previousKeyboardState;
+  BitSet<static_cast<uint32_t>(MouseButton::MouseButtonsMax)> m_currentMouseState;
+  BitSet<static_cast<uint32_t>(MouseButton::MouseButtonsMax)> m_previousMouseState;
 
   UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyUpCallbacks;
   UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyPressedCallbacks;
   UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyDownCallbacks;
+
+  UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonUpCallbacks;
+  UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonPressedCallbacks;
+  UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonDownCallbacks;
+  
 };
 } // namespace chEngineSDK

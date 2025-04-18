@@ -111,23 +111,23 @@ DisplayEventHandle::update() {
   while (SDL_PollEvent(&event)) {
     switch (event.type) {
       case SDL_EVENT_QUIT:
-        addEvent(PLATFORM_EVENT_TYPE::kCLOSE);
+        addEvent(PlatformEventType::Close);
         break;
       case SDL_EVENT_KEY_DOWN:
         {
           Key key = translateSDLKey(event.key.key);
-          addEvent(PLATFORM_EVENT_TYPE::kKEY_DOWN, KeyBoardData{key});
+          addEvent(PlatformEventType::kKEY_DOWN, KeyBoardData{key});
         }
         break;
       case SDL_EVENT_KEY_UP:
         {
           Key key = translateSDLKey(event.key.key);
-          addEvent(PLATFORM_EVENT_TYPE::kKEY_UP, KeyBoardData{key});
+          addEvent(PlatformEventType::kKEY_UP, KeyBoardData{key});
         }
         break;
 
       case SDL_EVENT_MOUSE_MOTION:
-        addEvent(PLATFORM_EVENT_TYPE::kMOUSE_MOVE, MouseMoveData{
+        addEvent(PlatformEventType::MouseMove, MouseMoveData{
             static_cast<uint32>(event.motion.x),
             static_cast<uint32>(event.motion.y),
             static_cast<uint32>(event.motion.x),
@@ -138,7 +138,7 @@ DisplayEventHandle::update() {
         break;
            
       case SDL_EVENT_WINDOW_RESIZED:
-        addEvent(PLATFORM_EVENT_TYPE::kRESIZE, ResizeData{
+        addEvent(PlatformEventType::Resize, ResizeData{
             static_cast<uint32>(event.window.data1),
             static_cast<uint32>(event.window.data2)
         });

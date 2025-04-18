@@ -16,8 +16,8 @@ class DisplayEvent;
 
 struct MouseMoveData;
 struct KeyBoardData;
-enum class KEYBOARD_STATE : uint32;
-enum class KEY_MODIFIER : uint16;
+enum class KeyBoardState : uint32;
+enum class KeyBoardModifier : uint16;
 
 // Forward of any graphics stuff
 class IBuffer;

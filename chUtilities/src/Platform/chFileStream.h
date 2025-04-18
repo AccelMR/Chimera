@@ -29,7 +29,7 @@ namespace chEngineSDK{
  *  AccessModeFlag myFlag(ACCESS_MODE::kREAD | ACCESS_MODE::kWRITE);
  */
 enum class ACCESS_MODE: uint16 {
-  kNONE  = 0x00,
+  NonePlatformEvent  = 0x00,
   kREAD  = 0x01,
   kWRITE = 0x02
 };
