@@ -12,9 +12,11 @@
 
 #include "chVulkanPipeline.h"
 
+#include "chVertexLayout.h"
+#include "chVulkanDescriptorSetLayout.h"
+#include "chVulkanPipelineLayout.h"
 #include "chVulkanShader.h"
 #include "chVulkanRenderPass.h"
-#include "chVertexLayout.h"
 
 namespace chEngineSDK {
 /*
@@ -22,14 +24,19 @@ namespace chEngineSDK {
 VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& createInfo)
     : m_device(device) {
 
+  Vector<VkDescriptorSetLayout> descriptorSetLayouts;
+  for (const auto& layout : createInfo.setLayouts) {
+    auto vulkanLayout = std::static_pointer_cast<VulkanDescriptorSetLayout>(layout);
+    descriptorSetLayouts.push_back(vulkanLayout->getHandle());
+  }
+    
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    .setLayoutCount = 0,
-    .pSetLayouts = nullptr,
+    .setLayoutCount = static_cast<uint32>(descriptorSetLayouts.size()),
+    .pSetLayouts = descriptorSetLayouts.empty() ? nullptr : descriptorSetLayouts.data(),
     .pushConstantRangeCount = 0,
     .pPushConstantRanges = nullptr,
   };
-
   VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 
   Vector<VkPipelineShaderStageCreateInfo> shaderStages(createInfo.shaders.size());
@@ -180,6 +187,13 @@ VulkanPipeline::~VulkanPipeline() {
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     m_pipelineLayout = VK_NULL_HANDLE;
   }
+}
+
+/*
+*/
+SPtr<IPipelineLayout>
+VulkanPipeline::getLayout() const {
+  return std::make_shared<VulkanPipelineLayout>(m_device, m_pipelineLayout);
 }
 
 } // namespace chEngineSDK

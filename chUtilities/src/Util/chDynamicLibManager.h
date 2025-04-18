@@ -19,6 +19,8 @@
 #include "chModule.h"
 
 #include "chDynamicLibrary.h"
+#include "chPath.h"
+
 
 namespace chEngineSDK{
 using std::less;
@@ -52,7 +54,7 @@ class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryMana
    *  during the load, please check output for more information.
    **/
   WeakPtr<DynamicLibrary>
-  loadDynLibrary(const String& name);
+  loadDynLibrary(const String& name, const Path& path = Path());
 
   /** 
    *   Unloads a loaded library. If library does not exist then it'll do nothing. 

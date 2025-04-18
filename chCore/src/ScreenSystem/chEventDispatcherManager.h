@@ -112,6 +112,11 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
     return KeyPressedCallbacks.at(key).connect(callback);
   }
 
+  FORCEINLINE HEvent
+  listenAnyKeyPressed(KeyPressedCallback callback) const {
+    return KeyPressedCallbacks.at(Key::KeysMax).connect(callback);
+  }
+
   /** 
    *   True if the key is down in the current frame.
    **/
@@ -184,6 +189,9 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   const Event<void(const MouseMoveData &data)> OnMouseMove;
   const Event<void()> OnClose;
   const Event<void(uint32,uint32)> OnResize;
+  const Event<void(const KeyBoardData&)> OnKeyDown;
+  const Event<void(const KeyBoardData&)> OnKeyUp;
+  const Event<void(const KeyBoardData&)> OnKeyPressed;
 
 private:
   void

@@ -21,14 +21,10 @@ class VulkanPipeline : public IPipeline {
   ~VulkanPipeline() override;
 
   NODISCARD FORCEINLINE virtual VkPipeline
-  getHandle() const {
-    return m_pipeline;
-  }
+  getHandle() const { return m_pipeline; }
 
-  NODISCARD FORCEINLINE virtual VkPipelineLayout
-  getLayout() const {
-    return m_pipelineLayout;
-  }
+  NODISCARD virtual SPtr<IPipelineLayout>
+  getLayout() const override;
 
  private:
   VkPipeline m_pipeline = VK_NULL_HANDLE;

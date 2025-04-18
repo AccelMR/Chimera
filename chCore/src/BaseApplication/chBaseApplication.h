@@ -77,7 +77,7 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
 
   //TODO: delete this
   void
-  render();
+  render(const float deltaTime);
 
  protected:
   bool m_isInitialized = false;

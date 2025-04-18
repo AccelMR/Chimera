@@ -48,31 +48,49 @@ class CH_CORE_EXPORT ICommandBuffer {
                    uint32 binding = 0, 
                    uint64 offset = 0) = 0;
 
-  virtual void 
+  virtual void
   bindIndexBuffer(SPtr<IBuffer> buffer, 
                   IndexType indexType, 
                   uint32 offset = 0) = 0;
 
-  virtual void 
+  virtual void
   draw(uint32 vertexCount, 
        uint32 instanceCount = 1, 
        uint32 firstVertex = 0, 
        uint32 firstInstance = 0) = 0;
 
-  virtual void 
-  drawIndexed(uint32 indexCount, uint32 instanceCount = 1,
-              uint32 firstIndex = 0, int32 vertexOffset = 0, 
+  /**
+   * @brief Issues a draw call using an index buffer.
+   * 
+   * @param indexCount The number of indices to draw.
+   * @param instanceCount The number of instances to draw. Defaults to 1.
+   * @param firstIndex The starting index in the index buffer. Defaults to 0.
+   * @param vertexOffset The value added to the vertex index before indexing into the vertex buffer. Defaults to 0.
+   * @param firstInstance The starting instance ID. Defaults to 0.
+   */
+  virtual void
+  drawIndexed(uint32 indexCount, 
+              uint32 instanceCount = 1,
+              uint32 firstIndex = 0, 
+              int32 vertexOffset = 0, 
               uint32 firstInstance = 0) = 0;
 
-  virtual void 
+  virtual void
   setViewport(float x, float y, 
               float width, float height,
               float minDepth = 0.0f, float maxDepth = 1.0f) = 0;
 
-  virtual void 
+  virtual void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) = 0;
 
-  NODISCARD virtual 
+  virtual void
+  bindDescriptorSets(PipelineBindPoint bindPoint,
+                     SPtr<IPipelineLayout> layout,
+                     uint32 firstSet,
+                     const Vector<SPtr<IDescriptorSet>>& descriptorSets,
+                     const Vector<uint32>& dynamicOffsets = {}) = 0;
+
+  NODISCARD virtual
   CommandBufferState getState() const = 0;
 };
 } // namespace chEngineSDK

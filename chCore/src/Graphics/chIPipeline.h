@@ -18,5 +18,8 @@ namespace chEngineSDK {
 class IPipeline {
  public:
   virtual ~IPipeline() = default;
+
+  NODISCARD virtual SPtr<IPipelineLayout>
+  getLayout() const = 0;
 };
 } // namespace chEngineSDK

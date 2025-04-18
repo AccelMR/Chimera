@@ -70,6 +70,18 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD SPtr<ICommandQueue>
   getQueue(QueueType queueType) override;
 
+  NODISCARD virtual SPtr<ISampler>
+  createSampler(const SamplerCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<IDescriptorSetLayout>
+  createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) override;
+
+  NODISCARD SPtr<IDescriptorPool>
+  createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) override;
+
+  void 
+  updateDescriptorSets(const Vector<WriteDescriptorSet>& writeDescriptorSets) override;
+
   void
   waitIdle() override;
 

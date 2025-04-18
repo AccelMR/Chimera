@@ -977,9 +977,11 @@ public:
 FORCEINLINE LookAtMatrix::LookAtMatrix(const Vector3& EyePosition,
                                        const Vector3& LookAtPosition,
                                        const Vector3& UpVector) {
-  const Vector3 ZAxis = (LookAtPosition - EyePosition).getNormalized();
-  const Vector3 XAxis = ZAxis.cross(UpVector).getNormalized();
-  const Vector3 YAxis = XAxis.cross(ZAxis);
+  const Vector3 ZAxis = (LookAtPosition - EyePosition).getNormalized(); // Forward
+  const Vector3 XAxis = UpVector.cross(ZAxis).getNormalized(); //Right
+  const Vector3 YAxis = ZAxis.cross(XAxis); //Up
+  //const Vector3 XAxis = ZAxis.cross(UpVector).getNormalized();
+  //const Vector3 YAxis = XAxis.cross(ZAxis);
 
   m00 = XAxis.x;  m01 = YAxis.x;  m02 = ZAxis.x;  m03 = 0.0f;
   m10 = XAxis.y;  m11 = YAxis.y;  m12 = ZAxis.y;  m13 = 0.0f;
@@ -990,4 +992,4 @@ FORCEINLINE LookAtMatrix::LookAtMatrix(const Vector3& EyePosition,
   m32 = -EyePosition.dot(ZAxis);
   m33 = 1.0f;
 }
-}
+} //namespace chEngineSDK

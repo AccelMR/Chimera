@@ -32,16 +32,23 @@ UtilUnloadLibrary(WeakPtr<DynamicLibrary> library) {
 /*
 */
 WeakPtr<DynamicLibrary>
-DynamicLibraryManager::loadDynLibrary(const String& name)
+DynamicLibraryManager::loadDynLibrary(const String& name, const Path& path)
 {
   String fileName = sanitizeName(name);
+
   WeakPtr<DynamicLibrary> lib = getLibrary(fileName);
 
   if(lib.lock()){
     return lib;
   }
+  
+  Path fileWholeName = fileName;
+  if (!path.empty()) {
+    fileWholeName = path.toString() + "/" + fileName;
+    std::cout << "Loading library: " << fileWholeName.toString() << std::endl;
+  }
 
-  SPtr<DynamicLibrary> newLib =  chMakeShared<DynamicLibrary>(fileName);
+  SPtr<DynamicLibrary> newLib =  chMakeShared<DynamicLibrary>(fileWholeName.toString());
   m_loadedLibraries.emplace(fileName, newLib);
 
   return newLib;

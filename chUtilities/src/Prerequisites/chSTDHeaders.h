@@ -324,4 +324,11 @@ using Atomic = std::atomic<T>;
  */
 using Thread = std::thread;
 
+/**
+ * @brief Wrapper for the C++ std::pair
+*/
+template<typename T1, typename T2>
+using Pair = std::pair<T1, T2>;
+
+
 }

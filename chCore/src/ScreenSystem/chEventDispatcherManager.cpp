@@ -115,15 +115,18 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
     case KEYBOARD_STATE::PRESSED:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
       KeyPressedCallbacks.at(keyData.key)(keyData);
+      OnKeyPressed(keyData);
       break;
     case KEYBOARD_STATE::DOWN:
       m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
       KeyDownCallbacks.at(keyData.key)(keyData);
+      OnKeyDown(keyData);
       break;
 
     case KEYBOARD_STATE::UP:
       m_currentKeyboardState.reset(static_cast<uint32_t>(keyData.key));
       KeyUpCallbacks.at(keyData.key)(keyData);
+      OnKeyUp(keyData);
       break;
 
     default:

@@ -109,17 +109,3 @@ PerspectiveMatrix::PerspectiveMatrix(const Radian& halfFOV, float width,
       Plane(0.0f, 0.0f, -_near * _far / (_far - _near), 0.0f))
 {}
 }
-
-
-/*
-    : Matrix4(Plane(1.0f / Math::tan(HalfFOV), 0.0f, 0.0f, 0.0f),
-              Plane(0.0f, Width / Math::tan(HalfFOV) / Height, 0.0f, 0.0f),
-              Plane(0.0f,
-                    0.0f,
-                    ((MinZ == MaxZ) ? (1.0f - 0.0f) : MaxZ / (MaxZ - MinZ)),
-                    1.0f),
-              Plane(0.0f,
-                    0.0f,
-                    -MinZ * ((MinZ == MaxZ) ? (1.0f - 0.0f) : MaxZ / (MaxZ - MinZ)),
-                    0.0f))
-  {}*/

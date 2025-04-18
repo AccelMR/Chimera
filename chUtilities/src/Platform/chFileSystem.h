@@ -21,6 +21,9 @@ namespace chEngineSDK{
 class CH_UTILITY_EXPORT FileSystem {
  public:
 
+  NODISCARD static Path 
+  absolutePath(const Path& path);
+
  /** 
   *   Creates a directory with a given path.
   *  NOTE: Path must end at '/' to be a directory.

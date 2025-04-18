@@ -68,6 +68,18 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual SPtr<ICommandQueue>
   getQueue(QueueType queueType) = 0;
 
+  NODISCARD virtual SPtr<ISampler>
+  createSampler(const SamplerCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<IDescriptorSetLayout>
+  createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) = 0;
+
+  NODISCARD virtual SPtr<IDescriptorPool>
+  createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) = 0;
+
+  virtual void
+  updateDescriptorSets(const Vector<WriteDescriptorSet>& writeDescriptorSets) = 0;
+
   virtual void
   waitIdle() = 0;
 };

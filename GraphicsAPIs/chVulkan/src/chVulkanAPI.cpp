@@ -17,10 +17,17 @@
 #include "chVulkanFrameBuffer.h"
 #include "chVulkanPipeline.h"
 #include "chVulkanRenderPass.h"
+#include "chVulkanSampler.h"
 #include "chVulkanShader.h"
 #include "chVulkanSwapChain.h"
 #include "chVulkanSynchronization.h"
 #include "chVulkanTexture.h"
+#include "chVulkanTextureView.h"
+#include "chVulkanDescriptorSet.h"
+#include "chVulkanDescriptorSetLayout.h"
+#include "chVulkanDescriptorPool.h"
+#include "chVulkanPipelineLayout.h"
+
 
 
 #if USING(CH_PLATFORM_WIN32)
@@ -270,6 +277,105 @@ VulkanAPI::getQueue(QueueType queueType) {
     return nullptr;
     break;
   }
+}
+
+/*
+*/
+SPtr<ISampler>
+VulkanAPI::createSampler(const SamplerCreateInfo& createInfo) {
+  return chMakeShared<VulkanSampler>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<IDescriptorSetLayout>
+VulkanAPI::createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) {
+  return chMakeShared<VulkanDescriptorSetLayout>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+NODISCARD SPtr<IDescriptorPool>
+VulkanAPI::createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) {
+  return chMakeShared<VulkanDescriptorPool>(m_vulkanData->device, createInfo);
+}
+
+/*
+*/
+void
+VulkanAPI::updateDescriptorSets(const Vector<WriteDescriptorSet>& descriptorWrites) {
+  Vector<VkWriteDescriptorSet> writes;
+  writes.reserve(descriptorWrites.size());
+  
+  Vector<Vector<VkDescriptorBufferInfo>> bufferInfos;
+  Vector<Vector<VkDescriptorImageInfo>> imageInfos;
+  
+  bufferInfos.resize(descriptorWrites.size());
+  imageInfos.resize(descriptorWrites.size());
+  
+  for (size_t i = 0; i < descriptorWrites.size(); ++i) {
+    const auto& write = descriptorWrites[i];
+    
+    VkWriteDescriptorSet vkWrite{};
+    vkWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    vkWrite.dstSet = std::static_pointer_cast<VulkanDescriptorSet>(write.dstSet)->getHandle();
+    vkWrite.dstBinding = write.dstBinding;
+    vkWrite.dstArrayElement = write.dstArrayElement;
+    
+    switch (write.descriptorType) {
+      case DescriptorType::UniformBuffer:
+        vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        break;
+      case DescriptorType::StorageBuffer:
+        vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        break;
+      case DescriptorType::CombinedImageSampler:
+        vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        break;
+    }
+    
+    if (!write.bufferInfos.empty()) {
+      bufferInfos[i].reserve(write.bufferInfos.size());
+      
+      for (const auto& info : write.bufferInfos) {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = std::static_pointer_cast<VulkanBuffer>(info.buffer)->getHandle();
+        bufferInfo.offset = info.offset;
+        bufferInfo.range = info.range;
+        
+        bufferInfos[i].push_back(bufferInfo);
+      }
+      
+      vkWrite.descriptorCount = static_cast<uint32>(bufferInfos[i].size());
+      vkWrite.pBufferInfo = bufferInfos[i].data();
+    }
+    
+    if (!write.imageInfos.empty()) {
+      imageInfos[i].reserve(write.imageInfos.size());
+      
+      for (const auto& info : write.imageInfos) {
+        VkDescriptorImageInfo imageInfo{};
+        if (info.sampler) {
+          imageInfo.sampler = std::static_pointer_cast<VulkanSampler>(info.sampler)->getHandle();
+        }
+        if (info.imageView) {
+          imageInfo.imageView = std::static_pointer_cast<VulkanTextureView>(info.imageView)->getHandle();
+        }
+        imageInfo.imageLayout = textureLayoutToVkImageLayout(info.imageLayout);
+        
+        imageInfos[i].push_back(imageInfo);
+      }
+      
+      vkWrite.descriptorCount = static_cast<uint32>(imageInfos[i].size());
+      vkWrite.pImageInfo = imageInfos[i].data();
+    }
+    
+    writes.push_back(vkWrite);
+  }
+  
+  vkUpdateDescriptorSets(m_vulkanData->device, 
+                         static_cast<uint32>(writes.size()), 
+                         writes.data(), 0, nullptr);
 }
 
 /*

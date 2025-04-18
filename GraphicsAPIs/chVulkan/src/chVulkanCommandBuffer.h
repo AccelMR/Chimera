@@ -64,6 +64,14 @@ class VulkanCommandBuffer : public ICommandBuffer {
   void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override;
 
+  void
+  bindDescriptorSets(PipelineBindPoint bindPoint,
+                     SPtr<IPipelineLayout> layout,
+                     uint32 firstSet,
+                     const Vector<SPtr<IDescriptorSet>>& descriptorSets,
+                     const Vector<uint32>& dynamicOffsets = {}) override;
+
+
   NODISCARD CommandBufferState
   getState() const {
     return m_state;

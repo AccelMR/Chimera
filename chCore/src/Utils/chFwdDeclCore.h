@@ -20,19 +20,26 @@ enum class KEYBOARD_STATE : uint32;
 enum class KEY_MODIFIER : uint16;
 
 // Forward of any graphics stuff
-class IGraphicsAPI;
-class ISwapChain;
-class ICommandQueue;
-class ICommandPool;
-class ICommandBuffer;
-class IFence;
 class IBuffer;
+class ICommandBuffer;
+class ICommandPool;
+class ICommandQueue;
+class IDescriptorPool;
+class IDescriptorSet;
+class IDescriptorSetLayout;
+class IFence;
+class IFrameBuffer;
+class IGraphicsAPI;
+class IPipeline;
+class IPipelineLayout;
+class IRenderPass;
+class ISampler;
+class ISemaphore;
+class IShader;
+class ISwapChain;
 class ITexture;
 class ITextureView;
-class IShader;
-class IPipeline;
-class IRenderPass;
-class IFrameBuffer;
-class ISemaphore;
+
+
 
 } // namespace chEngineSDK

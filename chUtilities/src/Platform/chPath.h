@@ -205,6 +205,9 @@ class CH_UTILITY_EXPORT Path {
   Path
   operator+(const String& other) const;
 
+  NODISCARD bool
+  empty() const { return m_path.empty(); }
+
  protected:
   friend class FileSystem;
   friend class FileDataStream;

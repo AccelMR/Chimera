@@ -23,7 +23,7 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
              bool vsync = false);
 
   void
-  render();
+  render(const float deltaTime);
 
  private:
   void
@@ -43,6 +43,13 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   Vector<SPtr<ICommandBuffer>> m_commandBuffers;
   SPtr<IPipeline> m_pipeline;
   SPtr<IBuffer> m_vertexBuffer;
+  SPtr<IBuffer> m_indexBuffer;
+  SPtr<IBuffer> m_viewProjectionBuffer;
+  
+  SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
+  SPtr<IDescriptorPool> m_descriptorPool;
+  SPtr<IDescriptorSet> m_descriptorSet;
+  
   
   // Sincronización
   Vector<SPtr<ISemaphore>> m_imageAvailableSemaphores;

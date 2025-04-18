@@ -17,6 +17,7 @@
 #include "chDynamicLibManager.h"
 #include "chDisplayManager.h"
 #include "chEventSystem.h"
+#include "chFileSystem.h"
 #include "chPath.h"
 #include "chStringUtils.h"
 #include "chEventDispatcherManager.h"
@@ -123,7 +124,10 @@ BaseApplication::initializeGraphics() {
 
   const String graphicsAPIName = CommandParser::getInstance().getParam("GraphicsAPI", "chVulkan");
 
-  WeakPtr<DynamicLibrary> graphicLibrary = dynamicLibraryManager.loadDynLibrary(graphicsAPIName);
+  Path dllPath ("build/debug-x64/lib");
+  Path dllFullPath = FileSystem::absolutePath(dllPath);
+  WeakPtr<DynamicLibrary> graphicLibrary = 
+    dynamicLibraryManager.loadDynLibrary(graphicsAPIName, dllFullPath);
   if (graphicLibrary.expired()) {
     CH_EXCEPT(InternalErrorException, "Failed to load graphics API library.");
   }
@@ -213,7 +217,7 @@ BaseApplication::run() {
     }
 
     // Render the frame.
-    render();
+    render(deltaTime);
 
     eventDispatcher.updateKeyboardState(); 
   }
@@ -222,8 +226,8 @@ BaseApplication::run() {
 /*
 */
 void
-BaseApplication::render(){
-  Renderer::instance().render();
+BaseApplication::render(const float deltaTime){
+  Renderer::instance().render(deltaTime);
 }
 
 } // namespace chEngineSDK

@@ -15,6 +15,9 @@
 /************************************************************************/
 #include "chDynamicLibrary.h"
 
+#include "chFileSystem.h"
+#include "chPath.h"
+
 
 namespace chEngineSDK{
 using std::move;
@@ -91,8 +94,8 @@ DynamicLibrary::DynamicLibrary(String _name)
 void
 DynamicLibrary::load()
 {
-  m_dynLibHandler = static_cast<DynamicLibraryHandle>(loadLibraryPlatformSpecific(m_name.c_str()));
-
+  m_dynLibHandler = static_cast<DynamicLibraryHandle>(
+                      loadLibraryPlatformSpecific(m_name.c_str()));
   if (!m_dynLibHandler) {
     CH_EXCEPT(InternalErrorException, "Could not load dynamic library " + m_name);
   }

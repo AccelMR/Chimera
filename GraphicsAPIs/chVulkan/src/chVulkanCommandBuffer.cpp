@@ -14,9 +14,12 @@
 #include "chICommandQueue.h"
 #include "chVulkanAPI.h"
 #include "chVulkanBuffer.h"
+#include "chVulkanDescriptorSet.h"
 #include "chVulkanRenderPass.h"
 #include "chVulkanFrameBuffer.h"
 #include "chVulkanPipeline.h"
+#include "chVulkanPipelineLayout.h"
+
 
 namespace chEngineSDK {
 /*
@@ -183,5 +186,47 @@ VulkanCommandBuffer::setScissor(uint32 x, uint32 y, uint32 width, uint32 height)
   vkCmdSetScissor(m_commandBuffer, 0, 1, &scissor);
   //m_state = CommandBufferState::Executable;
 }
+
+/*
+*/
+void
+VulkanCommandBuffer::bindDescriptorSets(PipelineBindPoint bindPoint,
+                                      SPtr<IPipelineLayout> layout,
+                                      uint32 firstSet,
+                                      const Vector<SPtr<IDescriptorSet>>& descriptorSets,
+                                      const Vector<uint32>& dynamicOffsets) {
+  auto vulkanLayout = std::static_pointer_cast<VulkanPipelineLayout>(layout);
+  
+  Vector<VkDescriptorSet> vkSets;
+  vkSets.reserve(descriptorSets.size());
+  
+  for (const auto& set : descriptorSets) {
+    auto vulkanSet = std::static_pointer_cast<VulkanDescriptorSet>(set);
+    vkSets.push_back(vulkanSet->getHandle());
+  }
+  
+  VkPipelineBindPoint vkBindPoint;
+  switch (bindPoint) {
+    case PipelineBindPoint::Graphics:
+      vkBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+      break;
+    case PipelineBindPoint::Compute:
+      vkBindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+      break;
+    default:
+      vkBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  }
+  
+  vkCmdBindDescriptorSets(m_commandBuffer,
+                          vkBindPoint,
+                          vulkanLayout->getHandle(),
+                          firstSet,
+                          static_cast<uint32>(vkSets.size()),
+                          vkSets.data(),
+                          static_cast<uint32>(dynamicOffsets.size()),
+                          dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
+}
+
+
 
 } // namespace chEngineSDK

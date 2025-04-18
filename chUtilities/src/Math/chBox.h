@@ -258,7 +258,7 @@ AABox::generateVertices3() const{
 
   ret[0] = minPoint;
   ret[1] = Vector3(minPoint.x, maxPoint.y, minPoint.z);
-  ret[2] = Vector3(maxPoint.x, maxPoint.y, maxPoint.z);
+  ret[2] = Vector3(maxPoint.x, maxPoint.y, minPoint.z);
   ret[3] = Vector3(maxPoint.x, minPoint.y, minPoint.z);
   ret[4] = Vector3(minPoint.x, minPoint.y, maxPoint.z);
   ret[5] = Vector3(minPoint.x, maxPoint.y, maxPoint.z);
@@ -270,6 +270,7 @@ AABox::generateVertices3() const{
 
 /*
 */
+
 FORCEINLINE AABox &
 AABox::operator+=(const Vector3& v)
 {
@@ -289,18 +290,19 @@ AABox::operator+=(const Vector3& v)
 FORCEINLINE Array<uint16, 36>
 AABox::getConstIndices() const {
   static Array<uint16, 36> ret{
-    0, 1, 2, 
-    0, 2, 3,
-    4, 6, 5,
-    4, 7, 6,
-    4, 5, 1,
-    4, 1, 0,
-    3, 2, 6, 
-    3, 6, 7,
-    1, 5, 6,
-    1, 6, 2,
-    4, 0, 3, 
-    4, 3, 7
+    // Seeing it from -X
+    0, 3, 1, // Up Face
+    3, 2, 1, // Up Face
+    4, 5, 7, // Down Face
+    7, 5, 6, // Down Face
+    3, 0, 4, // Left Face
+    3, 4, 7, // Left Face
+    1, 2, 5, // Right Face
+    2, 6, 5, // Right Face
+    2, 3, 6, // Back Face
+    3, 7, 6, // Back Face
+    0, 1, 4, // Front Face
+    1, 5, 4  // Front Face
   };
   return ret;
 }

@@ -12,6 +12,8 @@
 #include "chPrerequisitesCore.h"
 #include "chFlags.h"
 #include "chLinearColor.h"
+#include "chVector3.h"
+#include "chVector2.h"
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
@@ -141,14 +143,16 @@ enum class PrimitiveTopology {
   TriangleStrip
 };
 
-enum class ShaderStage {
-  Vertex,
-  Fragment,
-  Compute,
-  Geometry,
-  TessControl,
-  TessEvaluation
+enum class ShaderStage : uint32 {
+  Vertex = 0x01,
+  Fragment = 0x02,
+  Compute = 0x04,
+  Geometry = 0x08,
+  TessControl = 0x10,
+  TessEvaluation = 0x20,
 };
+CH_FLAGS_OPERATORS_EXT(ShaderStage, uint32);
+using ShaderStageFlags = Flags<ShaderStage, uint32>;
 
 enum class BufferUsage : uint16 {
   VertexBuffer = 0x01,
@@ -186,6 +190,12 @@ enum class PipelineBindPoint {
   Compute
 };
 
+enum class DescriptorType {
+  UniformBuffer,
+  StorageBuffer,
+  CombinedImageSampler,
+};
+
 enum class PipelineStage : uint32 {
   None                    = 0,
   TopOfPipe               = 1 << 0,
@@ -220,6 +230,42 @@ enum class Access : uint32 {
 };
 CH_FLAGS_OPERATORS_EXT(Access, uint32);
 using AccessFlags = Flags<Access, uint32>;
+
+enum class SamplerAddressMode {
+  Repeat,
+  MirroredRepeat,
+  ClampToEdge,
+  ClampToBorder,
+  MirrorClampToEdge
+};
+
+enum class SamplerFilter {
+  Nearest,
+  Linear
+};
+
+enum class SamplerMipmapMode {
+  Nearest,
+  Linear
+};
+
+struct SamplerCreateInfo {
+  SamplerFilter magFilter = SamplerFilter::Linear;
+  SamplerFilter minFilter = SamplerFilter::Linear;
+  SamplerMipmapMode mipmapMode = SamplerMipmapMode::Linear;
+  SamplerAddressMode addressModeU = SamplerAddressMode::Repeat;
+  SamplerAddressMode addressModeV = SamplerAddressMode::Repeat;
+  SamplerAddressMode addressModeW = SamplerAddressMode::Repeat;
+  float mipLodBias = 0.0f;
+  bool anisotropyEnable = false;
+  float maxAnisotropy = 1.0f;
+  bool compareEnable = false;
+  CompareOp compareOp = CompareOp::AlwaysOp;
+  float minLod = 0.0f;
+  float maxLod = 1000.0f;
+  LinearColor borderColor = LinearColor::Black;
+  bool unnormalizedCoordinates = false;
+};
 
 struct AttachmentReference {
   uint32 attachment = ~0u;
@@ -294,6 +340,16 @@ struct VertexPosColor {
   }
 };
 
+struct VertexNormalTexCoord {
+  Vector3 position;
+  Vector3 normal;
+  Vector2 texCoord;
+  
+  static VertexLayout getLayout() {
+    return VertexLayout::createPositionNormalTexCoordLayout();
+  }
+};
+
 struct ShaderCreateInfo {
   ShaderStage stage;
   String entryPoint;
@@ -322,6 +378,8 @@ struct PipelineCreateInfo {
 
   SPtr<IRenderPass> renderPass;
   uint32 subpass = 0;
+
+  Vector<SPtr<IDescriptorSetLayout>> setLayouts;
 
   //TODO: Add more fields for dynamic states, push constants, etc.
 };
@@ -370,6 +428,48 @@ struct SubmitInfo {
   Vector<SPtr<ISemaphore>> waitSemaphores;
   Vector<PipelineStageFlags> waitStages;
   Vector<SPtr<ISemaphore>> signalSemaphores;
+};
+
+struct DescriptorSetLayoutBinding {
+  uint32 binding = 0;
+  DescriptorType type = DescriptorType::UniformBuffer;
+  uint32 count = 1;
+  ShaderStageFlags stageFlags = ShaderStage::Vertex;
+};
+
+struct DescriptorSetLayoutCreateInfo {
+  Vector<DescriptorSetLayoutBinding> bindings;
+};
+
+struct DescriptorPoolCreateInfo {
+  uint32 maxSets = 0;
+  Vector<Pair<DescriptorType, uint32>> poolSizes;
+};
+
+struct DescriptorSetAllocateInfo {
+  SPtr<IDescriptorPool> pool;
+  SPtr<IDescriptorSetLayout> layout;
+};
+
+struct DescriptorBufferInfo {
+  SPtr<IBuffer> buffer;
+  uint32 offset = 0;
+  uint32 range = ~0u;
+};
+
+struct DescriptorImageInfo {
+  SPtr<ISampler> sampler;
+  SPtr<ITextureView> imageView;
+  TextureLayout imageLayout = TextureLayout::ShaderReadOnly;
+};
+
+struct WriteDescriptorSet {
+  SPtr<IDescriptorSet> dstSet;
+  uint32 dstBinding = 0;
+  uint32 dstArrayElement = 0;
+  DescriptorType descriptorType = DescriptorType::UniformBuffer;
+  Vector<DescriptorBufferInfo> bufferInfos;
+  Vector<DescriptorImageInfo> imageInfos;
 };
 
 } // namespace chEngineSDK

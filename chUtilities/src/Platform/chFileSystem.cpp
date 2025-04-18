@@ -19,8 +19,20 @@
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
-namespace fs = std::filesystem;/*
-**
+namespace fs = std::filesystem;
+
+/*
+*/
+/**
+ * @brief Converts a path to an absolute path.
+ */
+Path
+FileSystem::absolutePath(const Path& path) {
+  return Path(fs::absolute(path.m_path));
+}
+
+
+/**
  * @brief Creates a directory at a given path.
  */
 bool
