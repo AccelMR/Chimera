@@ -176,10 +176,10 @@ Renderer::initializeRenderResources() {
     .projectionMatrix = PerspectiveMatrix(g_halfFOV, 
                                           static_cast<float>(m_width), 
                                           static_cast<float>(m_height), 
-                                          g_nearPlane, g_farPlane).getTransposed(),
+                                          g_nearPlane, g_farPlane),
     .viewMatrix = LookAtMatrix(cameraPosition, 
                                lookAtPos,
-                               Vector3::UP).getTransposed()
+                               Vector3::UP)
   };
 
   BufferCreateInfo projectionViewBufferCreateInfo{
@@ -210,14 +210,24 @@ Renderer::initializeRenderResources() {
   m_vertexShader  = graphicsAPI.createShader(shaderCreateInfo);
   m_fragmentShader= graphicsAPI.createShader(fragmentShaderCreateInfo);
 
-  DescriptorSetLayoutBinding binding{
-    .binding = 0,
-    .type = DescriptorType::UniformBuffer,
-    .count = 1,
-    .stageFlags = ShaderStage::Vertex
+  Vector<DescriptorSetLayoutBinding> bindings{
+    {
+      .binding = 0,
+      .type = DescriptorType::UniformBuffer,
+      .count = 1,
+      .stageFlags = ShaderStage::Vertex
+    },
+    {
+      .binding = 1,
+      .type = DescriptorType::CombinedImageSampler,
+      .count = 1,
+      .stageFlags = ShaderStage::Fragment
+    }
+    
   };
+
   DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{
-    .bindings = { binding }
+    .bindings = bindings
   };
   m_descriptorSetLayout = graphicsAPI.createDescriptorSetLayout(descriptorSetLayoutCreateInfo);
 
@@ -272,12 +282,20 @@ Renderer::initializeRenderResources() {
       projectionViewMatrix.projectionMatrix = PerspectiveMatrix(g_halfFOV, 
                                                                 static_cast<float>(m_width), 
                                                                 static_cast<float>(m_height), 
-                                                                g_nearPlane, g_farPlane).getTransposed();
+                                                                g_nearPlane, g_farPlane);
+  });
+
+  HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
+    if (keydata.key == Key::P) {
+      // Print camera position and lookAtPos
+      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+      CH_LOG_INFO(RendererSystem, "LookAt Position: ({0}, {1}, {2})", lookAtPos.x, lookAtPos.y, lookAtPos.z);
+    }
   });
 
   HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
     Vector3 cameraDir = (lookAtPos - cameraPosition).getNormalized(); // Adjusted to align with forward direction
-    Vector3 right = cameraDir.cross(Vector3::UP).getNormalized(); // Corrected to align with right direction
+    Vector3 right = Vector3::UP.cross(cameraDir).getNormalized(); // Corrected to align with right direction
 
     switch (keydata.key) {
       case Key::W: cameraPosition += cameraDir * g_cameraSpeed; lookAtPos += cameraDir * g_cameraSpeed; break; // Move forward
@@ -287,16 +305,11 @@ Renderer::initializeRenderResources() {
       case Key::Q: cameraPosition += Vector3::UP * g_cameraSpeed; lookAtPos += Vector3::UP * g_cameraSpeed; break; // Move up
       case Key::E: cameraPosition -= Vector3::UP * g_cameraSpeed; lookAtPos -= Vector3::UP * g_cameraSpeed; break; // Move down
       case Key::R: cameraPosition = Vector3(-5.0f, 0.0f, 0.0f); lookAtPos = Vector3::ZERO; break;
-      case Key::P : {
-        // Print camera position and lookAtPos
-        CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", cameraPosition.x, cameraPosition.y, cameraPosition.z);
-        CH_LOG_INFO(RendererSystem, "LookAt Position: ({0}, {1}, {2})", lookAtPos.x, lookAtPos.y, lookAtPos.z);
-        break;
-      }
       default: return;
     }
 
-    projectionViewMatrix.viewMatrix = LookAtMatrix(cameraPosition, lookAtPos, Vector3::UP).getTransposed();
+    lookAtPos = cameraPosition + cameraDir * 5.0f;
+    projectionViewMatrix.viewMatrix = LookAtMatrix(cameraPosition, lookAtPos, Vector3::UP);
   });
 
   HEvent listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
@@ -311,7 +324,7 @@ Renderer::initializeRenderResources() {
         Degree(0.0f),                     // Pitch (rotation around X axis - not used)
         Degree(mouseData.deltaY * g_cameraRotationSpeed)   // Roll (rotation around Y axis)
     ));
-      projectionViewMatrix.projectionMatrix *= rotationMatrix;
+      projectionViewMatrix.viewMatrix *= rotationMatrix;
     }
   });
 }
@@ -356,11 +369,7 @@ Renderer::render(const float deltaTime) {
   cmdBuffer->bindVertexBuffer(m_vertexBuffer);
   cmdBuffer->bindIndexBuffer(m_indexBuffer, IndexType::UInt16);
 
-  RendererHelpers::ProjectionViewMatrix transposedMatrix ={
-    .projectionMatrix = projectionViewMatrix.projectionMatrix.getTransposed(),
-    .viewMatrix = projectionViewMatrix.viewMatrix.getTransposed()
-  };
-  m_viewProjectionBuffer->update(&transposedMatrix,
+  m_viewProjectionBuffer->update(&projectionViewMatrix,
                                  sizeof(RendererHelpers::ProjectionViewMatrix));
 
   cmdBuffer->bindDescriptorSets(PipelineBindPoint::Graphics,
@@ -397,7 +406,7 @@ Renderer::resizeSwapChain() {
 
   m_imageAvailableSemaphores.clear();
   m_renderFinishedSemaphores.clear();
-
+  cameraDir * 5
   m_swapChain->resize(m_width, m_height);
 
   createSyncObjects();

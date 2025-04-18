@@ -88,12 +88,10 @@ Matrix4::transformVector(const Vector3& v) const
 FORCEINLINE Vector4
  Matrix4::transformVector4(const Vector4& p) const {
   Vector4 Result{};
-
-  Result.x = p.x * m00 + p.y * m10 + p.z * m20 + p.w * m30;
-  Result.y = p.x * m01 + p.y * m11 + p.z * m21 + p.w * m31;
-  Result.z = p.x * m02 + p.y * m12 + p.z * m22 + p.w * m32;
-  Result.w = p.x * m03 + p.y * m13 + p.z * m23 + p.w * m33;
-
+  Result.x = p.x * m00 + p.y * m01 + p.z * m02 + p.w * m03;
+  Result.y = p.x * m10 + p.y * m11 + p.z * m12 + p.w * m13;
+  Result.z = p.x * m20 + p.y * m21 + p.z * m22 + p.w * m23;
+  Result.w = p.x * m30 + p.y * m31 + p.z * m32 + p.w * m33;
   return Result;
 
 }
