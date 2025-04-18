@@ -31,6 +31,16 @@ FileSystem::absolutePath(const Path& path) {
   return Path(fs::absolute(path.m_path));
 }
 
+/*
+*/
+/**
+ * @brief Checks if a path is a file.
+ */
+bool
+FileSystem::isFile(const Path& path) {
+  fs::path fsPath(path.toString());
+  return fs::is_regular_file(fsPath);
+}
 
 /**
  * @brief Creates a directory at a given path.

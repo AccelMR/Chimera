@@ -34,7 +34,7 @@ class VulkanTexture : public ITexture {
     m_depth(depth), m_mipLevels(mipLevels),
     m_arrayLayers(arrayLayers), m_format(vkFormatToChFormat(format)),
     m_type(TextureType::Texture2D), m_image(image), m_memory(VK_NULL_HANDLE),
-    m_bShouldDestroy(false) {}
+    m_ownsTexture(false) {}
 
   ~VulkanTexture() override;
 
@@ -65,6 +65,9 @@ class VulkanTexture : public ITexture {
   void
   uploadData(const void* data, size_t size) override;
 
+  NODISCARD VkImage
+  getHandle() const { return m_image; }
+
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
@@ -78,6 +81,6 @@ class VulkanTexture : public ITexture {
   uint32 m_arrayLayers = 0;
   Format m_format = Format::Unknown;
   TextureType m_type = TextureType::Texture2D;
-  bool m_bShouldDestroy = true;
+  bool m_ownsTexture = true;
 };
 } // namespace chEngineSDK

@@ -24,6 +24,9 @@ class CH_UTILITY_EXPORT FileSystem {
   NODISCARD static Path 
   absolutePath(const Path& path);
 
+  NODISCARD static bool
+  isFile(const Path& path);
+
  /** 
   *   Creates a directory with a given path.
   *  NOTE: Path must end at '/' to be a directory.

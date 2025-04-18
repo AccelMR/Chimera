@@ -29,6 +29,11 @@
 #include "chIShader.h"
 #include "chISwapChain.h"
 #include "chISynchronization.h"
+#include "chITexture.h"
+#include "chITextureView.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
 
 namespace chEngineSDK {
 
@@ -45,7 +50,23 @@ struct ProjectionViewMatrix{
   Matrix4 projectionMatrix;
   Matrix4 viewMatrix;
 };
+
+Vector<uint8> loadImage(const Path& path, 
+                        int32* width, 
+                        int32* height, 
+                        int32* channels) {
+  CH_ASSERT(FileSystem::isFile(path));
+
+  Vector<uint8> imageData;
+  uint8* data = stbi_load(path.toString().c_str(), width, height, channels, STBI_rgb_alpha);
+  if (data) {
+    imageData.resize((*width) * (*height) * (static_cast<SIZE_T>(STBI_rgb_alpha)));
+    memcpy(imageData.data(), data, imageData.size());
+    stbi_image_free(data);
+  }
+  return imageData;
 }
+} // namespace RendererHelpers
 
 RendererHelpers::ProjectionViewMatrix projectionViewMatrix;
 Vector3 cameraPosition(-5.0f, 0.0f, 0.0f);
@@ -133,6 +154,39 @@ Renderer::initializeRenderResources() {
 
   createSyncObjects();
 
+  int32 imageWidth = 0;
+  int32 imageHeight = 0;
+  int32 channel = 0;
+  Vector<uint8> imageData = RendererHelpers::loadImage("resources/images/beto1.jpg", 
+                                                       &imageWidth,
+                                                       &imageHeight,
+                                                       &channel);
+
+  TextureCreateInfo textureCreateInfo{
+    .type = TextureType::Texture2D,
+    .format = Format::R8G8B8A8_UNORM,
+    .width = static_cast<uint32>(imageWidth),
+    .height = static_cast<uint32>(imageHeight),
+    .depth = 1,
+    .mipLevels = 1,
+    .arrayLayers = 1,
+    .samples = SampleCount::Count1,
+    .usage = TextureUsage::Sampled | TextureUsage::TransferDst,
+    .initialData = imageData.data(),
+    .initialDataSize = imageData.size()
+  };
+  m_texture = graphicsAPI.createTexture(textureCreateInfo);
+
+  TextureViewCreateInfo textureViewCreateInfo{
+    .format = Format::R8G8B8A8_UNORM,
+    .viewType = TextureViewType::View2D,
+    .baseMipLevel = 0,
+    .mipLevelCount = 1,
+    .baseArrayLayer = 0,
+    .arrayLayerCount = 1
+  };
+  m_textureView = m_texture->createView(textureViewCreateInfo);
+
   AABox box(-Vector3::UNIT, Vector3::UNIT);
   Array<Vector3, 8> boxVertices = box.generateVertices3();
 
@@ -146,8 +200,8 @@ Renderer::initializeRenderResources() {
     { boxVertices[1], unitY, Vector2(1.0f, 0.0f) },
     { boxVertices[2], unitZ, Vector2(1.0f, 1.0f) },
     { boxVertices[3], unitW, Vector2(0.0f, 1.0f) },
-    { boxVertices[4], unitX, Vector2(0.5f, 0.5f) },
-    { boxVertices[5], unitY, Vector2(1.5f, 0.5f) },
+    { boxVertices[4], unitX, Vector2(0.0f, 1.0f) },
+    { boxVertices[5], unitY, Vector2(1.0f, 1.0f) },
     { boxVertices[6], unitZ, Vector2(1.5f, 1.5f) },
     { boxVertices[7], unitW, Vector2(0.5f, 1.5f) }
   };
@@ -234,10 +288,23 @@ Renderer::initializeRenderResources() {
   DescriptorPoolCreateInfo descriptorPoolCreateInfo{
     .maxSets = 1,
     .poolSizes = {
-      { DescriptorType::UniformBuffer, 1 }
+      { DescriptorType::UniformBuffer, 1 },
+      { DescriptorType::CombinedImageSampler, 1 }
     }
   };
   m_descriptorPool = graphicsAPI.createDescriptorPool(descriptorPoolCreateInfo);
+
+  SamplerCreateInfo samplerCreateInfo {
+    .magFilter = SamplerFilter::Linear,
+    .minFilter = SamplerFilter::Linear,
+    .mipmapMode = SamplerMipmapMode::Linear,
+    .addressModeU = SamplerAddressMode::Repeat,
+    .addressModeV = SamplerAddressMode::Repeat,
+    .addressModeW = SamplerAddressMode::Repeat,
+    .anisotropyEnable = false,
+    .maxAnisotropy = 16.0f
+  };
+  m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
 
   DescriptorSetAllocateInfo descriptorSetAllocateInfo{
     .pool = m_descriptorPool,
@@ -251,14 +318,29 @@ Renderer::initializeRenderResources() {
     .range = sizeof(RendererHelpers::ProjectionViewMatrix)
   };
 
-  WriteDescriptorSet writeDescriptorSet{
-    .dstSet = m_descriptorSet,
-    .dstBinding = 0,
-    .dstArrayElement = 0,
-    .descriptorType = DescriptorType::UniformBuffer,
-    .bufferInfos = { descriptorBufferInfo }
+  DescriptorImageInfo descriptorImageInfo{
+    .sampler = m_sampler,
+    .imageView = m_textureView,
+    .imageLayout = TextureLayout::ShaderReadOnly
   };
-  graphicsAPI.updateDescriptorSets({ writeDescriptorSet });
+
+  Vector<WriteDescriptorSet> writeDescriptorSets{
+    {
+      .dstSet = m_descriptorSet,
+      .dstBinding = 0,
+      .dstArrayElement = 0,
+      .descriptorType = DescriptorType::UniformBuffer,
+      .bufferInfos = { descriptorBufferInfo }
+    },
+    {
+      .dstSet = m_descriptorSet,
+      .dstBinding = 1,
+      .dstArrayElement = 0,
+      .descriptorType = DescriptorType::CombinedImageSampler,
+      .imageInfos = { descriptorImageInfo }
+    }
+  };
+  graphicsAPI.updateDescriptorSets(writeDescriptorSets);
 
   PipelineCreateInfo pipelineCreateInfo{
     .shaders = {
@@ -406,7 +488,6 @@ Renderer::resizeSwapChain() {
 
   m_imageAvailableSemaphores.clear();
   m_renderFinishedSemaphores.clear();
-  cameraDir * 5
   m_swapChain->resize(m_width, m_height);
 
   createSyncObjects();

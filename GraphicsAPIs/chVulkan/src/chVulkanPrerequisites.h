@@ -46,6 +46,22 @@ throwVkResult(VkResult result, const char* file, int line) {
   }
 }
 
+static VkImageType
+chTextureTypeToVkImageType(TextureType type) {
+  switch (type) {
+    case TextureType::Texture1D:
+      return VK_IMAGE_TYPE_1D;
+    case TextureType::Texture2D:
+      return VK_IMAGE_TYPE_2D;
+    case TextureType::Texture3D:
+      return VK_IMAGE_TYPE_3D;
+    case TextureType::TextureCube:
+    default:
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan image type: {0}", static_cast<uint32>(type)));
+  }
+  return VK_IMAGE_TYPE_1D;
+}
+
 static Format
 vkFormatToChFormat(VkFormat format) {
   switch (format) {
@@ -279,6 +295,60 @@ convertVertexFormatToVkFormat(VertexFormat format) {
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported vertex format: {0}", static_cast<uint32>(format)));
   }
   return VK_FORMAT_UNDEFINED;
+}
+
+static VkSampleCountFlagBits
+chSampleCountToVkSampleCount(SampleCount sampleCount) {
+  switch (sampleCount) {
+    case SampleCount::Count1:
+      return VK_SAMPLE_COUNT_1_BIT;
+    case SampleCount::Count2:
+      return VK_SAMPLE_COUNT_2_BIT;
+    case SampleCount::Count4:
+      return VK_SAMPLE_COUNT_4_BIT;
+    case SampleCount::Count8:
+      return VK_SAMPLE_COUNT_8_BIT;
+    case SampleCount::Count16:
+      return VK_SAMPLE_COUNT_16_BIT;
+    case SampleCount::Count32:
+      return VK_SAMPLE_COUNT_32_BIT;
+    case SampleCount::Count64:
+      return VK_SAMPLE_COUNT_64_BIT;
+    default:
+      CH_EXCEPT(VulkanErrorException, chString::format("Unsupported sample count: {0}", static_cast<uint32>(sampleCount)));
+  }
+  return VK_SAMPLE_COUNT_1_BIT;
+}
+
+static VkImageUsageFlags
+chTextureUsageToVkImageUsage(TextureUsageFlags usage) {
+  VkImageUsageFlags result = 0;
+  
+  if (usage.isSet(TextureUsage::TransferSrc)) {
+    result |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
+  if (usage.isSet(TextureUsage::TransferDst)) {
+    result |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+  if (usage.isSet(TextureUsage::Sampled)) {
+    result |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  if (usage.isSet(TextureUsage::Storage)) {
+    result |= VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+  if (usage.isSet(TextureUsage::ColorAttachment)) {
+    result |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  }
+  if (usage.isSet(TextureUsage::DepthStencil)) {
+    result |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  }
+  if (usage.isSet(TextureUsage::Transient)) {
+    result |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+  }
+  if (usage.isSet(TextureUsage::InputAttachment)) {
+    result |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+  }
+  return result;
 }
 
 } // namespace chEngineSDK

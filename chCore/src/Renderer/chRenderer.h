@@ -45,6 +45,9 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   SPtr<IBuffer> m_vertexBuffer;
   SPtr<IBuffer> m_indexBuffer;
   SPtr<IBuffer> m_viewProjectionBuffer;
+  SPtr<ISampler> m_sampler;
+  SPtr<ITexture> m_texture;
+  SPtr<ITextureView> m_textureView;
   
   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
   SPtr<IDescriptorPool> m_descriptorPool;

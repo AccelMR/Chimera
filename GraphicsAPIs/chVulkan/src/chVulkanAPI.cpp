@@ -338,10 +338,16 @@ VulkanAPI::updateDescriptorSets(const Vector<WriteDescriptorSet>& descriptorWrit
       bufferInfos[i].reserve(write.bufferInfos.size());
       
       for (const auto& info : write.bufferInfos) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = std::static_pointer_cast<VulkanBuffer>(info.buffer)->getHandle();
-        bufferInfo.offset = info.offset;
-        bufferInfo.range = info.range;
+        auto vulkanBuffer = std::static_pointer_cast<VulkanBuffer>(info.buffer);
+        if (!vulkanBuffer) {
+          CH_EXCEPT(VulkanErrorException, "Invalid buffer");
+        }
+
+        VkDescriptorBufferInfo bufferInfo{
+          .buffer = vulkanBuffer->getHandle(),
+          .offset = info.offset,
+          .range = info.range,
+        };
         
         bufferInfos[i].push_back(bufferInfo);
       }
@@ -355,11 +361,11 @@ VulkanAPI::updateDescriptorSets(const Vector<WriteDescriptorSet>& descriptorWrit
       
       for (const auto& info : write.imageInfos) {
         VkDescriptorImageInfo imageInfo{};
-        if (info.sampler) {
-          imageInfo.sampler = std::static_pointer_cast<VulkanSampler>(info.sampler)->getHandle();
+        if (auto vulkanSampler = std::static_pointer_cast<VulkanSampler>(info.sampler)) {
+          imageInfo.sampler = vulkanSampler->getHandle();
         }
-        if (info.imageView) {
-          imageInfo.imageView = std::static_pointer_cast<VulkanTextureView>(info.imageView)->getHandle();
+        if (auto vulkanTextureView = std::static_pointer_cast<VulkanTextureView>(info.imageView)) {
+          imageInfo.imageView = vulkanTextureView->getHandle();
         }
         imageInfo.imageLayout = textureLayoutToVkImageLayout(info.imageLayout);
         

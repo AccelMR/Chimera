@@ -38,6 +38,7 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../chUtilities/src)
 
 target_include_directories(chCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/crosswindow/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/externals
 )
 
 
