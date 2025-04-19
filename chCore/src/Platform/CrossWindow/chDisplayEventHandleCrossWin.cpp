@@ -402,28 +402,30 @@ DisplayEventHandle::update() {
 
           case XCB_BUTTON_PRESS: {
             xcb_button_press_event_t* buttonEvent = reinterpret_cast<xcb_button_press_event_t*>(event);
-            
-            MouseButton button;
-            switch (buttonEvent->detail) {
-              case 1: button = MouseButton::Left; break;
-              case 2: button = MouseButton::Middle; break;
-              case 3: button = MouseButton::Right; break;
-              case 4: button = MouseButton::MouseButton4; break;
-              case 5: button = MouseButton::MouseButton5; break;
-              default: continue; // Ignorar botones desconocidos
-            }
-            
-            // Si el botón es 4 o 5, podría ser la rueda del mouse (scroll)
-            // En ese caso, podrías generar un evento de scroll en lugar de un clic
+  
             if (buttonEvent->detail == 4 || buttonEvent->detail == 5) {
-              // Implementar manejo de la rueda del mouse si lo necesitas
-            } else {
-              // Es un clic normal
+              int32 deltaY = (buttonEvent->detail == 4) ? 1 : -1;
+              
+              addEvent(PlatformEventType::MouseWheel, MouseWheelData(
+                deltaY,
+                static_cast<uint32>(buttonEvent->event_x),
+                static_cast<uint32>(buttonEvent->event_y)
+              ));
+            } 
+            else {
+              MouseButton button;
+              switch (buttonEvent->detail) {
+                case 1: button = MouseButton::Left; break;
+                case 2: button = MouseButton::Middle; break;
+                case 3: button = MouseButton::Right; break;
+                default: button = MouseButton::MouseButtonsMax; break;
+              }
               addEvent(PlatformEventType::MouseButton, MouseButtonData(
-                       button,
-                       MouseState::Down,
-                       static_cast<uint32>(buttonEvent->event_x),
-                       static_cast<uint32>(buttonEvent->event_y)));
+                button,
+                MouseState::Down,
+                static_cast<uint32>(buttonEvent->event_x),
+                static_cast<uint32>(buttonEvent->event_y)
+              ));
             }
             break;
           }

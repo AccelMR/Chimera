@@ -247,6 +247,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   const Event<void(const KeyBoardData&)> OnKeyUp;
   const Event<void(const KeyBoardData&)> OnKeyPressed;
   const Event<void(const MouseButtonData &data)> OnMouseButton;
+  const Event<void(const MouseWheelData &data)> OnMouseWheel;
 
 private:
   void

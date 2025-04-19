@@ -84,6 +84,17 @@ struct MouseButtonData{
   uint32 y;
 };
 
+struct MouseWheelData {
+  MouseWheelData() = delete;
+  MouseWheelData(int32 _deltaY, 
+                 uint32 _x, uint32 _y)
+    : deltaY(_deltaY), x(_x), y(_y) {}
+
+  int32 deltaY;
+  uint32 x;
+  uint32 y;
+};
+
 struct ResizeData {
   uint32 width;
   uint32 height;
@@ -93,6 +104,7 @@ using DisplayEventData = std::variant<std::monostate,
                                       MouseMoveData,
                                       KeyBoardData,
                                       ResizeData,
-                                      MouseButtonData>;
+                                      MouseButtonData,
+                                      MouseWheelData>;
 
 } // namespace chEngineSDK

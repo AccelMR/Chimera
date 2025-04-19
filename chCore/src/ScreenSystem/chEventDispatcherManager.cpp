@@ -117,6 +117,18 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   }
   break;
 
+  case PlatformEventType::MouseWheel:
+  {
+    if (const auto& wheelData = get_if<MouseWheelData>(&eventData)) {
+      OnMouseWheel(*wheelData);
+    }
+    else {
+      CH_LOG_DEBUG(InputSystem, "Mouse wheel data is not valid.");
+      dispatched = false;
+    }
+  }
+  break;
+
   case PlatformEventType::NonePlatformEvent:
   default:
     dispatched = false;

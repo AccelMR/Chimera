@@ -9,6 +9,7 @@
 #include "chRenderer.h"
 
 #include "chBox.h"
+#include "chCamera.h"
 #include "chDegree.h"
 #include "chEventDispatcherManager.h"
 #include "chEventSystem.h"
@@ -49,6 +50,7 @@ namespace RendererHelpers{
 struct ProjectionViewMatrix{
   Matrix4 projectionMatrix;
   Matrix4 viewMatrix;
+  Matrix4 modelMatrix;
 };
 
 Vector<uint8> loadImage(const Path& path, 
@@ -69,13 +71,16 @@ Vector<uint8> loadImage(const Path& path,
 } // namespace RendererHelpers
 
 RendererHelpers::ProjectionViewMatrix projectionViewMatrix;
-Vector3 cameraPosition(-5.0f, 0.0f, 0.0f);
-Vector3 lookAtPos = Vector3::ZERO;
 float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
-Radian g_halfFOV(Degree(45.0f) * .5f);
-float g_cameraSpeed = 0.01f;
-float g_cameraRotationSpeed = 0.01f;
+Radian g_FOV(Degree(45.0f));
+float g_cameraPanSpeed = 0.01f;
+float g_cameraMoveSpeed = 0.1f;
+float g_rotationSpeed = 0.1f;
+
+Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
+
+static constexpr uint64 MAX_WAIT_TIME = 1000000000; // 1 second
 
 /*
 */
@@ -225,15 +230,16 @@ Renderer::initializeRenderResources() {
   };
   m_indexBuffer = graphicsAPI.createBuffer(indexBufferCreateInfo);
 
+  m_camera = chMakeUnique<Camera>(initialCameraPos, Vector3::ZERO, m_width, m_height);
+  m_camera->setProjectionType(CameraProjectionType::Perspective);
+  m_camera->setFieldOfView(g_FOV);
+  m_camera->setClipPlanes(g_nearPlane, g_farPlane);
+  m_camera->updateMatrices();
   
   projectionViewMatrix = {
-    .projectionMatrix = PerspectiveMatrix(g_halfFOV, 
-                                          static_cast<float>(m_width), 
-                                          static_cast<float>(m_height), 
-                                          g_nearPlane, g_farPlane),
-    .viewMatrix = LookAtMatrix(cameraPosition, 
-                               lookAtPos,
-                               Vector3::UP)
+    .projectionMatrix = m_camera->getProjectionMatrix(),
+    .viewMatrix = m_camera->getViewMatrix(),
+    .modelMatrix = Matrix4::IDENTITY
   };
 
   BufferCreateInfo projectionViewBufferCreateInfo{
@@ -361,59 +367,70 @@ Renderer::initializeRenderResources() {
       m_height = height;
       resizeSwapChain();
 
-      projectionViewMatrix.projectionMatrix = PerspectiveMatrix(g_halfFOV, 
-                                                                static_cast<float>(m_width), 
-                                                                static_cast<float>(m_height), 
-                                                                g_nearPlane, g_farPlane);
+      m_camera->setViewportSize(width, height);
+      m_camera->updateMatrices();
+      projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
   });
 
   HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
     if (keydata.key == Key::P) {
       // Print camera position and lookAtPos
-      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", cameraPosition.x, cameraPosition.y, cameraPosition.z);
-      CH_LOG_INFO(RendererSystem, "LookAt Position: ({0}, {1}, {2})", lookAtPos.x, lookAtPos.y, lookAtPos.z);
+      Vector3 cameraPosition = m_camera->getPosition();
+      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", 
+                  cameraPosition.x, cameraPosition.y, cameraPosition.z);
+      return;
     }
   });
 
   HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
-    Vector3 cameraDir = (lookAtPos - cameraPosition).getNormalized(); // Adjusted to align with forward direction
-    Vector3 right = Vector3::UP.cross(cameraDir).getNormalized(); // Corrected to align with right direction
-
+    float moveSpeed = g_cameraMoveSpeed * 0.1f;
     switch (keydata.key) {
-      case Key::W: cameraPosition += cameraDir * g_cameraSpeed; lookAtPos += cameraDir * g_cameraSpeed; break; // Move forward
-      case Key::S: cameraPosition -= cameraDir * g_cameraSpeed; lookAtPos -= cameraDir * g_cameraSpeed; break; // Move backward
-      case Key::A: cameraPosition -= right * g_cameraSpeed; lookAtPos -= right * g_cameraSpeed; break; // Move left
-      case Key::D: cameraPosition += right * g_cameraSpeed; lookAtPos += right * g_cameraSpeed; break; // Move right
-      case Key::Q: cameraPosition += Vector3::UP * g_cameraSpeed; lookAtPos += Vector3::UP * g_cameraSpeed; break; // Move up
-      case Key::E: cameraPosition -= Vector3::UP * g_cameraSpeed; lookAtPos -= Vector3::UP * g_cameraSpeed; break; // Move down
-      case Key::R: cameraPosition = Vector3(-5.0f, 0.0f, 0.0f); lookAtPos = Vector3::ZERO; break;
+      case Key::W: m_camera->moveForward(moveSpeed); break;
+      case Key::S: m_camera->moveForward(-moveSpeed); break;
+      case Key::A: m_camera->moveRight(-moveSpeed); break;
+      case Key::D: m_camera->moveRight(moveSpeed); break;
+      case Key::Q: m_camera->moveUp(moveSpeed); break;
+      case Key::E: m_camera->moveUp(-moveSpeed); break;
+      case Key::R:
+        m_camera->setPosition(initialCameraPos);
+        m_camera->lookAt(Vector3::ZERO);
+        break;
       default: return;
     }
+  
+    // Actualizar la matriz de vista después de mover la cámara
+    projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
+  });
 
-    lookAtPos = cameraPosition + cameraDir * 5.0f;
-    projectionViewMatrix.viewMatrix = LookAtMatrix(cameraPosition, lookAtPos, Vector3::UP);
+  HEvent listenWheel = eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
+    if (wheelData.deltaY != 0) {
+      m_camera->moveForward(wheelData.deltaY * g_cameraMoveSpeed);
+    }
   });
 
   HEvent listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
-    if (!eventDispatcher.isMouseButtonDown(MouseButton::Right)) {
+    const bool isMouseButtonDown = eventDispatcher.isMouseButtonDown(MouseButton::Right);
+    const bool isMouseButtonDownMiddle = eventDispatcher.isMouseButtonDown(MouseButton::Middle);
+    if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
       return;
     }
-
+  
     if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
-      //CH_LOG_INFO(RendererSystem, "Mouse moved: ({0}, {1})", mouseData.deltaX, mouseData.deltaY);
-      RotationMatrix rotationMatrix(Rotator(
-        Degree(-mouseData.deltaX * g_cameraRotationSpeed),  // Yaw (rotation around Z axis)
-        Degree(0.0f),                     // Pitch (rotation around X axis - not used)
-        Degree(mouseData.deltaY * g_cameraRotationSpeed)   // Roll (rotation around Y axis)
-    ));
-      projectionViewMatrix.viewMatrix *= rotationMatrix;
+      if (isMouseButtonDownMiddle) {
+        m_camera->pan(-mouseData.deltaX * g_cameraPanSpeed, -mouseData.deltaY * g_cameraPanSpeed);
+      }
+      if (isMouseButtonDown) {
+        m_camera->rotate(mouseData.deltaY * g_rotationSpeed, 
+                         mouseData.deltaX * g_rotationSpeed, 
+                         0.0f);
+      }
+      projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
     }
   });
 }
 
 /*
 */
-static constexpr uint64 MAX_WAIT_TIME = 1000000000; // 1 second
 void
 Renderer::render(const float deltaTime) {
   auto& graphicsAPI = IGraphicsAPI::instance();
@@ -450,6 +467,10 @@ Renderer::render(const float deltaTime) {
   cmdBuffer->bindPipeline(m_pipeline);
   cmdBuffer->bindVertexBuffer(m_vertexBuffer);
   cmdBuffer->bindIndexBuffer(m_indexBuffer, IndexType::UInt16);
+
+  projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
+  projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
+
 
   m_viewProjectionBuffer->update(&projectionViewMatrix,
                                  sizeof(RendererHelpers::ProjectionViewMatrix));

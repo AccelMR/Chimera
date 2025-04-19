@@ -26,6 +26,7 @@ enum class PlatformEventType {
   NonePlatformEvent = 0,
   MouseMove,
   MouseButton,
+  MouseWheel,
   Keyboard,
   Close,
   Resize,
@@ -59,6 +60,10 @@ class CH_CORE_EXPORT DisplayEvent
 
   DisplayEvent(PlatformEventType _type, MouseButtonData mouseButtonData)
     : m_type(_type), m_data(std::move(mouseButtonData)) { }
+
+  DisplayEvent(PlatformEventType _type, MouseWheelData mouseWheelData)
+    : m_type(_type), m_data(std::move(mouseWheelData)) { }
+
  /*
   *  Default destructor.
   */

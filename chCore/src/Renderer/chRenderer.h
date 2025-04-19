@@ -61,6 +61,8 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
 
   SPtr<IShader> m_vertexShader;
   SPtr<IShader> m_fragmentShader;
+
+  UniquePtr<Camera> m_camera;
   
   uint32 m_currentFrame = 0;
   static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;

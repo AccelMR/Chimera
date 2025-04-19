@@ -448,6 +448,19 @@ public:
   bool
   operator!=(const Degree& degree) const;
 
+  
+  /**
+   * @brief Overloaded multiplication operator for scaling a Radian object.
+   * 
+   * This operator allows a Radian object to be multiplied by a scalar value,
+   * effectively scaling the radian value by the given float.
+   * 
+   * @param value The scalar value to multiply the Radian object by.
+   * @return Radian A new Radian object representing the scaled value.
+   */
+  Radian
+  operator*(float value) const;
+
   /************************************************************************/
   /*
    * Friend methods for float overloads.

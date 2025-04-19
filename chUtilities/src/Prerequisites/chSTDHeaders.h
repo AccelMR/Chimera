@@ -203,11 +203,18 @@ using SPtr = std::shared_ptr<T>;
 template<typename T>
 using WeakPtr = std::weak_ptr<T>;
 
+template<typename T>
+struct ForwardDeleter {
+    void operator()(T* ptr) const {
+        delete ptr;
+    }
+};
+
 /** 
  *   Unique pointer used along Chimera.
  **/
-template<class T, typename A = std::default_delete<T>>
-using UnqPtr = std::unique_ptr<T, A>;
+template<class T>
+using UniquePtr = std::unique_ptr<T, ForwardDeleter<T>>;
 
 /**
  * @brief Create a new shared pointer using a custom allocator category.
@@ -223,9 +230,8 @@ chMakeShared(Args&&... args) {
  * @brief Create a new shared pointer using a custom allocator category.
  */
 template<class T, class... Args>
-UnqPtr<T>
-chMakeUnique(Args&&... args) {
-  return UnqPtr<T>(new T(std::forward<Args>(args)...));
+UniquePtr<T> chMakeUnique(Args&&... args) {
+    return UniquePtr<T>(new T(std::forward<Args>(args)...));
 }
 
 /************************************************************************/

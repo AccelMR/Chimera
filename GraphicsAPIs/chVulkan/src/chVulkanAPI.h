@@ -134,7 +134,7 @@ class VulkanAPI : public IGraphicsAPI {
   void
   createSurface(WeakPtr<DisplaySurface> display);
 
-  UnqPtr<VulkanData> m_vulkanData;
+  UniquePtr<VulkanData> m_vulkanData;
   
   SPtr<ICommandQueue> m_graphicsQueue;
   uint32 m_graphicsQueueFamilyIndex = 0;

@@ -19,6 +19,8 @@ struct KeyBoardData;
 enum class KeyBoardState : uint32;
 enum class KeyBoardModifier : uint16;
 
+class Camera;
+
 // Forward of any graphics stuff
 class IBuffer;
 class ICommandBuffer;

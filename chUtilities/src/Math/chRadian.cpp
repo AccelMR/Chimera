@@ -130,6 +130,13 @@ Radian::operator!=(const Degree& degree) const
 
 /*
 */
+Radian
+Radian::operator*(float value) const {
+  return Radian(m_radian * value);
+}
+
+/*
+*/
 bool
 Radian::operator==(const Degree& degree) const
 {
