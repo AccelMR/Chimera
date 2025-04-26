@@ -12,8 +12,6 @@
 #include "chPrerequisitesCore.h"
 #include "chFlags.h"
 #include "chLinearColor.h"
-#include "chVector3.h"
-#include "chVector2.h"
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
@@ -329,25 +327,6 @@ struct TextireCreateInfo {
   uint32 height = 0;
   uint32 depth = 1;
   uint32 mipLevels = 1;
-};
-
-struct VertexPosColor {
-  float position[3];
-  float color[4];
-  
-  static VertexLayout getLayout() {
-    return VertexLayout::createPostionColorLayout();
-  }
-};
-
-struct VertexNormalTexCoord {
-  Vector3 position;
-  Vector3 normal;
-  Vector2 texCoord;
-  
-  static VertexLayout getLayout() {
-    return VertexLayout::createPositionNormalTexCoordLayout();
-  }
 };
 
 struct ShaderCreateInfo {

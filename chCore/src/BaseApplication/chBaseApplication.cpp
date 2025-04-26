@@ -23,6 +23,7 @@
 #include "chEventDispatcherManager.h"
 #include "chIGraphicsAPI.h"
 #include "chLogger.h"
+#include "chMeshManager.h"
 #include "chRenderer.h"
 
 #if USING(CH_PLATFORM_LINUX)
@@ -113,6 +114,8 @@ BaseApplication::initializeModules() {
 
   // Initialize the renderer.
   Renderer::startUp();
+
+  MeshManager::startUp();
 }
 
 /*
@@ -159,6 +162,8 @@ BaseApplication::initializeGraphics() {
 void
 BaseApplication::destroyModules() {
   Renderer::shutDown();
+
+  MeshManager::shutDown();
 
   EventDispatcherManager::shutDown();
   DisplayManager::shutDown();

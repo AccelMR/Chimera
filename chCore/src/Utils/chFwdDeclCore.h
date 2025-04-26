@@ -21,6 +21,10 @@ enum class KeyBoardModifier : uint16;
 
 class Camera;
 
+class MeshManager;
+class Mesh;
+class Model;
+
 // Forward of any graphics stuff
 class IBuffer;
 class ICommandBuffer;

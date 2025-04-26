@@ -2,3 +2,6 @@
 	path = chCore/externals/crosswindow
 	url = https://github.com/AccelMR/CrossWindow.git
 	branch = master
+[submodule "chCore/externals/assimp"]
+	path = chCore/externals/assimp
+	url = https://github.com/assimp/assimp.git

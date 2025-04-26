@@ -400,5 +400,4 @@ private:
   // Frustum planes (left, right, top, bottom, near, far)
   Array<Plane, 6> m_frustumPlanes;
 };
-template void ForwardDeleter<Camera>::operator()(Camera* ptr) const;
 } // namespace chEngineSDK

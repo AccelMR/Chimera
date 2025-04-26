@@ -13,6 +13,10 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chLinearColor.h"
+#include "chVector3.h"
+#include "chVector2.h"
+
 namespace chEngineSDK {
 enum class VertexAttributeType {
   Position,
@@ -116,5 +120,28 @@ class CH_CORE_EXPORT VertexLayout {
   uint32 m_vertexSize = 0;   // Tamaño total de un vértice en el binding 0
 };
 
+/*
+ * Vertex structures for different vertex layouts.
+ * These structures are used to define the vertex data format
+ * for the graphics pipeline.
+*/
 
+struct VertexPosColor {
+  Vector3 position;
+  LinearColor color;
+  
+  static VertexLayout getLayout() {
+    return VertexLayout::createPostionColorLayout();
+  }
+};
+
+struct VertexNormalTexCoord {
+  Vector3 position;
+  Vector3 normal;
+  Vector2 texCoord;
+  
+  static VertexLayout getLayout() {
+    return VertexLayout::createPositionNormalTexCoordLayout();
+  }
+};
 } // namespace chEngineSDK

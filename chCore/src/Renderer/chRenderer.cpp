@@ -16,6 +16,7 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
+#include "chMeshManager.h"
 #include "chRadian.h"
 #include "chVector3.h"
 
@@ -77,6 +78,7 @@ Radian g_FOV(Degree(45.0f));
 float g_cameraPanSpeed = 0.01f;
 float g_cameraMoveSpeed = 0.1f;
 float g_rotationSpeed = 0.1f;
+SPtr<Model> g_model;
 
 Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 
@@ -104,7 +106,6 @@ Renderer::~Renderer() {
   m_renderFinishedSemaphores.clear();
   m_inFlightFences.clear();
 
-  m_vertexBuffer.reset();
   m_vertexShader.reset();
   m_fragmentShader.reset();
   m_pipeline.reset();
@@ -192,55 +193,77 @@ Renderer::initializeRenderResources() {
   };
   m_textureView = m_texture->createView(textureViewCreateInfo);
 
-  AABox box(-Vector3::UNIT, Vector3::UNIT);
-  Array<Vector3, 8> boxVertices = box.generateVertices3();
+  /********************************************************************************************/
+  SPtr<Model> model = MeshManager::instance().loadModel("resources/models/Porce/scene.gltf");
+  if (!model) {
+    CH_LOG_ERROR(RendererSystem, "Failed to load model");
+    return;
+  }
+  
+  m_currentModel = model;
+  
+  // Crear buffers para cada mesh en el modelo
+  const auto& meshes = model->getMeshes();
+  m_meshVertexBuffers.resize(meshes.size());
+  m_meshIndexBuffers.resize(meshes.size());
+  m_meshIndexCounts.resize(meshes.size());
+  m_meshIndexTypes.resize(meshes.size());
+  
+  for (size_t i = 0; i < meshes.size(); ++i) {
+    const auto& mesh = meshes[i];
+    
+    // Crear buffer de vértices
+    const Vector<uint8>& vertexData = mesh->getVertexData();
+    const uint32 vertexDataSize = mesh->getVertexDataSize();
+    
+    BufferCreateInfo bufferCreateInfo{
+      .size = vertexDataSize,
+      .usage = BufferUsage::VertexBuffer,
+      .memoryUsage = MemoryUsage::CpuToGpu,
+      .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
+      .initialDataSize = vertexDataSize,
+    };
+    m_meshVertexBuffers[i] = graphicsAPI.createBuffer(bufferCreateInfo);
+    
+    // Crear buffer de índices
+    m_meshIndexTypes[i] = mesh->getIndexType();
+    m_meshIndexCounts[i] = mesh->getIndexCount();
+    
+    if (m_meshIndexTypes[i] == IndexType::UInt16) {
+      Vector<uint16> indexData = mesh->getIndicesAsUInt16();
+      const uint32 indexDataSize = mesh->getIndexDataSize();
+      
+      BufferCreateInfo indexBufferCreateInfo{
+        .size = indexDataSize,
+        .usage = BufferUsage::IndexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
+        .initialDataSize = indexDataSize,
+      };
+      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
+    }
+    else {
+      Vector<uint32> indexData = mesh->getIndicesAsUInt32();
+      const uint32 indexDataSize = mesh->getIndexDataSize();
+      
+      BufferCreateInfo indexBufferCreateInfo{
+        .size = indexDataSize,
+        .usage = BufferUsage::IndexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
+        .initialDataSize = indexDataSize,
+      };
+      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
+    }
+  }
+  /********************************************************************************************/
 
-  Vector3 unitX(1.0f, 0.0f, 0.0f);
-  Vector3 unitY(0.0f, 1.0f, 0.0f);
-  Vector3 unitZ(0.0f, 0.0f, 1.0f);
-  Vector3 unitW(0.0f, 0.0f, 0.0f);
-
-  VertexNormalTexCoord cubeVertices[] = {
-    { boxVertices[0], unitX, Vector2(0.0f, 0.0f) },
-    { boxVertices[1], unitY, Vector2(1.0f, 0.0f) },
-    { boxVertices[2], unitZ, Vector2(1.0f, 1.0f) },
-    { boxVertices[3], unitW, Vector2(0.0f, 1.0f) },
-    { boxVertices[4], unitX, Vector2(0.0f, 1.0f) },
-    { boxVertices[5], unitY, Vector2(1.0f, 1.0f) },
-    { boxVertices[6], unitZ, Vector2(1.5f, 1.5f) },
-    { boxVertices[7], unitW, Vector2(0.5f, 1.5f) }
-  };
-
-  BufferCreateInfo bufferCreateInfo{
-    .size = sizeof(cubeVertices),
-    .usage = BufferUsage::VertexBuffer,
-    .memoryUsage = MemoryUsage::CpuToGpu,
-    .initialData = static_cast<void*>(&cubeVertices),
-    .initialDataSize = sizeof(cubeVertices),
-  };
-  m_vertexBuffer = graphicsAPI.createBuffer(bufferCreateInfo);
-
-  Array<uint16, 36> boxIndices = box.getConstIndices();
-  BufferCreateInfo indexBufferCreateInfo{
-    .size = sizeof(boxIndices),
-    .usage = BufferUsage::IndexBuffer,
-    .memoryUsage = MemoryUsage::CpuToGpu,
-    .initialData = static_cast<void*>(&boxIndices),
-    .initialDataSize = sizeof(boxIndices),
-  };
-  m_indexBuffer = graphicsAPI.createBuffer(indexBufferCreateInfo);
-
+  // Camera setup
   m_camera = chMakeUnique<Camera>(initialCameraPos, Vector3::ZERO, m_width, m_height);
   m_camera->setProjectionType(CameraProjectionType::Perspective);
   m_camera->setFieldOfView(g_FOV);
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);
   m_camera->updateMatrices();
-  
-  projectionViewMatrix = {
-    .projectionMatrix = m_camera->getProjectionMatrix(),
-    .viewMatrix = m_camera->getViewMatrix(),
-    .modelMatrix = Matrix4::IDENTITY
-  };
 
   BufferCreateInfo projectionViewBufferCreateInfo{
     .size = sizeof(RendererHelpers::ProjectionViewMatrix),
@@ -250,6 +273,13 @@ Renderer::initializeRenderResources() {
     .initialDataSize = sizeof(RendererHelpers::ProjectionViewMatrix),
   };
   m_viewProjectionBuffer = graphicsAPI.createBuffer(projectionViewBufferCreateInfo);
+
+  
+  projectionViewMatrix = {
+    .projectionMatrix = m_camera->getProjectionMatrix(),
+    .viewMatrix = m_camera->getViewMatrix(),
+    .modelMatrix = Matrix4::IDENTITY
+  };
 
   ShaderCreateInfo shaderCreateInfo{
     .stage = ShaderStage::Vertex,
@@ -460,27 +490,29 @@ Renderer::render(const float deltaTime) {
   };
   
   cmdBuffer->beginRenderPass(renderPassInfo);
-  
   cmdBuffer->setViewport(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
   cmdBuffer->setScissor(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
-  
   cmdBuffer->bindPipeline(m_pipeline);
-  cmdBuffer->bindVertexBuffer(m_vertexBuffer);
-  cmdBuffer->bindIndexBuffer(m_indexBuffer, IndexType::UInt16);
 
   projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
 
+  const Matrix4& modelGlobalTransform = m_currentModel->getTransform();
+  for (size_t i = 0; i < m_currentModel->getMeshCount(); ++i) {
+    Matrix4 meshTransform = m_currentModel->getMeshTransform(i);
+    projectionViewMatrix.modelMatrix =  modelGlobalTransform * meshTransform;
+    m_viewProjectionBuffer->update(&projectionViewMatrix, 
+                                    sizeof(RendererHelpers::ProjectionViewMatrix));
 
-  m_viewProjectionBuffer->update(&projectionViewMatrix,
-                                 sizeof(RendererHelpers::ProjectionViewMatrix));
-
-  cmdBuffer->bindDescriptorSets(PipelineBindPoint::Graphics,
-                                m_pipeline->getLayout(),
-                                0,
-                                { m_descriptorSet });
-  
-  cmdBuffer->drawIndexed(36);
+    cmdBuffer->bindDescriptorSets(PipelineBindPoint::Graphics,
+                                  m_pipeline->getLayout(),
+                                  0,
+                                  { m_descriptorSet });
+    
+    cmdBuffer->bindVertexBuffer(m_meshVertexBuffers[i]);
+    cmdBuffer->bindIndexBuffer(m_meshIndexBuffers[i], m_meshIndexTypes[i]);
+    cmdBuffer->drawIndexed(m_meshIndexCounts[i]);
+  }
   
   cmdBuffer->endRenderPass();
   cmdBuffer->end();

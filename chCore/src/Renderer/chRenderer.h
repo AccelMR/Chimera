@@ -8,6 +8,8 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+
+#include "chCamera.h"
 #include "chGraphicsTypes.h"
 #include "chModule.h"
 
@@ -42,12 +44,16 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   SPtr<ICommandPool> m_commandPool;
   Vector<SPtr<ICommandBuffer>> m_commandBuffers;
   SPtr<IPipeline> m_pipeline;
-  SPtr<IBuffer> m_vertexBuffer;
-  SPtr<IBuffer> m_indexBuffer;
   SPtr<IBuffer> m_viewProjectionBuffer;
   SPtr<ISampler> m_sampler;
   SPtr<ITexture> m_texture;
   SPtr<ITextureView> m_textureView;
+
+  SPtr<Model> m_currentModel;
+  Vector<SPtr<IBuffer>> m_meshVertexBuffers;
+  Vector<SPtr<IBuffer>> m_meshIndexBuffers;
+  Vector<uint32> m_meshIndexCounts;
+  Vector<IndexType> m_meshIndexTypes;
   
   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
   SPtr<IDescriptorPool> m_descriptorPool;
