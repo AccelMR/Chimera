@@ -84,6 +84,15 @@ VulkanCommandBuffer::beginRenderPass(const RenderPassBeginInfo& beginInfo) {
     });
   }
 
+  if (beginInfo.depthStencilClearValue.has_value()) {
+    VkClearValue vkClearValue;
+    vkClearValue.depthStencil = { 
+        beginInfo.depthStencilClearValue->first,
+        beginInfo.depthStencilClearValue->second
+    };
+    clearValues.push_back(vkClearValue);
+}
+
   VkRenderPassBeginInfo renderPassInfo = {
     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
     .renderPass = vulkanRenderPass->getHandle(),
@@ -96,7 +105,7 @@ VulkanCommandBuffer::beginRenderPass(const RenderPassBeginInfo& beginInfo) {
       }
     },
     .clearValueCount = static_cast<uint32>(clearValues.size()),
-    .pClearValues = clearValues.data()
+    .pClearValues = clearValues.data(),
   };
 
   vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);

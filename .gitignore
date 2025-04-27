@@ -10,5 +10,6 @@ CMakeSettings.json
 
 # Exclude Resource
 resources/
+assets/
 
 !resources/shaders/

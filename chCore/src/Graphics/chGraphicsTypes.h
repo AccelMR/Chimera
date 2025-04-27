@@ -318,6 +318,7 @@ struct TextureViewCreateInfo {
   uint32 mipLevelCount = ~0u;
   uint32 baseArrayLayer = 0;
   uint32 arrayLayerCount = ~0u;
+  bool bIsDepthStencil = false;
 };
 
 struct TextireCreateInfo {
@@ -400,6 +401,7 @@ struct RenderPassBeginInfo {
   SPtr<IRenderPass> renderPass;
   SPtr<IFrameBuffer> framebuffer;
   Vector<LinearColor> clearValues;
+  Optional<std::pair<float, uint32>> depthStencilClearValue = NullOpt;
 };
 
 struct SubmitInfo {

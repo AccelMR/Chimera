@@ -296,6 +296,8 @@ using RecursiveLock = std::unique_lock<RecursiveMutex>;
 template<typename T>
 using Optional = std::optional<T>;
 
+constexpr auto NullOpt = std::nullopt;
+
 /**
  * @brief Wrapper for the C++ std::variant.
  */

@@ -19,6 +19,7 @@ endmacro()
 add_compile_definitions(CH_UTILITY_EXPORTS)
 
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/externals)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Perform Linux-specific actions

@@ -13,9 +13,7 @@
 #include "chGameObject.h"
 
 namespace chEngineSDK {
-
-class CH_CORE_EXPORT Scene
-{
+class CH_CORE_EXPORT Scene{
  public:
   /**
    * Constructor
@@ -75,7 +73,6 @@ class CH_CORE_EXPORT Scene
  private:
   String m_name;
   Vector<SPtr<GameObject>> m_rootGameObjects;
-  UnorderedMap<String, SPtr<GameObject>> m_gameObjectsMap; // Para búsqueda rápida por nombre
+  UnorderedMap<String, SPtr<GameObject>> m_gameObjectsMap;
 };
-
 } // namespace chEngineSDK

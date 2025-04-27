@@ -19,6 +19,7 @@
 #include "chMeshManager.h"
 #include "chRadian.h"
 #include "chVector3.h"
+#include "chUUID.h"
 
 // Graphics-related includes
 #include "chIBuffer.h"
@@ -378,6 +379,41 @@ Renderer::initializeRenderResources() {
   };
   graphicsAPI.updateDescriptorSets(writeDescriptorSets);
 
+  //Create depth stencil
+  TextureCreateInfo depthStencilCreateInfo{
+    .type = TextureType::Texture2D,
+    .format = Format::D32_SFLOAT,
+    .width = m_swapChain->getWidth(),
+    .height = m_swapChain->getHeight(),
+    .depth = 1,
+    .mipLevels = 1,
+    .arrayLayers = 1,
+    .samples = SampleCount::Count1,
+    .usage = TextureUsage::DepthStencil
+  };
+  m_depthTexture = graphicsAPI.createTexture(depthStencilCreateInfo);
+
+  TextureViewCreateInfo depthStencilViewCreateInfo{
+    .format = Format::D32_SFLOAT,
+    .viewType = TextureViewType::View2D,
+    .bIsDepthStencil = true
+  };
+  m_depthTextureView = m_depthTexture->createView(depthStencilViewCreateInfo);
+
+  createRenderPass();
+
+  m_framebuffers.resize(m_swapChain->getTextureCount());
+  for (uint32 i = 0; i < m_swapChain->getTextureCount(); i++) {
+    FrameBufferCreateInfo fbInfo{
+      .renderPass = m_renderPass,
+      .attachments = {m_swapChain->getTextureView(i), m_depthTextureView},
+      .width = m_width,
+      .height = m_height,
+      .layers = 1
+    };
+    m_framebuffers[i] = graphicsAPI.createFrameBuffer(fbInfo);
+  }
+
   PipelineCreateInfo pipelineCreateInfo{
     .shaders = {
       { ShaderStage::Vertex, m_vertexShader },
@@ -385,17 +421,24 @@ Renderer::initializeRenderResources() {
     },
     .vertexLayout = VertexNormalTexCoord::getLayout(),
     .topology = PrimitiveTopology::TriangleList,
-    .renderPass = m_swapChain->getRenderPass(),
+    .depthStencil = {
+      .enable = true,
+      .writeEnable = true,
+      .compareOp = CompareOp::Less
+    },
+    .renderPass = m_renderPass,
     .setLayouts = { m_descriptorSetLayout },
   };
   m_pipeline = graphicsAPI.createPipeline(pipelineCreateInfo);
+
+
 
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
   HEvent listenResize = eventDispatcher.OnResize.connect(
     [&](uint32 width,uint32 height) {
       m_width = width;
       m_height = height;
-      resizeSwapChain();
+      resize();
 
       m_camera->setViewportSize(width, height);
       m_camera->updateMatrices();
@@ -469,7 +512,7 @@ Renderer::render(const float deltaTime) {
   m_inFlightFences[m_currentFrame]->reset();
   
   if (!m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame])){
-    resizeSwapChain();
+    resize();
     return;
   }
   uint32 imageIndex = m_swapChain->getCurrentImageIndex();
@@ -484,9 +527,14 @@ Renderer::render(const float deltaTime) {
   cmdBuffer->begin();
   
   RenderPassBeginInfo renderPassInfo{
-    .renderPass = m_swapChain->getRenderPass(),
-    .framebuffer = m_swapChain->getFramebuffer(imageIndex),
-    .clearValues = { LinearColor::Black }
+    .renderPass = m_renderPass,
+    .framebuffer = m_framebuffers[imageIndex],
+    .clearValues = { 
+      LinearColor::Black
+    },
+    .depthStencilClearValue = {
+      {1.0f, 0}
+    }
   };
   
   cmdBuffer->beginRenderPass(renderPassInfo);
@@ -500,7 +548,8 @@ Renderer::render(const float deltaTime) {
   const Matrix4& modelGlobalTransform = m_currentModel->getTransform();
   for (size_t i = 0; i < m_currentModel->getMeshCount(); ++i) {
     Matrix4 meshTransform = m_currentModel->getMeshTransform(i);
-    projectionViewMatrix.modelMatrix =  modelGlobalTransform * meshTransform;
+    RotationMatrix rotationMatrix(Rotator(180.0f, 0.0f, 0.0f));
+    projectionViewMatrix.modelMatrix =  modelGlobalTransform * meshTransform * rotationMatrix;
     m_viewProjectionBuffer->update(&projectionViewMatrix, 
                                     sizeof(RendererHelpers::ProjectionViewMatrix));
 
@@ -536,19 +585,129 @@ Renderer::render(const float deltaTime) {
 /*
 */
 void
-Renderer::resizeSwapChain() {
-  IGraphicsAPI::instance().getQueue(QueueType::Graphics)->waitIdle();
-
+Renderer::resize() {
+  auto& graphicsAPI = IGraphicsAPI::instance();
+  graphicsAPI.waitIdle();
+  
+  for (auto& fence : m_inFlightFences) {
+    if (fence) {
+      fence->wait(MAX_WAIT_TIME * 10);
+    }
+  }
+  
   m_imageAvailableSemaphores.clear();
   m_renderFinishedSemaphores.clear();
+
   m_swapChain->resize(m_width, m_height);
+
+  uint32 swapchainWidth = m_swapChain->getWidth();
+  uint32 swapchainHeight = m_swapChain->getHeight();
+
+  m_width = swapchainWidth;
+  m_height = swapchainHeight;
+
+  TextureCreateInfo depthTextureInfo{
+    .type = TextureType::Texture2D,
+    .format = Format::D32_SFLOAT,
+    .width = swapchainWidth,
+    .height = swapchainHeight,
+    .depth = 1,
+    .mipLevels = 1,
+    .arrayLayers = 1,
+    .samples = SampleCount::Count1,
+    .usage = TextureUsage::DepthStencil
+  };
+  
+  m_depthTexture = graphicsAPI.createTexture(depthTextureInfo);
+  TextureViewCreateInfo depthTextureViewInfo{
+    .format = Format::D32_SFLOAT,
+    .viewType = TextureViewType::View2D,
+    .bIsDepthStencil = true
+  };
+  m_depthTextureView = m_depthTexture->createView(depthTextureViewInfo);
+  
+  createRenderPass();
+  
+  m_framebuffers.clear();
+  m_framebuffers.resize(m_swapChain->getTextureCount());
+  for (uint32 i = 0; i < m_swapChain->getTextureCount(); i++) {
+    FrameBufferCreateInfo fbInfo{
+      .renderPass = m_renderPass,
+      .attachments = {m_swapChain->getTextureView(i), m_depthTextureView},
+      .width = swapchainWidth,
+      .height = swapchainHeight,
+      .layers = 1
+    };
+    
+    m_framebuffers[i] = graphicsAPI.createFrameBuffer(fbInfo);
+  }
 
   createSyncObjects();
 
   m_commandBuffers.clear();
   m_commandBuffers.resize(m_swapChain->getTextureCount());
   for (auto& commandBuffer : m_commandBuffers) {
-    commandBuffer = m_commandPool->allocateCommandBuffer();
+      commandBuffer = m_commandPool->allocateCommandBuffer();
   }
+}
+
+/*
+*/
+void
+Renderer::createRenderPass() {
+  auto& graphicsAPI = IGraphicsAPI::instance();
+    
+    AttachmentDescription colorAttachment{
+      .format = m_swapChain->getFormat(),
+      .loadOp = LoadOp::Clear,
+      .storeOp = StoreOp::Store,
+      .stencilLoadOp = LoadOp::DontCare,
+      .stencilStoreOp = StoreOp::DontCare,
+      .initialLayout = TextureLayout::Undefined,
+      .finalLayout = TextureLayout::PresentSrc
+    };
+    
+    AttachmentDescription depthAttachment{
+      .format = Format::D32_SFLOAT, // Mismo formato que usaste para crear la textura
+      .loadOp = LoadOp::Clear,
+      .storeOp = StoreOp::DontCare, // No necesitamos preservar el contenido después
+      .stencilLoadOp = LoadOp::DontCare,
+      .stencilStoreOp = StoreOp::DontCare,
+      .initialLayout = TextureLayout::Undefined,
+      .finalLayout = TextureLayout::DepthStencilAttachment
+    };
+    
+    AttachmentReference colorRef{
+      .attachment = 0,
+      .layout = TextureLayout::ColorAttachment
+    };
+    
+    AttachmentReference depthRef{
+      .attachment = 1,
+      .layout = TextureLayout::DepthStencilAttachment
+    };
+    
+    SubpassDescription subpass{
+      .pipelineBindPoint = PipelineBindPoint::Graphics,
+      .colorAttachments = {colorRef},
+      .depthStencilAttachment = depthRef
+    };
+    
+    SubpassDependency dependency{
+      .srcSubpass = SUBPASS_EXTERNAL,
+      .dstSubpass = 0,
+      .srcStageMask = PipelineStage::ColorAttachmentOutput,
+      .dstStageMask = PipelineStage::ColorAttachmentOutput,
+      .srcAccessMask = Access::NoAccess,
+      .dstAccessMask = Access::ColorAttachmentWrite
+    };
+    
+    RenderPassCreateInfo renderPassInfo{
+      .attachments = {colorAttachment, depthAttachment},
+      .subpasses = {subpass},
+      .dependencies = {dependency}
+    };
+    
+    m_renderPass = graphicsAPI.createRenderPass(renderPassInfo);
 }
 } // namespace chEngineSDK

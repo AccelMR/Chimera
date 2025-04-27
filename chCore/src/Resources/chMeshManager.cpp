@@ -159,26 +159,26 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
     
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
       vertices[i].position =  {
-        //mesh->mVertices[i].z,
-        //mesh->mVertices[i].x,
-        //-mesh->mVertices[i].y
+        mesh->mVertices[i].z,
         mesh->mVertices[i].x,
-        mesh->mVertices[i].y,
-        mesh->mVertices[i].z
+        mesh->mVertices[i].y
+        //mesh->mVertices[i].x,
+        //mesh->mVertices[i].y,
+        //mesh->mVertices[i].z
       };
       vertices[i].normal = {
-        //mesh->mNormals[i].z,
-        //mesh->mNormals[i].x,
-        //-mesh->mNormals[i].y
+        mesh->mNormals[i].z,
         mesh->mNormals[i].x,
-        mesh->mNormals[i].y,
-        mesh->mNormals[i].z
+        mesh->mNormals[i].y
+        // mesh->mNormals[i].x,
+        // mesh->mNormals[i].y,
+        // mesh->mNormals[i].z
       };
       
       if (hasTexCoords) {
         vertices[i].texCoord = { 
           mesh->mTextureCoords[0][i].x, 
-          mesh->mTextureCoords[0][i].y 
+          1.0f - mesh->mTextureCoords[0][i].y
         };
       } 
       else {

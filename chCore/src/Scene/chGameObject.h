@@ -10,12 +10,15 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+
+#include "chObject.h"
+
 #include "chTransform.h"
 #include "chComponent.h"
 
 namespace chEngineSDK {
 
-class CH_CORE_EXPORT GameObject
+class CH_CORE_EXPORT GameObject : public Object
 {
  public:
   /**
@@ -35,7 +38,8 @@ class CH_CORE_EXPORT GameObject
    * 
    * @param child GameObject to add as child
    */
-  void addChild(SPtr<GameObject> child);
+  void 
+  addChild(SPtr<GameObject> child);
   
   /**
    * Remove a child GameObject
@@ -43,24 +47,28 @@ class CH_CORE_EXPORT GameObject
    * @param child GameObject to remove
    * @return True if child was removed
    */
-  bool removeChild(SPtr<GameObject> child);
+  bool 
+  removeChild(SPtr<GameObject> child);
   
   /**
    * Get the GameObject's transformation
    * 
    * @return Reference to the transform
    */
-  NODISCARD Transform& getTransform() { return m_transform; }
+  NODISCARD Transform& 
+  getTransform() { return m_transform; }
   
   /**
    * Get the GameObject's name
    * 
    * @return Name of the GameObject
    */
-  NODISCARD const String& getName() const { return m_name; }
+  NODISCARD const String& 
+  getName() const { return m_name; }
   
   /**
    * Add a component to the GameObject
+  
    * 
    * @tparam T Component type
    * @param component Component to add
@@ -132,52 +140,58 @@ class CH_CORE_EXPORT GameObject
    * 
    * @return Vector of all components
    */
-  NODISCARD const Vector<SPtr<Component>>& getAllComponents() const { return m_components; }
+  NODISCARD const Vector<SPtr<Component>>& 
+  getAllComponents() const { return m_components; }
   
   /**
    * Get all child GameObjects
    * 
    * @return Vector of child GameObjects
    */
-  NODISCARD const Vector<SPtr<GameObject>>& getChildren() const { return m_children; }
+  NODISCARD const Vector<SPtr<GameObject>>& 
+  getChildren() const { return m_children; }
   
   /**
    * Get the parent GameObject
    * 
    * @return Shared pointer to the parent, or nullptr if no parent
    */
-  NODISCARD SPtr<GameObject> getParent() const { return m_parent.lock(); }
+  NODISCARD SPtr<GameObject> 
+  getParent() const { return m_parent.lock(); }
   
   /**
    * Set the parent GameObject
    * 
    * @param parent New parent GameObject
    */
-  void setParent(SPtr<GameObject> parent);
+  void 
+  setParent(SPtr<GameObject> parent);
   
   /**
    * Update the GameObject and all its children
    * 
    * @param deltaTime Time elapsed since the last update
    */
-  void update(float deltaTime);
+  void 
+  update(float deltaTime);
   
   /**
    * Set whether the GameObject is active
    * 
    * @param active Whether the GameObject should be active
    */
-  void setActive(bool active) { m_active = active; }
+  void 
+  setActive(bool active) { m_active = active; }
   
   /**
    * Check if the GameObject is active
    * 
    * @return True if the GameObject is active
    */
-  NODISCARD bool isActive() const { return m_active; }
+  NODISCARD bool 
+  isActive() const { return m_active; }
 
  private:
-  String m_name;
   Transform m_transform;
   Vector<SPtr<Component>> m_components;
   Vector<SPtr<GameObject>> m_children;

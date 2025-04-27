@@ -205,6 +205,13 @@ class CH_UTILITY_EXPORT Path {
   Path
   operator+(const String& other) const;
 
+  Path
+  operator/(const String& other) const;
+
+  Path
+  operator/(const Path& other) const;
+
+
   NODISCARD bool
   empty() const { return m_path.empty(); }
 

@@ -156,6 +156,22 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
     return;
   }
 
+  VkPipelineDepthStencilStateCreateInfo depthStencil{};
+  depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = createInfo.depthStencil.enable ? VK_TRUE : VK_FALSE;
+  depthStencil.depthWriteEnable = createInfo.depthStencil.writeEnable ? VK_TRUE : VK_FALSE;
+
+  switch (createInfo.depthStencil.compareOp) {
+    case CompareOp::Less:
+      depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+      break;
+    case CompareOp::Equal:
+      depthStencil.depthCompareOp = VK_COMPARE_OP_EQUAL;
+      break;
+    default:
+      depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+  }
+
   VkGraphicsPipelineCreateInfo pipelineInfo{
     .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
     .stageCount = static_cast<uint32>(shaderStages.size()),
@@ -165,7 +181,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
     .pViewportState = &viewportState,
     .pRasterizationState = &rasterizer,
     .pMultisampleState = &multisampling,
-    .pDepthStencilState = nullptr, // Por ahora sin depth/stencil
+    .pDepthStencilState = &depthStencil,
     .pColorBlendState = &colorBlending,
     .pDynamicState = &dynamicState,
     .layout = m_pipelineLayout,

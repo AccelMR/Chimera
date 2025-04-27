@@ -100,4 +100,14 @@ Path::operator+(const String& other) const {
   return Path((m_path.generic_string() + "/" + other));
 }
 
+Path
+Path::operator/(const String& other) const {
+  return Path((m_path.generic_string() + "/" + other));
+}
+
+Path
+Path::operator/(const Path& other) const {
+  return Path((m_path / other.m_path));
+}
+
 }  // namespace chEngineSDK
