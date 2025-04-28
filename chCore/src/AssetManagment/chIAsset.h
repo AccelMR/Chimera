@@ -18,6 +18,20 @@
 
 namespace chEngineSDK {
 
+enum class AssetType : uint32 {
+  None = 0,
+  Mesh,
+  Model,
+  Material,
+  Texture,
+  Shader,
+  Prefab,
+
+  COUNT
+};
+
+std::ostream& operator<<(std::ostream& os, AssetType type);
+
 enum class AssetState : uint16 {
   None = 0,
   Loading,
@@ -34,8 +48,8 @@ struct AssetMetadata {
   String name = "";
   UUID uuid = UUID::null();
   uint64 creationTime = ~0;
-  Path originalPath = "";
-  Path cachedPath = "";
+  Path originalPath = Path::EMPTY;
+  Path cachedPath = Path::EMPTY;
 };
 
 class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
@@ -52,6 +66,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   }
 
   template<typename T>
+  requires std::is_base_of<IAsset, T>::value
   NODISCARD FORCEINLINE bool
   isTypeOf() const;
 
@@ -135,7 +150,8 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 */
 template<typename T>
 requires std::is_base_of<IAsset, T>::value
-bool IAsset::isTypeOf() const {
+bool 
+IAsset::isTypeOf() const {
   return getType() == T::getStaticType();
 }
 } // namespace chEngineSDK

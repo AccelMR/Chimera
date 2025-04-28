@@ -42,9 +42,9 @@ DynamicLibraryManager::loadDynLibrary(const String& name, const Path& path)
     return lib;
   }
   
-  Path fileWholeName = fileName;
+  Path fileWholeName(fileName);
   if (!path.empty()) {
-    fileWholeName = path.toString() + "/" + fileName;
+    fileWholeName = path / fileName;
     std::cout << "Loading library: " << fileWholeName.toString() << std::endl;
   }
 

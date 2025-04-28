@@ -76,11 +76,11 @@ class CH_CORE_EXPORT MeshManager : public Module<MeshManager> {
   SPtr<Mesh>
   processMesh(aiMesh* mesh, const aiScene* scene);
 
-  void 
+  void
   processNodeForModel(aiNode* node, 
                       const aiScene* scene, 
                       SPtr<Model> model,
-                      const Matrix4& parentTransform);
+                      ModelNode* parentNode);
 
 
  private:

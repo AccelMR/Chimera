@@ -75,7 +75,7 @@ FileSystem::exists(const Path& path) {
 SPtr<DataStream>
 FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
   const Path fullPath = path.isRelative() ? 
-    fs::absolute(path.toString()).generic_string() : 
+    Path(fs::absolute(path.toString()).generic_string()) : 
     path;
 
   AccesModeFlag accessMode(ACCESS_MODE::kREAD);

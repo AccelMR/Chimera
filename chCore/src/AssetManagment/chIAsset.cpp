@@ -19,6 +19,21 @@
 #include "chLogger.h"
 
 namespace chEngineSDK {
+
+std::ostream& operator<<(std::ostream& os, AssetType type){
+  switch (type) {
+    case AssetType::None: os << "None"; break;
+    case AssetType::Mesh: os << "Mesh"; break;
+    case AssetType::Model: os << "Model"; break;
+    case AssetType::Material: os << "Material"; break;
+    case AssetType::Texture: os << "Texture"; break;
+    case AssetType::Shader: os << "Shader"; break;
+    case AssetType::Prefab: os << "Prefab"; break;
+    default: os << "Unknown"; break;
+  }
+  return os;
+}
+
 /*
 */
 bool

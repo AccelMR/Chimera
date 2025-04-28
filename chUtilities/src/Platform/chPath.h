@@ -35,7 +35,7 @@ class CH_UTILITY_EXPORT Path {
    * @param path
    *    As string.
    */
-  Path(const String& path);
+  explicit Path(const String& path);
 
   /**
    * Constructor from a C-string.
@@ -43,7 +43,7 @@ class CH_UTILITY_EXPORT Path {
    * @param path
    *    As C-string.
   */
-  Path(const char* path) 
+  explicit Path(const char* path) 
     : m_path(path) {}
 
 #if USING(CH_CPP17_OR_LATER)
@@ -53,7 +53,7 @@ class CH_UTILITY_EXPORT Path {
    * @param path
    *    As filesystem path.
    */
-  FORCEINLINE
+  FORCEINLINE explicit
   Path(const fs::path& path) 
     : m_path(path) {}
 
@@ -211,9 +211,20 @@ class CH_UTILITY_EXPORT Path {
   Path
   operator/(const Path& other) const;
 
-
   NODISCARD bool
   empty() const { return m_path.empty(); }
+
+  /**
+   * Returns the underlying filesystem path.
+   * 
+   * @return The underlying filesystem path.
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Path& path) {
+    os << path.toString();
+    return os;
+  }
+
+  static Path EMPTY;
 
  protected:
   friend class FileSystem;

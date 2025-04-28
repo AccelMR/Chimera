@@ -164,7 +164,7 @@ Renderer::initializeRenderResources() {
   int32 imageWidth = 0;
   int32 imageHeight = 0;
   int32 channel = 0;
-  Vector<uint8> imageData = RendererHelpers::loadImage("resources/images/beto1.jpg", 
+  Vector<uint8> imageData = RendererHelpers::loadImage(Path("resources/images/beto1.jpg"),
                                                        &imageWidth,
                                                        &imageHeight,
                                                        &channel);
@@ -195,45 +195,61 @@ Renderer::initializeRenderResources() {
   m_textureView = m_texture->createView(textureViewCreateInfo);
 
   /********************************************************************************************/
-  SPtr<Model> model = MeshManager::instance().loadModel("resources/models/Porce/scene.gltf");
+
+  SPtr<Model> model = MeshManager::instance().loadModel(Path("resources/models/test.fbx"));
+  //SPtr<Model> model = MeshManager::instance().loadModel(Path("resources/models/Porce/scene.gltf"));
   if (!model) {
     CH_LOG_ERROR(RendererSystem, "Failed to load model");
     return;
   }
-  
   m_currentModel = model;
-  
-  // Crear buffers para cada mesh en el modelo
-  const auto& meshes = model->getMeshes();
-  m_meshVertexBuffers.resize(meshes.size());
-  m_meshIndexBuffers.resize(meshes.size());
-  m_meshIndexCounts.resize(meshes.size());
-  m_meshIndexTypes.resize(meshes.size());
-  
-  for (size_t i = 0; i < meshes.size(); ++i) {
-    const auto& mesh = meshes[i];
-    
+
+  // Recopilar todas las mallas únicas de todos los nodos
+  Vector<SPtr<Mesh>> uniqueMeshes;
+  UnorderedMap<SPtr<Mesh>, uint32> meshToIndexMap;
+
+  // Primero recopilamos todas las mallas únicas
+  for (ModelNode* node : model->getAllNodes()) {
+    for (const auto& mesh : node->getMeshes()) {
+      // Si esta malla no está ya en nuestra lista
+      if (meshToIndexMap.find(mesh) == meshToIndexMap.end()) {
+        meshToIndexMap[mesh] = static_cast<uint32>(uniqueMeshes.size());
+        uniqueMeshes.push_back(mesh);
+      }
+    }
+  }
+
+  // Redimensionar nuestros buffers basados en las mallas únicas
+  m_meshVertexBuffers.resize(uniqueMeshes.size());
+  m_meshIndexBuffers.resize(uniqueMeshes.size());
+  m_meshIndexCounts.resize(uniqueMeshes.size());
+  m_meshIndexTypes.resize(uniqueMeshes.size());
+
+  // Crear buffers para cada malla única
+  for (size_t i = 0; i < uniqueMeshes.size(); ++i) {
+    const auto& mesh = uniqueMeshes[i];
+
     // Crear buffer de vértices
     const Vector<uint8>& vertexData = mesh->getVertexData();
     const uint32 vertexDataSize = mesh->getVertexDataSize();
-    
+
     BufferCreateInfo bufferCreateInfo{
-      .size = vertexDataSize,
-      .usage = BufferUsage::VertexBuffer,
-      .memoryUsage = MemoryUsage::CpuToGpu,
-      .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
-      .initialDataSize = vertexDataSize,
+        .size = vertexDataSize,
+        .usage = BufferUsage::VertexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
+        .initialDataSize = vertexDataSize,
     };
     m_meshVertexBuffers[i] = graphicsAPI.createBuffer(bufferCreateInfo);
-    
+
     // Crear buffer de índices
     m_meshIndexTypes[i] = mesh->getIndexType();
     m_meshIndexCounts[i] = mesh->getIndexCount();
-    
+
     if (m_meshIndexTypes[i] == IndexType::UInt16) {
       Vector<uint16> indexData = mesh->getIndicesAsUInt16();
       const uint32 indexDataSize = mesh->getIndexDataSize();
-      
+
       BufferCreateInfo indexBufferCreateInfo{
         .size = indexDataSize,
         .usage = BufferUsage::IndexBuffer,
@@ -242,11 +258,11 @@ Renderer::initializeRenderResources() {
         .initialDataSize = indexDataSize,
       };
       m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
-    }
+    } 
     else {
       Vector<uint32> indexData = mesh->getIndicesAsUInt32();
       const uint32 indexDataSize = mesh->getIndexDataSize();
-      
+
       BufferCreateInfo indexBufferCreateInfo{
         .size = indexDataSize,
         .usage = BufferUsage::IndexBuffer,
@@ -257,6 +273,10 @@ Renderer::initializeRenderResources() {
       m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
     }
   }
+
+  // Guardar el mapa de mallas a índices para usarlo durante el renderizado
+  m_meshToIndexMap = std::move(meshToIndexMap);
+
   /********************************************************************************************/
 
   // Camera setup
@@ -285,7 +305,7 @@ Renderer::initializeRenderResources() {
   ShaderCreateInfo shaderCreateInfo{
     .stage = ShaderStage::Vertex,
     .entryPoint = "main",
-    .sourceCode = FileSystem::fastRead("resources/shaders/cubeVertex.spv"),
+    .sourceCode = FileSystem::fastRead(Path("resources/shaders/cubeVertex.spv")),
     .filePath = "resources/shaders/cubeVertex.spv",
     .defines = { /* Preprocessor defines */ }
   };
@@ -293,7 +313,7 @@ Renderer::initializeRenderResources() {
   ShaderCreateInfo fragmentShaderCreateInfo{
     .stage = ShaderStage::Fragment,
     .entryPoint = "main",
-    .sourceCode = FileSystem::fastRead("resources/shaders/cubeFragment.spv"),
+    .sourceCode = FileSystem::fastRead(Path("resources/shaders/cubeFragment.spv")),
     .filePath = "resources/shaders/cubeFragment.spv",
     .defines = { /* Preprocessor defines */ }
   };
@@ -545,23 +565,7 @@ Renderer::render(const float deltaTime) {
   projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
 
-  const Matrix4& modelGlobalTransform = m_currentModel->getTransform();
-  for (size_t i = 0; i < m_currentModel->getMeshCount(); ++i) {
-    Matrix4 meshTransform = m_currentModel->getMeshTransform(i);
-    RotationMatrix rotationMatrix(Rotator(180.0f, 0.0f, 0.0f));
-    projectionViewMatrix.modelMatrix =  modelGlobalTransform * meshTransform * rotationMatrix;
-    m_viewProjectionBuffer->update(&projectionViewMatrix, 
-                                    sizeof(RendererHelpers::ProjectionViewMatrix));
-
-    cmdBuffer->bindDescriptorSets(PipelineBindPoint::Graphics,
-                                  m_pipeline->getLayout(),
-                                  0,
-                                  { m_descriptorSet });
-    
-    cmdBuffer->bindVertexBuffer(m_meshVertexBuffers[i]);
-    cmdBuffer->bindIndexBuffer(m_meshIndexBuffers[i], m_meshIndexTypes[i]);
-    cmdBuffer->drawIndexed(m_meshIndexCounts[i]);
-  }
+  renderModel(m_currentModel, cmdBuffer, deltaTime);
   
   cmdBuffer->endRenderPass();
   cmdBuffer->end();
@@ -709,5 +713,57 @@ Renderer::createRenderPass() {
     };
     
     m_renderPass = graphicsAPI.createRenderPass(renderPassInfo);
+}
+
+/*
+ */
+void
+Renderer::renderModel(const SPtr<Model>& model, const SPtr<ICommandBuffer>& commandBuffer, float deltaTime) {
+  m_currentModel->updateTransforms();
+
+  ModelNode* targetNode = m_currentModel->findNode("Cube");
+  if (targetNode) {
+    const Matrix4 originalTransform = targetNode->getLocalTransform();
+    
+    //RotationMatrix rotationMatrix(Rotator(0.0f, deltaTime * 20 , 0.0f)); 
+    static float initPos = 0.0f;
+    initPos += deltaTime * 2.0f;
+    TranslationMatrix translationMatrix(Vector3(initPos, 0.0f, 0.0f));
+
+    const Matrix4 newTransform = originalTransform * translationMatrix;
+  
+    m_currentModel->updateNodeTransform(targetNode, newTransform);
+  }
+
+  // Recorrer todos los nodos para renderizar sus mallas
+  //uint32 meshIndex = 0;
+  for (ModelNode* node : m_currentModel->getAllNodes()) {
+    if (node->getMeshes().empty()) {
+      continue; // Si no hay mallas, saltar este nodo
+    }
+
+    // Obtener la transformación global del nodo
+    const Matrix4& nodeTransform = node->getGlobalTransform();
+
+    projectionViewMatrix.modelMatrix = nodeTransform;
+
+    m_viewProjectionBuffer->update(&projectionViewMatrix,
+                                   sizeof(RendererHelpers::ProjectionViewMatrix));
+
+    commandBuffer->bindDescriptorSets(PipelineBindPoint::Graphics, 
+                                      m_pipeline->getLayout(), 0,
+                                      {m_descriptorSet});
+
+    // Renderizar todas las mallas asociadas a este nodo
+    for (const auto& mesh : node->getMeshes()) {
+      // Obtener el índice de la malla en nuestros buffers
+      uint32 meshIndex = m_meshToIndexMap[mesh];
+
+      commandBuffer->bindVertexBuffer(m_meshVertexBuffers[meshIndex]);
+      commandBuffer->bindIndexBuffer(m_meshIndexBuffers[meshIndex], m_meshIndexTypes[meshIndex]);
+      commandBuffer->drawIndexed(m_meshIndexCounts[meshIndex]);
+      //meshIndex++;
+    }
+  }
 }
 } // namespace chEngineSDK

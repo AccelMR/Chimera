@@ -11,7 +11,7 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chAssetManager.h"
+#include "chIAsset.h"
 
 namespace chEngineSDK {
 static const UnorderedMap<AssetType, Vector<String>> SUPPORTED_IMPORTS = {

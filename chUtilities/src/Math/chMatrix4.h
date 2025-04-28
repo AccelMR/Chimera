@@ -126,7 +126,7 @@ class Matrix4
    *    A new Matrix4 created from this.
    **/
   FORCEINLINE Matrix4
-  getInverse();
+  getInverse() const ;
 
   /**
    *  Computes the conversion between this matrix to a rotator.
@@ -493,8 +493,7 @@ Matrix4::getDeterminant() const
 /*
 */
 FORCEINLINE Matrix4
-Matrix4::getInverse()
-{
+Matrix4::getInverse() const {
   Matrix4 Res;
   const float	Det = getDeterminant();
   if (0.0f == Det) {

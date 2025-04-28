@@ -39,6 +39,9 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   resize();
 
   void
+  renderModel(const SPtr<Model>& model, const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
+
+  void
   createRenderPass();
 
  private:
@@ -61,6 +64,7 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   Vector<SPtr<IBuffer>> m_meshIndexBuffers;
   Vector<uint32> m_meshIndexCounts;
   Vector<IndexType> m_meshIndexTypes;
+  UnorderedMap<SPtr<Mesh>, uint32> m_meshToIndexMap;
   
   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
   SPtr<IDescriptorPool> m_descriptorPool;

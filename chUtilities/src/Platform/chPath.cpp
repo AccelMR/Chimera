@@ -21,6 +21,8 @@
 namespace chEngineSDK {
 namespace fs = std::filesystem;
 
+Path Path::EMPTY = Path("");
+
 Path::Path(const String& path) {
     String normalizedPath = path;
     std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
@@ -77,7 +79,7 @@ Path::getExtension() const {
 
 Path 
 Path::getDirectory() const {
-  return m_path.parent_path();
+  return Path(m_path.parent_path());
 }
 
 void 

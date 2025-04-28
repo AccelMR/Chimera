@@ -27,12 +27,6 @@ convertAssimpMatrix(const aiMatrix4x4& matrix) {
   Matrix4 result;
   std::memcpy(&result, &matrix, sizeof(Matrix4));
   return result;
-  // return Matrix4(
-  //   matrix.a1, matrix.a2, matrix.a3, matrix.a4,
-  //   matrix.b1, matrix.b2, matrix.b3, matrix.b4,
-  //   matrix.c1, matrix.c2, matrix.c3, matrix.c4,
-  //   matrix.d1, matrix.d2, matrix.d3, matrix.d4
-  // );
 }
 } // namespace MeshManagerHelpers
 
@@ -43,74 +37,81 @@ CH_LOG_DECLARE_STATIC(MeshSystem, All);
 SPtr<Mesh>
 MeshManager::loadMesh(const Path& meshPath, const String& meshName) {
   String name = meshName.empty() ? meshPath.getFileName() : meshName;
-  
+
   auto it = m_meshes.find(name);
   if (it != m_meshes.end()) {
     return it->second;
   }
-  
+
   SPtr<Model> model = loadModel(meshPath);
-  if (!model || model->getMeshCount() == 0) {
+  if (!model || model->getAllNodes().empty()) {
     CH_LOG_ERROR(MeshSystem, "Failed to load mesh from path: {0}", meshPath.toString());
     return nullptr;
   }
-  
-  SPtr<Mesh> mesh = model->getMesh(0);
-  
-  m_meshes[name] = mesh;
+
+  // Buscar el primer nodo que tenga meshes
+  SPtr<Mesh> firstMesh = nullptr;
+  for (ModelNode* node : model->getAllNodes()) {
+    if (!node->getMeshes().empty()) {
+      firstMesh = node->getMeshes()[0];
+      break;
+    }
+  }
+
+  if (!firstMesh) {
+    CH_LOG_ERROR(MeshSystem, "Model has no meshes: {0}", meshPath.toString());
+    return nullptr;
+  }
+
+  m_meshes[name] = firstMesh;
   CH_LOG_DEBUG(MeshSystem, "Loaded mesh from path: {0}", meshPath.toString());
-  
-  return mesh;
+
+  return firstMesh;
 }
 
 /*
 */
-SPtr<Model> 
+SPtr<Model>
 MeshManager::loadModel(const Path& filePath) {
   CH_LOG_INFO(MeshSystem, "Loading model: {0}", filePath.toString());
 
   String modelName = filePath.getFileName();
-  
+
   auto it = m_models.find(modelName);
   if (it != m_models.end()) {
     return it->second;
   }
-  
+
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
     return nullptr;
   }
-  
+
   Assimp::Importer importer;
-  
-  const aiScene* scene = importer.ReadFile(
-    filePath.toString(),
-    aiProcessPreset_TargetRealtime_MaxQuality |
-    aiProcess_FlipUVs |
-    aiProcess_MakeLeftHanded |
-    aiProcess_PreTransformVertices
+
+  const aiScene* scene = importer.ReadFile(filePath.toString(),
+                                           aiProcessPreset_TargetRealtime_MaxQuality |
+                                               aiProcess_FlipUVs | aiProcess_MakeLeftHanded //|
+                                           // aiProcess_PreTransformVertices
   );
 
-    // aiProcess_Triangulate |
-    // aiProcess_GenSmoothNormals |
-    // aiProcess_CalcTangentSpace |
-    // aiProcess_JoinIdenticalVertices |
-    // aiProcess_ImproveCacheLocality |
-  
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
     CH_LOG_ERROR(MeshSystem, "Assimp error: {0}", importer.GetErrorString());
     return nullptr;
   }
-  
+
   SPtr<Model> model = chMakeShared<Model>();
-  
-  processNodeForModel(scene->mRootNode, scene, model, Matrix4::IDENTITY);
-  
+
+  // Procesar el árbol de nodos comenzando por la raíz
+  processNodeForModel(scene->mRootNode, scene, model, nullptr);
+
+  // Actualizar todas las transformaciones
+  model->updateTransforms();
+
   m_models[modelName] = model;
-  
+
   return model;
 }
-
 
 /*
 */
@@ -159,20 +160,20 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
     
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
       vertices[i].position =  {
-        mesh->mVertices[i].z,
+        // mesh->mVertices[i].z,
+        // mesh->mVertices[i].x,
+        // mesh->mVertices[i].y
         mesh->mVertices[i].x,
-        mesh->mVertices[i].y
-        //mesh->mVertices[i].x,
-        //mesh->mVertices[i].y,
-        //mesh->mVertices[i].z
+        mesh->mVertices[i].y,
+        mesh->mVertices[i].z
       };
       vertices[i].normal = {
-        mesh->mNormals[i].z,
-        mesh->mNormals[i].x,
-        mesh->mNormals[i].y
+        // mesh->mNormals[i].z,
         // mesh->mNormals[i].x,
-        // mesh->mNormals[i].y,
-        // mesh->mNormals[i].z
+        // mesh->mNormals[i].y
+        mesh->mNormals[i].x,
+        mesh->mNormals[i].y,
+        mesh->mNormals[i].z
       };
       
       if (hasTexCoords) {
@@ -284,27 +285,54 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
 
 /*
 */
-void 
-MeshManager::processNodeForModel(aiNode* node, 
-                                const aiScene* scene, 
-                                SPtr<Model> model,
-                                const Matrix4& parentTransform) {
-  Matrix4 nodeTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
-  Matrix4 globalTransform = nodeTransform;
+// void 
+// MeshManager::processNodeForModel(aiNode* node, 
+//                                 const aiScene* scene, 
+//                                 SPtr<Model> model,
+//                                 const Matrix4& parentTransform) {
+//   Matrix4 nodeTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
+//   Matrix4 globalTransform = nodeTransform * parentTransform;
   
+//   for (uint32 i = 0; i < node->mNumMeshes; i++) {
+//     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+//     SPtr<Mesh> processedMesh = processMesh(mesh, scene);
+    
+//     if (processedMesh) {
+//       uint32 meshIndex = model->addMesh(processedMesh);
+      
+//       model->setMeshTransform(meshIndex, globalTransform);
+//     }
+//   }
+  
+//   for (uint32 i = 0; i < node->mNumChildren; i++) {
+//     processNodeForModel(node->mChildren[i], scene, model, globalTransform);
+//   }
+// }
+
+void
+MeshManager::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
+                                 ModelNode* parentNode) {
+  Matrix4 nodeLocalTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
+
+  String nodeName = node->mName.C_Str();
+  ModelNode* modelNode = model->createNode(nodeName, nodeLocalTransform, parentNode);
+
+  CH_ASSERT(parentNode == nullptr || std::find(parentNode->getChildren().begin(), 
+                                               parentNode->getChildren().end(), 
+                                               modelNode) != parentNode->getChildren().end());
+    
+
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
     SPtr<Mesh> processedMesh = processMesh(mesh, scene);
-    
+
     if (processedMesh) {
-      uint32 meshIndex = model->addMesh(processedMesh);
-      
-      model->setMeshTransform(meshIndex, globalTransform);
+      modelNode->addMesh(processedMesh);
     }
   }
-  
+
   for (uint32 i = 0; i < node->mNumChildren; i++) {
-    processNodeForModel(node->mChildren[i], scene, model, globalTransform);
+    processNodeForModel(node->mChildren[i], scene, model, modelNode);
   }
 }
 } // namespace chEngineSDK
