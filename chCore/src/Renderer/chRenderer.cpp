@@ -16,10 +16,8 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
-#include "chMeshManager.h"
 #include "chRadian.h"
 #include "chVector3.h"
-#include "chUUID.h"
 
 // Graphics-related includes
 #include "chIBuffer.h"
@@ -83,6 +81,18 @@ SPtr<Model> g_model;
 
 Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 
+static Vector<String> NodeNames;
+static uint32 NodeIndex = 0;
+static bool bIsModelRotating = false;
+static Array<Path, 4> ModelPaths = {
+  Path("resources/models/Porch.fbx"),
+  Path("resources/models/cyberdemon.md5mesh"),
+  Path("resources/models/test.fbx"),
+  Path("resources/models/Porce/scene.gltf")
+
+};
+static uint32 ModelIndex = 0;
+
 static constexpr uint64 MAX_WAIT_TIME = 1000000000; // 1 second
 
 /*
@@ -125,6 +135,7 @@ Renderer::initialize(uint32 width,
   m_swapChain = IGraphicsAPI::instance().createSwapChain(width, height, vsync);
 
   initializeRenderResources();
+  bindInputEvents();
 }
 
 /*
@@ -141,6 +152,157 @@ Renderer::createSyncObjects() {
     m_imageAvailableSemaphores[i] = graphicsAPI.createSemaphore();
     m_renderFinishedSemaphores[i] = graphicsAPI.createSemaphore();
     m_inFlightFences[i] = graphicsAPI.createFence(true);
+  }
+}
+
+/*
+*/
+void
+Renderer::loadModel() {
+  auto& graphicsAPI = IGraphicsAPI::instance();
+
+  cleanupModelResources();
+  const Path& modelPath = ModelPaths[ModelIndex];
+  CH_LOG_INFO(RendererSystem, "Loading model: {0}", modelPath.toString());
+
+  SPtr<Model> model = MeshManager::instance().loadModel(modelPath);
+  if (!model) {
+    CH_LOG_ERROR(RendererSystem, "Failed to load model");
+    return;
+  }
+  m_currentModel = model;
+
+  Vector<SPtr<Mesh>> uniqueMeshes;
+  UnorderedMap<SPtr<Mesh>, uint32> meshToIndexMap;
+
+  // Primero recopilamos todas las mallas únicas
+  for (ModelNode* node : model->getAllNodes()) {
+    NodeNames.push_back(node->getName());
+    for (const auto& mesh : node->getMeshes()) {
+      // Si esta malla no está ya en nuestra lista
+      if (meshToIndexMap.find(mesh) == meshToIndexMap.end()) {
+        meshToIndexMap[mesh] = static_cast<uint32>(uniqueMeshes.size());
+        uniqueMeshes.push_back(mesh);
+      }
+    }
+  }
+
+  m_meshVertexBuffers.resize(uniqueMeshes.size());
+  m_meshIndexBuffers.resize(uniqueMeshes.size());
+  m_meshIndexCounts.resize(uniqueMeshes.size());
+  m_meshIndexTypes.resize(uniqueMeshes.size());
+
+  for (size_t i = 0; i < uniqueMeshes.size(); ++i) {
+    const auto& mesh = uniqueMeshes[i];
+
+    const Vector<uint8>& vertexData = mesh->getVertexData();
+    const uint32 vertexDataSize = mesh->getVertexDataSize();
+
+    BufferCreateInfo bufferCreateInfo{
+        .size = vertexDataSize,
+        .usage = BufferUsage::VertexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
+        .initialDataSize = vertexDataSize,
+    };
+    m_meshVertexBuffers[i] = graphicsAPI.createBuffer(bufferCreateInfo);
+
+    m_meshIndexTypes[i] = mesh->getIndexType();
+    m_meshIndexCounts[i] = mesh->getIndexCount();
+
+    if (m_meshIndexTypes[i] == IndexType::UInt16) {
+      Vector<uint16> indexData = mesh->getIndicesAsUInt16();
+      const uint32 indexDataSize = mesh->getIndexDataSize();
+
+      BufferCreateInfo indexBufferCreateInfo{
+        .size = indexDataSize,
+        .usage = BufferUsage::IndexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
+        .initialDataSize = indexDataSize,
+      };
+      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
+    } 
+    else {
+      Vector<uint32> indexData = mesh->getIndicesAsUInt32();
+      const uint32 indexDataSize = mesh->getIndexDataSize();
+
+      BufferCreateInfo indexBufferCreateInfo{
+        .size = indexDataSize,
+        .usage = BufferUsage::IndexBuffer,
+        .memoryUsage = MemoryUsage::CpuToGpu,
+        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
+        .initialDataSize = indexDataSize,
+      };
+      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
+    }
+  }
+
+  m_meshToIndexMap = std::move(meshToIndexMap);
+
+  uint32 nodeCount = static_cast<uint32>(model->getAllNodes().size());
+  DescriptorPoolCreateInfo descriptorPoolCreateInfo{
+    .maxSets = nodeCount, 
+    .poolSizes = {
+      { DescriptorType::UniformBuffer, nodeCount },
+      { DescriptorType::CombinedImageSampler, nodeCount } 
+    }
+  };
+  m_descriptorPool = graphicsAPI.createDescriptorPool(descriptorPoolCreateInfo);
+
+  for (ModelNode* node : m_currentModel->getAllNodes()) {
+    if (node->getMeshes().empty()) {
+      continue;
+    }
+    
+    BufferCreateInfo bufferCreateInfo{
+      .size = sizeof(RendererHelpers::ProjectionViewMatrix),
+      .usage = BufferUsage::UniformBuffer,
+      .memoryUsage = MemoryUsage::CpuToGpu
+    };
+    SPtr<IBuffer> nodeBuffer = graphicsAPI.createBuffer(bufferCreateInfo);
+    
+    DescriptorSetAllocateInfo allocInfo{
+      .pool = m_descriptorPool,
+      .layout = m_descriptorSetLayout
+    };
+    SPtr<IDescriptorSet> nodeDescriptorSet = m_descriptorPool->allocateDescriptorSet(allocInfo);
+    
+    DescriptorBufferInfo bufferInfo{
+      .buffer = nodeBuffer,
+      .offset = 0,
+      .range = sizeof(RendererHelpers::ProjectionViewMatrix)
+    };
+    
+    DescriptorImageInfo imageInfo{
+      .sampler = m_sampler,
+      .imageView = m_textureView,
+      .imageLayout = TextureLayout::ShaderReadOnly
+    };
+    
+    Vector<WriteDescriptorSet> writeDescriptorSets{
+      {
+        .dstSet = nodeDescriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorType = DescriptorType::UniformBuffer,
+        .bufferInfos = { bufferInfo }
+      },
+      {
+        .dstSet = nodeDescriptorSet,
+        .dstBinding = 1,
+        .dstArrayElement = 0,
+        .descriptorType = DescriptorType::CombinedImageSampler,
+        .imageInfos = { imageInfo }
+      }
+    };
+    
+    graphicsAPI.updateDescriptorSets(writeDescriptorSets);
+    
+    m_nodeResources[node] = {
+      .uniformBuffer = nodeBuffer,
+      .descriptorSet = nodeDescriptorSet
+    };
   }
 }
 
@@ -194,91 +356,6 @@ Renderer::initializeRenderResources() {
   };
   m_textureView = m_texture->createView(textureViewCreateInfo);
 
-  /********************************************************************************************/
-
-  SPtr<Model> model = MeshManager::instance().loadModel(Path("resources/models/test.fbx"));
-  //SPtr<Model> model = MeshManager::instance().loadModel(Path("resources/models/Porce/scene.gltf"));
-  if (!model) {
-    CH_LOG_ERROR(RendererSystem, "Failed to load model");
-    return;
-  }
-  m_currentModel = model;
-
-  // Recopilar todas las mallas únicas de todos los nodos
-  Vector<SPtr<Mesh>> uniqueMeshes;
-  UnorderedMap<SPtr<Mesh>, uint32> meshToIndexMap;
-
-  // Primero recopilamos todas las mallas únicas
-  for (ModelNode* node : model->getAllNodes()) {
-    for (const auto& mesh : node->getMeshes()) {
-      // Si esta malla no está ya en nuestra lista
-      if (meshToIndexMap.find(mesh) == meshToIndexMap.end()) {
-        meshToIndexMap[mesh] = static_cast<uint32>(uniqueMeshes.size());
-        uniqueMeshes.push_back(mesh);
-      }
-    }
-  }
-
-  // Redimensionar nuestros buffers basados en las mallas únicas
-  m_meshVertexBuffers.resize(uniqueMeshes.size());
-  m_meshIndexBuffers.resize(uniqueMeshes.size());
-  m_meshIndexCounts.resize(uniqueMeshes.size());
-  m_meshIndexTypes.resize(uniqueMeshes.size());
-
-  // Crear buffers para cada malla única
-  for (size_t i = 0; i < uniqueMeshes.size(); ++i) {
-    const auto& mesh = uniqueMeshes[i];
-
-    // Crear buffer de vértices
-    const Vector<uint8>& vertexData = mesh->getVertexData();
-    const uint32 vertexDataSize = mesh->getVertexDataSize();
-
-    BufferCreateInfo bufferCreateInfo{
-        .size = vertexDataSize,
-        .usage = BufferUsage::VertexBuffer,
-        .memoryUsage = MemoryUsage::CpuToGpu,
-        .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
-        .initialDataSize = vertexDataSize,
-    };
-    m_meshVertexBuffers[i] = graphicsAPI.createBuffer(bufferCreateInfo);
-
-    // Crear buffer de índices
-    m_meshIndexTypes[i] = mesh->getIndexType();
-    m_meshIndexCounts[i] = mesh->getIndexCount();
-
-    if (m_meshIndexTypes[i] == IndexType::UInt16) {
-      Vector<uint16> indexData = mesh->getIndicesAsUInt16();
-      const uint32 indexDataSize = mesh->getIndexDataSize();
-
-      BufferCreateInfo indexBufferCreateInfo{
-        .size = indexDataSize,
-        .usage = BufferUsage::IndexBuffer,
-        .memoryUsage = MemoryUsage::CpuToGpu,
-        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
-        .initialDataSize = indexDataSize,
-      };
-      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
-    } 
-    else {
-      Vector<uint32> indexData = mesh->getIndicesAsUInt32();
-      const uint32 indexDataSize = mesh->getIndexDataSize();
-
-      BufferCreateInfo indexBufferCreateInfo{
-        .size = indexDataSize,
-        .usage = BufferUsage::IndexBuffer,
-        .memoryUsage = MemoryUsage::CpuToGpu,
-        .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
-        .initialDataSize = indexDataSize,
-      };
-      m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
-    }
-  }
-
-  // Guardar el mapa de mallas a índices para usarlo durante el renderizado
-  m_meshToIndexMap = std::move(meshToIndexMap);
-
-  /********************************************************************************************/
-
   // Camera setup
   m_camera = chMakeUnique<Camera>(initialCameraPos, Vector3::ZERO, m_width, m_height);
   m_camera->setProjectionType(CameraProjectionType::Perspective);
@@ -286,22 +363,40 @@ Renderer::initializeRenderResources() {
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);
   m_camera->updateMatrices();
 
-  BufferCreateInfo projectionViewBufferCreateInfo{
-    .size = sizeof(RendererHelpers::ProjectionViewMatrix),
-    .usage = BufferUsage::UniformBuffer,
-    .memoryUsage = MemoryUsage::CpuToGpu,
-    .initialData = static_cast<void*>(&projectionViewMatrix),
-    .initialDataSize = sizeof(RendererHelpers::ProjectionViewMatrix),
+  // Configuración de layouts y descriptores
+  Vector<DescriptorSetLayoutBinding> bindings{
+    {
+      .binding = 0,
+      .type = DescriptorType::UniformBuffer,
+      .count = 1,
+      .stageFlags = ShaderStage::Vertex
+    },
+    {
+      .binding = 1,
+      .type = DescriptorType::CombinedImageSampler,
+      .count = 1,
+      .stageFlags = ShaderStage::Fragment
+    }
   };
-  m_viewProjectionBuffer = graphicsAPI.createBuffer(projectionViewBufferCreateInfo);
 
-  
-  projectionViewMatrix = {
-    .projectionMatrix = m_camera->getProjectionMatrix(),
-    .viewMatrix = m_camera->getViewMatrix(),
-    .modelMatrix = Matrix4::IDENTITY
+  DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{
+    .bindings = bindings
   };
+  m_descriptorSetLayout = graphicsAPI.createDescriptorSetLayout(descriptorSetLayoutCreateInfo);
 
+  SamplerCreateInfo samplerCreateInfo {
+    .magFilter = SamplerFilter::Linear,
+    .minFilter = SamplerFilter::Linear,
+    .mipmapMode = SamplerMipmapMode::Linear,
+    .addressModeU = SamplerAddressMode::Repeat,
+    .addressModeV = SamplerAddressMode::Repeat,
+    .addressModeW = SamplerAddressMode::Repeat,
+    .anisotropyEnable = false,
+    .maxAnisotropy = 16.0f
+  };
+  m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
+
+  loadModel();
   ShaderCreateInfo shaderCreateInfo{
     .stage = ShaderStage::Vertex,
     .entryPoint = "main",
@@ -318,88 +413,9 @@ Renderer::initializeRenderResources() {
     .defines = { /* Preprocessor defines */ }
   };
 
-  m_vertexShader  = graphicsAPI.createShader(shaderCreateInfo);
-  m_fragmentShader= graphicsAPI.createShader(fragmentShaderCreateInfo);
+  m_vertexShader = graphicsAPI.createShader(shaderCreateInfo);
+  m_fragmentShader = graphicsAPI.createShader(fragmentShaderCreateInfo);
 
-  Vector<DescriptorSetLayoutBinding> bindings{
-    {
-      .binding = 0,
-      .type = DescriptorType::UniformBuffer,
-      .count = 1,
-      .stageFlags = ShaderStage::Vertex
-    },
-    {
-      .binding = 1,
-      .type = DescriptorType::CombinedImageSampler,
-      .count = 1,
-      .stageFlags = ShaderStage::Fragment
-    }
-    
-  };
-
-  DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{
-    .bindings = bindings
-  };
-  m_descriptorSetLayout = graphicsAPI.createDescriptorSetLayout(descriptorSetLayoutCreateInfo);
-
-  DescriptorPoolCreateInfo descriptorPoolCreateInfo{
-    .maxSets = 1,
-    .poolSizes = {
-      { DescriptorType::UniformBuffer, 1 },
-      { DescriptorType::CombinedImageSampler, 1 }
-    }
-  };
-  m_descriptorPool = graphicsAPI.createDescriptorPool(descriptorPoolCreateInfo);
-
-  SamplerCreateInfo samplerCreateInfo {
-    .magFilter = SamplerFilter::Linear,
-    .minFilter = SamplerFilter::Linear,
-    .mipmapMode = SamplerMipmapMode::Linear,
-    .addressModeU = SamplerAddressMode::Repeat,
-    .addressModeV = SamplerAddressMode::Repeat,
-    .addressModeW = SamplerAddressMode::Repeat,
-    .anisotropyEnable = false,
-    .maxAnisotropy = 16.0f
-  };
-  m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
-
-  DescriptorSetAllocateInfo descriptorSetAllocateInfo{
-    .pool = m_descriptorPool,
-    .layout = m_descriptorSetLayout 
-  };
-  m_descriptorSet = m_descriptorPool->allocateDescriptorSet(descriptorSetAllocateInfo);
-
-  DescriptorBufferInfo descriptorBufferInfo{
-    .buffer = m_viewProjectionBuffer,
-    .offset = 0,
-    .range = sizeof(RendererHelpers::ProjectionViewMatrix)
-  };
-
-  DescriptorImageInfo descriptorImageInfo{
-    .sampler = m_sampler,
-    .imageView = m_textureView,
-    .imageLayout = TextureLayout::ShaderReadOnly
-  };
-
-  Vector<WriteDescriptorSet> writeDescriptorSets{
-    {
-      .dstSet = m_descriptorSet,
-      .dstBinding = 0,
-      .dstArrayElement = 0,
-      .descriptorType = DescriptorType::UniformBuffer,
-      .bufferInfos = { descriptorBufferInfo }
-    },
-    {
-      .dstSet = m_descriptorSet,
-      .dstBinding = 1,
-      .dstArrayElement = 0,
-      .descriptorType = DescriptorType::CombinedImageSampler,
-      .imageInfos = { descriptorImageInfo }
-    }
-  };
-  graphicsAPI.updateDescriptorSets(writeDescriptorSets);
-
-  //Create depth stencil
   TextureCreateInfo depthStencilCreateInfo{
     .type = TextureType::Texture2D,
     .format = Format::D32_SFLOAT,
@@ -450,76 +466,6 @@ Renderer::initializeRenderResources() {
     .setLayouts = { m_descriptorSetLayout },
   };
   m_pipeline = graphicsAPI.createPipeline(pipelineCreateInfo);
-
-
-
-  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
-  HEvent listenResize = eventDispatcher.OnResize.connect(
-    [&](uint32 width,uint32 height) {
-      m_width = width;
-      m_height = height;
-      resize();
-
-      m_camera->setViewportSize(width, height);
-      m_camera->updateMatrices();
-      projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
-  });
-
-  HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
-    if (keydata.key == Key::P) {
-      // Print camera position and lookAtPos
-      Vector3 cameraPosition = m_camera->getPosition();
-      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", 
-                  cameraPosition.x, cameraPosition.y, cameraPosition.z);
-      return;
-    }
-  });
-
-  HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
-    float moveSpeed = g_cameraMoveSpeed * 0.1f;
-    switch (keydata.key) {
-      case Key::W: m_camera->moveForward(moveSpeed); break;
-      case Key::S: m_camera->moveForward(-moveSpeed); break;
-      case Key::A: m_camera->moveRight(-moveSpeed); break;
-      case Key::D: m_camera->moveRight(moveSpeed); break;
-      case Key::Q: m_camera->moveUp(moveSpeed); break;
-      case Key::E: m_camera->moveUp(-moveSpeed); break;
-      case Key::R:
-        m_camera->setPosition(initialCameraPos);
-        m_camera->lookAt(Vector3::ZERO);
-        break;
-      default: return;
-    }
-  
-    // Actualizar la matriz de vista después de mover la cámara
-    projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
-  });
-
-  HEvent listenWheel = eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
-    if (wheelData.deltaY != 0) {
-      m_camera->moveForward(wheelData.deltaY * g_cameraMoveSpeed);
-    }
-  });
-
-  HEvent listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
-    const bool isMouseButtonDown = eventDispatcher.isMouseButtonDown(MouseButton::Right);
-    const bool isMouseButtonDownMiddle = eventDispatcher.isMouseButtonDown(MouseButton::Middle);
-    if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
-      return;
-    }
-  
-    if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
-      if (isMouseButtonDownMiddle) {
-        m_camera->pan(-mouseData.deltaX * g_cameraPanSpeed, -mouseData.deltaY * g_cameraPanSpeed);
-      }
-      if (isMouseButtonDown) {
-        m_camera->rotate(mouseData.deltaY * g_rotationSpeed, 
-                         mouseData.deltaX * g_rotationSpeed, 
-                         0.0f);
-      }
-      projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
-    }
-  });
 }
 
 /*
@@ -660,110 +606,227 @@ Renderer::resize() {
 void
 Renderer::createRenderPass() {
   auto& graphicsAPI = IGraphicsAPI::instance();
-    
-    AttachmentDescription colorAttachment{
-      .format = m_swapChain->getFormat(),
+
+  AttachmentDescription colorAttachment{.format = m_swapChain->getFormat(),
+                                        .loadOp = LoadOp::Clear,
+                                        .storeOp = StoreOp::Store,
+                                        .stencilLoadOp = LoadOp::DontCare,
+                                        .stencilStoreOp = StoreOp::DontCare,
+                                        .initialLayout = TextureLayout::Undefined,
+                                        .finalLayout = TextureLayout::PresentSrc};
+
+  AttachmentDescription depthAttachment{
+      .format = Format::D32_SFLOAT, 
       .loadOp = LoadOp::Clear,
-      .storeOp = StoreOp::Store,
+      .storeOp = StoreOp::DontCare,
       .stencilLoadOp = LoadOp::DontCare,
       .stencilStoreOp = StoreOp::DontCare,
       .initialLayout = TextureLayout::Undefined,
-      .finalLayout = TextureLayout::PresentSrc
-    };
-    
-    AttachmentDescription depthAttachment{
-      .format = Format::D32_SFLOAT, // Mismo formato que usaste para crear la textura
-      .loadOp = LoadOp::Clear,
-      .storeOp = StoreOp::DontCare, // No necesitamos preservar el contenido después
-      .stencilLoadOp = LoadOp::DontCare,
-      .stencilStoreOp = StoreOp::DontCare,
-      .initialLayout = TextureLayout::Undefined,
-      .finalLayout = TextureLayout::DepthStencilAttachment
-    };
-    
-    AttachmentReference colorRef{
-      .attachment = 0,
-      .layout = TextureLayout::ColorAttachment
-    };
-    
-    AttachmentReference depthRef{
-      .attachment = 1,
-      .layout = TextureLayout::DepthStencilAttachment
-    };
-    
-    SubpassDescription subpass{
-      .pipelineBindPoint = PipelineBindPoint::Graphics,
-      .colorAttachments = {colorRef},
-      .depthStencilAttachment = depthRef
-    };
-    
-    SubpassDependency dependency{
-      .srcSubpass = SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
-      .srcStageMask = PipelineStage::ColorAttachmentOutput,
-      .dstStageMask = PipelineStage::ColorAttachmentOutput,
-      .srcAccessMask = Access::NoAccess,
-      .dstAccessMask = Access::ColorAttachmentWrite
-    };
-    
-    RenderPassCreateInfo renderPassInfo{
-      .attachments = {colorAttachment, depthAttachment},
-      .subpasses = {subpass},
-      .dependencies = {dependency}
-    };
-    
-    m_renderPass = graphicsAPI.createRenderPass(renderPassInfo);
+      .finalLayout = TextureLayout::DepthStencilAttachment};
+
+  AttachmentReference colorRef{.attachment = 0, .layout = TextureLayout::ColorAttachment};
+
+  AttachmentReference depthRef{.attachment = 1,
+                               .layout = TextureLayout::DepthStencilAttachment};
+
+  SubpassDescription subpass{.pipelineBindPoint = PipelineBindPoint::Graphics,
+                             .colorAttachments = {colorRef},
+                             .depthStencilAttachment = depthRef};
+
+  SubpassDependency dependency{.srcSubpass = SUBPASS_EXTERNAL,
+                               .dstSubpass = 0,
+                               .srcStageMask = PipelineStage::ColorAttachmentOutput,
+                               .dstStageMask = PipelineStage::ColorAttachmentOutput,
+                               .srcAccessMask = Access::NoAccess,
+                               .dstAccessMask = Access::ColorAttachmentWrite};
+
+  RenderPassCreateInfo renderPassInfo{.attachments = {colorAttachment, depthAttachment},
+                                      .subpasses = {subpass},
+                                      .dependencies = {dependency}};
+
+  m_renderPass = graphicsAPI.createRenderPass(renderPassInfo);
 }
 
 /*
  */
 void
-Renderer::renderModel(const SPtr<Model>& model, const SPtr<ICommandBuffer>& commandBuffer, float deltaTime) {
+Renderer::renderModel(const SPtr<Model>& model, 
+                      const SPtr<ICommandBuffer>& commandBuffer,
+                      float deltaTime) {
   m_currentModel->updateTransforms();
 
-  ModelNode* targetNode = m_currentModel->findNode("Cube");
-  if (targetNode) {
-    const Matrix4 originalTransform = targetNode->getLocalTransform();
-    
-    //RotationMatrix rotationMatrix(Rotator(0.0f, deltaTime * 20 , 0.0f)); 
-    static float initPos = 0.0f;
-    initPos += deltaTime * 2.0f;
-    TranslationMatrix translationMatrix(Vector3(initPos, 0.0f, 0.0f));
-
-    const Matrix4 newTransform = originalTransform * translationMatrix;
-  
-    m_currentModel->updateNodeTransform(targetNode, newTransform);
+  if (bIsModelRotating) {
+    if (ModelNode* targetNode = m_currentModel->findNode(NodeNames[NodeIndex])) {
+      const Matrix4 originalTransform = targetNode->getLocalTransform();
+      
+      RotationMatrix rotationMatrix(Rotator(0.0f, deltaTime * 20, 0.0f));
+      
+      const Matrix4 newTransform = originalTransform * rotationMatrix;
+      
+      m_currentModel->updateNodeTransform(targetNode, newTransform);
+    }
   }
 
-  // Recorrer todos los nodos para renderizar sus mallas
-  //uint32 meshIndex = 0;
+  const Matrix4& projectionMatrix = m_camera->getProjectionMatrix();
+  const Matrix4& viewMatrix = m_camera->getViewMatrix();
+
   for (ModelNode* node : m_currentModel->getAllNodes()) {
     if (node->getMeshes().empty()) {
-      continue; // Si no hay mallas, saltar este nodo
+      continue;
     }
 
-    // Obtener la transformación global del nodo
-    const Matrix4& nodeTransform = node->getGlobalTransform();
+    auto it = m_nodeResources.find(node);
+    if (it == m_nodeResources.end()) {
+      CH_LOG_ERROR(RendererSystem, "No render resources found for node: {0}", node->getName());
+      continue;
+    }
 
-    projectionViewMatrix.modelMatrix = nodeTransform;
+    NodeRenderResources& resources = it->second;
 
-    m_viewProjectionBuffer->update(&projectionViewMatrix,
-                                   sizeof(RendererHelpers::ProjectionViewMatrix));
+    RendererHelpers::ProjectionViewMatrix matrices = {.projectionMatrix = projectionMatrix,
+                                                      .viewMatrix = viewMatrix,
+                                                      .modelMatrix =
+                                                          node->getGlobalTransform()};
 
-    commandBuffer->bindDescriptorSets(PipelineBindPoint::Graphics, 
-                                      m_pipeline->getLayout(), 0,
-                                      {m_descriptorSet});
+    resources.uniformBuffer->update(&matrices, sizeof(matrices));
 
-    // Renderizar todas las mallas asociadas a este nodo
+    commandBuffer->bindDescriptorSets(PipelineBindPoint::Graphics, m_pipeline->getLayout(), 0,
+                                      {resources.descriptorSet});
+
     for (const auto& mesh : node->getMeshes()) {
-      // Obtener el índice de la malla en nuestros buffers
       uint32 meshIndex = m_meshToIndexMap[mesh];
 
       commandBuffer->bindVertexBuffer(m_meshVertexBuffers[meshIndex]);
-      commandBuffer->bindIndexBuffer(m_meshIndexBuffers[meshIndex], m_meshIndexTypes[meshIndex]);
+      commandBuffer->bindIndexBuffer(m_meshIndexBuffers[meshIndex],
+                                     m_meshIndexTypes[meshIndex]);
       commandBuffer->drawIndexed(m_meshIndexCounts[meshIndex]);
-      //meshIndex++;
     }
   }
 }
+
+
+
+/*
+*/
+void
+Renderer::bindInputEvents() {
+
+  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
+  HEvent listenResize = eventDispatcher.OnResize.connect(
+    [&](uint32 width,uint32 height) {
+      m_width = width;
+      m_height = height;
+      resize();
+
+      m_camera->setViewportSize(width, height);
+      m_camera->updateMatrices();
+      projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
+  });
+
+  HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
+    if (keydata.key == Key::P) {
+      Vector3 cameraPosition = m_camera->getPosition();
+      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", 
+                  cameraPosition.x, cameraPosition.y, cameraPosition.z);
+      return;
+    }
+
+    if (keydata.key == Key::Num1) {
+      NodeIndex = (NodeIndex + 1) % NodeNames.size();
+      CH_LOG_INFO(RendererSystem, "Node Rotating: {0}", NodeNames[NodeIndex]);
+    }
+
+    if (keydata.key == Key::Num2) {
+      NodeIndex = (NodeIndex - 1) % NodeNames.size();
+      CH_LOG_INFO(RendererSystem, "Node Rotating: {0}", NodeNames[NodeIndex]);
+    }
+
+    if (keydata.key == Key::Num3) {
+      bIsModelRotating = !bIsModelRotating;
+      if (bIsModelRotating) {
+        CH_LOG_INFO(RendererSystem, "Model rotation enabled");
+      } 
+      else {
+        CH_LOG_INFO(RendererSystem, "Model rotation disabled");
+      }
+    }
+
+    if (keydata.key == Key::Num9) {
+      ModelIndex = (ModelIndex + 1) % ModelPaths.size();
+      CH_LOG_INFO(RendererSystem, "Loading model: {0}", ModelPaths[ModelIndex]);
+      loadModel();
+    }
+
+  });
+
+  HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
+    float moveSpeed = g_cameraMoveSpeed * 0.1f;
+    switch (keydata.key) {
+      case Key::W: m_camera->moveForward(moveSpeed); break;
+      case Key::S: m_camera->moveForward(-moveSpeed); break;
+      case Key::A: m_camera->moveRight(-moveSpeed); break;
+      case Key::D: m_camera->moveRight(moveSpeed); break;
+      case Key::Q: m_camera->moveUp(moveSpeed); break;
+      case Key::E: m_camera->moveUp(-moveSpeed); break;
+      case Key::R:
+        m_camera->setPosition(initialCameraPos);
+        m_camera->lookAt(Vector3::ZERO);
+        break;
+      default: return;
+    }
+  
+    projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
+  });
+
+  HEvent listenWheel = eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
+    if (wheelData.deltaY != 0) {
+      m_camera->moveForward(wheelData.deltaY * g_cameraMoveSpeed);
+    }
+  });
+
+  HEvent listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
+    const bool isMouseButtonDown = eventDispatcher.isMouseButtonDown(MouseButton::Right);
+    const bool isMouseButtonDownMiddle = eventDispatcher.isMouseButtonDown(MouseButton::Middle);
+    if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
+      return;
+    }
+  
+    if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
+      if (isMouseButtonDownMiddle) {
+        m_camera->pan(-mouseData.deltaX * g_cameraPanSpeed, -mouseData.deltaY * g_cameraPanSpeed);
+      }
+      if (isMouseButtonDown) {
+        m_camera->rotate(mouseData.deltaY * g_rotationSpeed, 
+                         mouseData.deltaX * g_rotationSpeed, 
+                         0.0f);
+      }
+      projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
+    }
+  });
+}
+
+void 
+Renderer::cleanupModelResources() {
+  // Limpiar buffers de mallas
+  m_meshVertexBuffers.clear();
+  m_meshIndexBuffers.clear();
+  m_meshIndexCounts.clear();
+  m_meshIndexTypes.clear();
+  m_meshToIndexMap.clear();
+  
+  // Limpiar recursos de nodos
+  for (auto& pair : m_nodeResources) {
+    pair.second.uniformBuffer.reset();
+    pair.second.descriptorSet.reset();
+  }
+  m_nodeResources.clear();
+  
+  // Limpiar nombres de nodos
+  NodeNames.clear();
+  NodeIndex = 0;
+  
+  // Resetear el modelo actual
+  m_currentModel.reset();
+}
+
 } // namespace chEngineSDK

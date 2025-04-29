@@ -13,6 +13,8 @@
 #include "chGraphicsTypes.h"
 #include "chModule.h"
 
+#include "chMeshManager.h"
+
 
 namespace chEngineSDK {
 class CH_CORE_EXPORT Renderer : public Module<Renderer> {
@@ -38,11 +40,20 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   void
   resize();
 
+  void 
+  loadModel();
+
   void
   renderModel(const SPtr<Model>& model, const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
 
   void
   createRenderPass();
+
+  void 
+  bindInputEvents();
+
+  void
+  cleanupModelResources();
 
  private:
   SPtr<ISwapChain> m_swapChain;
@@ -69,6 +80,13 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
   SPtr<IDescriptorPool> m_descriptorPool;
   SPtr<IDescriptorSet> m_descriptorSet;
+
+  struct NodeRenderResources {
+    SPtr<IBuffer> uniformBuffer;
+    SPtr<IDescriptorSet> descriptorSet;
+  };
+  
+  UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
   
   
   // Sincronización

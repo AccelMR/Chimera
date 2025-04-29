@@ -91,8 +91,9 @@ MeshManager::loadModel(const Path& filePath) {
 
   const aiScene* scene = importer.ReadFile(filePath.toString(),
                                            aiProcessPreset_TargetRealtime_MaxQuality |
-                                               aiProcess_FlipUVs | aiProcess_MakeLeftHanded //|
-                                           // aiProcess_PreTransformVertices
+                                           aiProcess_FlipUVs | 
+                                           aiProcess_MakeLeftHanded //|
+                                           //aiProcess_PreTransformVertices
   );
 
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
@@ -275,39 +276,8 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
     }
   }
   
-  // AABox bounds = newMesh->calculateBounds();
-  // CH_LOG_DEBUG(MeshSystem, "Mesh bounds: Min({0}, {1}, {2}), Max({3}, {4}, {5})",
-  //              bounds.minPoint.x, bounds.minPoint.y, bounds.minPoint.z,
-  //              bounds.maxPoint.x, bounds.maxPoint.y, bounds.maxPoint.z);
-  
   return newMesh;
 }
-
-/*
-*/
-// void 
-// MeshManager::processNodeForModel(aiNode* node, 
-//                                 const aiScene* scene, 
-//                                 SPtr<Model> model,
-//                                 const Matrix4& parentTransform) {
-//   Matrix4 nodeTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
-//   Matrix4 globalTransform = nodeTransform * parentTransform;
-  
-//   for (uint32 i = 0; i < node->mNumMeshes; i++) {
-//     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-//     SPtr<Mesh> processedMesh = processMesh(mesh, scene);
-    
-//     if (processedMesh) {
-//       uint32 meshIndex = model->addMesh(processedMesh);
-      
-//       model->setMeshTransform(meshIndex, globalTransform);
-//     }
-//   }
-  
-//   for (uint32 i = 0; i < node->mNumChildren; i++) {
-//     processNodeForModel(node->mChildren[i], scene, model, globalTransform);
-//   }
-// }
 
 void
 MeshManager::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
