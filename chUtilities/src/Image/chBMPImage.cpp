@@ -3,10 +3,10 @@
  * @file chBMPImage.cpp
  * @author AccelMR
  * @date 2025/01/17
- * 
+ *
  *    BMP Image class that handles BMP image files, load/save and edit them.
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
@@ -17,22 +17,18 @@
 
 #include "chBox2D.h"
 #include "chColor.h"
-#include "chLogger.h"
 #include "chFileSystem.h"
+#include "chLogger.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
-namespace ImageHelpers
-{
+namespace ImageHelpers {
 /*
  */
-void 
-writePixel(uint8 *buffer, const Color &color, const BPP m_bpp)
-{
-  switch (m_bpp)
-  {
-  case BPP::BPP_16:
-  {
+void
+writePixel(uint8* buffer, const Color& color, const BPP m_bpp) {
+  switch (m_bpp) {
+  case BPP::BPP_16: {
     uint16 pixel = color.to16Bit(true);
     buffer[0] = pixel & 0xFF;
     buffer[1] = (pixel >> 8) & 0xFF;
@@ -50,23 +46,21 @@ writePixel(uint8 *buffer, const Color &color, const BPP m_bpp)
     buffer[3] = color.a;
     break;
   default:
-    std::cerr << "BMPImage::writePixel() " << "Error: Unsupported BPP format in writePixel." << std::endl;
+    std::cerr << "BMPImage::writePixel() " << "Error: Unsupported BPP format in writePixel."
+              << std::endl;
     break;
   }
 }
 
 /*
  */
-Color 
-readPixel(const uint8 *buffer, const BPP m_bpp)
-{
-  switch (m_bpp)
-  {
+Color
+readPixel(const uint8* buffer, const BPP m_bpp) {
+  switch (m_bpp) {
   case BPP::BPP_16:
-    return Color::from16Bit(*reinterpret_cast<const uint16 *>(buffer), true);
+    return Color::from16Bit(*reinterpret_cast<const uint16*>(buffer), true);
     break;
-  case BPP::BPP_24:
-  {
+  case BPP::BPP_24: {
     Color color;
     color.b = buffer[0];
     color.g = buffer[1];
@@ -74,8 +68,7 @@ readPixel(const uint8 *buffer, const BPP m_bpp)
     return color;
     break;
   }
-  case BPP::BPP_32:
-  {
+  case BPP::BPP_32: {
     Color color;
     color.b = buffer[0];
     color.g = buffer[1];
@@ -89,7 +82,7 @@ readPixel(const uint8 *buffer, const BPP m_bpp)
     break;
   }
 }
-}
+} // namespace ImageHelpers
 
 /*
  */
@@ -98,8 +91,7 @@ BMPImage::~BMPImage() {}
 /*
  */
 void
-BMPImage::create(uint32 width, uint32 height, BPP bpp)
-{
+BMPImage::create(uint32 width, uint32 height, BPP bpp) {
   if (width <= 0 || height <= 0) {
     return;
   }
@@ -118,9 +110,8 @@ BMPImage::create(uint32 width, uint32 height, BPP bpp)
 
 /*
  */
-void 
-BMPImage::clear(const Color &color)
-{
+void
+BMPImage::clear(const Color& color) {
   Vector<uint8> buffer(m_bytesPerPixel);
   ImageHelpers::writePixel(buffer.data(), color, m_bpp);
 
@@ -128,11 +119,9 @@ BMPImage::clear(const Color &color)
   uint8* pixelInit = m_data->getCurrentPtr();
   CH_ASSERT(pixelInit);
 
-  for (int32 y = 0; y < m_height; ++y)
-  {
-    uint8 *row = pixelInit + y * m_pitch;
-    for (int32 x = 0; x < m_width; ++x)
-    {
+  for (uint32 y = 0; y < m_height; ++y) {
+    uint8* row = pixelInit + y * m_pitch;
+    for (uint32 x = 0; x < m_width; ++x) {
       std::memcpy(row + x * m_bytesPerPixel, buffer.data(), m_bytesPerPixel);
     }
   }
@@ -140,39 +129,36 @@ BMPImage::clear(const Color &color)
 
 /*
  */
-Color 
-BMPImage::getPixel(uint32 x, uint32 y) const
-{
+Color
+BMPImage::getPixel(uint32 x, uint32 y) const {
   if (x >= m_width || y >= m_height) {
     return Color();
   }
 
   CH_ASSERT(m_data);
   m_data->seek(y * m_pitch + x * m_bytesPerPixel);
-  uint8 *buffer = m_data->getCurrentPtr();
+  uint8* buffer = m_data->getCurrentPtr();
   return ImageHelpers::readPixel(buffer, m_bpp);
 }
 
 /*
  */
-void 
-BMPImage::setPixel(uint32 x, uint32 y, const Color &color)
-{
+void
+BMPImage::setPixel(uint32 x, uint32 y, const Color& color) {
   if (x >= m_width || y >= m_height) {
     return;
   }
 
   CH_ASSERT(m_data);
   m_data->seek(y * m_pitch + x * m_bytesPerPixel);
-  uint8 *buffer = m_data->getCurrentPtr();
+  uint8* buffer = m_data->getCurrentPtr();
   ImageHelpers::writePixel(buffer, color, m_bpp);
 }
 
 /*
  */
-Color 
-BMPImage::getColor(float u, float v) const
-{
+Color
+BMPImage::getColor(float u, float v) const {
   int32 x = static_cast<int32>(u * (m_width - 1));
   int32 y = static_cast<int32>(v * (m_height - 1));
 
@@ -181,9 +167,8 @@ BMPImage::getColor(float u, float v) const
 
 /*
  */
-void 
-BMPImage::setColor(float u, float v, const Color &color)
-{
+void
+BMPImage::setColor(float u, float v, const Color& color) {
   int32 x = static_cast<int32>(u * (m_width - 1));
   int32 y = static_cast<int32>(v * (m_height - 1));
 
@@ -192,9 +177,8 @@ BMPImage::setColor(float u, float v, const Color &color)
 
 /*
  */
-bool 
-BMPImage::decode(const Path &bmpPath)
-{
+bool
+BMPImage::decode(const Path& bmpPath) {
   Vector<uint8> buffer = FileSystem::fastRead(bmpPath);
   if (buffer.empty()) {
     return false;
@@ -230,9 +214,8 @@ BMPImage::decode(const Path &bmpPath)
 
 /*
  */
-void 
-BMPImage::encode(const Path& filename) const
-{
+void
+BMPImage::encode(const Path& filename) const {
   SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
   if (!file) {
     return;
@@ -249,7 +232,7 @@ BMPImage::encode(const Path& filename) const
   header.reserved = 0;
   header.dataOffset = wholeHeaderSize;
 
-  file->write(reinterpret_cast<const char *>(&header), sizeof(BMPHeader));
+  file->write(reinterpret_cast<const char*>(&header), sizeof(BMPHeader));
 
   BMPInfoHeader infoHeader;
   infoHeader.core.headerSize = sizeof(BMPInfoHeader);
@@ -265,17 +248,15 @@ BMPImage::encode(const Path& filename) const
   infoHeader.colorsUsed = 0;
   infoHeader.importantColors = 0;
 
-  file->write(reinterpret_cast<const char *>(&infoHeader), sizeof(BMPInfoHeader));
+  file->write(reinterpret_cast<const char*>(&infoHeader), sizeof(BMPInfoHeader));
 
   uint8* imageData = m_data->getStartPtr();
 
   const char paddBuffer[3] = {0, 0, 0};
-  for (int y = m_height - 1; y >= 0; --y)
-  {
-    file->write(reinterpret_cast<const char *>(imageData + y * m_pitch), m_pitch);
+  for (int y = m_height - 1; y >= 0; --y) {
+    file->write(reinterpret_cast<const char*>(imageData + y * m_pitch), m_pitch);
 
-    if (padding != 0)
-    {
+    if (padding != 0) {
       file->write(paddBuffer, padding);
     }
   }
@@ -285,39 +266,30 @@ BMPImage::encode(const Path& filename) const
 
 /*
  */
-void 
-BMPImage::bitBlt(const BMPImage& src,
-                 const Box2D& srcRect,
-                 const Box2D& dstRect,
-                 const BMP_TEXTURE_MODE mode,
-                 const Color& colorKey)
-{
+void
+BMPImage::bitBlt(const BMPImage& src, const Box2D& srcRect, const Box2D& dstRect,
+                 const BMP_TEXTURE_MODE mode, const Color& colorKey) {
   Box2D srcRectClamped = srcRect;
-  srcRectClamped.clamp(Box2D(Vector2::ZERO, { static_cast<float>(src.getWidth()),
-                                              static_cast<float>(src.getHeight()) } ));
+  srcRectClamped.clamp(Box2D(Vector2::ZERO, {static_cast<float>(src.getWidth()),
+                                             static_cast<float>(src.getHeight())}));
 
   Box2D dstRectClamped = dstRect;
-  dstRectClamped.clamp(Box2D(Vector2::ZERO, { static_cast<float>(m_width), 
-                                              static_cast<float>(m_height) }));
+  dstRectClamped.clamp(
+      Box2D(Vector2::ZERO, {static_cast<float>(m_width), static_cast<float>(m_height)}));
 
   Vector2 widthHeight = dstRectClamped.getSize();
 
-  for (int32 y = 0; y < widthHeight.y; ++y)
-  {
-    for (int32 x = 0; x < widthHeight.x; ++x)
-    {
+  for (int32 y = 0; y < widthHeight.y; ++y) {
+    for (int32 x = 0; x < widthHeight.x; ++x) {
       int32 srcX = 0;
       int32 srcY = 0;
-      if (!calculateSourceCoordinates(x, y, 
-                                      srcRectClamped, dstRectClamped, 
-                                      mode, srcX, srcY))
-      {
+      if (!calculateSourceCoordinates(x, y, srcRectClamped, dstRectClamped, mode, srcX,
+                                      srcY)) {
         continue;
       }
 
       Color color = src.getPixel(srcX, srcY);
-      if (color == colorKey)
-      {
+      if (color == colorKey) {
         continue;
       }
 
@@ -328,23 +300,19 @@ BMPImage::bitBlt(const BMPImage& src,
 
 /*
  */
-bool 
-BMPImage::calculateSourceCoordinates(int32 x, int32 y,
-                                     const Box2D &srcRect, 
-                                     const Box2D &dstRect,
-                                     BMP_TEXTURE_MODE mode,
-                                     int32 &srcX, int32 &srcY)
-{
+bool
+BMPImage::calculateSourceCoordinates(int32 x, int32 y, const Box2D& srcRect,
+                                     const Box2D& dstRect, BMP_TEXTURE_MODE mode, int32& srcX,
+                                     int32& srcY) {
   Vector2 dstWidthHeight = dstRect.getSize();
   Vector2 srcWidthHeight = srcRect.getSize();
-  switch (mode)
-  {
+  switch (mode) {
   case BMP_TEXTURE_MODE::NONE:
     srcX = srcRect.minPoint.x + x;
     srcY = srcRect.minPoint.y + y;
 
-    return srcX >= 0 && srcX < static_cast<int32>(srcWidthHeight.x) &&
-          srcY >= 0 && srcY < static_cast<int32>(srcWidthHeight.y);
+    return srcX >= 0 && srcX < static_cast<int32>(srcWidthHeight.x) && srcY >= 0 &&
+           srcY < static_cast<int32>(srcWidthHeight.y);
 
   case BMP_TEXTURE_MODE::REPEAT:
     return calculateRepeatCoordinates(x, y, srcRect, srcX, srcY);
@@ -364,22 +332,18 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y,
 }
 
 /*
-*/
-bool 
-BMPImage::calculateRepeatCoordinates(int32 x, int32 y, 
-                                    const Box2D &srcRect,
-                                    int32& srcX, int32& srcY)
-{
+ */
+bool
+BMPImage::calculateRepeatCoordinates(int32 x, int32 y, const Box2D& srcRect, int32& srcX,
+                                     int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
   srcX = srcRect.minPoint.x + x % static_cast<int32>(widthHeight.x);
-  if (srcX < 0)
-  {
+  if (srcX < 0) {
     srcX += widthHeight.x;
   }
 
   srcY = srcRect.minPoint.y + y % static_cast<int32>(widthHeight.y);
-  if (srcY < 0)
-  {
+  if (srcY < 0) {
     srcY += widthHeight.y;
   }
 
@@ -387,73 +351,60 @@ BMPImage::calculateRepeatCoordinates(int32 x, int32 y,
 }
 
 /*
-*/
-bool 
-BMPImage::calculateClampCoordinates(int32 x, int32 y, 
-                                    const Box2D &srcRect,
-                                    int32 &srcX, int32 &srcY)
-{
+ */
+bool
+BMPImage::calculateClampCoordinates(int32 x, int32 y, const Box2D& srcRect, int32& srcX,
+                                    int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
-  srcX = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.x + x), 
+  srcX = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.x + x),
                                static_cast<int32>(widthHeight.x - 1)));
-  srcY = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.y + y), 
+  srcY = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.y + y),
                                static_cast<int32>(widthHeight.y - 1)));
 
   return true;
 }
 
 /*
-*/
-bool 
-BMPImage::calculateMirrorCoordinates(int32 x, int32 y, 
-                                     const Box2D &srcRect,
-                                     int32 &srcX, int32 &srcY)
-{
+ */
+bool
+BMPImage::calculateMirrorCoordinates(int32 x, int32 y, const Box2D& srcRect, int32& srcX,
+                                     int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
   srcX = static_cast<int32>(srcRect.minPoint.x) + x;
   srcY = static_cast<int32>(srcRect.minPoint.y) + y;
 
-  if (srcX < 0)
-  {
-      srcX = -srcX;
+  if (srcX < 0) {
+    srcX = -srcX;
   }
-  if (srcX >= static_cast<int32>(widthHeight.x))
-  {
-      srcX %= (2 * static_cast<int32>(widthHeight.x));
-      if (srcX >= static_cast<int32>(widthHeight.x))
-      {
-          srcX = 2 * static_cast<int32>(widthHeight.x) - srcX - 1;
-      }
+  if (srcX >= static_cast<int32>(widthHeight.x)) {
+    srcX %= (2 * static_cast<int32>(widthHeight.x));
+    if (srcX >= static_cast<int32>(widthHeight.x)) {
+      srcX = 2 * static_cast<int32>(widthHeight.x) - srcX - 1;
+    }
   }
 
-  if (srcY < 0)
-  {
-      srcY = -srcY;
+  if (srcY < 0) {
+    srcY = -srcY;
   }
-  if (srcY >= static_cast<int32>(widthHeight.y))
-  {
-      srcY %= (2 * static_cast<int32>(widthHeight.y));
-      if (srcY >= static_cast<int32>(widthHeight.y))
-      {
-          srcY = 2 * static_cast<int32>(widthHeight.y) - srcY - 1;
-      }
+  if (srcY >= static_cast<int32>(widthHeight.y)) {
+    srcY %= (2 * static_cast<int32>(widthHeight.y));
+    if (srcY >= static_cast<int32>(widthHeight.y)) {
+      srcY = 2 * static_cast<int32>(widthHeight.y) - srcY - 1;
+    }
   }
 
-  if (srcX < 0 || srcX >= static_cast<int32>(widthHeight.x) ||
-      srcY < 0 || srcY >= static_cast<int32>(widthHeight.y)) {
+  if (srcX < 0 || srcX >= static_cast<int32>(widthHeight.x) || srcY < 0 ||
+      srcY >= static_cast<int32>(widthHeight.y)) {
     return false;
   }
   return true;
 }
 
 /*
-*/
-bool 
-BMPImage::calculateStretchCoordinates(int32 x, int32 y, 
-                                         const Box2D &srcRect, 
-                                         const Box2D &dstRect,
-                                         int32 &srcX, int32 &srcY)
-{
+ */
+bool
+BMPImage::calculateStretchCoordinates(int32 x, int32 y, const Box2D& srcRect,
+                                      const Box2D& dstRect, int32& srcX, int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
   Vector2 widthHeightDst = dstRect.getSize();
   const float scaleX = static_cast<float>(widthHeight.x) / widthHeightDst.x;
@@ -468,10 +419,8 @@ BMPImage::calculateStretchCoordinates(int32 x, int32 y,
 /*
  */
 void
-BMPImage::resize(uint32 width, uint32 height)
-{
-  if ((width == m_width && height == m_height) || width <= 0 || height <= 0)
-  {
+BMPImage::resize(uint32 width, uint32 height) {
+  if ((width == m_width && height == m_height) || width <= 0 || height <= 0) {
     return;
   }
 
@@ -482,11 +431,9 @@ BMPImage::resize(uint32 width, uint32 height)
   temp.create(width, height, m_bpp);
 
   // #pragma omp parallel for
-  for (int32 y = 0; y < height; ++y)
-  {
+  for (uint32 y = 0; y < height; ++y) {
     float v = y * scaleY;
-    for (int32 x = 0; x < width; ++x)
-    {
+    for (uint32 x = 0; x < width; ++x) {
       float u = x * scaleX;
       temp.setPixel(x, y, getColor(u, v));
     }

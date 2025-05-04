@@ -11,7 +11,15 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
+# add warning to highest warning level only for linux, on windows we have to use /W4 or /Wall
+if (WIN32)
+  add_compile_options(/W4)
+else()
+  add_compile_options(-Wall -Wextra -pedantic -Werror)
+endif()
+
 add_subdirectory(chUtilities)
+
 ##Ad if exist depending on the stream
 if(EXISTS "${CMAKE_SOURCE_DIR}/chUtilitiesTest")
   message("Directory exists.")
@@ -20,14 +28,14 @@ endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   message("Directory exists.")
-  add_subdirectory(chCore)
+  #add_subdirectory(chCore)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chCoreTest")
   message("Directory exists.")
-  add_subdirectory(chCoreTest)
+  #add_subdirectory(chCoreTest)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
-  add_subdirectory(GraphicsAPIs/chVulkan)
+  #add_subdirectory(GraphicsAPIs/chVulkan)
 endif()

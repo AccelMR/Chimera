@@ -11,15 +11,15 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
 namespace chEngineSDK{
 /*
- * Description: 
- *     Base exception class. 
- *  Every new exceptions must inherit _source here and 
+ * Description:
+ *     Base exception class.
+ *  Every new exceptions must inherit _source here and
  *  send its own type as a hard coded string.
  *
  */
@@ -39,9 +39,9 @@ class Exception : public std::exception
       m_line(0)
   {}
 
-  Exception(const char* _type, 
-            const String& _description, 
-            const String& _source, 
+  Exception(const char* _type,
+            const String& _description,
+            const String& _source,
             const char* _file,
             uint32 _line)
     : m_typeName(_type),
@@ -52,12 +52,12 @@ class Exception : public std::exception
   {}
 
   Exception(const Exception& rhs)
-    : m_line( rhs.m_line ),
-      m_typeName( rhs.m_typeName ),
+    : m_typeName( rhs.m_typeName ),
       m_description( rhs.m_description ),
       m_source( rhs.m_source ),
       m_fileName( rhs.m_fileName ),
-      m_fullDescription( rhs.m_fullDescription ) 
+      m_line( rhs.m_line ),
+      m_fullDescription( rhs.m_fullDescription )
   {}
 
  /*
@@ -65,16 +65,16 @@ class Exception : public std::exception
   */
   ~Exception() _NOEXCEPT = default;
 
-  /** 
+  /**
    *   Returns a string with the full description.
-   * 
+   *
    * @note  The description contains the error number, the description
    *        supplied by the thrower, what routine threw the exception, and
    *        will also supply extra platform-specific information where applicable.
-   * 
+   *
    * @return
    **/
-  virtual const String& 
+  virtual const String&
   getFullDescription() const {
     if (m_fullDescription.empty()) {
       StringStream desc;
@@ -91,11 +91,11 @@ class Exception : public std::exception
     return m_fullDescription;
   }
 
-  
+
   /**
    * @brief Overriden std::exception::what. Returns the same value as "getFullDescription".
    */
-  const char* 
+  const char*
   what() const noexcept override {
     return getFullDescription().c_str();
   }
@@ -105,7 +105,7 @@ protected:
   String m_description;
   String m_source;
   String m_fileName;
-  uint32 m_line; 
+  uint32 m_line;
 
   mutable String m_fullDescription;
 };
@@ -174,4 +174,3 @@ static_assert((std::is_base_of<chEngineSDK::Exception, type>::value),           
   throw type(desc, __PRETTY_FUNCTION__, __FILE__, __LINE__);                    \
 }
 }
-

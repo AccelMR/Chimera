@@ -151,6 +151,9 @@ public:
   FORCEINLINE Vector4
   getNormalized(float tolerance = Math::SMALL_NUMBER) const;
 
+  NODISCARD FORCEINLINE bool
+  nearEqual(const Vector4& v, const float& tolerance = Math::SMALL_NUMBER) const;
+
   /************************************************************************/
   /*
    * Operator overloads.
@@ -457,13 +460,24 @@ Vector4::normalize(float tolerance /*= Math::SMALL_NUMBER*/)
   const float SquareSum = x * x + y * y + z * z;
   if (SquareSum > tolerance) {
     const float Scale = Math::invSqrt(SquareSum);
-    x *= Scale;  
-    y *= Scale;  
-    z *= Scale;  
+    x *= Scale;
+    y *= Scale;
+    z *= Scale;
     w = 0.0f;
     return;
   }
   *this = Vector4::ZERO;
+}
+
+/*
+*/
+FORCEINLINE bool
+Vector4::nearEqual(const Vector4& v, const float& tolerance /*= Math::SMALL_NUMBER*/) const
+{
+  return (Math::abs(v.x - x) <= tolerance) &&
+         (Math::abs(v.y - y) <= tolerance) &&
+         (Math::abs(v.z - z) <= tolerance) &&
+         (Math::abs(v.w - w) <= tolerance);
 }
 
 /*

@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2022/06/09
  * @brief   Way to represent three dimensional planes.
- * 
+ *
  *  Three dimensional plane.
  */
  /************************************************************************/
@@ -13,7 +13,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
@@ -21,8 +21,8 @@
 
 namespace chEngineSDK{
 /*
- * Description: 
- *     This class stores the coefficients as Xx+Yy+Zz=W. 
+ * Description:
+ *     This class stores the coefficients as Xx+Yy+Zz=W.
  * NOTE: This is different from many other Plane classes that use Xx+Yy+Zz+W=0.
  *
  * Sample usage:
@@ -36,17 +36,17 @@ class Plane : public Vector3
   */
   FORCEINLINE Plane() = default;
 
-  /** 
+  /**
    *   Constructor from a vector 4.
-   * 
+   *
    * @param v
    *  Vector to construct this plane
    **/
   Plane(const Vector4& v);
 
-  /** 
+  /**
    *   Constructor from 4 components.
-   * 
+   *
    * @param _x
    *   X component.
    *
@@ -61,20 +61,20 @@ class Plane : public Vector3
    **/
   FORCEINLINE Plane(float _x, float _y, float _z, float _w);
 
-  /** 
+  /**
    *   Construct from a normal and a point
-   * 
+   *
    * @param  point
    *   Any point inside the plane.
-   * 
+   *
    * @param normal
    *   Normal direction of the plane.
    **/
   FORCEINLINE Plane(const Vector3& point, const Vector3& normal);
 
-  /** 
+  /**
    *   Constructor from three points that will create a plane.
-   * 
+   *
    * @param p1
    *   First point to take in count.
    *
@@ -83,7 +83,7 @@ class Plane : public Vector3
    *
    * @param p3
    *   Third point to take in count.
-   * 
+   *
    * @return
    **/
   FORCEINLINE Plane(const Vector3& p1, const Vector3& p2, const Vector3& p3);
@@ -93,28 +93,23 @@ class Plane : public Vector3
   */
   ~Plane() = default;
 
-  
+
   /**
    *     Calculates distance between plane and a point.
-   * 
+   *
    * @param P
    *   The other point.
-   * @return 
+   * @return
    *   >0: point is in front of the plane, <0: behind, =0: on the plane.
    */
   FORCEINLINE float
   planeDot(const Vector3& p) const;
 
  public:
- 
- float w;
- 
-};
 
-/*
-*/
-FORCEINLINE
-Plane::Plane(const Vector4& v) : Vector3(v), w(v.w) {}
+ float w;
+
+};
 
 /*
 */
@@ -150,4 +145,3 @@ Plane::planeDot(const Vector3& p) const
 }
 
 }
-

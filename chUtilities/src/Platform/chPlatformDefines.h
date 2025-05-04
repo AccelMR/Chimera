@@ -64,7 +64,7 @@
 #   define CH_COMP_VER __INTEL_COMPILER
 #   define CH_STDCALL __stdcall
 #   define CH_CDECL __cdecl
-#   define CH_FALLTHROUHG 
+#   define CH_FALLTHROUHG
 
 /**
  * CH_THREADLOCAL define is down below because Intel compiler defines it
@@ -110,7 +110,7 @@
 # endif
 # if CH_COMP_VER >= 1200
 #   define FORCEINLINE                     __forceinline
-#   ifndef RESTRICT 
+#   ifndef RESTRICT
 #     define RESTRICT                      __restrict
 #   endif
 # endif
@@ -216,7 +216,7 @@
  */
  /************************************************************************/
 #if USING(CH_PLATFORM_WIN32)
-# if USING(CH_COMPILER_MSVC) 
+# if USING(CH_COMPILER_MSVC)
 #   if defined( CH_STATIC_LIB )
 #     define CH_UTILITY_EXPORT
 #   else
@@ -282,7 +282,7 @@
  /************************************************************************/
 
  //
-#if USING(CH_PLATFORM_LINUX) || USING(CH_PLATFORM_OSX) 
+#if USING(CH_PLATFORM_LINUX) || USING(CH_PLATFORM_OSX)
 //if we're on debug mode
 # if defined(_DEBUG) || defined(DEBUG)
 #   define CH_DEBUG_MODE                  IN_USE
@@ -346,7 +346,7 @@
 # pragma warning (disable: 4251)
 
     //Disable: 'X' Function call with parameters that may be unsafe
-# pragma warning(disable: 4996) 
+# pragma warning(disable: 4996)
 
   /**
    * Disable: decorated name length exceeded, name was truncated. Happens with

@@ -276,7 +276,7 @@ PlatformMath::atanh(const float& valuealue)
 /************************************************************************/
 /*
  * Intersections
- */                                                                     
+ */
 /************************************************************************/
 namespace chEngineSDK{
 /*
@@ -384,5 +384,6 @@ PlatformMath::boxesIntersect(const SphereBoxBounds &sphereboxbounds1,
   return Math::aabAABIntersection(sphereboxbounds1.getBox(),
                                   sphereboxbounds2.getBox());
 }
+
 
 }

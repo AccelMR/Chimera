@@ -63,44 +63,44 @@ public:
   static float
   invSqrt(const float& value);
 
-  /** 
+  /**
    *   Computes pow of a given value.
-   * 
+   *
    * @param value
    *  The value to apply pow.
-   * 
+   *
    * @param  vPow
    *  Number of times to be multiplied.
-   * 
-   * @return float 
+   *
+   * @return float
    *  The calculated pow.
    **/
-  static float 
+  static float
   pow(const float& value, const float vPow);
 
-  /** 
+  /**
    *   Computes absolute value.
-   * 
+   *
    * @param value
    *  the value to get absolute.
-   * 
+   *
    * @return float
    *  The abs calculated.
    **/
-  static float 
+  static float
   abs(const float& value);
 
-  /** 
+  /**
    *   Computes the interpolation between val1 and val2 with a given time.
    * @param val1
    *  First value.
-   * 
+   *
    * @param val2
    *  Second value.
-   * 
+   *
    * @param time
    *  Time to calculate lerp.
-   * 
+   *
    * @return
    **/
   FORCEINLINE static float
@@ -115,9 +115,9 @@ public:
     return X < Min ? Min : X < Max ? X : Max;
   }
 
-  /** 
+  /**
    *   Computes the inverse interpolation between val1 and val2 with given time.
-   * 
+   *
    * @param val1
    *  First value.
    *
@@ -128,57 +128,57 @@ public:
    *  Time to calculate lerp.
    *
    * @return   * @param val
-   * 
+   *
    * @return
    **/
   FORCEINLINE static float
   invLerp(const float& val1, const float& val2, const float& time);
 
-  /** 
-   *   Checks if given float is neither Nan nor infinite. 
-   * 
+  /**
+   *   Checks if given float is neither Nan nor infinite.
+   *
    * @param value
    *  The value to check.
-   * 
+   *
    * @return bool
    *  False if value is Nan or infinite.
    **/
   static bool
   isFinite(float value);
 
-  /** 
+  /**
    *   Returns the lowest between two values.
-   * 
+   *
    * @param x
    *    First value.
    *
    * @param y
    *    Second value.
    **/
-  static float 
+  static float
   min(const float x, const float y);
 
-  /** 
+  /**
    *   Returns the highest between two values.
-   * 
+   *
    * @param x
    *    First value.
    *
    * @param y
    *    Second value.
    **/
-  static float 
+  static float
   max(const float x, const float y);
 
-  /** 
+  /**
    *   Computes the floating point remainder of the division operation value1/value2.
-   * 
+   *
    * @param value1
    *  Float point value.
-   * 
+   *
    * @param value2
    *  Float point value.
-   * 
+   *
    * @return float
    * The reminder of the division.
    **/
@@ -232,14 +232,14 @@ public:
 
   /**
    *    Computes the sine and cosine of a scalar float.
-   * 
-   * @param ScalarSin	
+   *
+   * @param ScalarSin
    *    Pointer to where the sin result should be stored
-   * 
-   * @param ScalarCos	
+   *
+   * @param ScalarCos
    *    Pointer to where the cos result should be stored
-   * 
-   * @param Value 
+   *
+   * @param Value
    *    input angles
    */
   static FORCEINLINE void
@@ -421,111 +421,114 @@ public:
   FORCEINLINE static float
   unwindRadians(float radian);
 
+  NODISCARD FORCEINLINE static bool
+  nearEqual(const float& a, const float& b, const float& epsilon = SMALL_NUMBER);
+
   /************************************************************************/
   /*
    * Shapes
-   */                                                                     
+   */
   /************************************************************************/
 
-  /** 
+  /**
    *   Checks if a point intersects with a AABox.
-   * 
+   *
    * @param point
    *  A point to be checked.
-   * 
+   *
    * @param aabox
    *   The box to check.
-   * 
+   *
    * @return
    *  True if there's an intersection.
    **/
   static bool
   pointAABIntersection(const Vector3& point, const AABox& aabox);
 
-  /** 
+  /**
    *   Checks if theres any intersection between two AAboxes.
-   * 
+   *
    * @param aabox1
    *   The fist aabox to check.
    *
    * @param aabox2
    *   The second aabox to check.
-   * 
+   *
    * @return
    *   True if there's any intersection.
    **/
   static bool
   aabAABIntersection(const AABox& aabox1, const AABox& aabox2);
 
-  /** 
+  /**
    *   Checks if theres any intersection between a AABox and a Plane.
-   * 
+   *
    * @param aabox
    *   The aabox to check.
-   * 
+   *
    * @param plane
    *   The plane to check.
-   * 
+   *
    * @return
    *   True if there's an interaction.
    **/
   static bool
   aabPlaneIntersection(const AABox& aabox, const Plane& plane);
 
-  /** 
+  /**
    *   Checks if theres any intersection between a point and a Sphere.
-   * 
+   *
    * @param point
    *   The point to check.
-   * 
+   *
    * @param sphere
    *   Sphere to be checked.
-   * 
+   *
    * @return
    *   True if there's any intersection.
    **/
   static bool
   pointSphereIntersect(const Vector3& point, const Sphere& sphere);
 
-  /** 
+  /**
    *   Checks if theres any intersection between two spheres.
-   * 
+   *
    * @param sphere1
    *   Sphere 1 to be checked.
-   * 
+   *
    * @param sphere2
    *   Sphere 2 to be checked.
-   * 
+   *
    * @return
    *   True if there's any intersection.
    **/
   static bool
   sphereSphereIntersect(const Sphere& sphere1, const Sphere& sphere2);
 
-  /** 
+  /**
    *   Checks if theres any intersection between a AABox and a spheres.
-   * 
+   *
    * @param aabox
    *   The box to check.
-   * 
+   *
    * @param sphere
    *   Sphere to be checked.
-   * 
+   *
    * @return
    *   True if there's any intersection.
    **/
   static bool
   aabSphereintersection(const AABox& aabox, const Sphere& sphere);
 
-  /** 
+  /**
    *   Test whether the spheres from two BoxSphereBounds intersect/overlap.
-   * 
+   *
    * @param sphereboxbounds1
    *   The first SphereBoxBounds.
    *
    * @param sphereboxbounds2
    *   The second SphereBoxBounds.
-   * 
+   *
    * @return
    *   True if there's an intersection.
    **/
@@ -534,20 +537,20 @@ public:
                    const SphereBoxBounds& sphereboxbounds2,
                    float Tolerance = KINDA_SMALL_NUMBER);
 
-  /** 
+  /**
    *   Test whether the boxes from two BoxSphereBounds intersect/overlap.
-   * 
+   *
    * @param sphereboxbounds1
    *   The first SphereBoxBounds.
    *
    * @param sphereboxbounds2
    *   The second SphereBoxBounds.
-   * 
+   *
    * @return
    *   True if there's an intersection.
    **/
   static bool
-  boxesIntersect(const SphereBoxBounds& sphereboxbounds1, 
+  boxesIntersect(const SphereBoxBounds& sphereboxbounds1,
                  const SphereBoxBounds& sphereboxbounds2);
 
   /************************************************************************/
@@ -597,7 +600,7 @@ public:
    */
   static const float KINDA_SMALL_NUMBER;
 
-  /** 
+  /**
    *   Inverse PI
    **/
   static const float INV_PI;
@@ -695,5 +698,12 @@ PlatformMath::sin_cos( float *ScalarSin, float *ScalarCos, float Value )
 
   *ScalarCos = fSign * p;
 }
+
+/*
+*/
+FORCEINLINE bool
+PlatformMath::nearEqual(const float& a, const float& b, const float& epsilon) {
+  return (abs(a - b) <= epsilon);
 }
 
+} // namespace chEngineSDK

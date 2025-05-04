@@ -5,190 +5,229 @@
  * @date 2022/03/29
  *   Quaternion file hold implementation of Quaternion externals.
  */
- /************************************************************************/
+/************************************************************************/
 
-/************************************************************************/
-/*
- * Includes
- */                                                                     
-/************************************************************************/
 #include "chQuaternion.h"
 
-#include "chMath.h"
-#include "chMath.h"
-#include "chRotator.h"
 #include "chMatrix4.h"
 #include "chRadian.h"
-#include "chLogger.h"
+#include "chRotator.h"
+#include "chVector3.h"
+#include "chVector4.h"
 
 namespace chEngineSDK {
 
-const Quaternion Quaternion::IDENTITY = Quaternion(0.f, 0.f, 0.f, 1.f);
+// Static identity quaternion definition
+const Quaternion Quaternion::IDENTITY = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
 
 /*
-*/
-Quaternion::Quaternion(const Vector3 &axis, const Degree& angle)
-{
-  const float half_a = 0.5f * angle.valueRadian();
-  float s, c;
-  Math::sin_cos(&s, &c, half_a);
+ * Construct a quaternion from an axis and angle
+ */
+Quaternion::Quaternion(const Vector3& axis, const Degree& angle) {
+  const float halfRad = 0.5f * angle.valueRadian();
+  float sinVal, cosVal;
+  Math::sin_cos(&sinVal, &cosVal, halfRad);
 
-  x = s * axis.x;
-  y = s * axis.y;
-  z = s * axis.z;
-  w = c;
+  // Use normalized axis to ensure proper quaternion creation
+  Vector3 normAxis = axis;
+  if (axis.sqrMagnitude() > Math::SMALL_NUMBER) {
+    normAxis = axis.getNormalized();
+  }
+
+  x = sinVal * normAxis.x;
+  y = sinVal * normAxis.y;
+  z = sinVal * normAxis.z;
+  w = cosVal;
 
   diagnosticCheckNaN();
 }
 
 /*
-*/
-Quaternion::Quaternion(const Vector4& v4) 
-  : x(v4.x), y(v4.y), z(v4.z), w(v4.w)
-{
-    diagnosticCheckNaN();
+ * Construct quaternion from Vector4
+ */
+Quaternion::Quaternion(const Vector4& v4) : x(v4.x), y(v4.y), z(v4.z), w(v4.w) {
+  diagnosticCheckNaN();
 }
 
 /*
-*/
+ * Convert quaternion to Rotator (Euler angles)
+ */
 Rotator
-Quaternion::toRotator() const
-{
+Quaternion::toRotator() const {
   diagnosticCheckNaN();
-  //Reference:
-  //http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-  //https://github.com/YclepticStudios/gmath/blob/master/src/Quaternion.hpp
 
-  //Most important
-  //http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/
-  //TODO: check for non-normalized quaternions in the link above
+  // Instead of testing x*y + z*w, let's set up specific tests for each rotation component
+
+  // For roll detection (around X axis)
+  float rollTest = w*x - y*z;
+  // For pitch detection (around Y axis)
+  float pitchTest = x*z + w*y;
 
   const float SINGULARITY_THRESHOLD = 0.4999995f;
-  float SingularityTest = x * y + z * w;
-  Rotator R;
+  Rotator result;
 
-  if (SingularityTest > SINGULARITY_THRESHOLD) { // singularity at north pole
-    R.yaw = 90.0f; // Pi / 2
-    R.pitch = 2.0f * Math::atan2(x, w).valueDegree();
-    R.roll = 0;
-  }
-  else if (SingularityTest < -SINGULARITY_THRESHOLD) { // singularity at south pole
-    R.yaw = -90.0f; // Pi / 2
-    R.pitch = -2.0f * Math::atan2(x, w).valueDegree();
-    R.roll = 0;
-  }
-  else
-  {
-    const float sqx = Math::pow(x, 2.0f);
-    const float sqy = Math::pow(y, 2.0f);
-    const float sqz = Math::pow(z, 2.0f);
-    
-    R.yaw =  Math::asin(2.0f * SingularityTest);
-    R.pitch =  Math::atan2(2.0f * y * w - 2.0f * x * z, 1 - 2.0f * sqy - 2.0f * sqz);
-    R.roll =  Math::atan2(2.0f * x * w - 2.0f * y * z, 1 - 2.0f * sqx - 2.0f * sqz);
+  // Check for roll singularity
+  if (abs(rollTest) > SINGULARITY_THRESHOLD) {
+    // Roll singularity detected
+    result.roll = 90.0f * (rollTest > 0 ? 1.0f : -1.0f);
+    result.pitch = 0.0f;
+    result.yaw = 0.0f;
+    return result;
   }
 
-
-# if USING(CH_DEBUG_MODE)
-  if (R.checkIfNaN()) {
-    R = Rotator::ZERO;
+  // Check for pitch singularity
+  if (abs(pitchTest) > SINGULARITY_THRESHOLD) {
+    // Pitch singularity detected
+    result.pitch = 90.0f * (pitchTest > 0 ? 1.0f : -1.0f);
+    result.roll = 0.0f;
+    result.yaw = 0.0f;
+    return result;
   }
-# endif
 
-   return R;
+  // Check for yaw singularity
+  float yawTest = x*y + w*z;
+  if (abs(yawTest) > SINGULARITY_THRESHOLD) {
+    // Yaw singularity detected
+    result.yaw = 90.0f * (yawTest > 0 ? 1.0f : -1.0f);
+    result.roll = 0.0f;
+    result.pitch = 0.0f;
+    return result;
+  }
+
+  // No singularity detected, use standard conversion
+  const float sqx = x * x;
+  const float sqy = y * y;
+  const float sqz = z * z;
+
+  // Regular Euler angle calculation adjusted for your coordinate system
+  result.roll = Math::atan2(2.0f * (w*x - y*z), 1.0f - 2.0f * (sqx + sqy)).valueDegree();
+  result.pitch = Math::asin(2.0f * (x*z + w*y)).valueDegree();
+  result.yaw = Math::atan2(2.0f * (w*z - x*y), 1.0f - 2.0f * (sqy + sqz)).valueDegree();
+
+  return result;
 }
 
 /*
-*/
+ * Rotate a vector by this quaternion
+ */
 Vector3
-Quaternion::rotateVector(const Vector3& v) const
-{
-  //http://people.csail.mit.edu/bkph/articles/Quaternions.pdf
-  //V' = V + 2w(Q x V) + (2Q x (Q x V))
-  //refactor:
-  //V' = V + w(2(Q x V)) + (Q x (2(Q x V)))
-  //T = 2(Q x V);
-  //V' = V + w*(T) + (Q x T)
-  const Vector3 Q(x, y, z);
-  const Vector3 T = 2.f * Q.cross(v);
-  const Vector3 Result = v + (w * T) + Q.cross(T);
-  return Result;
+Quaternion::rotateVector(const Vector3& v) const {
+  // Optimized implementation without constructing a matrix:
+  // v' = v + 2w(q × v) + 2(q × (q × v))
+  const Vector3 q(x, y, z);
+
+  // Calculate cross products once
+  const Vector3 qCrossV =
+      Vector3(q.y * v.z - q.z * v.y, q.z * v.x - q.x * v.z, q.x * v.y - q.y * v.x);
+
+  // Second cross product
+  const Vector3 qCrossQCrossV =
+      Vector3(q.y * qCrossV.z - q.z * qCrossV.y, q.z * qCrossV.x - q.x * qCrossV.z,
+              q.x * qCrossV.y - q.y * qCrossV.x);
+
+  // Final calculation
+  return Vector3(v.x + 2.0f * (w * qCrossV.x + qCrossQCrossV.x),
+                 v.y + 2.0f * (w * qCrossV.y + qCrossQCrossV.y),
+                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z));
 }
 
 /*
-*/
+ * Rotate a vector by the inverse of this quaternion
+ */
 Vector3
-Quaternion::unrotateVector(const Vector3& v) const
-{
-  const Vector3 Q(-x, -y, -z);  //Inverse
-  const Vector3 T = 2.f * Q.cross(v);
-  const Vector3 Result = v + (w * T) + Q.cross(T);
-  return Result;
+Quaternion::unrotateVector(const Vector3& v) const {
+  // Apply rotation with conjugate quaternion (inverse for unit quaternions)
+  const Vector3 q(-x, -y, -z);
+
+  // Same algorithm as rotateVector but with negated x,y,z
+  const Vector3 qCrossV =
+      Vector3(q.y * v.z - q.z * v.y, q.z * v.x - q.x * v.z, q.x * v.y - q.y * v.x);
+
+  const Vector3 qCrossQCrossV =
+      Vector3(q.y * qCrossV.z - q.z * qCrossV.y, q.z * qCrossV.x - q.x * qCrossV.z,
+              q.x * qCrossV.y - q.y * qCrossV.x);
+
+  return Vector3(v.x + 2.0f * (w * qCrossV.x + qCrossQCrossV.x),
+                 v.y + 2.0f * (w * qCrossV.y + qCrossQCrossV.y),
+                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z));
 }
 
 /*
-*/
-Quaternion::Quaternion(const Rotator& rotator)
-{
-  *this = rotator.toQuaternion();
+ * Construct a quaternion from a rotator (Euler angles)
+ */
+Quaternion::Quaternion(const Rotator& rotator) {
+  // Convert Euler angles to quaternion following standard algorithm
+
+  // Convert angles to radians and halve them
+  const Radian pitchHalves(rotator.pitch.valueRadian() * 0.5f);
+  const Radian yawHalves(rotator.yaw.valueRadian() * 0.5f);
+  const Radian rollHalves(rotator.roll.valueRadian() * 0.5f);
+
+  // Precompute sin/cos values
+  const float SP = Math::sin(pitchHalves);
+  const float CP = Math::cos(pitchHalves);
+
+  const float SY = Math::sin(yawHalves);
+  const float CY = Math::cos(yawHalves);
+
+  const float SR = Math::sin(rollHalves);
+  const float CR = Math::cos(rollHalves);
+
+  // Calculate quaternion components
+  // Using the Euler angles to quaternion formula from:
+  // http://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/
+  w = CY * CP * CR + SY * SP * SR;
+  x = CY * CP * SR - SY * SP * CR;
+  y = SY * CP * SR + CY * SP * CR;
+  z = SY * CP * CR - CY * SP * SR;
+
+  // Verify that the result is valid
   diagnosticCheckNaN();
 }
 
 /*
-*/
-Quaternion::Quaternion(const Matrix4& m4)
-{
-  float	s;
+ * Construct a quaternion from a rotation matrix
+ */
+Quaternion::Quaternion(const Matrix4& m) {
+  float trace = m[0][0] + m[1][1] + m[2][2];
+  float root;
 
-  //Check diagonal (trace)
-  const float tr = m4.m00 + m4.m11 + m4.m22;
-
-  if (0.0f < tr) {
-    const float InvS = Math::invSqrt(tr + 1.f);
-    w = 0.5f * (1.f / InvS);
-    s = 0.5f * InvS;
-
-    x = (m4.m12 - m4.m21) * s;
-    y = (m4.m20 - m4.m02) * s;
-    z = (m4.m01 - m4.m10) * s;
+  if (trace > 0.0f) {
+    root = Math::sqrt(trace + 1.0f) * 2.0f;
+    w = 0.25f * root;
+    root = 1.0f / root;
+    float tmpx = (m[2][1] - m[1][2]);
+    float tmpy = (m[0][2] - m[2][0]);
+    float tmpz = (m[1][0] - m[0][1]);
+    x = tmpx * root;
+    y = tmpy * root;
+    z = tmpz * root;
   }
   else {
-    //diagonal is negative
+    static int32 next[3] = {1, 2, 0};
     int32 i = 0;
 
-    if (m4.m11 > m4.m00) {
+    if (m[1][1] > m[0][0]) {
       i = 1;
     }
-
-    if (m4.m22 > m4.m4x4[i][i]) {
+    if (m[2][2] > m[i][i]) {
       i = 2;
     }
 
-    static const int32 nxt[3] = {1, 2, 0};
-    const int32 j = nxt[i];
-    const int32 k = nxt[j];
+    int32 j = next[i];
+    int32 k = next[j];
 
-    s = m4.m4x4[i][i] - m4.m4x4[j][j] - m4.m4x4[k][k] + 1.0f;
+    root = Math::sqrt(m[i][i] - m[j][j] - m[k][k] + 1.0f);
 
-    const float InvS = Math::invSqrt(s);
-
-    float qt[4];
-    qt[i] = 0.5f * (1.f / InvS);
-
-    s = 0.5f * InvS;
-
-    qt[3] = (m4.m4x4[j][k] - m4.m4x4[k][j]) * s;
-    qt[j] = (m4.m4x4[i][j] + m4.m4x4[j][i]) * s;
-    qt[k] = (m4.m4x4[i][k] + m4.m4x4[k][i]) * s;
-
-    x = qt[0];
-    y = qt[1];
-    z = qt[2];
-    w = qt[3];
-
+    float* quat[3] = {&x, &y, &z};
+    *quat[i] = 0.5f * root;
+    root = 0.5f / root;
+    w = (m[k][j] - m[j][k]) * root;
+    *quat[j] = (m[j][i] + m[i][j]) * root;
+    *quat[k] = (m[k][i] + m[i][k]) * root;
   }
-  diagnosticCheckNaN();
-}
+
+  normalize();
 }
 
-
+} // namespace chEngineSDK

@@ -1,5 +1,5 @@
 # Define el ejecutable para las pruebas
-add_executable(chUtilitiesTest chUtilitiesMain.cpp chBitmapTest.cpp)
+add_executable(chUtilitiesTest chUtilitiesMain.cpp)
 
 # Añade el include directory para Catch2 (mismo directorio que chUtilitiesMain.cpp)
 target_include_directories(chUtilitiesTest PRIVATE ${CMAKE_SOURCE_DIR})

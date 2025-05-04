@@ -1,11 +1,11 @@
 /************************************************************************/
 /**
  * @file chRandom.h
- * @author Victor Flores (lGaze) 
+ * @author Victor Flores (lGaze)
  * @date 2022/09/10
- * 
+ *
  * Random number generator class
- * 
+ *
  * @bug No bug known.
  */
 /************************************************************************/
@@ -14,22 +14,22 @@
 /************************************************************************/
 /*
  * Includes.
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
 namespace chEngineSDK{
 /*
- * Description: 
+ * Description:
  *     Random number generator class
  */
 class CH_UTILITY_EXPORT Random
 {
  public:
-  
+
   /**
    * @brief Constructor using the initial given value as a starting seed
-   * 
+   *
    * By default seed value equals 0
    **/
   explicit FORCEINLINE
@@ -39,7 +39,7 @@ class CH_UTILITY_EXPORT Random
    * @brief Default destructor
    **/
   ~Random() = default;
-  
+
   /************************************************************************/
   /*
    * Methods.
@@ -57,6 +57,14 @@ class CH_UTILITY_EXPORT Random
    **/
   FORCEINLINE uint32
   getPseudoRandom() const;
+
+  /**
+   * Gets a random number between 0 and 1
+   **/
+  NODISCARD FORCEINLINE float
+  getRandom01() const {
+    return static_cast<float>(getPseudoRandom()) / static_cast<float>(UINT32_MAX);
+  }
 
   /************************************************************************/
   /*
@@ -85,7 +93,7 @@ class CH_UTILITY_EXPORT Random
  private:
 
   /**
-   * 
+   *
    */
   mutable uint32 m_seed;
 };
@@ -122,5 +130,3 @@ Random::setSeed(uint32 seed) {
 }
 
 }
-
-
