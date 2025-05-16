@@ -31,7 +31,7 @@ CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, CH_ASSETSYSTEM_LOG_LEVEL);
 
 /*
 */
-bool 
+bool
 AssetManager::importAsset(const Path& importPath, const Path& assetPath) {
 
   if (importPath.empty() || assetPath.empty()) {
@@ -92,7 +92,8 @@ AssetManager::importAsset(const Path& importPath, const Path& assetPath) {
 */
 bool
 AssetManager::importModel(const Path& importPath, const Path& fullAssetPath) {
+  CH_PAMRAMETER_UNUSED(importPath);
+  CH_PAMRAMETER_UNUSED(fullAssetPath);
   return true;
 }
 } // namespace chEngineSDK
-

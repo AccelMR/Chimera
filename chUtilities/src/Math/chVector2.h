@@ -68,8 +68,8 @@ public:
    */
   FORCEINLINE Vector2(const Vector2& toCopy);
 
-  /** 
-   *   
+  /**
+   *
    **/
   Vector2(const Vector3& vector3);
 
@@ -248,7 +248,7 @@ public:
    * @return Vector3
    *  This vector reference modified.
    **/
-  FORCEINLINE Vector2& 
+  FORCEINLINE Vector2&
   operator-=(const Vector2& vector3);
 
   /**
@@ -260,8 +260,11 @@ public:
   FORCEINLINE Vector2
   operator-() const;
 
-  FORCEINLINE Vector2& 
+  FORCEINLINE Vector2&
   operator=(const float* v2Arr);
+
+  FORCEINLINE Vector2&
+  operator=(const Vector2& vector2);
 
   /**
    *   Returns the xy as Array
@@ -496,10 +499,18 @@ Vector2::operator-() const
 /*
 */
 FORCEINLINE Vector2&
-Vector2::operator=(const float* v2Arr) 
-{
+Vector2::operator=(const float* v2Arr) {
   x = v2Arr[0];
   y = v2Arr[1];
+  return *this;
+}
+
+/*
+*/
+FORCEINLINE Vector2&
+Vector2::operator=(const Vector2& vector2) {
+  x = vector2.x;
+  y = vector2.y;
   return *this;
 }
 

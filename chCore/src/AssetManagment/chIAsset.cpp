@@ -49,22 +49,22 @@ IAsset::save(){
     CH_LOG(AssetSystem, Error, "Failed to create asset file {0}", assetPath.toString());
     return false;
   }
-  
+
   stream << getType();
   stream << m_metadata.uuid;
-  
+
   const uint32 referencedAssetsCount = static_cast<uint32>(m_referencedAssets.size());
   stream << referencedAssetsCount;
   for (const UUID& refUUID : m_referencedAssets) {
     stream << refUUID;
   }
-  
+
   const bool success = serialize(stream);
   if (!success) {
     CH_LOG(AssetSystem, Error, "Failed to serialize asset {0}", m_metadata.name);
     return false;
   }
-  
+
   CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name, assetPath.toString());
   return true;
 }
@@ -103,9 +103,9 @@ IAsset::load(){
   }
   m_metadata = metadata;
 
-  uint32 referencedAssetCount = INVALID_INDEX;
+  uint32 referencedAssetCount = INVALID_UNSIGNED_INDEX;
   stream >> referencedAssetCount;
-  if (referencedAssetCount == INVALID_INDEX) {
+  if (referencedAssetCount == INVALID_UNSIGNED_INDEX) {
     CH_LOG(AssetSystem, Error, "Invalid asset reference count {0}", referencedAssetCount);
     m_state = AssetState::Failed;
     return false;
@@ -147,9 +147,9 @@ IAsset::unload(){
 
   m_state = AssetState::Unloading;
 
-  for (const UUID& refUUID : m_referencedAssets) {
-    //AssetManager::getInstance().unloadAsset(refUUID);
-  }
+  // for (const UUID& refUUID : m_referencedAssets) {
+  //   //AssetManager::getInstance().unloadAsset(refUUID);
+  // }
 
   //clear the asset data
   clearAssetData();
@@ -170,7 +170,7 @@ IAsset::validateMetadata(const AssetMetadata& metadata) const {
     return false;
   }
 
-  // This probably does not need to be checked since is the original path and can be empty or 
+  // This probably does not need to be checked since is the original path and can be empty or
   // does not exist since it can be imported in a different machine.
   // if (metadata.originalPath.empty()) {
   //   CH_LOG(AssetSystem, Error, "Original path is empty");

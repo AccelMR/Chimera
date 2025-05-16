@@ -21,6 +21,8 @@ VulkanShader::VulkanShader(VkDevice device, const ShaderCreateInfo& createInfo)
     : m_device(device), m_type(createInfo.stage), m_entryPoint(createInfo.entryPoint) {
   VkShaderModuleCreateInfo shaderModuleCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .codeSize = createInfo.sourceCode.size(),
       .pCode = reinterpret_cast<const uint32*>(createInfo.sourceCode.data()),
   };

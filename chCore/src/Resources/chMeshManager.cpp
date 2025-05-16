@@ -24,9 +24,12 @@ namespace MeshManagerHelpers {
 */
 static Matrix4
 convertAssimpMatrix(const aiMatrix4x4& matrix) {
-  Matrix4 result;
-  std::memcpy(&result, &matrix, sizeof(Matrix4));
-  return result;
+  return Matrix4(
+    matrix.a1, matrix.a2, matrix.a3, matrix.a4,
+    matrix.b1, matrix.b2, matrix.b3, matrix.b4,
+    matrix.c1, matrix.c2, matrix.c3, matrix.c4,
+    matrix.d1, matrix.d2, matrix.d3, matrix.d4
+  );
 }
 } // namespace MeshManagerHelpers
 
@@ -91,7 +94,7 @@ MeshManager::loadModel(const Path& filePath) {
 
   const aiScene* scene = importer.ReadFile(filePath.toString(),
                                            aiProcessPreset_TargetRealtime_MaxQuality |
-                                           aiProcess_FlipUVs | 
+                                           aiProcess_FlipUVs |
                                            aiProcess_MakeLeftHanded //|
                                            //aiProcess_PreTransformVertices
   );
@@ -118,7 +121,7 @@ MeshManager::loadModel(const Path& filePath) {
 */
 void
 MeshManager::unloadMesh(const WeakPtr<Mesh>& mesh) {
-  //CH_NOT_IMPLEMENTED();
+  CH_PAMRAMETER_UNUSED(mesh);
 }
 
 /*
@@ -126,21 +129,21 @@ MeshManager::unloadMesh(const WeakPtr<Mesh>& mesh) {
 Vector<SPtr<Mesh>>
 MeshManager::processNode(aiNode* node, const aiScene* scene) {
   Vector<SPtr<Mesh>> meshes;
-  
+
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
     SPtr<Mesh> processedMesh = processMesh(mesh, scene);
-    
+
     if (processedMesh) {
       meshes.push_back(processedMesh);
     }
   }
-  
+
   for (uint32 i = 0; i < node->mNumChildren; i++) {
     Vector<SPtr<Mesh>> childMeshes = processNode(node->mChildren[i], scene);
     meshes.insert(meshes.end(), childMeshes.begin(), childMeshes.end());
   }
-  
+
   return meshes;
 }
 
@@ -149,16 +152,16 @@ MeshManager::processNode(aiNode* node, const aiScene* scene) {
 SPtr<Mesh>
 MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
   SPtr<Mesh> newMesh = chMakeShared<Mesh>();
-  
+
   const bool hasPositions = mesh->HasPositions();
   const bool hasNormals = mesh->HasNormals();
   const bool hasTexCoords = mesh->HasTextureCoords(0);
   const bool hasColors = mesh->HasVertexColors(0);
-  const bool hasTangents = mesh->HasTangentsAndBitangents();
-  
+  //const bool hasTangents = mesh->HasTangentsAndBitangents();
+
   if (hasPositions && hasNormals && hasTexCoords) {
     Vector<VertexNormalTexCoord> vertices(mesh->mNumVertices);
-    
+
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
       vertices[i].position =  {
         // mesh->mVertices[i].z,
@@ -176,76 +179,76 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
         mesh->mNormals[i].y,
         mesh->mNormals[i].z
       };
-      
+
       if (hasTexCoords) {
-        vertices[i].texCoord = { 
-          mesh->mTextureCoords[0][i].x, 
+        vertices[i].texCoord = {
+          mesh->mTextureCoords[0][i].x,
           1.0f - mesh->mTextureCoords[0][i].y
         };
-      } 
+      }
       else {
         CH_LOG_WARNING(MeshSystem, "Mesh does not have texture coordinates");
         vertices[i].texCoord = { 0.0f, 0.0f };
       }
     }
-    
+
     newMesh->setVertexData(std::move(vertices));
   }
   else if (hasPositions && hasColors) {
     Vector<VertexPosColor> vertices(mesh->mNumVertices);
-    
+
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = { 
-        mesh->mVertices[i].x, 
-        mesh->mVertices[i].y, 
-        mesh->mVertices[i].z 
+      vertices[i].position = {
+        mesh->mVertices[i].x,
+        mesh->mVertices[i].y,
+        mesh->mVertices[i].z
       };
-      
+
       if (hasColors) {
-        vertices[i].color = { 
-          mesh->mColors[0][i].r, 
-          mesh->mColors[0][i].g, 
-          mesh->mColors[0][i].b, 
-          mesh->mColors[0][i].a 
+        vertices[i].color = {
+          mesh->mColors[0][i].r,
+          mesh->mColors[0][i].g,
+          mesh->mColors[0][i].b,
+          mesh->mColors[0][i].a
         };
-      } 
+      }
       else {
         vertices[i].color = { 1.0f, 1.0f, 1.0f, 1.0f };
       }
     }
-    
+
     newMesh->setVertexData(std::move(vertices));
   }
   else if (hasPositions) {
     CH_LOG_WARNING(MeshSystem, "Mesh does not have color data, using default color");
     Vector<VertexPosColor> vertices(mesh->mNumVertices);
-    
+
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
       vertices[i].position = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
-      
+
       // Assign default color if no color data is available
       vertices[i].color = { 0.7f, 0.7f, 0.7f, 1.0f };
     }
-    
+
     newMesh->setVertexData(std::move(vertices));
   }
   else {
     CH_LOG_ERROR(MeshSystem, "Mesh does not have position data");
     return nullptr;
   }
-  
-  if (mesh->mMaterialIndex >= 0) {
+
+  if (mesh->mMaterialIndex != 0) {
     aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-    
+
     // TODO: Process material properties
-    
+
     aiString texturePath;
     if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
       const String diffuseTexPath = texturePath.C_Str();
       CH_LOG_INFO(MeshSystem, "Found diffuse texture: {0}", diffuseTexPath);
     }
   }
-  
+
   // Procesar índices
   if (mesh->HasFaces()) {
     const uint32 numIndices = mesh->mNumFaces * 3;
@@ -262,7 +265,7 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
         }
       }
       newMesh->setIndexData(indices);
-    } 
+    }
     else {
       Vector<uint16> indices(numIndices);
       uint32 index = 0;
@@ -275,7 +278,7 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
       newMesh->setIndexData(indices);
     }
   }
-  
+
   return newMesh;
 }
 
@@ -287,10 +290,10 @@ MeshManager::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model>
   String nodeName = node->mName.C_Str();
   ModelNode* modelNode = model->createNode(nodeName, nodeLocalTransform, parentNode);
 
-  CH_ASSERT(parentNode == nullptr || std::find(parentNode->getChildren().begin(), 
-                                               parentNode->getChildren().end(), 
+  CH_ASSERT(parentNode == nullptr || std::find(parentNode->getChildren().begin(),
+                                               parentNode->getChildren().end(),
                                                modelNode) != parentNode->getChildren().end());
-    
+
 
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];

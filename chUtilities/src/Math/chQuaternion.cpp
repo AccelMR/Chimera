@@ -112,23 +112,19 @@ Quaternion::toRotator() const {
  */
 Vector3
 Quaternion::rotateVector(const Vector3& v) const {
-  // Optimized implementation without constructing a matrix:
-  // v' = v + 2w(q × v) + 2(q × (q × v))
   const Vector3 q(x, y, z);
+  const Vector3 qCrossV(q.y * v.z - q.z * v.y,
+                        q.z * v.x - q.x * v.z,
+                        q.x * v.y - q.y * v.x);
 
-  // Calculate cross products once
-  const Vector3 qCrossV =
-      Vector3(q.y * v.z - q.z * v.y, q.z * v.x - q.x * v.z, q.x * v.y - q.y * v.x);
+  const Vector3 qCrossQCrossV(q.y * qCrossV.z - q.z * qCrossV.y,
+                              q.z * qCrossV.x - q.x * qCrossV.z,
+                              q.x * qCrossV.y - q.y * qCrossV.x);
 
-  // Second cross product
-  const Vector3 qCrossQCrossV =
-      Vector3(q.y * qCrossV.z - q.z * qCrossV.y, q.z * qCrossV.x - q.x * qCrossV.z,
-              q.x * qCrossV.y - q.y * qCrossV.x);
-
-  // Final calculation
   return Vector3(v.x + 2.0f * (w * qCrossV.x + qCrossQCrossV.x),
                  v.y + 2.0f * (w * qCrossV.y + qCrossQCrossV.y),
-                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z));
+                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z)
+  );
 }
 
 /*
@@ -189,45 +185,39 @@ Quaternion::Quaternion(const Rotator& rotator) {
  * Construct a quaternion from a rotation matrix
  */
 Quaternion::Quaternion(const Matrix4& m) {
-  float trace = m[0][0] + m[1][1] + m[2][2];
-  float root;
+  const float trace = m[0][0] + m[1][1] + m[2][2];
 
   if (trace > 0.0f) {
-    root = Math::sqrt(trace + 1.0f) * 2.0f;
-    w = 0.25f * root;
-    root = 1.0f / root;
-    float tmpx = (m[2][1] - m[1][2]);
-    float tmpy = (m[0][2] - m[2][0]);
-    float tmpz = (m[1][0] - m[0][1]);
-    x = tmpx * root;
-    y = tmpy * root;
-    z = tmpz * root;
+    const float s = Math::sqrt(trace + 1.0f) * 2.0f;
+    w = 0.25f * s;
+    const float invS = 1.0f / s;
+    x = (m[1][2] - m[2][1]) * invS;
+    y = (m[2][0] - m[0][2]) * invS;
+    z = (m[0][1] - m[1][0]) * invS;  // (m[1][0] - m[0][1])
+  }
+  else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+    const float s = Math::sqrt(1.0f + m[0][0] - m[1][1] - m[2][2]) * 2.0f;
+    x = 0.25f * s;
+    const float invS = 1.0f / s;
+    w = (m[2][1] - m[1][2]) * invS;
+    y = (m[0][1] + m[1][0]) * invS;
+    z = (m[0][2] + m[2][0]) * invS;
+  }
+  else if (m[1][1] > m[2][2]) {
+    const float s = std::sqrt(1.0f + m[1][1] - m[0][0] - m[2][2]) * 2.0f;
+    y = 0.25f * s;
+    const float invS = 1.0f / s;
+    w = (m[0][2] - m[2][0]) * invS;
+    x = (m[0][1] + m[1][0]) * invS;
+    z = (m[1][2] + m[2][1]) * invS;
   }
   else {
-    static int32 next[3] = {1, 2, 0};
-    int32 i = 0;
-
-    if (m[1][1] > m[0][0]) {
-      i = 1;
-    }
-    if (m[2][2] > m[i][i]) {
-      i = 2;
-    }
-
-    int32 j = next[i];
-    int32 k = next[j];
-
-    root = Math::sqrt(m[i][i] - m[j][j] - m[k][k] + 1.0f);
-
-    float* quat[3] = {&x, &y, &z};
-    *quat[i] = 0.5f * root;
-    root = 0.5f / root;
-    w = (m[k][j] - m[j][k]) * root;
-    *quat[j] = (m[j][i] + m[i][j]) * root;
-    *quat[k] = (m[k][i] + m[i][k]) * root;
+    const float s = Math::sqrt(1.0f + m[2][2] - m[0][0] - m[1][1]) * 2.0f;
+    const float invS = 1.0f / s;
+    w = (m[1][0] - m[0][1]) * invS;
+    x = (m[0][2] + m[2][0]) * invS;
+    y = (m[1][2] + m[2][1]) * invS;
+    z = 0.25f * s;
   }
-
-  normalize();
 }
-
 } // namespace chEngineSDK

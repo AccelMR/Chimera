@@ -17,23 +17,28 @@
 namespace chEngineSDK {
 class VulkanTexture : public ITexture {
  public:
-  VulkanTexture(VkDevice device, 
+  VulkanTexture(VkDevice device,
                 VkPhysicalDevice physicalDevice,
                 const TextureCreateInfo& createInfo);
 
-  VulkanTexture(VkDevice device, 
-                VkPhysicalDevice physicalDevice, 
+  VulkanTexture(VkDevice device,
+                VkPhysicalDevice physicalDevice,
                 VkImage image,
                 VkFormat format,
                 uint32 width, uint32 height,
                 uint32 depth, uint32 mipLevels,
                 uint32 arrayLayers = 1)
-  : m_device(device), 
+  : m_device(device),
     m_physicalDevice(physicalDevice),
-    m_width(width), m_height(height),
-    m_depth(depth), m_mipLevels(mipLevels),
-    m_arrayLayers(arrayLayers), m_format(vkFormatToChFormat(format)),
-    m_type(TextureType::Texture2D), m_image(image), m_memory(VK_NULL_HANDLE),
+    m_memory(VK_NULL_HANDLE),
+    m_image(image),
+    m_width(width),
+    m_height(height),
+    m_depth(depth),
+    m_mipLevels(mipLevels),
+    m_arrayLayers(arrayLayers),
+    m_format(vkFormatToChFormat(format)),
+    m_type(TextureType::Texture2D),
     m_ownsTexture(false) {}
 
   ~VulkanTexture() override;

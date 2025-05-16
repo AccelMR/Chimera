@@ -28,14 +28,14 @@ endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   message("Directory exists.")
-  #add_subdirectory(chCore)
+  add_subdirectory(chCore)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chCoreTest")
   message("Directory exists.")
-  #add_subdirectory(chCoreTest)
+  add_subdirectory(chCoreTest)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
-  #add_subdirectory(GraphicsAPIs/chVulkan)
+  add_subdirectory(GraphicsAPIs/chVulkan)
 endif()

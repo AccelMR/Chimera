@@ -17,11 +17,11 @@
 namespace chEngineSDK {
 class VulkanTextureView : public ITextureView {
  public:
-  VulkanTextureView(VkDevice device, 
+  VulkanTextureView(VkDevice device,
                     ITexture* texture,
                     const TextureViewCreateInfo& createInfo);
 
-  VulkanTextureView(VkDevice device, 
+  VulkanTextureView(VkDevice device,
                     VkImageView imageView,
                     VkFormat format,
                     uint32 baseMipLevel, uint32 mipLevelCount,
@@ -29,15 +29,16 @@ class VulkanTextureView : public ITextureView {
                     TextureViewType viewType = TextureViewType::View2D)
   : m_device(device),
     m_imageView(imageView),
-    m_format(format),
+    m_viewType(chTextureViewTypeToVkTextureViewType(viewType)),
     m_baseMipLevel(baseMipLevel),
     m_mipLevelCount(mipLevelCount),
     m_baseArrayLayer(baseArrayLayer),
     m_arrayLayerCount(arrayLayerCount),
-    m_viewType(chTextureViewTypeToVkTextureViewType(viewType)),
-    m_ownsTextureView(false) {
-    CH_ASSERT(m_device != VK_NULL_HANDLE);
-    CH_ASSERT(m_imageView != VK_NULL_HANDLE);
+    m_format(format),
+    m_ownsTextureView(false),
+    m_texture(nullptr) {
+      CH_ASSERT(m_device != VK_NULL_HANDLE);
+      CH_ASSERT(m_imageView != VK_NULL_HANDLE);
   }
 
   ~VulkanTextureView() override;
@@ -45,22 +46,22 @@ class VulkanTextureView : public ITextureView {
   NODISCARD VkImageView
   getHandle() const { return m_imageView; }
 
-  NODISCARD FORCEINLINE virtual Format 
+  NODISCARD FORCEINLINE virtual Format
   getFormat() const override { return vkFormatToChFormat(m_format); }
 
-  NODISCARD FORCEINLINE virtual TextureViewType 
+  NODISCARD FORCEINLINE virtual TextureViewType
   getViewType() const override { return vkTextureViewTypeToChTextureViewType(m_viewType); }
 
-  NODISCARD FORCEINLINE virtual uint32 
+  NODISCARD FORCEINLINE virtual uint32
   getBaseMipLevel() const override { return m_baseMipLevel; }
 
-  NODISCARD FORCEINLINE virtual uint32 
+  NODISCARD FORCEINLINE virtual uint32
   getMipLevelCount() const override { return m_mipLevelCount; }
 
-  NODISCARD FORCEINLINE virtual uint32 
+  NODISCARD FORCEINLINE virtual uint32
   getBaseArrayLayer() const override { return m_baseArrayLayer; }
 
-  NODISCARD FORCEINLINE virtual uint32 
+  NODISCARD FORCEINLINE virtual uint32
   getArrayLayerCount() const override { return m_arrayLayerCount; }
 
  private:

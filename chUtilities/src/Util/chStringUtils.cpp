@@ -4,14 +4,14 @@
  * @author AccelMR
  * @date 2022/06/23
  * @brief String utilities file.
- *   
+ *
  */
  /************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chStringUtils.h"
 
@@ -25,12 +25,16 @@ const String chString::WHITESPACE = " \n\r\t\f\v";
 
 /*
 */
+const String chString::EMPTY = "";
+
+/*
+*/
 String
 chString::replaceAllChars(const String& toReplace, const char& from, const char& to) {
   String output = toReplace;
   for(auto& c: output) {
     if (c == from) {
-      c = to; 
+      c = to;
     }
   }
   return output;
@@ -39,8 +43,8 @@ chString::replaceAllChars(const String& toReplace, const char& from, const char&
 /*
 */
 String
-chString::replaceAllSubStr(const String& toReplace, 
-                              const String& from, 
+chString::replaceAllSubStr(const String& toReplace,
+                              const String& from,
                               const String& to) {
   String output = toReplace;
   SIZE_T startPos = 0;
@@ -78,7 +82,7 @@ chString::splitString(const String& toSplit, const char& separator) {
 /*
 */
 Vector<String>
-chString::splitString(const String& toSplit, const String& separator) {  
+chString::splitString(const String& toSplit, const String& separator) {
   Vector<String> ret = {};
   SIZE_T prevPos = 0;
   SIZE_T currentPos = 0;
@@ -156,5 +160,3 @@ chString::trim(const String& str) {
 }
 
 }
-
-

@@ -274,19 +274,19 @@ RotationTranslationMatrix::RotationTranslationMatrix(const Rotator& rotator,
   const float SR = Math::sin(rotator.roll);
   const float CR = Math::cos(rotator.roll);
 
-  // Compute rotation matrix elements (Rx * Ry * Rz)
-  m_data[0][0] = CP * CY;
-  m_data[0][1] = CP * SY;
-  m_data[0][2] = SP;
+
+  m_data[0][0] = CP * CY;    // cos(0) * cos(90) = 1 * 0 = 0 ✔
+  m_data[0][1] = CP * SY;    // cos(0) * sin(90) = 1 * 1 = 1 ✔
+  m_data[0][2] = SP;         // sin(0) = 0 ✔
   m_data[0][3] = 0.0f;
 
-  m_data[1][0] = SR * SP * CY - CR * SY;
-  m_data[1][1] = SR * SP * SY + CR * CY;
-  m_data[1][2] = -SR * CP;
+  m_data[1][0] = SR * SP * CY - CR * SY;  // = 0 - (1 * 1) = -1 ✔
+  m_data[1][1] = SR * SP * SY + CR * CY;  // = 0 + (1 * 0) = 0 ✔
+  m_data[1][2] = -SR * CP;                // = 0 ✔
   m_data[1][3] = 0.0f;
 
-  m_data[2][0] = -(CR * SP * CY + SR * SY);
-  m_data[2][1] = CY * SR - CR * SP * SY;
+  m_data[2][0] = -(CR * SP * CY + SR * SY);  // = -(0 + 0) = 0 ✔
+  m_data[2][1] = CY * SR - CR * SP * SY;     // = 0 - 0 = 0 ✔
   m_data[2][2] = CR * CP;
   m_data[2][3] = 0.0f;
 

@@ -3,7 +3,7 @@
  * @file chVulkanFrameBuffer.cpp
  * @author AccelMR
  * @date 2025/04/12
- * @brief 
+ * @brief
  * Vulkan frame buffer implementation.
  * This file contains the implementation of the frame buffer
  * interface for Vulkan.
@@ -19,7 +19,7 @@
 namespace chEngineSDK {
 /*
 */
-VulkanFrameBuffer::VulkanFrameBuffer(VkDevice device, 
+VulkanFrameBuffer::VulkanFrameBuffer(VkDevice device,
                                      const FrameBufferCreateInfo& createInfo)
     : m_device(device),
       m_renderPass(createInfo.renderPass),
@@ -32,6 +32,8 @@ VulkanFrameBuffer::VulkanFrameBuffer(VkDevice device,
 
   VkFramebufferCreateInfo framebufferInfo{
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .renderPass = static_cast<VulkanRenderPass*>(m_renderPass.get())->getHandle(),
       .attachmentCount = static_cast<uint32>(m_attachments.size()),
       .pAttachments = nullptr,

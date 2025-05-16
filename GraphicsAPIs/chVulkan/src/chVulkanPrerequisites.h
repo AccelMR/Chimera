@@ -39,14 +39,14 @@ VulkanErrorException(const String& inDescription,
     : Exception("VulkanErrorException", inDescription, inSource, inFile, inLine) {}
 };
 
-static void 
+FORCEINLINE static void
 throwVkResult(VkResult result, const char* file, int line) {
   if (result != VK_SUCCESS) {
     CH_EXCEPT(VulkanErrorException, chString::format("Vulkan error: {0} at {1}:{2}", result, file, line));
   }
 }
 
-static VkImageType
+FORCEINLINE static VkImageType
 chTextureTypeToVkImageType(TextureType type) {
   switch (type) {
     case TextureType::Texture1D:
@@ -62,7 +62,7 @@ chTextureTypeToVkImageType(TextureType type) {
   return VK_IMAGE_TYPE_1D;
 }
 
-static Format
+FORCEINLINE static Format
 vkFormatToChFormat(VkFormat format) {
   switch (format) {
     case VK_FORMAT_R8G8B8A8_UNORM:
@@ -81,7 +81,7 @@ vkFormatToChFormat(VkFormat format) {
   return Format::Unknown;
 }
 
-static VkFormat
+FORCEINLINE static VkFormat
 chFormatToVkFormat(Format format) {
   switch (format) {
     case Format::R8G8B8A8_UNORM:
@@ -100,7 +100,7 @@ chFormatToVkFormat(Format format) {
   return VK_FORMAT_UNDEFINED;
 }
 
-static TextureViewType
+FORCEINLINE static TextureViewType
 vkTextureViewTypeToChTextureViewType(VkImageViewType viewType) {
   switch (viewType) {
     case VK_IMAGE_VIEW_TYPE_1D:
@@ -117,7 +117,7 @@ vkTextureViewTypeToChTextureViewType(VkImageViewType viewType) {
   return TextureViewType::View1D;
 }
 
-static VkImageViewType
+FORCEINLINE static VkImageViewType
 chTextureViewTypeToVkTextureViewType(TextureViewType viewType) {
   switch (viewType) {
     case TextureViewType::View1D:
@@ -129,14 +129,14 @@ chTextureViewTypeToVkTextureViewType(TextureViewType viewType) {
     case TextureViewType::ViewCube:
       return VK_IMAGE_VIEW_TYPE_CUBE;
     default:
-      CH_EXCEPT(VulkanErrorException, 
-                chString::format("Unsupported Vulkan image view type: {0}", 
+      CH_EXCEPT(VulkanErrorException,
+                chString::format("Unsupported Vulkan image view type: {0}",
                                     static_cast<uint32>(viewType)));
   }
   return VK_IMAGE_VIEW_TYPE_1D;
 }
 
-static VkImageLayout 
+FORCEINLINE static VkImageLayout
 textureLayoutToVkImageLayout(TextureLayout layout) {
   switch (layout) {
     case TextureLayout::Undefined:
@@ -162,42 +162,55 @@ textureLayoutToVkImageLayout(TextureLayout layout) {
   }
 }
 
-static VkPipelineStageFlags 
+FORCEINLINE static VkPipelineStageFlags
 pipelineStageToVkPipelineStage(PipelineStageFlags stageFlags) {
   VkPipelineStageFlags result = 0;
-  
-  if (stageFlags & PipelineStage::TopOfPipe)
+
+  if (stageFlags & PipelineStage::TopOfPipe) {
     result |= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-  if (stageFlags & PipelineStage::DrawIndirect)
+  }
+  if (stageFlags & PipelineStage::DrawIndirect) {
     result |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-  if (stageFlags & PipelineStage::VertexInput)
+  }
+  if (stageFlags & PipelineStage::VertexInput) {
     result |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-  if (stageFlags & PipelineStage::VertexShader)
+  }
+  if (stageFlags & PipelineStage::VertexShader) {
     result |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-  if (stageFlags & PipelineStage::FragmentShader)
+  }
+  if (stageFlags & PipelineStage::FragmentShader) {
     result |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-  if (stageFlags & PipelineStage::ColorAttachmentOutput)
+  }
+  if (stageFlags & PipelineStage::ColorAttachmentOutput) {
     result |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  if (stageFlags & PipelineStage::ComputeShader)
+  }
+  if (stageFlags & PipelineStage::ComputeShader) {
     result |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-  if (stageFlags & PipelineStage::Transfer)
+  }
+  if (stageFlags & PipelineStage::Transfer) {
     result |= VK_PIPELINE_STAGE_TRANSFER_BIT;
-  if (stageFlags & PipelineStage::BottomOfPipe)
+  }
+  if (stageFlags & PipelineStage::BottomOfPipe) {
     result |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  }
   // if (stageFlags & PipelineStage::Host)
   //   result |= VK_PIPELINE_STAGE_HOST_BIT;
-  if (stageFlags & PipelineStage::AllGraphics)
+  if (stageFlags & PipelineStage::AllGraphics) {
     result |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-  if (stageFlags & PipelineStage::AllCommands)
+  }
+  if (stageFlags & PipelineStage::AllCommands) {
     result |= VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-  
-  return result == 0 ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : result;
+  }
+
+  return (result == 0) ?
+          static_cast<VkPipelineStageFlags>(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) :
+          result;
 }
 
-static VkAccessFlags 
+FORCEINLINE static VkAccessFlags
 accessFlagsToVkAccessFlags(AccessFlags accessFlags) {
   VkAccessFlags result = 0;
-  
+
   // if (accessFlags & Access::IndirectCommandRead)
   //     result |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
   // if (accessFlags & Access::IndexRead)
@@ -244,11 +257,11 @@ accessFlagsToVkAccessFlags(AccessFlags accessFlags) {
   if (accessFlags.isSet(Access::MemoryWrite)) {
     result |= VK_ACCESS_MEMORY_WRITE_BIT;
   }
-  
+
   return result;
 }
 
-static VkFormat
+FORCEINLINE static VkFormat
 convertVertexFormatToVkFormat(VertexFormat format) {
   switch (format) {
     case VertexFormat::Float:
@@ -297,7 +310,7 @@ convertVertexFormatToVkFormat(VertexFormat format) {
   return VK_FORMAT_UNDEFINED;
 }
 
-static VkSampleCountFlagBits
+FORCEINLINE static VkSampleCountFlagBits
 chSampleCountToVkSampleCount(SampleCount sampleCount) {
   switch (sampleCount) {
     case SampleCount::Count1:
@@ -320,10 +333,10 @@ chSampleCountToVkSampleCount(SampleCount sampleCount) {
   return VK_SAMPLE_COUNT_1_BIT;
 }
 
-static VkImageUsageFlags
+FORCEINLINE static VkImageUsageFlags
 chTextureUsageToVkImageUsage(TextureUsageFlags usage) {
   VkImageUsageFlags result = 0;
-  
+
   if (usage.isSet(TextureUsage::TransferSrc)) {
     result |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   }

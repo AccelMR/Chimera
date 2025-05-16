@@ -129,7 +129,7 @@ BaseApplication::initializeGraphics() {
 
   Path dllPath ("build/debug-x64/lib");
   Path dllFullPath = FileSystem::absolutePath(dllPath);
-  WeakPtr<DynamicLibrary> graphicLibrary = 
+  WeakPtr<DynamicLibrary> graphicLibrary =
     dynamicLibraryManager.loadDynLibrary(graphicsAPIName, dllFullPath);
   if (graphicLibrary.expired()) {
     CH_EXCEPT(InternalErrorException, "Failed to load graphics API library.");
@@ -149,7 +149,7 @@ BaseApplication::initializeGraphics() {
   graphicsAPIInfo.weakDisplaySurface = m_display;
   graphicsAPIInfo.width = m_display->getWidth();
   graphicsAPIInfo.height = m_display->getHeight();
-  
+
   IGraphicsAPI::instance().initialize(graphicsAPIInfo);
 
   Renderer::instance().initialize(m_display->getWidth(),
@@ -186,16 +186,16 @@ BaseApplication::run() {
   CH_ASSERT(m_isInitialized);
 
   auto& eventDispatcher = EventDispatcherManager::instance();
-  
+
   bool running = true;
-  HEvent OnClose = eventDispatcher.OnClose.connect([&]() 
+  HEvent OnClose = eventDispatcher.OnClose.connect([&]()
     { running = false; } );
 
-  HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape, 
+  HEvent listenKeyEscapeDown = eventDispatcher.listenKeyDown(Key::Escape,
     [&](const KeyBoardData& keyData)
-      { running = false; });
+      { running = false; CH_PAMRAMETER_UNUSED(keyData); });
 
-  HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W, 
+  HEvent listenWDown = eventDispatcher.listenKeyDown(Key::W,
     [&](const KeyBoardData& keyData) {
       if (keyData.hasModifier(KeyBoardModifier::LSHIFT)) {
         CH_LOG_INFO(BaseApp, "Key W down with shift");

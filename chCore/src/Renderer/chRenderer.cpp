@@ -16,6 +16,7 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
+#include "chMatrixHelpers.h"
 #include "chRadian.h"
 #include "chVector3.h"
 
@@ -53,9 +54,9 @@ struct ProjectionViewMatrix{
   Matrix4 modelMatrix;
 };
 
-Vector<uint8> loadImage(const Path& path, 
-                        int32* width, 
-                        int32* height, 
+Vector<uint8> loadImage(const Path& path,
+                        int32* width,
+                        int32* height,
                         int32* channels) {
   CH_ASSERT(FileSystem::isFile(path));
 
@@ -127,8 +128,8 @@ Renderer::~Renderer() {
 /*
 */
 void
-Renderer::initialize(uint32 width, 
-                     uint32 height, 
+Renderer::initialize(uint32 width,
+                     uint32 height,
                      bool vsync) {
   CH_ASSERT(IGraphicsAPI::instancePtr() != nullptr);
 
@@ -222,7 +223,7 @@ Renderer::loadModel() {
         .initialDataSize = indexDataSize,
       };
       m_meshIndexBuffers[i] = graphicsAPI.createBuffer(indexBufferCreateInfo);
-    } 
+    }
     else {
       Vector<uint32> indexData = mesh->getIndicesAsUInt32();
       const uint32 indexDataSize = mesh->getIndexDataSize();
@@ -242,10 +243,10 @@ Renderer::loadModel() {
 
   uint32 nodeCount = static_cast<uint32>(model->getAllNodes().size());
   DescriptorPoolCreateInfo descriptorPoolCreateInfo{
-    .maxSets = nodeCount, 
+    .maxSets = nodeCount,
     .poolSizes = {
       { DescriptorType::UniformBuffer, nodeCount },
-      { DescriptorType::CombinedImageSampler, nodeCount } 
+      { DescriptorType::CombinedImageSampler, nodeCount }
     }
   };
   m_descriptorPool = graphicsAPI.createDescriptorPool(descriptorPoolCreateInfo);
@@ -254,32 +255,32 @@ Renderer::loadModel() {
     if (node->getMeshes().empty()) {
       continue;
     }
-    
+
     BufferCreateInfo bufferCreateInfo{
       .size = sizeof(RendererHelpers::ProjectionViewMatrix),
       .usage = BufferUsage::UniformBuffer,
       .memoryUsage = MemoryUsage::CpuToGpu
     };
     SPtr<IBuffer> nodeBuffer = graphicsAPI.createBuffer(bufferCreateInfo);
-    
+
     DescriptorSetAllocateInfo allocInfo{
       .pool = m_descriptorPool,
       .layout = m_descriptorSetLayout
     };
     SPtr<IDescriptorSet> nodeDescriptorSet = m_descriptorPool->allocateDescriptorSet(allocInfo);
-    
+
     DescriptorBufferInfo bufferInfo{
       .buffer = nodeBuffer,
       .offset = 0,
       .range = sizeof(RendererHelpers::ProjectionViewMatrix)
     };
-    
+
     DescriptorImageInfo imageInfo{
       .sampler = m_sampler,
       .imageView = m_textureView,
       .imageLayout = TextureLayout::ShaderReadOnly
     };
-    
+
     Vector<WriteDescriptorSet> writeDescriptorSets{
       {
         .dstSet = nodeDescriptorSet,
@@ -292,13 +293,12 @@ Renderer::loadModel() {
         .dstSet = nodeDescriptorSet,
         .dstBinding = 1,
         .dstArrayElement = 0,
-        .descriptorType = DescriptorType::CombinedImageSampler,
-        .imageInfos = { imageInfo }
+        .descriptorType = DescriptorType::CombinedImageSampler
       }
     };
-    
+
     graphicsAPI.updateDescriptorSets(writeDescriptorSets);
-    
+
     m_nodeResources[node] = {
       .uniformBuffer = nodeBuffer,
       .descriptorSet = nodeDescriptorSet
@@ -473,10 +473,10 @@ Renderer::initializeRenderResources() {
 void
 Renderer::render(const float deltaTime) {
   auto& graphicsAPI = IGraphicsAPI::instance();
-  
+
   m_inFlightFences[m_currentFrame]->wait(MAX_WAIT_TIME);
   m_inFlightFences[m_currentFrame]->reset();
-  
+
   if (!m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame])){
     resize();
     return;
@@ -488,21 +488,21 @@ Renderer::render(const float deltaTime) {
     CH_LOG_ERROR(RendererSystem, "Image index out of range, swapchain may be resized. Deferring to next frame.");
     return;
   }
-  
+
   auto& cmdBuffer = m_commandBuffers[imageIndex];
   cmdBuffer->begin();
-  
+
   RenderPassBeginInfo renderPassInfo{
     .renderPass = m_renderPass,
     .framebuffer = m_framebuffers[imageIndex],
-    .clearValues = { 
+    .clearValues = {
       LinearColor::Black
     },
     .depthStencilClearValue = {
       {1.0f, 0}
     }
   };
-  
+
   cmdBuffer->beginRenderPass(renderPassInfo);
   cmdBuffer->setViewport(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
   cmdBuffer->setScissor(0, 0, m_swapChain->getWidth(), m_swapChain->getHeight());
@@ -511,13 +511,13 @@ Renderer::render(const float deltaTime) {
   projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
 
-  renderModel(m_currentModel, cmdBuffer, deltaTime);
-  
+  renderModel(cmdBuffer, deltaTime);
+
   cmdBuffer->endRenderPass();
   cmdBuffer->end();
-  
+
   Vector<SPtr<ICommandBuffer>> submitBuffers = { cmdBuffer };
-  
+
   SubmitInfo submitInfo{
     .commandBuffers = { m_commandBuffers[imageIndex] },
     .waitSemaphores = { m_imageAvailableSemaphores[m_currentFrame] },
@@ -526,9 +526,9 @@ Renderer::render(const float deltaTime) {
   };
 
   graphicsAPI.getQueue(QueueType::Graphics)->submit(submitInfo, m_inFlightFences[m_currentFrame]);
-  
+
   m_swapChain->present({ m_renderFinishedSemaphores[m_currentFrame] });
-  
+
   m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -538,13 +538,13 @@ void
 Renderer::resize() {
   auto& graphicsAPI = IGraphicsAPI::instance();
   graphicsAPI.waitIdle();
-  
+
   for (auto& fence : m_inFlightFences) {
     if (fence) {
       fence->wait(MAX_WAIT_TIME * 10);
     }
   }
-  
+
   m_imageAvailableSemaphores.clear();
   m_renderFinishedSemaphores.clear();
 
@@ -567,7 +567,7 @@ Renderer::resize() {
     .samples = SampleCount::Count1,
     .usage = TextureUsage::DepthStencil
   };
-  
+
   m_depthTexture = graphicsAPI.createTexture(depthTextureInfo);
   TextureViewCreateInfo depthTextureViewInfo{
     .format = Format::D32_SFLOAT,
@@ -575,9 +575,9 @@ Renderer::resize() {
     .bIsDepthStencil = true
   };
   m_depthTextureView = m_depthTexture->createView(depthTextureViewInfo);
-  
+
   createRenderPass();
-  
+
   m_framebuffers.clear();
   m_framebuffers.resize(m_swapChain->getTextureCount());
   for (uint32 i = 0; i < m_swapChain->getTextureCount(); i++) {
@@ -588,7 +588,7 @@ Renderer::resize() {
       .height = swapchainHeight,
       .layers = 1
     };
-    
+
     m_framebuffers[i] = graphicsAPI.createFrameBuffer(fbInfo);
   }
 
@@ -616,7 +616,7 @@ Renderer::createRenderPass() {
                                         .finalLayout = TextureLayout::PresentSrc};
 
   AttachmentDescription depthAttachment{
-      .format = Format::D32_SFLOAT, 
+      .format = Format::D32_SFLOAT,
       .loadOp = LoadOp::Clear,
       .storeOp = StoreOp::DontCare,
       .stencilLoadOp = LoadOp::DontCare,
@@ -650,19 +650,18 @@ Renderer::createRenderPass() {
 /*
  */
 void
-Renderer::renderModel(const SPtr<Model>& model, 
-                      const SPtr<ICommandBuffer>& commandBuffer,
+Renderer::renderModel(const SPtr<ICommandBuffer>& commandBuffer,
                       float deltaTime) {
   m_currentModel->updateTransforms();
 
   if (bIsModelRotating) {
     if (ModelNode* targetNode = m_currentModel->findNode(NodeNames[NodeIndex])) {
       const Matrix4 originalTransform = targetNode->getLocalTransform();
-      
+
       RotationMatrix rotationMatrix(Rotator(0.0f, deltaTime * 20, 0.0f));
-      
+
       const Matrix4 newTransform = originalTransform * rotationMatrix;
-      
+
       m_currentModel->updateNodeTransform(targetNode, newTransform);
     }
   }
@@ -726,7 +725,7 @@ Renderer::bindInputEvents() {
   HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
     if (keydata.key == Key::P) {
       Vector3 cameraPosition = m_camera->getPosition();
-      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})", 
+      CH_LOG_INFO(RendererSystem, "Camera Position: ({0}, {1}, {2})",
                   cameraPosition.x, cameraPosition.y, cameraPosition.z);
       return;
     }
@@ -745,7 +744,7 @@ Renderer::bindInputEvents() {
       bIsModelRotating = !bIsModelRotating;
       if (bIsModelRotating) {
         CH_LOG_INFO(RendererSystem, "Model rotation enabled");
-      } 
+      }
       else {
         CH_LOG_INFO(RendererSystem, "Model rotation disabled");
       }
@@ -774,7 +773,7 @@ Renderer::bindInputEvents() {
         break;
       default: return;
     }
-  
+
     projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   });
 
@@ -790,14 +789,14 @@ Renderer::bindInputEvents() {
     if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
       return;
     }
-  
+
     if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
       if (isMouseButtonDownMiddle) {
         m_camera->pan(-mouseData.deltaX * g_cameraPanSpeed, -mouseData.deltaY * g_cameraPanSpeed);
       }
       if (isMouseButtonDown) {
-        m_camera->rotate(mouseData.deltaY * g_rotationSpeed, 
-                         mouseData.deltaX * g_rotationSpeed, 
+        m_camera->rotate(mouseData.deltaY * g_rotationSpeed,
+                         mouseData.deltaX * g_rotationSpeed,
                          0.0f);
       }
       projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
@@ -805,7 +804,7 @@ Renderer::bindInputEvents() {
   });
 }
 
-void 
+void
 Renderer::cleanupModelResources() {
   // Limpiar buffers de mallas
   m_meshVertexBuffers.clear();
@@ -813,18 +812,18 @@ Renderer::cleanupModelResources() {
   m_meshIndexCounts.clear();
   m_meshIndexTypes.clear();
   m_meshToIndexMap.clear();
-  
+
   // Limpiar recursos de nodos
   for (auto& pair : m_nodeResources) {
     pair.second.uniformBuffer.reset();
     pair.second.descriptorSet.reset();
   }
   m_nodeResources.clear();
-  
+
   // Limpiar nombres de nodos
   NodeNames.clear();
   NodeIndex = 0;
-  
+
   // Resetear el modelo actual
   m_currentModel.reset();
 }

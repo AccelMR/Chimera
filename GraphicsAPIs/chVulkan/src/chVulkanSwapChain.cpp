@@ -3,7 +3,7 @@
  * @file chVulkanSwapChain.cpp
  * @author AccelMR
  * @date 2025/04/07
- * @details 
+ * @details
  * SwapChain implementation for Vulkan.
  * This class is used to create and manage the swap chain.
  * It is used to create the swap chain, and to present the swap chain.
@@ -23,8 +23,8 @@
 namespace chEngineSDK {
 /*
 */
-VulkanSwapChain::VulkanSwapChain(VkDevice device, 
-                                   VkPhysicalDevice physicalDevice, 
+VulkanSwapChain::VulkanSwapChain(VkDevice device,
+                                   VkPhysicalDevice physicalDevice,
                                    VkSurfaceKHR surface,
                                    VkFormat colorFormat,
                                    VkColorSpaceKHR colorSpace,
@@ -32,11 +32,18 @@ VulkanSwapChain::VulkanSwapChain(VkDevice device,
                                    uint32 presentFamilyQueueIndex)
   : m_device(device),
     m_physicalDevice(physicalDevice),
+    m_swapChain(VK_NULL_HANDLE),
     m_surface(surface),
+    m_graphicsFamilyQueueIndex(graphicsFamilyQueueIndex),
+    m_presentFamilyQueueIndex(presentFamilyQueueIndex),
+    m_presentMode(VK_PRESENT_MODE_FIFO_KHR),
+    m_renderPass(nullptr),
     m_colorFormat(colorFormat),
     m_colorSpace(colorSpace),
-    m_graphicsFamilyQueueIndex(graphicsFamilyQueueIndex),
-    m_presentFamilyQueueIndex(presentFamilyQueueIndex) {
+    m_width(0),
+    m_height(0),
+    m_imageCount(0),
+    m_currentImageIndex(0) {
   CH_ASSERT(m_device != VK_NULL_HANDLE);
   CH_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
   CH_ASSERT(m_surface != VK_NULL_HANDLE);
@@ -53,21 +60,21 @@ VulkanSwapChain::~VulkanSwapChain() {
 
 /*
 */
-bool 
+bool
 VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence) {
   auto vulkanSemaphore = std::static_pointer_cast<VulkanSemaphore>(signalSemaphore);
-  
+
   VkFence vkFence = VK_NULL_HANDLE;
   if (fence) {
       auto vulkanFence = std::static_pointer_cast<VulkanFence>(fence);
       vkFence = vulkanFence->getHandle();
   }
-  
-  VkResult result = vkAcquireNextImageKHR(m_device, 
-                                          m_swapChain, 
-                                          UINT64_MAX, 
-                                          vulkanSemaphore->getHandle(), 
-                                          vkFence, 
+
+  VkResult result = vkAcquireNextImageKHR(m_device,
+                                          m_swapChain,
+                                          UINT64_MAX,
+                                          vulkanSemaphore->getHandle(),
+                                          vkFence,
                                           &m_currentImageIndex);
 
   if (result != VK_SUCCESS) {
@@ -83,22 +90,23 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
 */
 void
 VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
+  VkSwapchainKHR oldSwapChain = m_swapChain;
   cleanUpSwapChain();
 
   VkSurfaceCapabilitiesKHR capabilities;
-  VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, 
-                                                     m_surface, 
+  VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice,
+                                                     m_surface,
                                                      &capabilities));
 
   VkExtent2D swapChainExtent = {};
   if (capabilities.currentExtent.width == UINT32_MAX) {
-    swapChainExtent.width = Math::clamp(width, 
-                                        capabilities.minImageExtent.width, 
+    swapChainExtent.width = Math::clamp(width,
+                                        capabilities.minImageExtent.width,
                                         capabilities.maxImageExtent.width);
-    swapChainExtent.height = Math::clamp(height, 
-                                         capabilities.minImageExtent.height, 
+    swapChainExtent.height = Math::clamp(height,
+                                         capabilities.minImageExtent.height,
                                          capabilities.maxImageExtent.height);
-  } 
+  }
   else {
     swapChainExtent = capabilities.currentExtent;
   }
@@ -107,15 +115,15 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
   m_height = swapChainExtent.height;
 
   uint32 presentModeCount = 0;
-  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, 
-                                                     m_surface, 
-                                                     &presentModeCount, 
+  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice,
+                                                     m_surface,
+                                                     &presentModeCount,
                                                      nullptr));
 
   Vector<VkPresentModeKHR> presentModes(presentModeCount);
-  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, 
-                                                     m_surface, 
-                                                     &presentModeCount, 
+  VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice,
+                                                     m_surface,
+                                                     &presentModeCount,
                                                      presentModes.data()));
 
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -124,7 +132,7 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     auto it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_MAILBOX_KHR);
     if (it != presentModes.end()) {
       presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    } 
+    }
     else {
       // Fallback to IMMEDIATE (no VSync)
       it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR);
@@ -139,15 +147,17 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
   constexpr uint32 imageDefaultCount = 3; // Triple buffering
   if (capabilities.maxImageCount == 0) {
     m_imageCount = Math::max(imageDefaultCount, capabilities.minImageCount);
-  } 
+  }
   else {
-    m_imageCount = Math::clamp(imageDefaultCount, 
-                               capabilities.minImageCount, 
+    m_imageCount = Math::clamp(imageDefaultCount,
+                               capabilities.minImageCount,
                                capabilities.maxImageCount);
   }
 
   VkSwapchainCreateInfoKHR createInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext = nullptr,
+    .flags = 0,
     .surface = m_surface,
     .minImageCount = m_imageCount,
     .imageFormat = m_colorFormat,
@@ -155,10 +165,14 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     .imageExtent = swapChainExtent,
     .imageArrayLayers = 1,
     .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = 0,
+    .pQueueFamilyIndices = nullptr,
     .preTransform = capabilities.currentTransform,
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = presentMode,
-    .clipped = VK_TRUE
+    .clipped = VK_TRUE,
+    .oldSwapchain = oldSwapChain
   };
 
   if (m_graphicsFamilyQueueIndex != m_presentFamilyQueueIndex) {
@@ -166,7 +180,7 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     createInfo.queueFamilyIndexCount = 2;
     createInfo.pQueueFamilyIndices = queueFamilyIndices;
-  } 
+  }
   else {
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   }
@@ -185,32 +199,34 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
 /*
 */
-void 
+void
 VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
   Vector<VkSemaphore> vkSemaphores;
   for (const auto& sem : waitSemaphores) {
     auto vulkanSem = std::static_pointer_cast<VulkanSemaphore>(sem);
     vkSemaphores.push_back(vulkanSem->getHandle());
   }
-  
+
   VkPresentInfoKHR presentInfo{
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+    .pNext = nullptr,
     .waitSemaphoreCount = static_cast<uint32>(vkSemaphores.size()),
     .pWaitSemaphores = vkSemaphores.data(),
     .swapchainCount = 1,
     .pSwapchains = &m_swapChain,
-    .pImageIndices = &m_currentImageIndex
+    .pImageIndices = &m_currentImageIndex,
+    .pResults = nullptr
   };
-  
-  auto vulkanCommandQueue = 
+
+  auto vulkanCommandQueue =
     std::static_pointer_cast<VulkanCommandQueue>(g_vulkanAPI().getQueue(QueueType::Graphics));
   CH_ASSERT(vulkanCommandQueue != nullptr);
   VkQueue presentQueue = vulkanCommandQueue->getHandle();
   VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
-  
+
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     resize(m_width, m_height);
-  } 
+  }
   else if (result != VK_SUCCESS) {
     CH_LOG_ERROR(Vulkan, "Failed to present swap chain image");
   }
@@ -221,11 +237,11 @@ VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
 NODISCARD SPtr<ITexture>
 VulkanSwapChain::getTexture(uint32 index) const {
   CH_ASSERT(index < m_imageCount);
-  return chMakeShared<VulkanTexture>(m_device, 
-                                     m_physicalDevice, 
-                                     m_images[index], 
+  return chMakeShared<VulkanTexture>(m_device,
+                                     m_physicalDevice,
+                                     m_images[index],
                                      m_colorFormat,
-                                     m_width, m_height, 
+                                     m_width, m_height,
                                      1, 1, 1);
 }
 
@@ -234,7 +250,7 @@ VulkanSwapChain::getTexture(uint32 index) const {
 NODISCARD SPtr<ITextureView>
 VulkanSwapChain::getTextureView(uint32 index) const {
   CH_ASSERT(index < m_imageCount);
-  return chMakeShared<VulkanTextureView>(m_device, 
+  return chMakeShared<VulkanTextureView>(m_device,
                                          m_imageViews[index],
                                          m_colorFormat,
                                          0, 1, 0, 1,
@@ -269,7 +285,7 @@ VulkanSwapChain::resize(uint32 width, uint32 height) {
   }
 
   vkDeviceWaitIdle(m_device);
-  
+
   create(width, height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
 }
 
@@ -309,6 +325,8 @@ VulkanSwapChain::createImageViews() {
   for (uint32 i = 0; i < m_imageCount; i++) {
     VkImageViewCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .image = m_images[i],
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
       .format = m_colorFormat,
@@ -332,7 +350,7 @@ VulkanSwapChain::createImageViews() {
 
 /*
 */
-void 
+void
 VulkanSwapChain::createRenderPass() {
   AttachmentDescription colorAttachment{
       .format = vkFormatToChFormat(m_colorFormat),
@@ -341,17 +359,17 @@ VulkanSwapChain::createRenderPass() {
       .initialLayout = TextureLayout::Undefined,
       .finalLayout = TextureLayout::PresentSrc
   };
-  
+
   AttachmentReference colorRef{
       .attachment = 0,
       .layout = TextureLayout::ColorAttachment
   };
-  
+
   SubpassDescription subpass{
       .pipelineBindPoint = PipelineBindPoint::Graphics,
       .colorAttachments = {colorRef}
   };
-  
+
   SubpassDependency dependency{
       .srcSubpass = SUBPASS_EXTERNAL,
       .dstSubpass = 0,
@@ -360,25 +378,25 @@ VulkanSwapChain::createRenderPass() {
       .srcAccessMask = Access::NoAccess,
       .dstAccessMask = Access::ColorAttachmentWrite
   };
-  
+
   RenderPassCreateInfo renderPassInfo{
       .attachments = {colorAttachment},
       .subpasses = {subpass},
       .dependencies = {dependency}
   };
-  
+
   m_renderPass = g_vulkanAPI().createRenderPass(renderPassInfo);
 }
 
 /*
 */
-void 
+void
 VulkanSwapChain::createFramebuffers() {
   m_framebuffers.resize(m_imageCount);
-  
+
   for (uint32 i = 0; i < m_imageCount; i++) {
     auto textureView = getTextureView(i);
-    
+
     FrameBufferCreateInfo framebufferInfo{
       .renderPass = m_renderPass,
       .attachments = {textureView},
@@ -386,7 +404,7 @@ VulkanSwapChain::createFramebuffers() {
       .height = m_height,
       .layers = 1
     };
-    
+
     m_framebuffers[i] = g_vulkanAPI().createFrameBuffer(framebufferInfo);
   }
 }

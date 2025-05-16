@@ -22,23 +22,28 @@ namespace chEngineSDK {
 VulkanTextureView::VulkanTextureView(VkDevice device,
                                      ITexture* texture,
                                      const TextureViewCreateInfo& createInfo)
-    : m_device(device),
-      m_texture(texture),
-      m_ownsTextureView(true) {
+  : m_device(device),
+    m_imageView(VK_NULL_HANDLE),
+    m_viewType(VK_IMAGE_VIEW_TYPE_2D),
+    m_baseMipLevel(0),
+    m_mipLevelCount(1),
+    m_baseArrayLayer(0),
+    m_arrayLayerCount(1),
+    m_format(VK_FORMAT_UNDEFINED),
+    m_ownsTextureView(true),
+    m_texture(texture) {
   CH_ASSERT(m_device != VK_NULL_HANDLE);
   CH_ASSERT(m_texture != nullptr);
 
   VulkanTexture* vulkanTexture = static_cast<VulkanTexture*>(m_texture);
 
-  VkImageViewCreateInfo viewInfo = {
-    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-    .image = vulkanTexture->getHandle(),
-  };
-
+  VkImageViewCreateInfo viewInfo;
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  viewInfo.image = vulkanTexture->getHandle();
   viewInfo.viewType = chTextureViewTypeToVkTextureViewType(createInfo.viewType);
 
   //If unknown, use the texture format
-  Format format = (createInfo.format != Format::Unknown) ? 
+  Format format = (createInfo.format != Format::Unknown) ?
                    createInfo.format : vulkanTexture->getFormat();
   viewInfo.format = chFormatToVkFormat(format);
 

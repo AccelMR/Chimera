@@ -108,7 +108,7 @@ enum class TextureUsage : uint16 {
   ColorAttachment   = 1 << 4,
   DepthStencil      = 1 << 5,
   Transient         = 1 << 6,
-  InputAttachment   = 1 << 7 
+  InputAttachment   = 1 << 7
 };
 CH_FLAGS_OPERATORS_EXT(TextureUsage, uint16);
 using TextureUsageFlags = Flags<TextureUsage, uint16>;
@@ -171,15 +171,15 @@ enum class MemoryUsage {
 };
 
 enum class TextureLayout {
-  Undefined,                
-  General,                  
-  ColorAttachment,          
-  DepthStencilAttachment,   
-  DepthStencilReadOnly,     
-  ShaderReadOnly,           
-  TransferSrc,              
-  TransferDst,              
-  PresentSrc,               
+  Undefined,
+  General,
+  ColorAttachment,
+  DepthStencilAttachment,
+  DepthStencilReadOnly,
+  ShaderReadOnly,
+  TransferSrc,
+  TransferDst,
+  PresentSrc,
   // Otros layouts específicos...
 };
 
@@ -272,11 +272,11 @@ struct AttachmentReference {
 
 struct SubpassDescription {
   PipelineBindPoint pipelineBindPoint = PipelineBindPoint::Graphics;
-  Vector<AttachmentReference> inputAttachments;
-  Vector<AttachmentReference> colorAttachments;
-  Vector<AttachmentReference> resolveAttachments;
-  Optional<AttachmentReference> depthStencilAttachment;
-  Vector<uint32> preserveAttachments;
+  Vector<AttachmentReference> inputAttachments = {/**/};
+  Vector<AttachmentReference> colorAttachments = {/**/};
+  Vector<AttachmentReference> resolveAttachments = {/**/};
+  Optional<AttachmentReference> depthStencilAttachment = NullOpt;
+  Vector<uint32> preserveAttachments = {/**/};
 };
 
 struct SubpassDependency {
@@ -298,15 +298,15 @@ struct TextureCreateInfo {
   uint32 mipLevels = 1;
   uint32 arrayLayers = 1;
   SampleCount samples = SampleCount::Count1;
-  
+
   TextureUsageFlags usage = TextureUsage::Sampled | TextureUsage::TransferDst;
-  
+
   bool cubeCompatible = false;
   bool generateMipmaps = false;
-  
+
   bool concurrentSharing = false;
-  Vector<uint32> queueFamilyIndices;
-  
+  Vector<uint32> queueFamilyIndices = {/**/};
+
   const void* initialData = nullptr;
   SIZE_T initialDataSize = 0;
 };
@@ -347,19 +347,19 @@ struct PipelineCreateInfo {
     bool enable = false;
     bool writeEnable = true;
     CompareOp compareOp = CompareOp::Less;
-  } depthStencil;
+  } depthStencil = {/**/};
 
   struct {
     bool enable = false;
     BlendFactor srcColorFactor = BlendFactor::SrcAlpha;
     BlendFactor dstColorFactor = BlendFactor::OneMinusSrcAlpha;
     // TODO: Add more blend factors
-  } blend;
+  } blend = {/**/};
 
   SPtr<IRenderPass> renderPass;
   uint32 subpass = 0;
 
-  Vector<SPtr<IDescriptorSetLayout>> setLayouts;
+  Vector<SPtr<IDescriptorSetLayout>> setLayouts = {/**/};
 
   //TODO: Add more fields for dynamic states, push constants, etc.
 };
@@ -374,13 +374,13 @@ struct BufferCreateInfo {
 };
 
 struct AttachmentDescription {
-  Format format;
-  LoadOp loadOp;
-  StoreOp storeOp;
-  LoadOp stencilLoadOp;
-  StoreOp stencilStoreOp;
-  TextureLayout initialLayout;
-  TextureLayout finalLayout;
+  Format format = Format::Unknown;
+  LoadOp loadOp = LoadOp::DontCare;
+  StoreOp storeOp = StoreOp::DontCare;
+  LoadOp stencilLoadOp = LoadOp::DontCare;
+  StoreOp stencilStoreOp = StoreOp::DontCare;
+  TextureLayout initialLayout = TextureLayout::Undefined;
+  TextureLayout finalLayout = TextureLayout::Undefined;
 };
 
 struct RenderPassCreateInfo {
@@ -449,8 +449,8 @@ struct WriteDescriptorSet {
   uint32 dstBinding = 0;
   uint32 dstArrayElement = 0;
   DescriptorType descriptorType = DescriptorType::UniformBuffer;
-  Vector<DescriptorBufferInfo> bufferInfos;
-  Vector<DescriptorImageInfo> imageInfos;
+  Vector<DescriptorBufferInfo> bufferInfos = {/**/};
+  Vector<DescriptorImageInfo> imageInfos = {/**/};
 };
 
 } // namespace chEngineSDK

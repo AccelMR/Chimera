@@ -28,6 +28,7 @@ VulkanCommandBuffer::VulkanCommandBuffer(VkDevice device, VkCommandPool commandP
     : m_device(device), m_commandPool(commandPool) {
   VkCommandBufferAllocateInfo allocInfo = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .pNext = nullptr,
     .commandPool = commandPool,
     .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
     .commandBufferCount = 1
@@ -55,9 +56,11 @@ void
 VulkanCommandBuffer::begin() {
   VkCommandBufferBeginInfo beginInfo = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    .pNext = nullptr,
+    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    .pInheritanceInfo = nullptr
   };
-  
+
   VK_CHECK(vkBeginCommandBuffer(m_commandBuffer, &beginInfo));
   m_state = CommandBufferState::Recording;
 }
@@ -79,14 +82,14 @@ VulkanCommandBuffer::beginRenderPass(const RenderPassBeginInfo& beginInfo) {
 
   Vector<VkClearValue> clearValues;
   for (const auto& clearValue : beginInfo.clearValues) {
-    clearValues.push_back({ 
-      .color = { clearValue.r, clearValue.g, clearValue.b, clearValue.a } 
+    clearValues.push_back({
+      .color = { clearValue.r, clearValue.g, clearValue.b, clearValue.a }
     });
   }
 
   if (beginInfo.depthStencilClearValue.has_value()) {
     VkClearValue vkClearValue;
-    vkClearValue.depthStencil = { 
+    vkClearValue.depthStencil = {
         beginInfo.depthStencilClearValue->first,
         beginInfo.depthStencilClearValue->second
     };
@@ -95,13 +98,14 @@ VulkanCommandBuffer::beginRenderPass(const RenderPassBeginInfo& beginInfo) {
 
   VkRenderPassBeginInfo renderPassInfo = {
     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+    .pNext = nullptr,
     .renderPass = vulkanRenderPass->getHandle(),
     .framebuffer = vulkanFramebuffer->getHandle(),
     .renderArea = {
       .offset = { 0, 0 },
-      .extent = { 
-        beginInfo.framebuffer->getWidth(), 
-        beginInfo.framebuffer->getHeight() 
+      .extent = {
+        beginInfo.framebuffer->getWidth(),
+        beginInfo.framebuffer->getHeight()
       }
     },
     .clearValueCount = static_cast<uint32>(clearValues.size()),
@@ -205,15 +209,15 @@ VulkanCommandBuffer::bindDescriptorSets(PipelineBindPoint bindPoint,
                                       const Vector<SPtr<IDescriptorSet>>& descriptorSets,
                                       const Vector<uint32>& dynamicOffsets) {
   auto vulkanLayout = std::static_pointer_cast<VulkanPipelineLayout>(layout);
-  
+
   Vector<VkDescriptorSet> vkSets;
   vkSets.reserve(descriptorSets.size());
-  
+
   for (const auto& set : descriptorSets) {
     auto vulkanSet = std::static_pointer_cast<VulkanDescriptorSet>(set);
     vkSets.push_back(vulkanSet->getHandle());
   }
-  
+
   VkPipelineBindPoint vkBindPoint;
   switch (bindPoint) {
     case PipelineBindPoint::Graphics:
@@ -225,7 +229,7 @@ VulkanCommandBuffer::bindDescriptorSets(PipelineBindPoint bindPoint,
     default:
       vkBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   }
-  
+
   vkCmdBindDescriptorSets(m_commandBuffer,
                           vkBindPoint,
                           vulkanLayout->getHandle(),

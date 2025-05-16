@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
@@ -21,15 +21,15 @@ namespace chEngineSDK{
 struct MouseMoveData
 {
   MouseMoveData() = delete;
-  MouseMoveData(uint32 _x, 
+  MouseMoveData(uint32 _x,
                 uint32 _y,
-                uint32 _screenx, 
-                uint32 _screeny, 
-                int32 _deltax, 
+                uint32 _screenx,
+                uint32 _screeny,
+                int32 _deltax,
                 int32 _deltay)
-    : x(_x), 
-      y(_y), 
-      screenX(_screenx), screenY(_screeny), 
+    : x(_x),
+      y(_y),
+      screenX(_screenx), screenY(_screeny),
       deltaX(_deltax), deltaY(_deltay) {}
 
   // Current x position relative to active window
@@ -54,11 +54,11 @@ struct MouseMoveData
 
 struct KeyBoardData {
   KeyBoardData() = default;
-  KeyBoardData(chKeyBoard::Key _key, 
-                KeyBoardState _state, 
+  KeyBoardData(chKeyBoard::Key _key,
+                KeyBoardState _state,
                 uint16 _modifiers)
-    : key(_key), 
-      state(_state), 
+    : key(_key),
+      state(_state),
       modifiers(_modifiers) {}
 
   chKeyBoard::Key key;
@@ -66,7 +66,7 @@ struct KeyBoardData {
   uint16 modifiers;
 
   bool hasModifier(KeyBoardModifier mod) const {
-    return (modifiers & static_cast<uint16>(mod) != 0);
+    return ((modifiers & static_cast<uint16>(mod)) != 0);
   }
 
 };
@@ -86,7 +86,7 @@ struct MouseButtonData{
 
 struct MouseWheelData {
   MouseWheelData() = delete;
-  MouseWheelData(int32 _deltaY, 
+  MouseWheelData(int32 _deltaY,
                  uint32 _x, uint32 _y)
     : deltaY(_deltaY), x(_x), y(_y) {}
 

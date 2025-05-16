@@ -277,6 +277,9 @@ class CH_UTILITY_EXPORT Quaternion
   NODISCARD FORCEINLINE const float&
   operator[](int32 index) const;
 
+  NODISCARD FORCEINLINE bool
+  isRotationEqual(const Quaternion& q, float tolerance = Math::SMALL_NUMBER) const;
+
  public:
   /**
    * @brief Identity quaternion (no rotation)
@@ -505,4 +508,13 @@ Quaternion::getInverse() const {
   return IDENTITY;
 }
 
+/*
+*/
+FORCEINLINE bool
+Quaternion::isRotationEqual(const Quaternion& q, float tolerance) const {
+  // Two quaternions represent the same rotation if their dot product
+  // is close to 1.0 or -1.0
+  float dotProduct = x * q.x + y * q.y + z * q.z + w * q.w;
+  return (Math::abs(dotProduct) >= (1.0f - tolerance));
+}
 } // namespace chEngineSDK

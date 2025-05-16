@@ -26,6 +26,7 @@ VulkanCommandPool::VulkanCommandPool(VkDevice device, uint32 queueFamilyIndex, b
 
   VkCommandPoolCreateInfo poolInfo = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = nullptr,
     .flags = flags,
     .queueFamilyIndex = queueFamilyIndex,
   };

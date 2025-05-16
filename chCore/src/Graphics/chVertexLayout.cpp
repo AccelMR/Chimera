@@ -13,11 +13,12 @@
 #include "chVertexLayout.h"
 
 #include "chMath.h"
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 /*
 */
-VertexLayout 
+VertexLayout
 VertexLayout::createPostionColorLayout() {
   VertexLayout layout;
   layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
@@ -27,7 +28,7 @@ VertexLayout::createPostionColorLayout() {
 
 /*
 */
-VertexLayout 
+VertexLayout
 VertexLayout::createPositionNormalTexCoordLayout() {
   VertexLayout layout;
   layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
@@ -39,15 +40,16 @@ VertexLayout::createPositionNormalTexCoordLayout() {
 /*
 */
 void
-VertexLayout::addAttribute(VertexAttributeType type, 
-             VertexFormat format, 
-             uint32 offset /*= UINT32_MAX*/, 
+VertexLayout::addAttribute(VertexAttributeType type,
+             VertexFormat format,
+             uint32 offset /*= UINT32_MAX*/,
              uint32 binding /*= 0*/) {
   VertexAttributeDesc desc{
     .type = type,
     .format = format,
     .offset = (offset == UINT32_MAX) ? calculateOffset(binding) : offset,
-    .binding = binding
+    .binding = binding,
+    .semanticName = chString::EMPTY
   };
 
   m_attributes.push_back(desc);
@@ -58,9 +60,9 @@ VertexLayout::addAttribute(VertexAttributeType type,
 /*
 */
 void
-VertexLayout::addCustomAttribute(const String& semanticName, 
-                                 VertexFormat format, 
-                                 uint32 offset /*= UINT32_MAX*/, 
+VertexLayout::addCustomAttribute(const String& semanticName,
+                                 VertexFormat format,
+                                 uint32 offset /*= UINT32_MAX*/,
                                  uint32 binding/* = 0*/) {
   VertexAttributeDesc desc{
     .type = VertexAttributeType::Custom,
@@ -87,7 +89,7 @@ VertexLayout::updateSizes(uint32 binding, uint32 offset, VertexFormat format) {
     m_strides.resize(binding + 1, 0);
   }
 
-  m_strides[binding] = Math::max(m_strides[binding], 
+  m_strides[binding] = Math::max(m_strides[binding],
                                  offset + getFormatSize(format));
 }
 

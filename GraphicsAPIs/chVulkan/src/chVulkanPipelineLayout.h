@@ -21,15 +21,17 @@ class VulkanPipelineLayout : public IPipelineLayout {
 public:
   VulkanPipelineLayout(VkDevice device, const Vector<SPtr<IDescriptorSetLayout>>& setLayouts);
   VulkanPipelineLayout(VkDevice device, VkPipelineLayout pipelineLayout)
-    : m_device(device), m_pipelineLayout(pipelineLayout), m_ownsPipelineLayout(false) {}
+    : m_device(device),
+      m_pipelineLayout(pipelineLayout),
+      m_ownsPipelineLayout(false) {}
   ~VulkanPipelineLayout() override;
 
   NODISCARD FORCEINLINE VkPipelineLayout
   getHandle() const { return m_pipelineLayout; }
 
 private:
-  bool m_ownsPipelineLayout = true;
   VkDevice m_device = VK_NULL_HANDLE;
   VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+  bool m_ownsPipelineLayout = true;
 };
 } // namespace chEngineSDK

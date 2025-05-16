@@ -17,20 +17,20 @@
 
 namespace chEngineSDK {
 namespace chVulkanBufferUtils {
-uint32 
-findMemoryType(VkPhysicalDevice physicalDevice, 
-               uint32 typeFilter, 
+uint32
+findMemoryType(VkPhysicalDevice physicalDevice,
+               uint32 typeFilter,
                VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
-    
+
     for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && 
+        if ((typeFilter & (1 << i)) &&
             (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
             return i;
         }
     }
-    
+
     CH_EXCEPT(VulkanErrorException, "Failed to find suitable memory type");
     return 0;
 }
@@ -40,7 +40,7 @@ using namespace chVulkanBufferUtils;
 /*
 */
 VulkanBuffer::VulkanBuffer(VkDevice device,
-                           VkPhysicalDevice physicalDevice, 
+                           VkPhysicalDevice physicalDevice,
                            const BufferCreateInfo& createInfo)
     : m_device(device), m_size(createInfo.size) {
   VkBufferUsageFlags usage = 0;
@@ -65,9 +65,13 @@ VulkanBuffer::VulkanBuffer(VkDevice device,
 
   VkBufferCreateInfo bufferInfo = {
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
     .size = m_size,
     .usage = usage,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = 0,
+    .pQueueFamilyIndices = nullptr
   };
 
   VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &m_buffer));
@@ -95,12 +99,13 @@ VulkanBuffer::VulkanBuffer(VkDevice device,
     break;
   }
 
-  uint32 memoryTypeIndex = findMemoryType(physicalDevice, 
-                                          memRequirements.memoryTypeBits, 
+  uint32 memoryTypeIndex = findMemoryType(physicalDevice,
+                                          memRequirements.memoryTypeBits,
                                           memoryFlags);
 
   VkMemoryAllocateInfo allocInfo = {
     .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .pNext = nullptr,
     .allocationSize = memRequirements.size,
     .memoryTypeIndex = memoryTypeIndex
   };
@@ -126,7 +131,7 @@ VulkanBuffer::~VulkanBuffer() {
   if (result != VK_SUCCESS) {
     CH_LOG_ERROR(Vulkan, "VulkanBuffer::Destructor: Failed to wait for device idle.");
   }
-  
+
   if (m_buffer != VK_NULL_HANDLE) {
     vkDestroyBuffer(m_device, m_buffer, nullptr);
     m_buffer = VK_NULL_HANDLE;
@@ -149,7 +154,7 @@ void
 VulkanBuffer::update(const void* data, SIZE_T size, uint32 offset) {
   if (m_mappable && m_mappedData) {
     memcpy(static_cast<uint8*>(m_mappedData) + offset, data, size);
-  } 
+  }
   else if (m_mappable) {
     void* mappedData = nullptr;
     VK_CHECK(vkMapMemory(m_device, m_memory, offset, size, 0, &mappedData));

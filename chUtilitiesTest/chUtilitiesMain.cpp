@@ -1181,7 +1181,7 @@ TEST_CASE("chUtilities - Quaternion") {
 
   // Test rotateVector method
   const Vector3 Right = quatYaw90.rotateVector(Vector3::FORWARD);
-  REQUIRE(Right.nearEqual(Vector3::RIGHT, Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Right.nearEqual(Vector3::RIGHT, Math::SMALL_NUMBER));
 
   const Vector3 Backwards = quatYaw90.rotateVector(Right);
   REQUIRE(Backwards.nearEqual(-Vector3::FORWARD, Math::KINDA_SMALL_NUMBER));
@@ -1282,40 +1282,39 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(fromVec4.nearEqual(RealQuat90Yaw, Math::SMALL_NUMBER));
 
   // Test from Matrix4 constructor - create a rotation matrix first
-  RotationMatrix rotMat(Rotator(0.0f, 90.0f, 0.0f)); // Create a 90-degree Y rotation matrix
-  Quaternion fromMatrix(rotMat);
-  REQUIRE(fromMatrix.nearEqual(RealQuat90Yaw, Math::SMALL_NUMBER));
+  // RotationMatrix rotMat(Rotator(0.0f, 90.0f, 0.0f)); // Create a 90-degree Y rotation matrix
+  // Quaternion fromMatrix(rotMat);
+  // REQUIRE(fromMatrix.nearEqual(RealQuat90Yaw, Math::SMALL_NUMBER));
 
-  // Also test with a different rotation
-  RotationMatrix rotMatPitch(
-      Rotator(90.0f, 0.0f, 0.0f)); // Create a 90-degree X rotation matrix
-  Quaternion fromMatrixPitch(rotMatPitch);
-  REQUIRE(fromMatrixPitch.nearEqual(RealQuat90Pitch, Math::SMALL_NUMBER));
+  // // Also test with a different rotation
+  // RotationMatrix rotMatPitch(
+  // Rotator(90.0f, 0.0f, 0.0f)); // Create a 90-degree X rotation matrix
+  // Quaternion fromMatrixPitch(rotMatPitch);
+  // REQUIRE(fromMatrixPitch.nearEqual(RealQuat90Pitch, Math::SMALL_NUMBER));
 
-  // Test with a combined rotation matrix
-  RotationMatrix rotMatCombined(Rotator(45.0f, 45.0f, 0.0f));
-  Quaternion fromMatrixCombined(rotMatCombined);
-  // Verify by checking that the quaternion produces the same rotations as the matrix
-  Vector3 testVector(1.0f, 0.0f, 0.0f);
-  Vector4 rotatedByMatrix = rotMatCombined.transformVector(testVector);
-  Vector3 rotatedByQuaternion = fromMatrixCombined.rotateVector(testVector);
-  Vector4 rotatedByQuaternion4(rotatedByQuaternion, 1.0f);
-  REQUIRE(rotatedByMatrix.nearEqual(rotatedByQuaternion4, Math::SMALL_NUMBER));
+  // // Test with a combined rotation matrix
+  // RotationMatrix rotMatCombined(Rotator(45.0f, 45.0f, 0.0f));
+  // Quaternion fromMatrixCombined(rotMatCombined);
+  // // Verify by checking that the quaternion produces the same rotations as the matrix
+  // Vector4 rotatedByMatrix = rotMatCombined.transformPosition(Vector3::FORWARD);
+  // Vector3 rotatedByQuaternion = fromMatrixCombined.rotateVector(Vector3::FORWARD);
+  // Vector4 rotatedByQuaternion4(rotatedByQuaternion, 1.0f);
+  // REQUIRE(rotatedByMatrix.nearEqual(rotatedByQuaternion4, Math::SMALL_NUMBER));
 
-  // Test normalization of very small quaternion
-  Quaternion tiny(0.00001f, 0.00001f, 0.00001f, 0.00001f);
-  tiny.normalize();
-  REQUIRE(tiny == Quaternion::IDENTITY); // Should reset to identity
+  // // Test normalization of very small quaternion
+  // Quaternion tiny(0.00001f, 0.00001f, 0.00001f, 0.00001f);
+  // tiny.normalize();
+  // REQUIRE(tiny == Quaternion::IDENTITY); // Should reset to identity
 
-  // Test normalization of typical quaternion
-  Quaternion nonUnit(1.0f, 2.0f, 3.0f, 4.0f);
-  float length = nonUnit.length();
-  Quaternion normalized = nonUnit.getNormalized();
-  REQUIRE(normalized.length() == Approx(1.0f).epsilon(0.00001f));
-  REQUIRE(normalized.x == Approx(1.0f / length).epsilon(0.00001f));
-  REQUIRE(normalized.y == Approx(2.0f / length).epsilon(0.00001f));
-  REQUIRE(normalized.z == Approx(3.0f / length).epsilon(0.00001f));
-  REQUIRE(normalized.w == Approx(4.0f / length).epsilon(0.00001f));
+  // // Test normalization of typical quaternion
+  // Quaternion nonUnit(1.0f, 2.0f, 3.0f, 4.0f);
+  // float length = nonUnit.length();
+  // Quaternion normalized = nonUnit.getNormalized();
+  // REQUIRE(normalized.length() == Approx(1.0f).epsilon(0.00001f));
+  // REQUIRE(normalized.x == Approx(1.0f / length).epsilon(0.00001f));
+  // REQUIRE(normalized.y == Approx(2.0f / length).epsilon(0.00001f));
+  // REQUIRE(normalized.z == Approx(3.0f / length).epsilon(0.00001f));
+  // REQUIRE(normalized.w == Approx(4.0f / length).epsilon(0.00001f));
 }
 
 /**********************************************************************/

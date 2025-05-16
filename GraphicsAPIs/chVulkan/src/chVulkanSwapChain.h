@@ -3,7 +3,7 @@
  * @file chVulkanSwapChain.h
  * @author AccelMR
  * @date 2025/04/07
- * @details 
+ * @details
  * SwapChain implementation for Vulkan.
  * This class is used to create and manage the swap chain.
  * It is used to create the swap chain, and to present the swap chain.
@@ -18,8 +18,8 @@
 namespace chEngineSDK {
 class VulkanSwapChain : public ISwapChain {
  public:
-  VulkanSwapChain(VkDevice device, 
-                  VkPhysicalDevice physicalDevice, 
+  VulkanSwapChain(VkDevice device,
+                  VkPhysicalDevice physicalDevice,
                   VkSurfaceKHR surface,
                   VkFormat colorFormat,
                   VkColorSpaceKHR colorSpace,
@@ -29,12 +29,12 @@ class VulkanSwapChain : public ISwapChain {
   ~VulkanSwapChain() override;
 
   virtual bool
-  acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
+  acquireNextImage(SPtr<ISemaphore> waitSemaphore,
                    SPtr<IFence> fence = nullptr) override;
 
   virtual void
   present(const Vector<SPtr<ISemaphore>>& waitSemaphores) override;
- 
+
   virtual void
   resize(uint32 width, uint32 height) override;
 
@@ -51,9 +51,9 @@ class VulkanSwapChain : public ISwapChain {
   getRenderPass() const override { return m_renderPass; }
 
   NODISCARD FORCEINLINE virtual SPtr<IFrameBuffer>
-  getFramebuffer(uint32 index) const override { 
+  getFramebuffer(uint32 index) const override {
     CH_ASSERT(index < m_framebuffers.size());
-    return m_framebuffers[index]; 
+    return m_framebuffers[index];
   }
 
   NODISCARD FORCEINLINE virtual uint32
@@ -75,7 +75,7 @@ class VulkanSwapChain : public ISwapChain {
   void
   create(uint32 width, uint32 height, bool vsync = false);
 
-  void 
+  void
   cleanUpSwapChain();
 
   void
@@ -98,21 +98,18 @@ class VulkanSwapChain : public ISwapChain {
   uint32 m_graphicsFamilyQueueIndex = UINT32_MAX;
   uint32 m_presentFamilyQueueIndex = UINT32_MAX;
   VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
-
-  Vector<SPtr<IFrameBuffer>> m_framebuffers;
   SPtr<IRenderPass> m_renderPass;
- 
   VkFormat m_colorFormat;
   VkColorSpaceKHR m_colorSpace;
- 
   uint32 m_width = 0;
   uint32 m_height = 0;
   uint32 m_imageCount = 0;
   uint32 m_currentImageIndex = 0;
- 
+  VkPresentInfoKHR m_presentInfo = {};
+
   Vector<VkImage> m_images;
   Vector<VkImageView> m_imageViews;
- 
-  VkPresentInfoKHR m_presentInfo = {};
+  Vector<SPtr<IFrameBuffer>> m_framebuffers;
+
 };
 } // namespace chEngineSDKs

@@ -21,9 +21,9 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
  public:
   virtual ~Renderer();
 
-  void 
-  initialize(uint32 width, 
-             uint32 height, 
+  void
+  initialize(uint32 width,
+             uint32 height,
              bool vsync = false);
 
   void
@@ -40,16 +40,16 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   void
   resize();
 
-  void 
+  void
   loadModel();
 
   void
-  renderModel(const SPtr<Model>& model, const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
+  renderModel(const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
 
   void
   createRenderPass();
 
-  void 
+  void
   bindInputEvents();
 
   void
@@ -76,7 +76,7 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   Vector<uint32> m_meshIndexCounts;
   Vector<IndexType> m_meshIndexTypes;
   UnorderedMap<SPtr<Mesh>, uint32> m_meshToIndexMap;
-  
+
   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
   SPtr<IDescriptorPool> m_descriptorPool;
   SPtr<IDescriptorSet> m_descriptorSet;
@@ -85,10 +85,10 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
     SPtr<IBuffer> uniformBuffer;
     SPtr<IDescriptorSet> descriptorSet;
   };
-  
+
   UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
-  
-  
+
+
   // Sincronización
   Vector<SPtr<ISemaphore>> m_imageAvailableSemaphores;
   Vector<SPtr<ISemaphore>> m_renderFinishedSemaphores;
@@ -98,7 +98,7 @@ class CH_CORE_EXPORT Renderer : public Module<Renderer> {
   SPtr<IShader> m_fragmentShader;
 
   UniquePtr<Camera> m_camera;
-  
+
   uint32 m_currentFrame = 0;
   static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
 

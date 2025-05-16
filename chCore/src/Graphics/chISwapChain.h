@@ -3,11 +3,12 @@
  * @file chISwapChain.h
  * @author AccelMR
  * @date 2025/04/07
- * @details 
+ * @details
  * SwapChain interface.
  * This interface is used to create and manage the swap chain.
  * It is used to create the swap chain, and to present the swap chain.
  * It is used by the graphics API to create the swap chain.
+ */
 /************************************************************************/
 #pragma once
 
@@ -20,12 +21,12 @@ class CH_CORE_EXPORT ISwapChain {
   virtual ~ISwapChain() = default;
 
   virtual bool
-  acquireNextImage(SPtr<ISemaphore> waitSemaphore, 
+  acquireNextImage(SPtr<ISemaphore> waitSemaphore,
                    SPtr<IFence> fence = nullptr) = 0;
 
   virtual void
   present(const Vector<SPtr<ISemaphore>>& waitSemaphores) = 0;
- 
+
   virtual void
   resize(uint32 width, uint32 height) = 0;
 

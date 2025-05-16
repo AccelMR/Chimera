@@ -11,13 +11,14 @@
 /************************************************************************/
 /*
  * Include.
- */                                                                     
+ */
 /************************************************************************/
 #include <chPrerequisitesUtilities.h>
 
 #include "chFwdDeclCore.h"
 
 #define INVALID_INDEX -1
+#define INVALID_UNSIGNED_INDEX 0xFFFFFFFF
 
 
 //DLL export

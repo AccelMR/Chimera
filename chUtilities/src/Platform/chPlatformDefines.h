@@ -95,6 +95,8 @@
 #   pragma error "No known compIler. "
 #endif
 
+#define CH_PAMRAMETER_UNUSED(x) (void)x
+
 /************************************************************************/
 /**
  * See if we can use __forceinline or if we need to use __inline instead
