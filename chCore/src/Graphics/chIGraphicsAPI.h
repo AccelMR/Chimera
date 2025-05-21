@@ -28,7 +28,7 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   public:
   IGraphicsAPI() = default;
   virtual ~IGraphicsAPI() = default;
-  
+
   virtual void
   initialize(const GraphicsAPIInfo& graphicsAPIInfo) = 0;
 
@@ -84,4 +84,4 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   waitIdle() = 0;
 };
 
-} // namespace chEngineSDK 
+} // namespace chEngineSDK

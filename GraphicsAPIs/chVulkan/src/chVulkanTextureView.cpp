@@ -37,7 +37,7 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
 
   VulkanTexture* vulkanTexture = static_cast<VulkanTexture*>(m_texture);
 
-  VkImageViewCreateInfo viewInfo;
+  VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = vulkanTexture->getHandle();
   viewInfo.viewType = chTextureViewTypeToVkTextureViewType(createInfo.viewType);

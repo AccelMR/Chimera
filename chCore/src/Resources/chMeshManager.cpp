@@ -183,7 +183,7 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
       if (hasTexCoords) {
         vertices[i].texCoord = {
           mesh->mTextureCoords[0][i].x,
-          1.0f - mesh->mTextureCoords[0][i].y
+          mesh->mTextureCoords[0][i].y
         };
       }
       else {

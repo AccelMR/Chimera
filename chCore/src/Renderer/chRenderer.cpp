@@ -85,9 +85,10 @@ Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 static Vector<String> NodeNames;
 static uint32 NodeIndex = 0;
 static bool bIsModelRotating = false;
-static Array<Path, 4> ModelPaths = {
-  Path("resources/models/Porch.fbx"),
+static Array<Path, 5> ModelPaths = {
+  Path("resources/models/rex_norm.obj"),
   Path("resources/models/cyberdemon.md5mesh"),
+  Path("resources/models/Porch.fbx"),
   Path("resources/models/test.fbx"),
   Path("resources/models/Porce/scene.gltf")
 
@@ -135,6 +136,7 @@ Renderer::initialize(uint32 width,
 
   m_swapChain = IGraphicsAPI::instance().createSwapChain(width, height, vsync);
 
+  createSyncObjects();
   initializeRenderResources();
   bindInputEvents();
 }
@@ -143,15 +145,19 @@ Renderer::initialize(uint32 width,
 */
 void
 Renderer::createSyncObjects() {
-  auto& graphicsAPI = IGraphicsAPI::instance();
+  const uint32 imageCount = m_swapChain->getTextureCount();
 
-  m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-  m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  m_imageAvailableSemaphores.resize(imageCount);
+  m_renderFinishedSemaphores.resize(imageCount);
   m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
-  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+  auto& graphicsAPI = IGraphicsAPI::instance();
+  for (uint32 i = 0; i < imageCount; ++i) {
     m_imageAvailableSemaphores[i] = graphicsAPI.createSemaphore();
     m_renderFinishedSemaphores[i] = graphicsAPI.createSemaphore();
+  }
+
+  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     m_inFlightFences[i] = graphicsAPI.createFence(true);
   }
 }
@@ -293,7 +299,8 @@ Renderer::loadModel() {
         .dstSet = nodeDescriptorSet,
         .dstBinding = 1,
         .dstArrayElement = 0,
-        .descriptorType = DescriptorType::CombinedImageSampler
+        .descriptorType = DescriptorType::CombinedImageSampler,
+        .imageInfos = { imageInfo }
       }
     };
 
@@ -304,6 +311,9 @@ Renderer::loadModel() {
       .descriptorSet = nodeDescriptorSet
     };
   }
+
+  RotationMatrix rotationMatrix(Rotator(180.0f, 0.0f, 90.0f));
+  m_currentModel->updateNodeTransform(m_currentModel->findNode(NodeNames[NodeIndex]), rotationMatrix);
 }
 
 /*
@@ -321,12 +331,10 @@ Renderer::initializeRenderResources() {
     commandBuffer = m_commandPool->allocateCommandBuffer();
   }
 
-  createSyncObjects();
-
   int32 imageWidth = 0;
   int32 imageHeight = 0;
   int32 channel = 0;
-  Vector<uint8> imageData = RendererHelpers::loadImage(Path("resources/images/beto1.jpg"),
+  Vector<uint8> imageData = RendererHelpers::loadImage(Path("resources/images/Rex_C.bmp"),
                                                        &imageWidth,
                                                        &imageHeight,
                                                        &channel);
@@ -434,7 +442,9 @@ Renderer::initializeRenderResources() {
     .viewType = TextureViewType::View2D,
     .bIsDepthStencil = true
   };
-  m_depthTextureView = m_depthTexture->createView(depthStencilViewCreateInfo);
+  m_depthTextureView =
+
+  m_depthTexture->createView(depthStencilViewCreateInfo);
 
   createRenderPass();
 
@@ -476,6 +486,13 @@ Renderer::render(const float deltaTime) {
 
   m_inFlightFences[m_currentFrame]->wait(MAX_WAIT_TIME);
   m_inFlightFences[m_currentFrame]->reset();
+
+  // if (m_imageAvailableSemaphores.empty()) {
+  //   CH_LOG_ERROR(RendererSystem, "No image available semaphores");
+  //   return;
+  // }
+
+  //m_currentFrame = m_currentFrame % m_imageAvailableSemaphores.size();
 
   if (!m_swapChain->acquireNextImage(m_imageAvailableSemaphores[m_currentFrame])){
     resize();
@@ -522,12 +539,13 @@ Renderer::render(const float deltaTime) {
     .commandBuffers = { m_commandBuffers[imageIndex] },
     .waitSemaphores = { m_imageAvailableSemaphores[m_currentFrame] },
     .waitStages = { PipelineStage::ColorAttachmentOutput },
-    .signalSemaphores = { m_renderFinishedSemaphores[m_currentFrame] },
+    .signalSemaphores = { m_renderFinishedSemaphores[imageIndex] },
   };
 
   graphicsAPI.getQueue(QueueType::Graphics)->submit(submitInfo, m_inFlightFences[m_currentFrame]);
 
-  m_swapChain->present({ m_renderFinishedSemaphores[m_currentFrame] });
+  m_swapChain->present({ m_renderFinishedSemaphores[imageIndex] });
+
 
   m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }

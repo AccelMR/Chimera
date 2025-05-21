@@ -90,7 +90,7 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
 */
 void
 VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
-  VkSwapchainKHR oldSwapChain = m_swapChain;
+  //VkSwapchainKHR oldSwapChain = m_swapChain;
   cleanUpSwapChain();
 
   VkSurfaceCapabilitiesKHR capabilities;
@@ -172,7 +172,7 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = presentMode,
     .clipped = VK_TRUE,
-    .oldSwapchain = oldSwapChain
+    .oldSwapchain = VK_NULL_HANDLE
   };
 
   if (m_graphicsFamilyQueueIndex != m_presentFamilyQueueIndex) {
