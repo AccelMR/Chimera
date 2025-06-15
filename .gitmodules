@@ -5,3 +5,6 @@
 [submodule "chCore/externals/assimp"]
 	path = chCore/externals/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "chEditor/externals/imgui"]
+	path = chEditor/externals/imgui
+	url = https://github.com/ocornut/imgui.git
