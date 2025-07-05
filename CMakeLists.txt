@@ -31,9 +31,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   add_subdirectory(chCore)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/chCoreTest")
+if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   message("Directory exists.")
-  add_subdirectory(chCoreTest)
+  add_subdirectory(chEditor)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")

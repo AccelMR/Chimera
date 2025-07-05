@@ -95,8 +95,7 @@ static Array<Path, 5> ModelPaths = {
 };
 static uint32 ModelIndex = 0;
 
-static constexpr uint64 MAX_WAIT_TIME = 1000000000; // 1 second
-
+static constexpr uint64 MAX_WAIT_TIME = 100000000; // 1 seconds in nanoseconds
 /*
 */
 Renderer::~Renderer() {
@@ -484,7 +483,10 @@ void
 Renderer::render(const float deltaTime) {
   auto& graphicsAPI = IGraphicsAPI::instance();
 
-  m_inFlightFences[m_currentFrame]->wait(MAX_WAIT_TIME);
+  if (!m_inFlightFences[m_currentFrame]->wait(MAX_WAIT_TIME)){
+    CH_LOG_ERROR(RendererSystem, "Frame {0} timed out. Skipping rendering for this frame.", m_currentFrame);
+    return;
+  }
   m_inFlightFences[m_currentFrame]->reset();
 
   // if (m_imageAvailableSemaphores.empty()) {

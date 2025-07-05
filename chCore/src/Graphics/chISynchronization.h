@@ -26,13 +26,13 @@ class CH_CORE_EXPORT IFence {
   IFence() = default;
   virtual ~IFence() = default;
 
-  virtual void 
+  virtual bool
   wait(uint64 timeout = UINT64_MAX) = 0;
 
-  virtual void 
+  virtual void
   reset() = 0;
 
-  NODISCARD virtual bool 
+  NODISCARD virtual bool
   isSignaled() const = 0;
 };
 

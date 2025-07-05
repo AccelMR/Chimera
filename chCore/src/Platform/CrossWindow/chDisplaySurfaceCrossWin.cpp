@@ -20,7 +20,7 @@ namespace chEngineSDK {
 #if USING(CH_PLATFORM_LINUX)
 
 
-bool 
+bool
 initializeXCB(int argc, const char** argv) {
   int screenNum = 0;
   xcb_connection_t* connection = xcb_connect(nullptr, &screenNum);
@@ -55,26 +55,26 @@ static HINSTANCE g_hPrevInstance = nullptr;
 static LPSTR g_lpCmdLine = nullptr;
 static int g_nCmdShow = 0;
 
-bool 
+bool
 initializeWin32(int argc, const char** argv) {
   g_hInstance = GetModuleHandle(NULL);
   g_hPrevInstance = nullptr;
   g_lpCmdLine = GetCommandLineA();
   g_nCmdShow = SW_SHOWDEFAULT;
-  
+
   // Inicializar CrossWindow con estos parámetros
   xwin::init(g_hInstance, g_hPrevInstance, g_lpCmdLine, g_nCmdShow);
-  
+
   return true;
 }
 
-void 
+void
 cleanupWin32() {
   // Windows specific cleanup code
 }
 #endif //USING(CH_PLATFORM_WIN32)
 
-bool 
+bool
 initializePlatformSpecific(int argc, const char** argv) {
 #if USING(CH_PLATFORM_LINUX)
   const bool bIsXCBinitialized = initializeXCB(argc, argv);
@@ -87,7 +87,7 @@ initializePlatformSpecific(int argc, const char** argv) {
 
 /*
 */
-void 
+void
 cleanupPlatformSpecific() {
 #if USING(CH_PLATFORM_LINUX)
   cleanupXCB();
@@ -101,7 +101,7 @@ cleanupPlatformSpecific() {
 NODISCARD bool
 DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler) {
 
-  CommandParser& commandParser = CommandParser::getInstance();
+  CommandParser& commandParser = CommandParser::instance();
   int argc = static_cast<int>(commandParser.getArgc());
   const char** argv = const_cast<const char**>(commandParser.getArgv());
   if (!initializePlatformSpecific(argc, argv)) {
@@ -163,4 +163,3 @@ DisplaySurface::getPlatformHandlerInt() {
 
 } // namespace chEngineSDK
 #endif //CH_CROSS_WINDOW
-

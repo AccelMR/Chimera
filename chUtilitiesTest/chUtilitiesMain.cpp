@@ -1645,7 +1645,8 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
     const char* argv[] = {"program_name", "-option1=value1", "-option2=value2", "-flag"};
     int32 argc = 4;
 
-    CommandParser& parser = CommandParser::getInstance();
+    CommandParser::startUp();
+    CommandParser& parser = CommandParser::instance();
     parser.parse(argc, (char**)argv);
 
     // Test parsed parameters
@@ -1661,7 +1662,7 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
     const char* argv[] = {"program_name"};
     int32 argc = 1;
 
-    CommandParser& parser = CommandParser::getInstance();
+    CommandParser& parser = CommandParser::instance();
     parser.parse(argc, (char**)argv);
 
     // Test default parameter
@@ -1673,7 +1674,7 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
     const char* argv[] = {"program_name"};
     int32 argc = 1;
 
-    CommandParser& parser = CommandParser::getInstance();
+    CommandParser& parser = CommandParser::instance();
     parser.parse(argc, (char**)argv);
 
     // Test missing flag
@@ -1685,7 +1686,7 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
     const char* argv[] = {"program_name", "-OPTION=value"};
     int32 argc = 2;
 
-    CommandParser& parser = CommandParser::getInstance();
+    CommandParser& parser = CommandParser::instance();
     parser.parse(argc, (char**)argv);
 
     // Test case insensitivity

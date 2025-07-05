@@ -33,19 +33,19 @@ class VulkanFence : public IFence {
  public:
   VulkanFence(VkDevice device, bool signaled = false);
   ~VulkanFence() override;
- 
-  void
+
+  bool
   wait(uint64 timeout = UINT64_MAX) override;
- 
+
   void
   reset() override;
- 
+
   NODISCARD bool
   isSignaled() const override;
 
   NODISCARD FORCEINLINE VkFence
   getHandle() const { return m_fence; }
- 
+
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkFence m_fence = VK_NULL_HANDLE;

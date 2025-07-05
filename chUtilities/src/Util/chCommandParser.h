@@ -11,37 +11,22 @@
 
 #include "chPrerequisitesUtilities.h"
 
+#include "chModule.h"
+
 namespace chEngineSDK {
-class CH_UTILITY_EXPORT CommandParser {
+class CH_UTILITY_EXPORT CommandParser : public Module<CommandParser> {
  public:
-
   /**
-   * @brief Singleton pattern to ensure one instance of CommandParser.
-   * @return The instance of this CommandParser.
+   * @brief Destructor.
    */
-  static CommandParser& 
-  getInstance() {
-    static CommandParser instance;
-    return instance;
-  }
-
-  /**
-   * @brief Deleted copy constructor.
-   */
-  CommandParser(CommandParser const&) = delete;
-
-  /**
-   * @brief Deleted assignment operator.
-   */
-  void 
-  operator=(CommandParser const&) = delete;
+  ~CommandParser() override = default;
 
   /**
    * @brief Parse the command line arguments.
    * @param argc The number of arguments.
    * @param argv The arguments.
    */
-  void 
+  void
   parse(int32 argc, char** argv);
 
   /**
@@ -50,7 +35,7 @@ class CH_UTILITY_EXPORT CommandParser {
    * @param defaultValue The default value to return if the parameter is not found.
    * @return The value of the parameter.
    */
-  String 
+  String
   getParam(const String& param, const String defaultValue = "");
 
   /**
@@ -58,7 +43,7 @@ class CH_UTILITY_EXPORT CommandParser {
    * @param flag The flag to check.
    * @return True if the flag is set, otherwise false.
    */
-  bool 
+  bool
   isFlagSet(const String& flag);
 
   /**
@@ -78,12 +63,13 @@ class CH_UTILITY_EXPORT CommandParser {
     return m_argv;
   }
 
-  FORCEINLINE int32 
+  FORCEINLINE int32
   getParamAsInt(const String& param, int32 defaultValue = 0) {
     return std::stoi(getParam(param, std::to_string(defaultValue)));
   }
 
  private:
+  friend class Module<CommandParser>;
   /**
    * @brief Private constructor for singleton.
    */

@@ -73,8 +73,16 @@ BaseApplication::~BaseApplication() {
 */
 void
 BaseApplication::initialize(int argc, char** argv) {
+  if (!CommandParser::isStarted()) {
+    CH_LOG_WARNING(BaseApp, "CommandParser was not started before BaseApplication, starting it now.\n "
+      "It might cause issues with command line arguments.");
+    CommandParser::startUp();
+  }
+  CommandParser& commandParser = CommandParser::instance();
+  commandParser.parse(argc, argv);
+
   initializeModules();
-  initPlatform(argc, argv);
+  initPlatform();
   initializeGraphics();
   m_isInitialized = true;
 }
@@ -82,10 +90,8 @@ BaseApplication::initialize(int argc, char** argv) {
 /*
 */
 void
-BaseApplication::initPlatform(int argc, char** argv) {
-  CommandParser& commandParser = CommandParser::getInstance();
-  // Parse command line arguments.
-  commandParser.parse(static_cast<int32>(argc), argv);
+BaseApplication::initPlatform() {
+  CommandParser& commandParser = CommandParser::instance();
 
   uint32 width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1280));
   uint32 height = static_cast<uint32>(commandParser.getParamAsInt("Height", 720));
@@ -125,7 +131,7 @@ BaseApplication::initializeGraphics() {
 
   DynamicLibraryManager& dynamicLibraryManager = DynamicLibraryManager::instance();
 
-  const String graphicsAPIName = CommandParser::getInstance().getParam("GraphicsAPI", "chVulkan");
+  const String graphicsAPIName = CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
 
   Path dllPath ("build/debug-x64/lib");
   Path dllFullPath = FileSystem::absolutePath(dllPath);
@@ -154,7 +160,7 @@ BaseApplication::initializeGraphics() {
 
   Renderer::instance().initialize(m_display->getWidth(),
                                   m_display->getHeight(),
-                                  CommandParser::getInstance().getParam("VSync", "true") == "true");
+                                  CommandParser::instance().getParam("VSync", "true") == "true");
 }
 
 /*

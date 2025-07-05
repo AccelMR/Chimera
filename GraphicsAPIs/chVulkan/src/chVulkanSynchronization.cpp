@@ -14,6 +14,8 @@
 
 #include "chVulkanAPI.h"
 
+CH_LOG_DECLARE_STATIC(VulkanSynchronization, All);
+
 namespace chEngineSDK {
 /*
 */
@@ -57,11 +59,13 @@ VulkanFence::~VulkanFence() {
 
 /*
 */
-void
+bool
 VulkanFence::wait(uint64 timeout) {
   if (m_fence != VK_NULL_HANDLE) {
-    vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, timeout);
+    return vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, timeout) == VK_SUCCESS;
   }
+  CH_LOG_ERROR(VulkanSynchronization, "VulkanFence::wait called on an uninitialized fence.");
+  return false;
 }
 
 /*
@@ -82,5 +86,5 @@ VulkanFence::isSignaled() const {
   }
   return false;
 }
-  
+
 } // namespace chEngineSDK

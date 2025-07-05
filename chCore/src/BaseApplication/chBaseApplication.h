@@ -2,7 +2,7 @@
 /**
  * @file chBaseApplication.h
  * @author AccelMR
- * @date 2025/12/09   
+ * @date 2025/12/09
  *   BaseApplication class that handles the main loop, and the initialization of the engine.
  */
  /************************************************************************/
@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
   * Includes
-  */                                                                     
+  */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
@@ -21,47 +21,47 @@ namespace chEngineSDK {
 class Renderer;
 
 /*
- * Description: 
+ * Description:
  *     Base class for the application.
  */
 class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
  public:
-  
+
 
   /*
-   * Description: 
+   * Description:
    *     Default constructor.
    */
   BaseApplication();
 
   /*
-   * Description: 
+   * Description:
    *     Default destructor.
    */
   virtual ~BaseApplication();
 
   virtual void
-  initialize(int argc, char** argv);
+  initialize(int32 argc, ANSICHAR** gv);
 
   /*
-   * Description: 
+   * Description:
    *     Updates the application.
    */
   void
   run();
 
   /*
-   * Description: 
+   * Description:
    *     Initializes the platform.
    */
-  FORCEINLINE bool 
+  FORCEINLINE bool
   getIsInitialized() const {
     return m_isInitialized;
   }
 
  protected:
   virtual void
-  initPlatform(int argc, char** argv);
+  initPlatform();
 
   virtual void
   initializeGraphics();
@@ -72,7 +72,7 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   virtual void
   destroyModules();
 
-  virtual void 
+  virtual void
   destroyGraphics();
 
   //TODO: delete this
@@ -88,4 +88,4 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
 };
 } // namespace chEngineSDK
 
-#define CH_BASE_APPLICATION_MAIN 
+#define CH_BASE_APPLICATION_MAIN
