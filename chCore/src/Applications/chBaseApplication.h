@@ -18,8 +18,6 @@
 #include "chModule.h"
 
 namespace chEngineSDK {
-class Renderer;
-
 /*
  * Description:
  *     Base class for the application.
@@ -40,51 +38,37 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
    */
   virtual ~BaseApplication();
 
-  virtual void
-  initialize(int32 argc, ANSICHAR** gv);
+  void
+  initialize();
 
   /*
    * Description:
    *     Updates the application.
    */
-  void
+  virtual void
   run();
 
-  /*
-   * Description:
-   *     Initializes the platform.
-   */
-  FORCEINLINE bool
-  getIsInitialized() const {
-    return m_isInitialized;
-  }
+  virtual void
+  requestExit(const String& reason);
 
  protected:
   virtual void
-  initPlatform();
+  initializeModules() {}
 
   virtual void
-  initializeGraphics();
+  destroyModules() {}
 
   virtual void
-  initializeModules();
+  onPostInitialize() {}
 
   virtual void
-  destroyModules();
+  onPostDestoyModules() {}
 
   virtual void
-  destroyGraphics();
+  update(const float deltaTime) { CH_PAMRAMETER_UNUSED(deltaTime); }
 
-  //TODO: delete this
-  void
-  render(const float deltaTime);
-
- protected:
-  bool m_isInitialized = false;
-  SPtr<DisplayEventHandle> m_eventhandler;
-  SPtr<DisplaySurface> m_display;
-
-  SPtr<Renderer> m_renderer;
+ private:
+  bool m_running = true; ///< Flag to indicate if the application is running.
 };
 } // namespace chEngineSDK
 

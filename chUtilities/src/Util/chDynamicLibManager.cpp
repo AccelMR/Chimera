@@ -5,14 +5,14 @@
  * @date 2022/06/15
  * @brief This is a Dynamic Library Manager. This will keep every reference of each
  *        dll loaded.
- *   
+ *
  */
  /************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chDynamicLibManager.h"
 
@@ -21,7 +21,7 @@
 namespace chEngineSDK{
 /*
 */
-void 
+void
 UtilUnloadLibrary(WeakPtr<DynamicLibrary> library) {
   auto RealPointer = library.lock();
   if (RealPointer) {
@@ -41,11 +41,10 @@ DynamicLibraryManager::loadDynLibrary(const String& name, const Path& path)
   if(lib.lock()){
     return lib;
   }
-  
+
   Path fileWholeName(fileName);
   if (!path.empty()) {
     fileWholeName = path / fileName;
-    std::cout << "Loading library: " << fileWholeName.toString() << std::endl;
   }
 
   SPtr<DynamicLibrary> newLib =  chMakeShared<DynamicLibrary>(fileWholeName.toString());
@@ -69,7 +68,7 @@ DynamicLibraryManager::unloadDynLibrary(WeakPtr<DynamicLibrary> library)
   if (iterFind == m_loadedLibraries.end()) {
     CH_EXCEPT(InternalErrorException, "This Library was not added to the Dynamic Library Manager.");
   }
-  
+
   m_loadedLibraries.erase(iterFind);
   UtilUnloadLibrary(library);
 }
@@ -113,5 +112,3 @@ DynamicLibraryManager::sanitizeName(const String& libName) {
 }
 
 }
-
-

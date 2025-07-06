@@ -441,9 +441,7 @@ Renderer::initializeRenderResources() {
     .viewType = TextureViewType::View2D,
     .bIsDepthStencil = true
   };
-  m_depthTextureView =
-
-  m_depthTexture->createView(depthStencilViewCreateInfo);
+  m_depthTextureView =  m_depthTexture->createView(depthStencilViewCreateInfo);
 
   createRenderPass();
 
