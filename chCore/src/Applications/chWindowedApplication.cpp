@@ -46,6 +46,19 @@ WindowedApplication::WindowedApplication() {}
  */
 WindowedApplication::~WindowedApplication() {
   CH_LOG_INFO(WindowedApp, "Destroying WindowedApplication.");
+
+  for (auto& fence : m_renderComponents.inFlightFences) {
+    if (fence && !fence->wait(MAX_WAIT_TIME)) {
+      CH_LOG_WARNING(WindowedApp, "Fence wait timed out or failed to reset.");
+    }
+  }
+
+  m_renderComponents.commandBuffers.clear();
+  m_renderComponents.imageAvailableSemaphores.clear();
+  m_renderComponents.renderFinishedSemaphores.clear();
+  m_renderComponents.inFlightFences.clear();
+
+  CH_LOG_INFO(WindowedApp, "WindowedApplication destroyed successfully.");
 }
 
 /*
