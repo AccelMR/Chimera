@@ -13,7 +13,23 @@
 
 namespace chEngineSDK {
 
-struct RenderComponents {
+/**
+ * @brief Render components structure containing all rendering resources
+ */
+struct ApplicationRenderContext {
+  SPtr<ISwapChain> swapChain;
+  SPtr<ITexture> depthTexture;
+  SPtr<ITextureView> depthTextureView;
+  SPtr<ICommandPool> commandPool;
+  Vector<SPtr<ICommandBuffer>> commandBuffers;
+  SPtr<ICommandQueue> graphicsQueue;
+
+  Vector<SPtr<ISemaphore>> imageAvailableSemaphores;  // One per SwapChain image
+  Vector<SPtr<ISemaphore>> renderFinishedSemaphores;  // One per SwapChain image
+  Vector<SPtr<IFence>> inFlightFences;                // One per frame in flight
+
+  // Frame tracking
+  uint32 currentFrame = 0;
 };
 
 class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
@@ -70,12 +86,21 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
   void
   render(const float deltaTime);
 
+  void
+  resize(uint32 width, uint32 height);
+
+  void
+  createSyncObjects();
+
+  void
+  bindEvents();
+
  private:
   bool m_running = true;
   SPtr<DisplayEventHandle> m_eventhandler;
   SPtr<DisplaySurface> m_display;
 
-  RenderComponents m_renderComponents;
+  ApplicationRenderContext m_renderComponents;
 };
 
 } // namespace chEngineSDK
