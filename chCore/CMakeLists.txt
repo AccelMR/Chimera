@@ -23,14 +23,6 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
 endif()
 
-add_subdirectory(externals/crosswindow)
-
-# Configurar la salida de CrossWindow
-set_target_properties(CrossWindow PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-)
 
 # Configuración de Assimp
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -72,16 +64,12 @@ target_include_directories(chCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/externals
 )
 
-file(GLOB_RECURSE CROSSWIN_FILES
+file(GLOB_RECURSE SDL_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.cpp
 )
-target_sources(chCore PRIVATE ${CROSSWIN_FILES})
+target_sources(chCore PRIVATE ${SDL_FILES})
 
-if(UNIX AND NOT APPLE)
-    target_link_libraries(chCore PUBLIC chUtilities xcb xcb-keysyms assimp SDL3::SDL3)
-else()
-    target_link_libraries(chCore PUBLIC chUtilities assimp)
-endif()
+target_link_libraries(chCore PUBLIC chUtilities assimp SDL3::SDL3)
 
 target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../chCore/src/Platform/SDL
