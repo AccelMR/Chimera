@@ -47,7 +47,7 @@ EventDispatcherManager::EventDispatcherManager()
   for (uint32 i = 0; i < static_cast<uint32>(MouseButton::MouseButtonsMax); ++i) {
     MouseButton button = static_cast<MouseButton>(i);
     MouseButtonDownCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
-    MouseButtonPressedCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
+    //MouseButtonPressedCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
     MouseButtonUpCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
   }
 
@@ -172,11 +172,11 @@ EventDispatcherManager::dispatchMouseButtonEvent(const MouseButtonData& buttonDa
   CH_ASSERT(buttonData.button <= MouseButton::MouseButtonsMax);
 
   switch (buttonData.state) {
-    case MouseState::Pressed:
-      m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
-      MouseButtonPressedCallbacks.at(buttonData.button)(buttonData);
-      OnMouseButtonPressed(buttonData);
-      break;
+    // case MouseState::Pressed:
+    //   m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
+    //   MouseButtonPressedCallbacks.at(buttonData.button)(buttonData);
+    //   OnMouseButtonPressed(buttonData);
+    //   break;
     case MouseState::Down:
       m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
       MouseButtonDownCallbacks.at(buttonData.button)(buttonData);

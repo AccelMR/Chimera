@@ -328,8 +328,7 @@ DisplayEventHandle::update() {
           KeyBoardData keyData{key, KeyBoardState::DOWN,
                                getSDLKeyboardModifiers(event.key.mod)};
           addEvent(PlatformEventType::Keyboard, std::move(keyData));
-        }
-        else {
+        } else {
           // Key is being held down (repeat)
           KeyBoardData keyData{key, KeyBoardState::PRESSED,
                                getSDLKeyboardModifiers(event.key.mod)};
@@ -351,19 +350,10 @@ DisplayEventHandle::update() {
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
       MouseButton button = translateSDLMouseButton(event.button.button);
       if (button != MouseButton::MouseButtonsMax) {
-        auto& dispatcher = EventDispatcherManager::instance();
-
-        if (!dispatcher.isMouseButtonDown(button)) {
-          MouseButtonData buttonData{button, MouseState::Down, static_cast<uint32>(event.button.x),
-                                     static_cast<uint32>(event.button.y)};
-          addEvent(PlatformEventType::MouseButton, std::move(buttonData));
-        }
-        else {
-          // Button is being held down (repeat)
-          MouseButtonData buttonData{button, MouseState::Pressed, static_cast<uint32>(event.button.x),
-                                     static_cast<uint32>(event.button.y)};
-          addEvent(PlatformEventType::MouseButton, std::move(buttonData));
-        }
+        MouseButtonData buttonData{button, MouseState::Down,
+                                   static_cast<uint32>(event.button.x),
+                                   static_cast<uint32>(event.button.y)};
+        addEvent(PlatformEventType::MouseButton, std::move(buttonData));
       }
       break;
     }

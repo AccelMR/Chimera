@@ -130,10 +130,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
    **/
   NODISCARD FORCEINLINE bool
   isKeyDown(Key key) const {
-    if (key >= Key::KeysMax) {
-      CH_LOG_WARNING(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(key));
-      return false;
-    }
+    CH_ASSERT(key < Key::KeysMax);
     return m_currentKeyboardState.test(static_cast<SIZE_T>(key));
   }
 
@@ -159,16 +156,15 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   }
 
   FORCEINLINE HEvent
-  listenMouseButtonPressed(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
-    return MouseButtonPressedCallbacks.at(button).connect(callback);
+  listenMouseButtonPressed(MouseButton /*button*/, std::function<void(const MouseButtonData&)> /*callback*/) const {
+    //return MouseButtonPressedCallbacks.at(button).connect(callback);
+    CH_LOG_ERROR(InputSystem, "Mouse button pressed events are not supported yet.");
+    return HEvent();
   }
 
   NODISCARD FORCEINLINE bool
   isMouseButtonDown(MouseButton button) const {
-    if (button >= MouseButton::MouseButtonsMax) {
-      CH_LOG_WARNING(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(button));
-      return false;
-    }
+    CH_ASSERT(button < MouseButton::MouseButtonsMax);
     return m_currentMouseState.test(static_cast<SIZE_T>(button));
   }
 
@@ -181,7 +177,7 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   const Event<void(const KeyBoardData&)> OnKeyPressed;
   const Event<void(const MouseButtonData &data)> OnMouseButtonDown;
   const Event<void(const MouseButtonData &data)> OnMouseButtonUp;
-  const Event<void(const MouseButtonData &data)> OnMouseButtonPressed;
+  //const Event<void(const MouseButtonData &data)> OnMouseButtonPressed;
   const Event<void(const MouseWheelData &data)> OnMouseWheel;
 
 private:
@@ -201,7 +197,7 @@ private:
   UnorderedMap<Key, Event<void(const KeyBoardData&)>> KeyDownCallbacks;
 
   UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonUpCallbacks;
-  UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonPressedCallbacks;
+  //UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonPressedCallbacks;
   UnorderedMap<MouseButton, Event<void(const MouseButtonData&)>> MouseButtonDownCallbacks;
 
 };

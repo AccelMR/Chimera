@@ -93,11 +93,6 @@ EditorApplication::initializeEditorComponents() {
       CH_LOG_DEBUG(EditorApp, "Mouse button up event: {0}", static_cast<uint32>(data.button));
       // Handle mouse button up events specific to the editor
     });
-  eventDispatcher.OnMouseButtonPressed.connect(
-    [this](const MouseButtonData& data) {
-      CH_LOG_DEBUG(EditorApp, "Mouse button pressed event: {0}", static_cast<uint32>(data.button));
-      // Handle mouse button pressed events specific to the editor
-    });
 
   eventDispatcher.OnMouseMove.connect(
     [this](const MouseMoveData& /*data*/) {

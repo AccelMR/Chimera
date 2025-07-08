@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
@@ -22,7 +22,7 @@ enum class KeyBoardState : uint32
   DOWN,
   PRESSED,
   RELEASED,
-  
+
   NONE
 };
 
@@ -172,10 +172,9 @@ enum class MouseButton : uint16 {
 enum class MouseState : uint16 {
   Up = 0,
   Down,
-  Pressed,
+  //Pressed,
   Released,
 
   NoneMouse
 };
 } // namespace chEngineSDK
-
