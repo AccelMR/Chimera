@@ -70,12 +70,12 @@ class CH_CORE_EXPORT DisplayEventHandle
  /*
   *   Default constructor
   */
-  DisplayEventHandle(uint32 width = 0, uint32 height = 0);
+  DisplayEventHandle() = default;
 
  /*
   *   Default destructor
   */
-  ~DisplayEventHandle();
+  ~DisplayEventHandle() = default;
 
   /**
    *   Updates queue message from system.
@@ -130,13 +130,6 @@ class CH_CORE_EXPORT DisplayEventHandle
   Queue<DisplayEvent> m_eventQueue;
 
   PlatformPtr m_platformPtr;
-
-  uint32 m_previousWidth;
-  uint32 m_previousHeight;
-
-  int32 m_previousMouseX = 0;
-  int32 m_previousMouseY = 0;
-  bool m_firstMouseMove = true;
 };
 
 /************************************************************************/

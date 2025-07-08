@@ -144,8 +144,8 @@ WindowedApplication::onPostInitialize() {
   initializeDisplay(
       {.name = commandParser.getParam("AppName", "Chimera Engine"),
        .title = commandParser.getParam("WindowTitle", "Chimera Engine Windowed Application"),
-       .width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1280)),
-       .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 720))});
+       .width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1920)),
+       .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 1080))});
   initializeGraphics();
   initializeRenderComponents();
   bindEvents();
@@ -166,7 +166,7 @@ WindowedApplication::onPostDestoyModules() {
 */
 void
 WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
-  m_eventhandler = chMakeShared<DisplayEventHandle>(desc.width, desc.height);
+  m_eventhandler = chMakeShared<DisplayEventHandle>();
   WeakPtr<DisplaySurface> wptrDisplay =
       DisplayManager::instance().createDisplay(desc, m_eventhandler);
   if (wptrDisplay.expired()) {
