@@ -4,7 +4,6 @@ file(GLOB
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/crosswindow/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.cpp
 
 )
@@ -70,26 +69,22 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../chUtilities/src)
 
 target_include_directories(chCore PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/crosswindow/src
     ${CMAKE_CURRENT_SOURCE_DIR}/externals
 )
 
 file(GLOB_RECURSE CROSSWIN_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/CrossWindow/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.cpp
 )
 target_sources(chCore PRIVATE ${CROSSWIN_FILES})
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(chCore PUBLIC chUtilities CrossWindow xcb xcb-keysyms assimp SDL3::SDL3)
+    target_link_libraries(chCore PUBLIC chUtilities xcb xcb-keysyms assimp SDL3::SDL3)
 else()
-    target_link_libraries(chCore PUBLIC chUtilities CrossWindow assimp)
+    target_link_libraries(chCore PUBLIC chUtilities assimp)
 endif()
 
 target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../chCore/src/Platform/SDL
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/crosswindow/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CrossWindow
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/SDL
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/assimp/include
 )
