@@ -1,10 +1,16 @@
+file(GLOB
+    SOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
+)
+
+
 set(CMAKE_DEBUG_POSTFIX "d")
 
-add_executable(chEditor chEditorMain.cpp)
+add_executable(chEditor chEditorMain.cpp ${SOURCE_FILES})
 
 # Asegúrate de que todas las bibliotecas compartidas utilicen -fPIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 
 # Establecer -Wl,-Bsymbolic para asegurar que los símbolos estáticos se resuelvan dentro de la biblioteca
 #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-Bsymbolic")
@@ -21,11 +27,13 @@ macro(INCLUDESUBFOLDERS curdir)
     set(dirlist "")
     foreach(child ${children})
         if(IS_DIRECTORY ${child})
+            message(STATUS "Adding include directory: ${child}")
             include_directories(${child})
         endif()
     endforeach()
 endmacro()
 
+INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 

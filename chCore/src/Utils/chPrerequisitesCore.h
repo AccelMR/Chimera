@@ -20,6 +20,8 @@
 #define INVALID_INDEX -1
 #define INVALID_UNSIGNED_INDEX 0xFFFFFFFF
 
+// TODO: Make this a config variable or somehting
+#define CH_DISPLAY_SDL3 IN_USE
 
 //DLL export
 #if USING(CH_PLATFORM_WIN32)

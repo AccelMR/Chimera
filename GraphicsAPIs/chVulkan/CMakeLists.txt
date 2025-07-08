@@ -1,11 +1,11 @@
-file(GLOB SOURCE_FILES  
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp 
+file(GLOB SOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
 
 set(CMAKE_DEBUG_POSTFIX "d")
 add_library(chVulkan SHARED ${SOURCE_FILES})
 
-set_target_properties(chVulkan PROPERTIES 
+set_target_properties(chVulkan PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     OUTPUT_NAME "chVulkan"
     PREFIX "")
@@ -24,8 +24,6 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src)
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src/Platform)
-
-add_compile_definitions(CH_CROSS_WINDOW)
 
 # Configuración específica para XCB en Linux
 if(UNIX AND NOT APPLE)
@@ -56,7 +54,7 @@ target_link_libraries(chVulkan PRIVATE chCore chUtilities)
 
 # Enlazado específico para Linux
 if(UNIX AND NOT APPLE)
-    target_link_libraries(chVulkan PRIVATE 
+    target_link_libraries(chVulkan PRIVATE
         ${XCB_LIBRARY}
         ${Vulkan_LIBRARIES}
         X11

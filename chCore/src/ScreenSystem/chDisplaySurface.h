@@ -11,32 +11,25 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
 #include "chDisplayEventHandle.h"
 
-#ifdef CH_CROSS_WINDOW
-namespace xwin{
-  class Window;
-}
-using PlatformDisplay = xwin::Window*;
-#else 
-#define CH_SDL_WINDOW USE_IF(USING(CH_PLATFORM_LINUX))
-#if USING(CH_PLATFORM_WIN32)
-struct HWND__;
-using PlatformDisplay = HWND__*;
-#elif USING(CH_PLATFORM_LINUX)
+#if USING(CH_DISPLAY_SDL3)
 struct SDL_Window;
 using PlatformDisplay = SDL_Window*;
-#endif
+#else
+// Placeholder for other platforms, if needed
+using PlatformDisplay = void*; // This should be replaced with the actual platform-specific type
+#endif // USING(CH_DISPLAY_SDL3)
 
-#endif //CH_CROSS_WINDOW
+
 
 namespace chEngineSDK{
 /*
- * Description: 
+ * Description:
  *     Descriptor of how to create a DisplaySurface.
  */
 struct CH_CORE_EXPORT ScreenDescriptor {
@@ -47,25 +40,25 @@ struct CH_CORE_EXPORT ScreenDescriptor {
 };
 
 /*
- * Description: 
+ * Description:
  *     DisplaySurface platform agnostic.
  *
  * Sample usage:
  * You must avoid creating DisplaySurface from out of DisplayManager.
- * 
+ *
  *  DisplayManager::startUp();
- * 
+ *
  *  ScreenDescriptor winDesc;
  *  winDesc.name = "ChimeraCoreUnitTest";
  *  winDesc.title = "Chimera Core Unit Test";
- * 
+ *
  *  auto Eventhandler = chMakeShared<DisplayEventHandle>();
  *  auto screen = DisplayManager::instance().createDisplay(winDesc, Eventhandler);
- * 
+ *
  *  bool running = true;
  *  while (running) {
  *    Eventhandler->update();
- * 
+ *
  *    while (!Eventhandler->empty()) {
  *      DisplayEvent event = Eventhandler->frontPop();
  *      switch (event.getType())
@@ -95,7 +88,7 @@ class CH_CORE_EXPORT DisplaySurface
   */
   FORCEINLINE ~DisplaySurface();
 
-  /** 
+  /**
    *   Closes this window and cleans memory.
    **/
   void
@@ -110,25 +103,25 @@ class CH_CORE_EXPORT DisplaySurface
   FORCEINLINE PlatformDisplay
   getPlatformHandler() { return m_displayHandle; }
 
-  /** 
+  /**
    *   Do not use unless you know what you are doing.
    *  This function is used to get very specific platform handler.
    **/
-  uint32
-  getPlatformHandlerInt();
+  uint64
+  getPlatformHandlerAsInteger() const;
 
 protected:
   friend class DisplayManager;
 
-  /** 
+  /**
    *   Initialize this screen, from a descriptor using a proper handler.
-   * 
+   *
    * @param desc
    *  Descriptor how to create the scree.
-   * 
+   *
    * @param eventHandler
    *  The event to handle all messages coming from the screen.
-   * 
+   *
    * @return bool
    *  True if initialization went good.
    **/
@@ -141,12 +134,12 @@ protected:
 
   uint32 m_width;
   uint32 m_height;
- 
+
 };
 /************************************************************************/
 /*
  * Implementations
- */                                                                     
+ */
 /************************************************************************/
 /*
 */
@@ -154,5 +147,4 @@ DisplaySurface::~DisplaySurface() {
   close();
 }
 
-
-}
+} // namespace chEngineSDK

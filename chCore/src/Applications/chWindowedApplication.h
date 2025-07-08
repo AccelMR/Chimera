@@ -10,6 +10,7 @@
 
 #include "chBaseApplication.h"
 #include "chDisplaySurface.h"
+#include "chLinearColor.h"
 
 namespace chEngineSDK {
 
@@ -48,6 +49,9 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
   run() override;
 
  protected:
+
+  NODISCARD FORCEINLINE virtual LinearColor
+  getBackgroundColor() const { return LinearColor::Black; }
 
   virtual void
   initializeModules() override;

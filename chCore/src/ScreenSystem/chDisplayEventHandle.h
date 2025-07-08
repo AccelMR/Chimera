@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
@@ -25,13 +25,13 @@ namespace xwin{
 using PlatformPtr = xwin::EventQueue*;
 #else
 //Alias for a platform specific callback.
-using PlatformPtr = void *;
+using PlatformPtr = void*;
 #endif //CH_CROSS_WINDOW
 
 namespace chEngineSDK {
 
 /*
- * Description: 
+ * Description:
  *     DisplaySurface Event handler that keeps track of all messages sent from platform to Chimera.
  *
  * Sample usage: *
@@ -77,31 +77,31 @@ class CH_CORE_EXPORT DisplayEventHandle
   */
   ~DisplayEventHandle();
 
-  /** 
+  /**
    *   Updates queue message from system.
    **/
   void
   update();
 
-  /** 
+  /**
    *   Returns the front event in the queue.
    **/
   NODISCARD FORCEINLINE DisplayEvent&
   frontEventQueue();
 
-  /** 
+  /**
    *   Removes the front event in the queue.
    **/
   FORCEINLINE void
   popEventQueue();
 
-  /** 
+  /**
    *   Returns and removes the front event in queue.
    **/
   NODISCARD FORCEINLINE DisplayEvent&
   frontPopEventQueue();
 
-  /** 
+  /**
    *   Returns true if the event queue is empty.
    **/
   NODISCARD FORCEINLINE bool
@@ -110,13 +110,13 @@ class CH_CORE_EXPORT DisplayEventHandle
  protected:
   friend class DisplaySurface;
 
-  /** 
+  /**
    *   Returns callback for platform specific.
    **/
   PlatformPtr
   getPlatformPtr();
 
-  /** 
+  /**
    *   Adds a event to the queue.
    **/
   template<typename ... Args>
@@ -137,14 +137,12 @@ class CH_CORE_EXPORT DisplayEventHandle
   int32 m_previousMouseX = 0;
   int32 m_previousMouseY = 0;
   bool m_firstMouseMove = true;
-
-  ResizeDebouncer m_resizeBound;
 };
 
 /************************************************************************/
 /*
  * Implementations
- */                                                                     
+ */
 /************************************************************************/
 
 /*

@@ -28,13 +28,6 @@
 #include "chVulkanDescriptorPool.h"
 #include "chVulkanPipelineLayout.h"
 
-
-
-#if USING(CH_PLATFORM_WIN32)
-#elif USING(CH_PLATFORM_LINUX)
-#include "chXCBGlobals.h"
-#endif // USING(CH_PLATFORM_WIN32)
-
 namespace chVulkanAPIHelpers{
 FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
   "VK_LAYER_KHRONOS_validation"
@@ -139,7 +132,6 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
 
   // Initialize Vulkan instance, physical device, and logical device.
   createInstance( graphicsAPIInfo);
-
 
   if (graphicsAPIInfo.enableValidationLayer) {
     setupDebugMessenger(graphicsAPIInfo);
@@ -408,14 +400,29 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
       VK_KHR_SURFACE_EXTENSION_NAME,
       #if USING(CH_PLATFORM_WIN32)
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-      #elif USING(CH_PLATFORM_LINUX)
-      VK_KHR_XCB_SURFACE_EXTENSION_NAME
+      #elif USING(CH_DISPLAY_SDL3) && USING(CH_PLATFORM_LINUX)
+      //VK_KHR_XCB_SURFACE_EXTENSION_NAME
+      VK_KHR_XLIB_SURFACE_EXTENSION_NAME
       #endif
   };
 
   if (graphicsAPIInfo.enableValidationLayer) {
-      extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
+
+#if USING(CH_PLATFORM_WIN32)
+  Vector<const char*> vulkanExtensions = {};
+  uint32 vulkanExtensionCount = 0;
+  if (SDL_Vulkan_GetInstanceExtensions(&vulkanExtensionCount, nullptr)) {
+    vulkanExtensions.resize(vulkanExtensionCount);
+    SDL_Vulkan_GetInstanceExtensions(&vulkanExtensionCount, vulkanExtensions.data());
+  }
+
+  if (vulkanExtensionCount > 0) {
+    extensions.insert(extensions.end(), vulkanExtensions.begin(), vulkanExtensions.end());
+  }
+#endif // USING(CH_PLATFORM_WIN32)
+
 
   VkInstanceCreateInfo createInfo{
     .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -717,15 +724,35 @@ VulkanAPI::checkValidationLayerSupport() const {
 
 /*
 */
-void
+bool
 VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
   if (m_vulkanData->surface != VK_NULL_HANDLE) {
     CH_LOG_WARNING(Vulkan, "Vulkan surface already created");
-    return;
+    return false;
   }
 
-#if USING(CH_PLATFORM_WIN32)
 
+#if USING(CH_DISPLAY_SDL3)
+
+  CH_LOG_DEBUG(Vulkan, "Creating Vulkan surface for SDL3");
+
+  if (display.expired()) {
+    CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
+  }
+  SPtr<DisplaySurface> displayPtr = display.lock();
+  SDL_Window* sdlWindow = displayPtr->getPlatformHandler();
+  SDL_Vulkan_CreateSurface(sdlWindow,
+                           m_vulkanData->instance,
+                           nullptr,
+                           &m_vulkanData->surface);
+  if(VK_NULL_HANDLE == m_vulkanData->surface) {
+    CH_LOG_ERROR(Vulkan, "Failed to create Vulkan surface for SDL3: {0}",
+                 SDL_GetError());
+    CH_EXCEPT(VulkanErrorException, "Failed to create Vulkan surface for SDL3");
+    return false;
+  }
+
+#elif USING(CH_PLATFORM_WIN32)
   VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
   surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
   surfaceCreateInfo.hinstance = (HINSTANCE)platformHandle;
@@ -773,6 +800,8 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 
   m_vulkanData->surfaceFormat = surfaceFormats[0].format;
   m_vulkanData->colorSpace = surfaceFormats[0].colorSpace;
+
+  return true;
 }
 
 /*

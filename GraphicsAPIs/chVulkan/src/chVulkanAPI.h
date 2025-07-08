@@ -3,7 +3,7 @@
  * @file chVulkanAPI.h
  * @author AccelMR
  * @date 2025/04/07
- * @brief 
+ * @brief
  * Vulkan API implementation of the graphics API interface.
  */
 /************************************************************************/
@@ -79,7 +79,7 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD SPtr<IDescriptorPool>
   createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) override;
 
-  void 
+  void
   updateDescriptorSets(const Vector<WriteDescriptorSet>& writeDescriptorSets) override;
 
   void
@@ -112,7 +112,7 @@ class VulkanAPI : public IGraphicsAPI {
 
   void
   createInstance(const GraphicsAPIInfo& graphicsAPIInfo);
-  
+
   NODISCARD bool
   pickPhysicalDevice();
 
@@ -131,11 +131,11 @@ class VulkanAPI : public IGraphicsAPI {
   bool
   checkValidationLayerSupport() const;
 
-  void
+  bool
   createSurface(WeakPtr<DisplaySurface> display);
 
   UniquePtr<VulkanData> m_vulkanData;
-  
+
   SPtr<ICommandQueue> m_graphicsQueue;
   uint32 m_graphicsQueueFamilyIndex = 0;
 

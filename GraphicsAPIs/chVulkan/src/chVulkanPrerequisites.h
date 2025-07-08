@@ -20,11 +20,15 @@
 
 #include <vulkan/vulkan.h>
 
+#if USING(CH_DISPLAY_SDL3)
+#include <SDL3/SDL_vulkan.h>
+#endif // USING(CH_DISPLAY_SDL3)
+
 #if USING(CH_PLATFORM_WIN32)
 #include <vulkan/vulkan_win32.h>
 #elif USING(CH_PLATFORM_LINUX)
-#include <vulkan/vulkan_xcb.h>
-#include <vulkan/vulkan_xlib.h>
+// #include <vulkan/vulkan_xcb.h>
+// #include <vulkan/vulkan_xlib.h>
 #endif // USING(CH_PLATFORM_LINUX)
 
 namespace chEngineSDK {

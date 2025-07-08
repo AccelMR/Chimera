@@ -15,7 +15,6 @@
 #include "chEventDispatcherManager.h"
 #include "chFileSystem.h"
 #include "chGraphicsTypes.h"
-#include "chLinearColor.h"
 #include "chLogger.h"
 #include "chStringUtils.h"
 
@@ -163,6 +162,8 @@ WindowedApplication::onPostDestoyModules() {
   CH_LOG_INFO(WindowedApp, "WindowedApplication pre-shutdown completed.");
 }
 
+/*
+*/
 void
 WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
   m_eventhandler = chMakeShared<DisplayEventHandle>(desc.width, desc.height);
@@ -399,7 +400,7 @@ WindowedApplication::render(const float deltaTime) {
   // Begin render pass with clear color
   RenderPassBeginInfo renderPassBegin{.renderPass = renderPass,
                                       .framebuffer = framebuffer,
-                                      .clearValues = {LinearColor::Cyan}};
+                                      .clearValues = {getBackgroundColor()}};
 
   commandBuffer->beginRenderPass(renderPassBegin);
 

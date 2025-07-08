@@ -1,8 +1,8 @@
 #include "chCommandParser.h"
+#include "chEditorApplication.h"
 #include "chException.h"
 #include "chLogger.h"
 #include "chStringUtils.h"
-#include "chWindowedApplication.h"
 
 using namespace chEngineSDK;
 
@@ -23,7 +23,7 @@ int32 main(int32 argc, char* argv[])
   commandParser.parse(argc, argv);
 
   try {
-    BaseApplication::startUp<WindowedApplication>();
+    BaseApplication::startUp<EditorApplication>();
     //BaseApplication::startUp();
     BaseApplication& app = BaseApplication::instance();
     app.initialize();
