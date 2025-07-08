@@ -3,8 +3,8 @@
  * @file chSystemEventDispatcherModule.h
  * @author AccelMR
  * @date 2022/09/13
- *   
- *    Event handler for system events specific. 
+ *
+ *    Event handler for system events specific.
   Will execute platform specific function if needed.
  */
 /************************************************************************/
@@ -12,7 +12,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chEventDispatcherManager.h"
 
@@ -43,7 +43,6 @@ EventDispatcherManager::EventDispatcherManager()
 
   // Initialize the keyboard state
   m_currentKeyboardState.reset();
-  m_previousKeyboardState.reset();
 
   for (uint32 i = 0; i < static_cast<uint32>(MouseButton::MouseButtonsMax); ++i) {
     MouseButton button = static_cast<MouseButton>(i);
@@ -51,10 +50,9 @@ EventDispatcherManager::EventDispatcherManager()
     MouseButtonPressedCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
     MouseButtonUpCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
   }
-  
+
   // Initialize the mouse state
   m_currentMouseState.reset();
-  m_previousMouseState.reset();
 }
 
 /*
@@ -133,18 +131,15 @@ EventDispatcherManager::dispatchInputEvents(const DisplayEvent &sEvent) {
   default:
     dispatched = false;
   }
-  
+
   return dispatched;
 }
 
 /*
 */
-void 
+void
 EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
-  if (keyData.key >= Key::KeysMax) {
-    CH_LOG_DEBUG(InputSystem, "Key out of range: {0}", static_cast<uint32_t>(keyData.key));
-    return;
-  }
+  CH_ASSERT(keyData.key <= Key::KeysMax);
 
   switch (keyData.state) {
     case KeyBoardState::PRESSED:
@@ -172,25 +167,25 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
 
 /*
 */
-void 
+void
 EventDispatcherManager::dispatchMouseButtonEvent(const MouseButtonData& buttonData) {
-  if (buttonData.button >= MouseButton::MouseButtonsMax) {
-    CH_LOG_DEBUG(InputSystem, "Mouse button out of range: {0}", static_cast<uint32_t>(buttonData.button));
-    return;
-  }
-  
+  CH_ASSERT(buttonData.button <= MouseButton::MouseButtonsMax);
+
   switch (buttonData.state) {
     case MouseState::Pressed:
       m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
       MouseButtonPressedCallbacks.at(buttonData.button)(buttonData);
+      OnMouseButtonPressed(buttonData);
       break;
     case MouseState::Down:
       m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
       MouseButtonDownCallbacks.at(buttonData.button)(buttonData);
+      OnMouseButtonDown(buttonData);
       break;
     case MouseState::Up:
       m_currentMouseState.reset(static_cast<uint32_t>(buttonData.button));
       MouseButtonUpCallbacks.at(buttonData.button)(buttonData);
+      OnMouseButtonUp(buttonData);
       break;
     default:
       CH_LOG_DEBUG(InputSystem, "Invalid mouse button state.");
@@ -209,5 +204,6 @@ EventDispatcherManager::dispatchEvents(const SPtr<DisplayEventHandle>& eventHand
     }
   }
 }
+
 
 }  // namespace chEngineSDK

@@ -94,9 +94,6 @@ WindowedApplication::run() {
 
     // Render the application
     render(static_cast<float>(deltaTime));
-
-    // Dispatch events
-    eventDispatcher.updateStates();
   }
 }
 

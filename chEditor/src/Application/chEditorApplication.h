@@ -61,9 +61,15 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   NODISCARD FORCEINLINE virtual LinearColor
   getBackgroundColor() const override { return LinearColor::Pink; }
 
+  virtual void
+  onPostInitialize() override;
+
  private:
   void
   initializeEditorComponents();
+
+  void
+  bindEvents();
 };
 
 } // namespace chEngineSDK

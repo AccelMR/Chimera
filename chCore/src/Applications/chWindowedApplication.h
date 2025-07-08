@@ -86,6 +86,9 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
   virtual void
   onRender(const float deltaTime) { CH_PAMRAMETER_UNUSED(deltaTime); }
 
+  virtual SPtr<DisplayEventHandle>
+  getEventHandler() const { return m_eventhandler; }
+
  private:
   void
   render(const float deltaTime);
