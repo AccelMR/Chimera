@@ -341,8 +341,35 @@ using Thread = std::thread;
 template<typename T1, typename T2>
 using Pair = std::pair<T1, T2>;
 
+/******************************************************************************************* */
 /**
  * @brief Wrapper for the C++ std::any.
  */
 using Any = std::any;
+namespace AnyUtils {
+  template<typename T>
+  concept AnyCompatible = requires(const Any& any) { std::any_cast<T>(any); };
+
+  template<AnyCompatible T>
+  FORCEINLINE bool
+hasType(const Any& any) noexcept { return any.type() == typeid(T); }
+
+template <AnyCompatible T>
+FORCEINLINE bool
+tryGetValue(const Any& any, T& output) noexcept {
+  if (!hasType<T>(any)) {
+    return false;
+  }
+
+  try {
+    output = std::any_cast<T>(any);
+    return true;
+  } catch (const std::bad_any_cast&) {
+    return false;
+  }
+}
+} // namespace AnyUtils
+/******************************************************************************************* */
+
+
 } // namespace chEngineSDK

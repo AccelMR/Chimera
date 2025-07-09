@@ -124,6 +124,14 @@ using namespace chVulkanAPIHelpers;
 
 namespace chEngineSDK {
 
+struct VulkanContextData {
+  VkInstance instance;
+  VkDevice device;
+  VkPhysicalDevice physicalDevice;
+  uint32 graphicsQueueFamilyIndex;
+  VkQueue graphicsQueue;
+};
+
 /*
 */
 void
@@ -819,13 +827,25 @@ VulkanAPI::waitIdle() {
 NODISCARD Map<String, Any>
 VulkanAPI::getAPIContext() const {
   Map<String, Any> context;
-  context["instance"] = m_vulkanData->instance;
-  context["device"] = m_vulkanData->device;
-  context["physicalDevice"] = m_vulkanData->physicalDevice;
-  SPtr<VulkanCommandQueue> vulkanGraphicsQueue =
-    std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
-  context["graphicsQueue"] = vulkanGraphicsQueue->getHandle();
-  context["graphicsQueueFamilyIndex"] = m_graphicsQueueFamilyIndex;
+
+  SPtr<VulkanContextData> vulkanContext = chMakeShared<VulkanContextData>();
+  vulkanContext->instance = m_vulkanData->instance;
+  vulkanContext->device = m_vulkanData->device;
+  vulkanContext->physicalDevice = m_vulkanData->physicalDevice;
+  vulkanContext->graphicsQueueFamilyIndex = m_graphicsQueueFamilyIndex;
+  vulkanContext->graphicsQueue =
+    std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue)->getHandle();
+
+  context["vulkanContext"] = vulkanContext;
+  context["apiName"] = "Vulkan";
+
+  // context["instance"] = m_vulkanData->instance;
+  // context["device"] = m_vulkanData->device;
+  // context["physicalDevice"] = m_vulkanData->physicalDevice;
+  // SPtr<VulkanCommandQueue> vulkanGraphicsQueue =
+  //   std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
+  // context["graphicsQueue"] = vulkanGraphicsQueue->getHandle();
+  // context["graphicsQueueFamilyIndex"] = m_graphicsQueueFamilyIndex;
 
   return context;
 }

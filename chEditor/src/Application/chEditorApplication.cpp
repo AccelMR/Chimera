@@ -34,39 +34,15 @@ CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
 
-struct VulkanData {
-  VkInstance instance = VK_NULL_HANDLE;          ///< Vulkan instance handle.
-  VkPhysicalDevice physicalDevice = VK_NULL_HANDLE; ///< Vulkan physical device handle.
-  VkDevice device = VK_NULL_HANDLE;              ///< Vulkan logical device handle.
-  uint32 queueFamilyIndex = -1; ///< Index of the queue family used for graphics operations.
-  VkQueue queue = VK_NULL_HANDLE; ///< Vulkan queue handle for graphics operations.
+struct VulkanContextData {
+  VkInstance instance;
+  VkDevice device;
+  VkPhysicalDevice physicalDevice;
+  uint32 graphicsQueueFamilyIndex;
+  VkQueue graphicsQueue;
 };
 
 static VkPipelineCache          g_PipelineCache = VK_NULL_HANDLE;
-
-namespace {
-template<typename T>
-concept AnyCompatible = requires(const Any& any) { std::any_cast<T>(any); };
-
-template<AnyCompatible T>
-FORCEINLINE bool
-hasType(const Any& any) noexcept { return any.type() == typeid(T); }
-
-template <AnyCompatible T>
-FORCEINLINE bool
-tryGetValue(const Any& any, T& output) noexcept {
-  if (!hasType<T>(any)) {
-    return false;
-  }
-
-  try {
-    output = std::any_cast<T>(any);
-    return true;
-  } catch (const std::bad_any_cast&) {
-    return false;
-  }
-}
-} // namespace
 
   /*
 */
@@ -148,31 +124,10 @@ EditorApplication::initializeEditorComponents() {
 
     IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
     const Map<String, Any>& apiContext = graphicAPI.getAPIContext();
-    CH_ASSERT(apiContext.contains("instance"));
-    CH_ASSERT(apiContext.contains("physicalDevice"));
-    CH_ASSERT(apiContext.contains("device"));
-    CH_ASSERT(apiContext.contains("graphicsQueueFamilyIndex"));
-    CH_ASSERT(apiContext.contains("graphicsQueue"));
 
-    VulkanData vulkanData;
-    if (!tryGetValue<VkInstance>(apiContext.at("instance"), vulkanData.instance)) {
-      CH_LOG_ERROR(EditorApp, "Failed to get Vulkan instance from API context.");
-      return;
-    }
-    if (!tryGetValue<VkPhysicalDevice> (apiContext.at("physicalDevice"), vulkanData.physicalDevice)) {
-      CH_LOG_ERROR(EditorApp, "Failed to get Vulkan physical device from API context.");
-      return;
-    }
-    if (!tryGetValue<VkDevice>(apiContext.at("device"), vulkanData.device)) {
-      CH_LOG_ERROR(EditorApp, "Failed to get Vulkan device from API context.");
-      return;
-    }
-    if (!tryGetValue<uint32>(apiContext.at("graphicsQueueFamilyIndex"), vulkanData.queueFamilyIndex)) {
-      CH_LOG_ERROR(EditorApp, "Failed to get Vulkan queue family index from API context.");
-      return;
-    }
-    if (!tryGetValue<VkQueue>(apiContext.at("graphicsQueue"), vulkanData.queue)) {
-      CH_LOG_ERROR(EditorApp, "Failed to get Vulkan graphics queue from API context.");
+    SPtr<VulkanContextData> vulkanContext;
+    if (!AnyUtils::tryGetValue<SPtr<VulkanContextData>>(apiContext.at("vulkanContext"), vulkanContext)) {
+      CH_LOG_ERROR(EditorApp, "Failed to retrieve Vulkan context data from API context.");
       return;
     }
 
@@ -189,11 +144,11 @@ EditorApplication::initializeEditorComponents() {
     ImGui_ImplSDL3_InitForVulkan(window);
     ImGui_ImplVulkan_InitInfo init_info = {};
     //init_info.ApiVersion = VK_API_VERSION_1_3;              // Pass in your value of VkApplicationInfo::apiVersion, otherwise will default to header version.
-    init_info.Instance = vulkanData.instance;
-    init_info.PhysicalDevice = vulkanData.physicalDevice;
-    init_info.Device = vulkanData.device;
-    init_info.QueueFamily = vulkanData.queueFamilyIndex;
-    init_info.Queue = vulkanData.queue;
+    init_info.Instance = vulkanContext->instance;
+    init_info.PhysicalDevice = vulkanContext->physicalDevice;
+    init_info.Device = vulkanContext->device;
+    init_info.QueueFamily = vulkanContext->graphicsQueueFamilyIndex;
+    init_info.Queue = vulkanContext->graphicsQueue;
     init_info.PipelineCache = g_PipelineCache;
     init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
     init_info.RenderPass = static_cast<VkRenderPass>(renderContext.swapChain->getRenderPass()->getRaw());
@@ -214,7 +169,7 @@ EditorApplication::initializeEditorComponents() {
       }
 
       SDL_Event event;
-      if (!tryGetValue<SDL_Event>(args[0], event)) {
+      if (!AnyUtils::tryGetValue<SDL_Event>(args[0], event)) {
         CH_LOG_ERROR(EditorApp, "Invalid argument type passed to display event handler.");
         return false;
       }
