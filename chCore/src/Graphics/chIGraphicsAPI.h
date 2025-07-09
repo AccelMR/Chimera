@@ -82,6 +82,9 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
 
   virtual void
   waitIdle() = 0;
+
+  NODISCARD virtual Map<String, Any>
+  getAPIContext() const = 0;
 };
 
 } // namespace chEngineSDK

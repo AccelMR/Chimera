@@ -38,7 +38,7 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
    */
   virtual ~BaseApplication();
 
-  void
+  virtual void
   initialize();
 
   /*

@@ -6,7 +6,7 @@
  * @brief
  *  Vulkan Descriptor pool class. This class is used to manage descriptor sets
  *  and allocate them from the pool.
- * 
+ *
  */
 /************************************************************************/
 #pragma once
@@ -21,7 +21,12 @@ public:
   VulkanDescriptorPool(VkDevice device, const DescriptorPoolCreateInfo& createInfo);
   ~VulkanDescriptorPool() override;
 
-  SPtr<IDescriptorSet> 
+  NODISCARD FORCEINLINE void*
+  getRaw() const override {
+    return static_cast<void*>(m_pool);
+  }
+
+  SPtr<IDescriptorSet>
   allocateDescriptorSet(const DescriptorSetAllocateInfo& allocInfo) override;
 
   NODISCARD FORCEINLINE VkDescriptorPool

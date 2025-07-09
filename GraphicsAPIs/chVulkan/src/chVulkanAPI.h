@@ -108,6 +108,9 @@ class VulkanAPI : public IGraphicsAPI {
   void
   waitForDeviceIdle();
 
+  NODISCARD Map<String, Any>
+  getAPIContext() const override;
+
  private:
 
   void

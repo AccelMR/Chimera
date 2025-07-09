@@ -816,6 +816,23 @@ VulkanAPI::waitIdle() {
 
 /*
 */
+NODISCARD Map<String, Any>
+VulkanAPI::getAPIContext() const {
+  Map<String, Any> context;
+  context["instance"] = m_vulkanData->instance;
+  context["device"] = m_vulkanData->device;
+  context["physicalDevice"] = m_vulkanData->physicalDevice;
+  SPtr<VulkanCommandQueue> vulkanGraphicsQueue =
+    std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
+  context["graphicsQueue"] = vulkanGraphicsQueue->getHandle();
+  context["graphicsQueueFamilyIndex"] = m_graphicsQueueFamilyIndex;
+
+  return context;
+}
+
+
+/*
+*/
 VulkanAPI& g_vulkanAPI() {
   return reinterpret_cast<VulkanAPI&>(IGraphicsAPI::instance());
 }

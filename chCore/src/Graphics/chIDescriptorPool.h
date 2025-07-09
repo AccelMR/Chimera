@@ -18,7 +18,18 @@ namespace chEngineSDK {
 class CH_CORE_EXPORT IDescriptorPool {
  public:
   virtual ~IDescriptorPool() = default;
+  /**
+   * @brief Get the raw handle of the descriptor pool.
+   * @return The raw handle of the descriptor pool.
+   */
+  virtual void*
+  getRaw() const = 0;
 
+  /**
+   * @brief Allocate a descriptor set from the pool.
+   * @param allocInfo Information about the descriptor set to allocate.
+   * @return A shared pointer to the allocated descriptor set.
+   */
   virtual SPtr<IDescriptorSet>
   allocateDescriptorSet(const DescriptorSetAllocateInfo& allocInfo) = 0;
 };

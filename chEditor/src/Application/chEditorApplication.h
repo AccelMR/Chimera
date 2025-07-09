@@ -64,12 +64,17 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   virtual void
   onPostInitialize() override;
 
+  virtual void
+  onRender(const float deltaTime, const SPtr<ICommandBuffer>& commandBuffer) override;
+
  private:
   void
   initializeEditorComponents();
 
   void
   bindEvents();
-};
 
+ private:
+  SPtr<IDescriptorPool> m_descriptorPool;
+};
 } // namespace chEngineSDK

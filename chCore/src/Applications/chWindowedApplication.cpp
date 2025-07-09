@@ -98,6 +98,29 @@ WindowedApplication::run() {
 }
 
 /*
+*/
+void
+WindowedApplication::initialize() {
+  CH_LOG_INFO(WindowedApp, "Initializing WindowedApplication.");
+  initializeModules();
+
+  CommandParser& commandParser = CommandParser::instance();
+
+  initializeDisplay(
+      {.name = commandParser.getParam("AppName", "Chimera Engine"),
+       .title = commandParser.getParam("WindowTitle", "Chimera Engine Windowed Application"),
+       .width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1920)),
+       .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 1080))});
+  initializeGraphics();
+  initializeRenderComponents();
+  bindEvents();
+
+  CH_LOG_INFO(WindowedApp, "WindowedApplication post-initialization completed.");
+
+  onPostInitialize();
+}
+
+/*
  */
 void
 WindowedApplication::initializeModules() {
@@ -131,25 +154,7 @@ WindowedApplication::destroyModules() {
 }
 
 /*
- */
-void
-WindowedApplication::onPostInitialize() {
-  CH_LOG_INFO(WindowedApp, "WindowedApplication post-initialization.");
-
-  CommandParser& commandParser = CommandParser::instance();
-
-  initializeDisplay(
-      {.name = commandParser.getParam("AppName", "Chimera Engine"),
-       .title = commandParser.getParam("WindowTitle", "Chimera Engine Windowed Application"),
-       .width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1920)),
-       .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 1080))});
-  initializeGraphics();
-  initializeRenderComponents();
-  bindEvents();
-
-  CH_LOG_INFO(WindowedApp, "WindowedApplication post-initialization completed.");
-}
-
+*/
 void
 WindowedApplication::onPostDestoyModules() {
   CH_LOG_INFO(WindowedApp, "WindowedApplication pre-shutdown.");
@@ -402,7 +407,7 @@ WindowedApplication::render(const float deltaTime) {
   commandBuffer->beginRenderPass(renderPassBegin);
 
   // Call derived class render implementation
-  onRender(deltaTime);
+  onRender(deltaTime, commandBuffer);
 
   // End render pass
   commandBuffer->endRenderPass();

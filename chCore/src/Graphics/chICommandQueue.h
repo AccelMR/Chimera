@@ -21,10 +21,10 @@ class CH_CORE_EXPORT ICommandQueue {
   ICommandQueue() = default;
   virtual ~ICommandQueue() = default;
 
-  NODISCARD virtual 
+  NODISCARD virtual
   QueueType getQueueType() const = 0;
 
-  virtual void 
+  virtual void
   submit(const SubmitInfo& submitInfo, const SPtr<IFence>& fence = nullptr) = 0;
 
   virtual void waitIdle() = 0;

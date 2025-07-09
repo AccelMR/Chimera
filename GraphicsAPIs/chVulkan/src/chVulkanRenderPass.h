@@ -3,7 +3,7 @@
  * @file chVulkanRenderPass.h
  * @author AccelMR
  * @date 2025/04/10
- * @brief 
+ * @brief
  * Vulkan render pass implementation.
  * This file contains the implementation of the render pass
  * interface for Vulkan.
@@ -22,6 +22,9 @@ class VulkanRenderPass : public IRenderPass {
 
   NODISCARD VkRenderPass
   getHandle() const { return m_renderPass; }
+
+  NODISCARD void*
+  getRaw() const override { return reinterpret_cast<void*>(m_renderPass); }
 
  private:
   VkDevice m_device = VK_NULL_HANDLE;

@@ -18,6 +18,9 @@ namespace chEngineSDK {
 class CH_CORE_EXPORT IRenderPass {
  public:
   virtual ~IRenderPass() = default;
+
+  NODISCARD virtual void*
+  getRaw() const = 0;
 };
 
 } // namespace chEngineSDK

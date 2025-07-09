@@ -48,19 +48,28 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
   virtual void
   run() override;
 
+  void
+  initialize() override;
+
  protected:
 
   NODISCARD FORCEINLINE virtual LinearColor
   getBackgroundColor() const { return LinearColor::Black; }
+
+  NODISCARD FORCEINLINE virtual const ApplicationRenderContext&
+  getRenderComponents() const { return m_renderComponents; }
+
+  NODISCARD virtual SPtr<DisplayEventHandle>
+  getEventHandler() const { return m_eventhandler; }
+
+  NODISCARD FORCEINLINE virtual SPtr<DisplaySurface>
+  getDisplaySurface() const { return m_display; }
 
   virtual void
   initializeModules() override;
 
   virtual void
   destroyModules() override;
-
-  void
-  onPostInitialize() override;
 
   virtual void
   onPostDestoyModules() override;
@@ -84,10 +93,7 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication {
   destroyRenderer();
 
   virtual void
-  onRender(const float deltaTime) { CH_PAMRAMETER_UNUSED(deltaTime); }
-
-  virtual SPtr<DisplayEventHandle>
-  getEventHandler() const { return m_eventhandler; }
+  onRender(const float deltaTime, const SPtr<ICommandBuffer>&) { CH_PAMRAMETER_UNUSED(deltaTime); }
 
  private:
   void

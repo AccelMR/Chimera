@@ -4,7 +4,7 @@
  * @author AccelMR <accel.mr@gmail.com>
  * @date 2021/09/10
  * @brief Header for the STD libraries.
- * 
+ *
  * This file includes the most common and required STL objects.
  * It takes account of the operating system of the build to modify
  * the required object.
@@ -52,7 +52,7 @@
  /************************************************************************/
  /*
   * C++ Stream Stuff
-  */                                                                     
+  */
  /************************************************************************/
 #include <fstream>
 #include <iostream>
@@ -71,7 +71,7 @@
 /************************************************************************/
 /*
  * Threading
- */                                                                     
+ */
 /************************************************************************/
 #include <mutex>
 #include <thread>
@@ -83,6 +83,9 @@
 #include <algorithm>
 #include <chrono>
 #include <atomic>
+
+
+#include <any>
 
 /*****************************************************************************/
 /**
@@ -111,7 +114,7 @@ using std::min;
 using std::forward;
 using std::ios;
 
-/** 
+/**
  *   Std alias allocator.
  **/
 template<typename T>
@@ -173,31 +176,31 @@ template<typename K,
  * @brief An associative container containing an ordered set of key-value
  *        pairs.
  */
-template<typename K, 
-         typename T, 
+template<typename K,
+         typename T,
          typename Compare = std::less<K>,
          typename A = std::allocator<std::pair<const K, T>>>
 using Map = std::map<K, T, Compare, A>;
 
-/** 
+/**
  *   Queue wrapper.
  **/
-template< typename T, class Container = std::deque<T>> 
+template< typename T, class Container = std::deque<T>>
 using Queue =  std::queue<T, Container>;
 
 /************************************************************************/
 /*
  * Smart pointers
- */                                                                     
+ */
 /************************************************************************/
 
-/** 
+/**
  *   Shared pointer that will be used for Chimera.
  **/
 template <typename T>
 using SPtr = std::shared_ptr<T>;
 
-/** 
+/**
  *   Weak pointer used along Chimera.
  **/
 template<typename T>
@@ -210,7 +213,7 @@ struct ForwardDeleter {
     }
 };
 
-/** 
+/**
  *   Unique pointer used along Chimera.
  **/
 template<class T>
@@ -237,7 +240,7 @@ UniquePtr<T> chMakeUnique(Args&&... args) {
 /************************************************************************/
 /*
  * String related
- */                                                                     
+ */
 /************************************************************************/
 /**
  * @brief Wide string stream used for primarily for constructing strings
@@ -280,7 +283,7 @@ using U32String = BasicString<char32_t>;
 /************************************************************************/
 /*
  * Threading
- */                                                                     
+ */
  /************************************************************************/
 
 /**
@@ -338,5 +341,8 @@ using Thread = std::thread;
 template<typename T1, typename T2>
 using Pair = std::pair<T1, T2>;
 
-
-}
+/**
+ * @brief Wrapper for the C++ std::any.
+ */
+using Any = std::any;
+} // namespace chEngineSDK

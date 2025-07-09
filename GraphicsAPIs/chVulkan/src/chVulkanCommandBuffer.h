@@ -19,45 +19,50 @@ class VulkanCommandBuffer : public ICommandBuffer {
   VulkanCommandBuffer(VkDevice device, VkCommandPool commandPool);
   ~VulkanCommandBuffer() override;
 
-  void 
+  NODISCARD void*
+  getRaw() const override {
+    return static_cast<void*>(m_commandBuffer);
+  }
+
+  void
   begin() override;
-  void 
+  void
   end() override;
 
-  void 
+  void
   beginRenderPass(const RenderPassBeginInfo& beginInfo) override;
-  
-  void 
+
+  void
   endRenderPass() override;
 
-  void 
+  void
   bindPipeline(SPtr<IPipeline> pipeline) override;
-  
-  void 
-  bindVertexBuffer(SPtr<IBuffer> buffer, 
-                   uint32 binding = 0, 
+
+  void
+  bindVertexBuffer(SPtr<IBuffer> buffer,
+                   uint32 binding = 0,
                    uint64 offset = 0) override;
-  
-  void 
-  bindIndexBuffer(SPtr<IBuffer> buffer, 
-                  IndexType indexType, 
+
+  void
+  bindIndexBuffer(SPtr<IBuffer> buffer,
+                  IndexType indexType,
                   uint32 offset = 0) override;
-  
-  void 
-  draw(uint32 vertexCount, 
-       uint32 instanceCount = 1, 
-       uint32 firstVertex = 0, 
+
+  void
+  draw(uint32 vertexCount,
+       uint32 instanceCount = 1,
+       uint32 firstVertex = 0,
        uint32 firstInstance = 0) override;
 
   void
-  drawIndexed(uint32 indexCount, 
-              uint32 instanceCount = 1, 
-              uint32 firstIndex = 0, 
-              int32 vertexOffset = 0, 
+  drawIndexed(uint32 indexCount,
+              uint32 instanceCount = 1,
+              uint32 firstIndex = 0,
+              int32 vertexOffset = 0,
               uint32 firstInstance = 0) override;
 
   void
-  setViewport(float x, float y, 
+  setViewport(float x, float y,
               float width, float height,
               float minDepth = 0.0f, float maxDepth = 1.0f) override;
 
@@ -88,4 +93,4 @@ class VulkanCommandBuffer : public ICommandBuffer {
   CommandBufferState m_state = CommandBufferState::Initial;
   VkCommandPool m_commandPool = VK_NULL_HANDLE;
 };
-} // namespace chEngineSDK 
+} // namespace chEngineSDK

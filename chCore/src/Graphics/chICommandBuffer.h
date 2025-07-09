@@ -28,10 +28,13 @@ class CH_CORE_EXPORT ICommandBuffer {
   ICommandBuffer() = default;
   virtual ~ICommandBuffer() = default;
 
-  virtual void 
+  virtual void*
+  getRaw() const = 0;
+
+  virtual void
   begin() = 0;
 
-  virtual void 
+  virtual void
   end() = 0;
 
   virtual void
@@ -40,28 +43,28 @@ class CH_CORE_EXPORT ICommandBuffer {
   virtual void
   endRenderPass() = 0;
 
-  virtual void 
+  virtual void
   bindPipeline(SPtr<IPipeline> pipeline) = 0;
 
-  virtual void 
-  bindVertexBuffer(SPtr<IBuffer> buffer, 
-                   uint32 binding = 0, 
+  virtual void
+  bindVertexBuffer(SPtr<IBuffer> buffer,
+                   uint32 binding = 0,
                    uint64 offset = 0) = 0;
 
   virtual void
-  bindIndexBuffer(SPtr<IBuffer> buffer, 
-                  IndexType indexType, 
+  bindIndexBuffer(SPtr<IBuffer> buffer,
+                  IndexType indexType,
                   uint32 offset = 0) = 0;
 
   virtual void
-  draw(uint32 vertexCount, 
-       uint32 instanceCount = 1, 
-       uint32 firstVertex = 0, 
+  draw(uint32 vertexCount,
+       uint32 instanceCount = 1,
+       uint32 firstVertex = 0,
        uint32 firstInstance = 0) = 0;
 
   /**
    * @brief Issues a draw call using an index buffer.
-   * 
+   *
    * @param indexCount The number of indices to draw.
    * @param instanceCount The number of instances to draw. Defaults to 1.
    * @param firstIndex The starting index in the index buffer. Defaults to 0.
@@ -69,14 +72,14 @@ class CH_CORE_EXPORT ICommandBuffer {
    * @param firstInstance The starting instance ID. Defaults to 0.
    */
   virtual void
-  drawIndexed(uint32 indexCount, 
+  drawIndexed(uint32 indexCount,
               uint32 instanceCount = 1,
-              uint32 firstIndex = 0, 
-              int32 vertexOffset = 0, 
+              uint32 firstIndex = 0,
+              int32 vertexOffset = 0,
               uint32 firstInstance = 0) = 0;
 
   virtual void
-  setViewport(float x, float y, 
+  setViewport(float x, float y,
               float width, float height,
               float minDepth = 0.0f, float maxDepth = 1.0f) = 0;
 

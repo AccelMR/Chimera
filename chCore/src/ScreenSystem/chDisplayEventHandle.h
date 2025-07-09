@@ -15,6 +15,7 @@
 /************************************************************************/
 #include "chPrerequisitesCore.h"
 
+#include "chEventSystem.h"
 #include "chDisplayEvent.h"
 #include "chResizeDebouncer.h"
 
@@ -107,6 +108,13 @@ class CH_CORE_EXPORT DisplayEventHandle
   NODISCARD FORCEINLINE bool
   isEventQueueEmpty();
 
+
+
+  FORCEINLINE void
+  addUpdateInjection(std::function<bool(const Vector<Any>&)> updateFunc) {
+    m_updateInjection.connect(std::move(updateFunc));
+  }
+
  protected:
   friend class DisplaySurface;
 
@@ -130,6 +138,8 @@ class CH_CORE_EXPORT DisplayEventHandle
   Queue<DisplayEvent> m_eventQueue;
 
   PlatformPtr m_platformPtr;
+
+  const Event<bool(const Vector<Any>&)> m_updateInjection;
 };
 
 /************************************************************************/
@@ -167,4 +177,4 @@ bool
 DisplayEventHandle::isEventQueueEmpty() {
   return m_eventQueue.empty();
 }
-}
+} // namespace chEngineSDK
