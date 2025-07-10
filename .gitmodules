@@ -4,3 +4,6 @@
 [submodule "chEditor/externals/imgui"]
 	path = chEditor/externals/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "chCore/externals/SDL3"]
+	path = chCore/externals/SDL3
+	url = https://github.com/libsdl-org/SDL.git
