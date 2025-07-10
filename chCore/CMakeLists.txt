@@ -39,12 +39,17 @@ set_target_properties(assimp PROPERTIES
 
 add_library(chCore SHARED ${SOURCE_FILES})
 
-find_package(SDL3 REQUIRED CONFIG)
-if(NOT SDL3_FOUND)
-  add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
-  target_include_directories(chCore
-    PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include)
+#if linux we use the find package for SDL3
+if(UNIX AND NOT APPLE)
+  find_package(SDL3 REQUIRED CONFIG)
+  if(NOT SDL3_FOUND)
+    add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
+    target_include_directories(chCore PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include)
+  endif()
+else()
+  set(SDL3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3")
+  list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3")
 endif()
 
 set_target_properties(chCore PROPERTIES
