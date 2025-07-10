@@ -232,7 +232,7 @@ EditorApplication::bindEvents() {
         CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
       }
     }
-      break;
+    break;
 
     default:
       break;

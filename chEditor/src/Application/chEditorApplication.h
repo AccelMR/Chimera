@@ -75,6 +75,5 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   bindEvents();
 
  private:
-  SPtr<IDescriptorPool> m_descriptorPool;
 };
 } // namespace chEngineSDK
