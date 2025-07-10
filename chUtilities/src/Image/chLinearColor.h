@@ -52,6 +52,9 @@ class CH_UTILITY_EXPORT LinearColor
    */
   constexpr LinearColor(const Color& color);
 
+  FORCEINLINE LinearColor(float* components)
+      : r(components[0]), g(components[1]), b(components[2]), a(components[3]) {}
+
   /*
    * @brief Default destructor
    */
@@ -66,6 +69,14 @@ class CH_UTILITY_EXPORT LinearColor
    */
   NODISCARD FORCEINLINE bool
   equals(const LinearColor& linearColor, float tolerance = Math::KINDA_SMALL_NUMBER) const;
+
+  /**
+   * @brief Converts to a float pointer for easy access
+   *
+   * @return float* Pointer to the color components
+   */
+  NODISCARD FORCEINLINE  float*
+  toFloatPtr();
 
   /**
    * @brief True if both colors are exactly equal
@@ -321,6 +332,14 @@ LinearColor::LinearColor() : r(0.0f), g(0.0f), b(0.0f), a(1.0f) {}
 FORCEINLINE
 LinearColor::LinearColor(float _r, float _g, float _b, float _a)
  : r(_r), g(_g), b(_b), a(_a) {}
+
+/*
+*/
+NODISCARD FORCEINLINE float*
+LinearColor::toFloatPtr() {
+  // Return a pointer to the color components
+  return &r;
+}
 
 /*
  */

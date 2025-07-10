@@ -58,8 +58,8 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   virtual ~EditorApplication();
 
  protected:
-  NODISCARD FORCEINLINE virtual LinearColor
-  getBackgroundColor() const override { return LinearColor::Pink; }
+  NODISCARD virtual LinearColor
+  getBackgroundColor() const override;
 
   virtual void
   onPostInitialize() override;

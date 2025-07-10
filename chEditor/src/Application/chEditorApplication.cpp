@@ -33,6 +33,16 @@ CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
 
+namespace ImguiVars {
+  static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
+  static bool bRenderImGui = false;    // Variable to control if ImGui should render
+} // namespace ImguiVars
+
+namespace RenderVars {
+  static LinearColor backgroundColor = LinearColor::Pink; // Default background color for the editor
+} // namespace RenderVars
+
+
 /*
  */
 EditorApplication::EditorApplication() {
@@ -43,6 +53,14 @@ EditorApplication::EditorApplication() {
  */
 EditorApplication::~EditorApplication() {
   CH_LOG_INFO(EditorApp, "Destroying EditorApplication instance.");
+}
+
+/*
+*/
+NODISCARD LinearColor
+EditorApplication::getBackgroundColor() const{
+  // Return the background color for the editor
+  return RenderVars::backgroundColor;
 }
 
 /*
@@ -62,11 +80,34 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
   CH_PAMRAMETER_UNUSED(deltaTime);
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+
+  if (!ImguiVars::bRenderImGui) {
+    // If ImGui rendering is disabled, skip the rendering process
+    return;
+  }
+
   graphicAPI.execute("newFrameImGui");
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
-  ImGui::ShowDemoWindow();
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("Render")) {
+      ImGui::ColorEdit4("Background Color",
+                        RenderVars::backgroundColor.toFloatPtr(),
+                        ImGuiColorEditFlags_NoInputs);
+
+      ImGui::Separator(); //--------------------------------------------------------------
+
+      ImGui::MenuItem("Show ImGui Demo Window", nullptr, &ImguiVars::bShowDemoWindow);
+
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+  }
+
+  if (ImguiVars::bShowDemoWindow) {
+    ImGui::ShowDemoWindow(&ImguiVars::bShowDemoWindow);
+  }
 
   ImGui::Render();
   ImGuiIO& io = ImGui::GetIO();
@@ -93,8 +134,7 @@ EditorApplication::initializeEditorComponents() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
-  io.ConfigFlags |=
-      ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
+  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
   // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
   // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
 
@@ -106,17 +146,22 @@ EditorApplication::initializeEditorComponents() {
 
   // Setup scaling
   ImGuiStyle& style = ImGui::GetStyle();
-  style.ScaleAllSizes(
-      main_scale); // Bake a fixed style scale. (until we have a solution for dynamic style
-                   // scaling, changing this requires resetting Style + calling this again)
-  style.FontScaleDpi =
-      main_scale; // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this
-                  // unnecessary. We leave both here for documentation purpose)
-  io.ConfigDpiScaleFonts = true; // [Experimental] Automatically overwrite style.FontScaleDpi
-                                 // in Begin() when Monitor DPI changes. This will scale fonts
-                                 // but _NOT_ scale sizes/padding for now.
-  io.ConfigDpiScaleViewports =
-      true; // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
+
+  // Bake a fixed style scale. (until we have a solution for dynamic style
+  // scaling, changing this requires resetting Style + calling this again)
+  style.ScaleAllSizes(main_scale);
+
+  // unnecessary. We leave both here for documentation purpose)
+  // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this
+  style.FontScaleDpi = main_scale;
+
+  // [Experimental] Automatically overwrite style.FontScaleDpi
+  // in Begin() when Monitor DPI changes. This will scale fonts
+  // but _NOT_ scale sizes/padding for now.
+  io.ConfigDpiScaleFonts = true;
+
+  // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
+  io.ConfigDpiScaleViewports = true;
 
   // When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look
   // identical to regular ones.
@@ -126,12 +171,12 @@ EditorApplication::initializeEditorComponents() {
   }
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+  graphicAPI.execute("initImGui", { display, getRenderComponents().swapChain });
 
-  SPtr<IDescriptorPool> descriptorPool = graphicAPI.createDescriptorPool(
-    {100, Vector<Pair<DescriptorType, uint32>>{{DescriptorType::CombinedImageSampler, 100}}});
-  graphicAPI.execute("initImGui", {display, getRenderComponents().swapChain, descriptorPool });
+  SPtr<DisplayEventHandle> eventHandler = getEventHandler();
+  CH_ASSERT(eventHandler && "Display event handler must not be null.");
 
-  getEventHandler()->addUpdateInjection([this](const Vector<Any>& args) -> bool {
+  eventHandler->addUpdateInjection([this](const Vector<Any>& args) -> bool {
     CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
 
     if (args.empty()) {
@@ -145,7 +190,7 @@ EditorApplication::initializeEditorComponents() {
       return false;
     }
 
-    return !ImGui_ImplSDL3_ProcessEvent(&event);
+    return ImGui_ImplSDL3_ProcessEvent(&event);
   });
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -174,8 +219,24 @@ EditorApplication::bindEvents() {
     }
   });
 
-  eventDispatcher.OnKeyUp.connect([this](const KeyBoardData&) {
-    // Handle key up events specific to the editor
+  eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
+    switch (keyData.key)
+    {
+    case chKeyBoard::Key::F10:
+    {
+      CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
+      ImguiVars::bRenderImGui = !ImguiVars::bRenderImGui;
+      if (ImguiVars::bRenderImGui) {
+        CH_LOG_DEBUG(EditorApp, "ImGui rendering enabled.");
+      } else {
+        CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
+      }
+    }
+      break;
+
+    default:
+      break;
+    }
   });
 
   eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {

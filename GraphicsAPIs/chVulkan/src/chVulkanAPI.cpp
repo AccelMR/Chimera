@@ -901,7 +901,7 @@ VulkanAPI::initializeFunctionMap() {
     return Any(true);
   };
 
-  m_functionMap["newFrameImGui"] = [this](const Vector<Any>& args) -> Any {
+  m_functionMap["newFrameImGui"] = [this](const Vector<Any>&) -> Any {
     ImGui_ImplVulkan_NewFrame();
     return Any(true);
   };
