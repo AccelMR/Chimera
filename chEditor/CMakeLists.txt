@@ -75,6 +75,8 @@ target_compile_options(chEditor PRIVATE
 
 # ImGui core definitions (without Vulkan)
 target_compile_definitions(chEditor PRIVATE
+  CH_EDITOR_ENABLED
+  CH_SDL3_ENABLED
   IMGUI_DISABLE_OBSOLETE_FUNCTIONS
   IMGUI_DISABLE_OBSOLETE_KEYIO
 )

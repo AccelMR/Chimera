@@ -29,19 +29,11 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
    * Default constructor
    */
   AssetManager() = default;
-  
+
   /**
    * Destructor
    */
   ~AssetManager() = default;
-
-  bool
-  importAsset(const Path& importPath, const Path& assetPath);
-  
- private:
-
-  bool
-  importModel(const Path& importPath, const Path& fullAssetPath);
 
 }; // class AssetManager
 } // namespace chEngineSDK

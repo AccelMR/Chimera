@@ -741,15 +741,13 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
     return false;
   }
 
-
-#if USING(CH_DISPLAY_SDL3)
-
   CH_LOG_DEBUG(Vulkan, "Creating Vulkan surface for SDL3");
-
   if (display.expired()) {
     CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
   }
   SPtr<DisplaySurface> displayPtr = display.lock();
+
+#if USING(CH_DISPLAY_SDL3)
   SDL_Window* sdlWindow = displayPtr->getPlatformHandler();
   SDL_Vulkan_CreateSurface(sdlWindow,
                            m_vulkanData->instance,
@@ -761,30 +759,9 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
     CH_EXCEPT(VulkanErrorException, "Failed to create Vulkan surface for SDL3");
     return false;
   }
-
-#elif USING(CH_PLATFORM_WIN32)
-  VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
-  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-  surfaceCreateInfo.hinstance = (HINSTANCE)platformHandle;
-  surfaceCreateInfo.hwnd = (HWND)platformWindow;
-  VK_CHECK (vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_surface));
-
-#elif USING(CH_PLATFORM_LINUX)
-
-  CH_LOG_DEBUG(Vulkan, "Creating Vulkan surface for Linux");
-
-  if (display.expired()) {
-    CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
-  }
-  SPtr<DisplaySurface> displayPtr = display.lock();
-
-  VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {};
-  surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-  surfaceCreateInfo.connection = XCBGlobals::getXCBConnection();
-  surfaceCreateInfo.window = displayPtr->getPlatformHandlerInt();
-  VkInstance instance = g_vulkanAPI().getInstance();
-  VK_CHECK (vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &m_vulkanData->surface));
-
+#else
+  CH_LOG_FATAL(Vulkan, "Vulkan surface creation is not supported on this platform. "
+                 "Please use SDL3 for Vulkan surface creation.");
 #endif // USING(CH_PLATFORM_WIN32)
 
   VkBool32 presentSupported = VK_FALSE;
@@ -884,6 +861,7 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplVulkan_Init(&init_info);
     return Any(true);
 #endif // USING(CH_DISPLAY_SDL3)
+    CH_PAMRAMETER_UNUSED(args);
     return Any(false);
   };
 

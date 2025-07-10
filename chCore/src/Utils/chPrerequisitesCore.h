@@ -21,7 +21,17 @@
 #define INVALID_UNSIGNED_INDEX 0xFFFFFFFF
 
 // TODO: Make this a config variable or somehting
-#define CH_DISPLAY_SDL3 IN_USE
+#ifdef CH_EDITOR_ENABLED
+# define CH_EDIOR IN_USE
+#else
+# define CH_EDIOR NOT_IN_USE
+#endif
+
+#ifdef CH_SDL3_ENABLED
+# define CH_DISPLAY_SDL3  IN_USE
+#else
+# define CH_DISPLAY_SDL3 NOT_IN_USE
+#endif
 
 //DLL export
 #if USING(CH_PLATFORM_WIN32)

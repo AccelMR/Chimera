@@ -61,6 +61,11 @@ elseif(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
+  set(CH_EDITOR_ENABLED ON CACHE BOOL "Enable chEditor" FORCE)
+  set(CH_SDL3_ENABLED ON CACHE BOOL "Enable SDL3 support" FORCE)
+endif()
+
 add_subdirectory(chUtilities)
 
 ##Ad if exist depending on the stream
@@ -74,11 +79,11 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   add_subdirectory(chCore)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
+  add_subdirectory(GraphicsAPIs/chVulkan)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   message("Directory exists.")
   add_subdirectory(chEditor)
-endif()
-
-if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
-  add_subdirectory(GraphicsAPIs/chVulkan)
 endif()

@@ -75,6 +75,16 @@ if(UNIX AND NOT APPLE)
     )
 endif()
 
+if(CH_SDL3_ENABLED)
+# Activate preprocesor CH_SDL3_ENABLED
+    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED)
+    message(STATUS "SDL3 support enabled in chVulkan")
+else()
+    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED=0)
+    message(STATUS "SDL3 support disabled in chVulkan")
+endif()
+
+
 # ImGui Vulkan specific definitions (only if enabled)
 if(CH_VULKAN_IMGUI)
     target_compile_definitions(chVulkan PRIVATE

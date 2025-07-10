@@ -27,7 +27,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
 
-#endif // #include "chDisplayEventHandle.h"
+#endif // USING(CH_DISPLAY_SDL3)
 
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
@@ -87,7 +87,11 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
   }
 
   graphicAPI.execute("newFrameImGui");
+
+#if USING(CH_DISPLAY_SDL3)
   ImGui_ImplSDL3_NewFrame();
+#endif // USING(CH_DISPLAY_SDL3)
+
   ImGui::NewFrame();
 
   if (ImGui::BeginMainMenuBar()) {
@@ -142,7 +146,12 @@ EditorApplication::initializeEditorComponents() {
   ImGui::StyleColorsDark();
   // ImGui::StyleColorsLight();
 
+#if USING(CH_DISPLAY_SDL3)
   const float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+#else
+  // Fallback to a default scale if SDL3 is not used
+  const float main_scale = 1.0f;
+#endif // USING(CH_DISPLAY_SDL3)
 
   // Setup scaling
   ImGuiStyle& style = ImGui::GetStyle();
@@ -177,8 +186,8 @@ EditorApplication::initializeEditorComponents() {
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
 
   eventHandler->addUpdateInjection([this](const Vector<Any>& args) -> bool {
+# if USING(CH_DISPLAY_SDL3)
     CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
-
     if (args.empty()) {
       CH_LOG_ERROR(EditorApp, "No arguments passed to display event handler.");
       return false;
@@ -190,7 +199,13 @@ EditorApplication::initializeEditorComponents() {
       return false;
     }
 
+    // Process SDL3 events with ImGui
     return ImGui_ImplSDL3_ProcessEvent(&event);
+# else
+    CH_PAMRAMETER_UNUSED(args);
+    CH_LOG_ERROR(EditorApp, "SDL3 is not enabled. Cannot process SDL_Event.");
+    return false;
+# endif // USING(CH_DISPLAY_SDL3)
   });
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -218,6 +233,7 @@ EditorApplication::bindEvents() {
       }
     }
   });
+
 
   eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
     switch (keyData.key)

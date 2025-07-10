@@ -1,3 +1,6 @@
+option(CH_EDITOR_ENABLED "Enable chEditor" ON)
+option(CH_SDL3_ENABLED "Enable SDL3 support" ON)
+
 file(GLOB
     SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
@@ -88,3 +91,20 @@ target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/SDL
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/assimp/include
 )
+
+if (CH_EDITOR_ENABLED)
+  if (CH_SDL3_ENABLED)
+    target_compile_definitions(chCore PRIVATE
+      CH_EDITOR_ENABLED
+      CH_SDL3_ENABLED
+      IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+      IMGUI_DISABLE_OBSOLETE_KEYIO
+    )
+  else()
+    target_compile_definitions(chCore PRIVATE
+      CH_EDITOR_ENABLED
+      IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+      IMGUI_DISABLE_OBSOLETE_KEYIO
+    )
+  endif()
+endif()
