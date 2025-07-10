@@ -26,12 +26,12 @@
 
 namespace chEngineSDK {
 using chKeyBoard::Key;
-using CloseCallback = std::function<void()>;
-using ResizeCallback = std::function<void(uint32,uint32)>;
-using KeyDownCallback = std::function<void(const KeyBoardData&)>;
-using KeyUpCallback = std::function<void(const KeyBoardData&)>;
-using KeyPressedCallback = std::function<void(const KeyBoardData&)>;
-using OnMouseMoveCallback = std::function<void(const MouseMoveData&)>;
+using CloseCallback = Function<void()>;
+using ResizeCallback = Function<void(uint32,uint32)>;
+using KeyDownCallback = Function<void(const KeyBoardData&)>;
+using KeyUpCallback = Function<void(const KeyBoardData&)>;
+using KeyPressedCallback = Function<void(const KeyBoardData&)>;
+using OnMouseMoveCallback = Function<void(const MouseMoveData&)>;
 
 using KeyboardBitSet = BitSet<static_cast<int32>(Key::KeysMax)>;
 using MouseBitSet = BitSet<static_cast<int32>(MouseButton::MouseButtonsMax)>;
@@ -146,17 +146,17 @@ class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManage
   }
 
   FORCEINLINE HEvent
-  listenMouseButtonDown(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
+  listenMouseButtonDown(MouseButton button, Function<void(const MouseButtonData&)> callback) const {
     return MouseButtonDownCallbacks.at(button).connect(callback);
   }
 
   FORCEINLINE HEvent
-  listenMouseButtonUp(MouseButton button, std::function<void(const MouseButtonData&)> callback) const {
+  listenMouseButtonUp(MouseButton button, Function<void(const MouseButtonData&)> callback) const {
     return MouseButtonUpCallbacks.at(button).connect(callback);
   }
 
   FORCEINLINE HEvent
-  listenMouseButtonPressed(MouseButton /*button*/, std::function<void(const MouseButtonData&)> /*callback*/) const {
+  listenMouseButtonPressed(MouseButton /*button*/, Function<void(const MouseButtonData&)> /*callback*/) const {
     //return MouseButtonPressedCallbacks.at(button).connect(callback);
     CH_LOG_ERROR(InputSystem, "Mouse button pressed events are not supported yet.");
     return HEvent();

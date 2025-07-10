@@ -83,8 +83,28 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   virtual void
   waitIdle() = 0;
 
-  NODISCARD virtual Map<String, Any>
-  getAPIContext() const = 0;
+  /**
+  * @brief Executes a function with the given name and arguments.
+  *        This is a pure virtual function that must be implemented by derived classes.
+  * @param functionName The name of the function to execute.
+  * @param args The arguments to pass to the function.
+  * @return The result of the function execution as an Any type.
+  */
+  virtual Any
+  execute(const String& functionName, const Vector<Any>& args = {}) = 0;
+
+  /*
+  * @brief Executes a function with the given name and arguments.
+  *        This is a convenience method that converts the arguments to Any type.
+  * @param functionName The name of the function to execute.
+  * @param args The arguments to pass to the function.
+  * @return The result of the function execution as an Any type.
+  */
+  template<typename... Args>
+  Any
+  execute(const String& functionName, Args&&... args) {
+    return execute(functionName, {Any(std::forward<Args>(args))...});
+  }
 };
 
 } // namespace chEngineSDK

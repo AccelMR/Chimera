@@ -24,7 +24,6 @@
 #include "imgui_impl_sdl3.h"
 
 // TODO: For now only vulkan is supported
-#include "imgui_impl_vulkan.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
 
@@ -33,16 +32,6 @@
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
-
-struct VulkanContextData {
-  VkInstance instance;
-  VkDevice device;
-  VkPhysicalDevice physicalDevice;
-  uint32 graphicsQueueFamilyIndex;
-  VkQueue graphicsQueue;
-};
-
-static VkPipelineCache g_PipelineCache = VK_NULL_HANDLE;
 
 /*
  */
@@ -70,16 +59,24 @@ EditorApplication::onPostInitialize() {
  */
 void
 EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& commandBuffer) {
-  CH_LOG_INFO(EditorApp, "Rendering EditorApplication with delta time: {}", deltaTime);
+  CH_PAMRAMETER_UNUSED(deltaTime);
 
-  ImGui_ImplVulkan_NewFrame();
+  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+  graphicAPI.execute("newFrameImGui");
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
-  ImGui::Render();
+  ImGui::ShowDemoWindow();
 
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(),
-                                  static_cast<VkCommandBuffer>(commandBuffer->getRaw()));
+  ImGui::Render();
+  ImGuiIO& io = ImGui::GetIO();
+  // Update and Render additional Platform Windows
+  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
+  }
+
+  graphicAPI.execute("renderImGui", {commandBuffer});
 }
 
 /*
@@ -128,44 +125,11 @@ EditorApplication::initializeEditorComponents() {
     style.Colors[ImGuiCol_WindowBg].w = 1.0f;
   }
 
-  SDL_Window* window = display->getPlatformHandler();
-
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  const Map<String, Any>& apiContext = graphicAPI.getAPIContext();
-
-  SPtr<VulkanContextData> vulkanContext;
-  if (!AnyUtils::tryGetValue<SPtr<VulkanContextData>>(apiContext.at("vulkanContext"),
-                                                      vulkanContext)) {
-    CH_LOG_ERROR(EditorApp, "Failed to retrieve Vulkan context data from API context.");
-    return;
-  }
-
-  const ApplicationRenderContext& renderContext = getRenderComponents();
 
   SPtr<IDescriptorPool> descriptorPool = graphicAPI.createDescriptorPool(
-      {8, Vector<Pair<DescriptorType, uint32>>{{DescriptorType::CombinedImageSampler, 8}}});
-
-  // Setup Platform/Renderer backends
-  ImGui_ImplSDL3_InitForVulkan(window);
-  ImGui_ImplVulkan_InitInfo init_info = {};
-  // init_info.ApiVersion = VK_API_VERSION_1_3;              // Pass in your value of
-  // VkApplicationInfo::apiVersion, otherwise will default to header version.
-  init_info.Instance = vulkanContext->instance;
-  init_info.PhysicalDevice = vulkanContext->physicalDevice;
-  init_info.Device = vulkanContext->device;
-  init_info.QueueFamily = vulkanContext->graphicsQueueFamilyIndex;
-  init_info.Queue = vulkanContext->graphicsQueue;
-  init_info.PipelineCache = g_PipelineCache;
-  init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
-  init_info.RenderPass =
-      static_cast<VkRenderPass>(renderContext.swapChain->getRenderPass()->getRaw());
-  init_info.Subpass = 0;
-  init_info.MinImageCount = 2;
-  init_info.ImageCount = renderContext.swapChain->getTextureCount();
-  init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
-  CH_LOG_INFO(EditorApp, "Adapter Vulkan Nam : {0}", graphicAPI.getAdapterName());
-  ImGui_ImplVulkan_Init(&init_info);
+    {100, Vector<Pair<DescriptorType, uint32>>{{DescriptorType::CombinedImageSampler, 100}}});
+  graphicAPI.execute("initImGui", {display, getRenderComponents().swapChain, descriptorPool });
 
   getEventHandler()->addUpdateInjection([this](const Vector<Any>& args) -> bool {
     CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
@@ -181,7 +145,7 @@ EditorApplication::initializeEditorComponents() {
       return false;
     }
 
-    return ImGui_ImplSDL3_ProcessEvent(&event);
+    return !ImGui_ImplSDL3_ProcessEvent(&event);
   });
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");

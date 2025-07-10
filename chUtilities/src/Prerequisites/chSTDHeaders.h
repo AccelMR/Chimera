@@ -341,7 +341,11 @@ using Thread = std::thread;
 template<typename T1, typename T2>
 using Pair = std::pair<T1, T2>;
 
-/******************************************************************************************* */
+/************************************************************************/
+/*
+ * C++ std::any
+ */
+/************************************************************************/
 /**
  * @brief Wrapper for the C++ std::any.
  */
@@ -370,6 +374,14 @@ tryGetValue(const Any& any, T& output) noexcept {
 }
 } // namespace AnyUtils
 /******************************************************************************************* */
-
-
+/* Function std*/
+/******************************************************************************************* */
+/**
+ * @brief Function wrapper for std::function.
+ * This is a wrapper for std::function that allows
+ * for better type inference and usage in the engine.
+ * It is used to store functions that can be called with a specific signature.
+ */
+template<typename Signature>
+using Function = std::function<Signature>;
 } // namespace chEngineSDK

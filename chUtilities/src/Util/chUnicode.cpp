@@ -4,21 +4,18 @@
  * @author AccelMR
  * @date 2022/06/23
  * @brief Utilities Unicode to translate between UTF-8 and other encodings.
- *   
+ *
  */
  /************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chUnicode.h"
 
 namespace chEngineSDK{
-using std::codecvt_utf8;
-using std::wstring_convert;
-
 /**
  * @brief Converts an UTF-8 encoded character (possibly multi byte) into an UTF-32 character.
  */
@@ -111,7 +108,7 @@ UTF32To8(char32_t input, T output, uint32 maxElems, char invalidChar = 0) {
   else if (0x10000 > input) {
     numBytes = 3;
   }
-  else {// <= 0x0010FFFF 
+  else {// <= 0x0010FFFF
     numBytes = 4;
   }
 
@@ -246,7 +243,7 @@ wideToUTF32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
 
     return begin;
   }
-  
+
   //Assuming UTF-16 (i.e. Windows)
   return UTF16To32(begin, end, output, invalidChar);
 }
@@ -277,7 +274,7 @@ UTF32ToWide(char32_t input, T output, uint32 maxElems, wchar_t invalidChar = 0) 
     ++output;
     return output;
   }
-  
+
   //Assuming UTF-16 (i.e. Windows)
   return UTF32To16(input, output, maxElems, invalidChar);
 }
@@ -334,16 +331,16 @@ String
 UTF8::fromUTF16(const U16String& input) {
   String output;
   output.reserve(input.size());
-  
+
   auto backInserter = std::back_inserter(output);
-  
+
   auto iter = input.begin();
   while (iter != input.end()) {
     char32_t u32char = 0;
     iter = UTF16To32(iter, input.end(), u32char);
     UTF32To8(u32char, backInserter, 4);
   }
-  
+
   return output;
 }
 
@@ -370,15 +367,15 @@ String
 UTF8::fromUTF32(const U32String& input) {
   String output;
   output.reserve(input.size());
-  
+
   auto backInserter = std::back_inserter(output);
-  
+
   auto iter = input.begin();
   while (iter != input.end()) {
     UTF32To8(*iter, backInserter, 4);
     ++iter;
   }
-  
+
   return output;
 }
 
@@ -397,5 +394,3 @@ UTF8::toUTF32(const String& input) {
 }
 
 }
-
-

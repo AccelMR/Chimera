@@ -16,15 +16,15 @@ namespace chEngineSDK {
 class ResizeDebouncer {
  public:
   ResizeDebouncer(uint32 timeoutMs = 250,
-                  std::function<void(uint32, uint32)> callback = nullptr)
+                  Function<void(uint32, uint32)> callback = nullptr)
       : m_timeoutMs(timeoutMs),
         m_callback(callback),
         m_active(false) {}
-  
+
   ~ResizeDebouncer();
 
   void
-  setCallback(std::function<void(uint32, uint32)> callback);
+  setCallback(Function<void(uint32, uint32)> callback);
 
   void
   stopDebounce();
@@ -39,7 +39,7 @@ class ResizeDebouncer {
 
  private:
   uint32 m_timeoutMs;
-  std::function<void(uint32, uint32)> m_callback;
+  Function<void(uint32, uint32)> m_callback;
 
   uint32 m_latestWidth = 0;
   uint32 m_latestHeight = 0;

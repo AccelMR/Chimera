@@ -76,12 +76,12 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
                        desc.title.c_str());
 
   //TODO: probably change this? this set a max width and height, but you can scale smaller for a reason
-  // SDL_SetNumberProperty(properties,
-  //                      SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER,
-  //                      desc.width);
-  // SDL_SetNumberProperty(properties,
-  //                      SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
-  //                      desc.height);
+  SDL_SetNumberProperty(properties,
+                       SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER,
+                       desc.width);
+  SDL_SetNumberProperty(properties,
+                       SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
+                       desc.height);
 
   //Configure capabilities based on descriptor
   if (true) {

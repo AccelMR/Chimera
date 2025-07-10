@@ -20,16 +20,31 @@
 
 #include <vulkan/vulkan.h>
 
+#if defined(CH_VULKAN_IMGUI)
+#define CH_VK_IMGUI IN_USE
+#else
+#define CH_VK_IMGUI IN_NOT_USE
+#endif // defined(CH_VULKAN_IMGUI)
+
+#if USING(CH_VK_IMGUI)
+#include <imgui_impl_vulkan.h>
+
+  #if USING(CH_DISPLAY_SDL3)
+    #include <imgui_impl_sdl3.h>
+  #endif // USING(CH_DISPLAY_SDL3
+
+#endif // USING(CH_VK_IMGUI)
+
+
 #if USING(CH_DISPLAY_SDL3)
-#include <SDL3/SDL_vulkan.h>
+# include <SDL3/SDL_vulkan.h>
 #endif // USING(CH_DISPLAY_SDL3)
 
 #if USING(CH_PLATFORM_WIN32)
-#include <vulkan/vulkan_win32.h>
+# include <vulkan/vulkan_win32.h>
 #elif USING(CH_PLATFORM_LINUX)
-// #include <vulkan/vulkan_xcb.h>
-// #include <vulkan/vulkan_xlib.h>
 #endif // USING(CH_PLATFORM_LINUX)
+
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_EXTERN(Vulkan);

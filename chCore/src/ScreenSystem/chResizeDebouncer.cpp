@@ -21,7 +21,7 @@ ResizeDebouncer::~ResizeDebouncer() {
 /*
 */
 void
-ResizeDebouncer::setCallback(std::function<void(uint32, uint32)> callback) {
+ResizeDebouncer::setCallback(Function<void(uint32, uint32)> callback) {
   LockGuard<Mutex> lock(m_mutex);
   m_callback = std::move(callback);
 }
@@ -76,7 +76,7 @@ ResizeDebouncer::startDebounce() {
     while(true){
       steady_clock::time_point lastTime;
       bool bShouldRun = false;
-      std::function<void(uint32, uint32)> callback;
+      Function<void(uint32, uint32)> callback;
 
       {
         LockGuard<Mutex> lock(m_mutex);

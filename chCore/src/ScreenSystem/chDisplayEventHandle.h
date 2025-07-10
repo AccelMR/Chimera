@@ -111,7 +111,7 @@ class CH_CORE_EXPORT DisplayEventHandle
 
 
   FORCEINLINE void
-  addUpdateInjection(std::function<bool(const Vector<Any>&)> updateFunc) {
+  addUpdateInjection(Function<bool(const Vector<Any>&)> updateFunc) {
     m_updateInjection.connect(std::move(updateFunc));
   }
 

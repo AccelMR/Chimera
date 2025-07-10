@@ -155,6 +155,8 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
 
   CH_LOG_DEBUG(Vulkan, "Vulkan API initialized successfully");
   CH_LOG_DEBUG(Vulkan, "Using Adapter : " + getAdapterName());
+
+  initializeFunctionMap();
 }
 
 /*
@@ -823,37 +825,125 @@ VulkanAPI::waitIdle() {
 }
 
 /*
-*/
-NODISCARD Map<String, Any>
-VulkanAPI::getAPIContext() const {
-  Map<String, Any> context;
+ */
+void
+VulkanAPI::initializeFunctionMap() {
+  m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
+#if USING (CH_VK_IMGUI)
+    bool load_result = ImGui_ImplVulkan_LoadFunctions(
+        VK_API_VERSION_1_2,
+        [](const char* function_name, void* user_data) -> PFN_vkVoidFunction {
+            VkInstance* instance = static_cast<VkInstance*>(user_data);
+            return vkGetInstanceProcAddr(*instance, function_name);
+        },
+        &m_vulkanData->instance
+    );
+    if (!load_result) {
+      CH_LOG_ERROR(Vulkan, "Failed to load ImGui Vulkan functions");
+      return Any(false);
+    }
+  #if USING(CH_DISPLAY_SDL3)
+    SPtr<DisplaySurface> displaySurface;
+    if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[0], displaySurface)) {
+      CH_LOG_ERROR(Vulkan, "DisplaySurface is expired");
+      return Any(false);
+    }
+    CH_ASSERT(displaySurface && "DisplaySurface is null");
+    SDL_Window* sdlWindow = displaySurface->getPlatformHandler();
+    CH_ASSERT(sdlWindow && "SDL_Window is null");
 
-  SPtr<VulkanContextData> vulkanContext = chMakeShared<VulkanContextData>();
-  vulkanContext->instance = m_vulkanData->instance;
-  vulkanContext->device = m_vulkanData->device;
-  vulkanContext->physicalDevice = m_vulkanData->physicalDevice;
-  vulkanContext->graphicsQueueFamilyIndex = m_graphicsQueueFamilyIndex;
-  vulkanContext->graphicsQueue =
-    std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue)->getHandle();
+    ImGui_ImplSDL3_InitForVulkan(sdlWindow);
 
-  context["vulkanContext"] = vulkanContext;
-  context["apiName"] = "Vulkan";
+    SPtr<ISwapChain> inSwapchain;
+    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[1], inSwapchain)) {
+      CH_LOG_ERROR(Vulkan, "SwapChain is expired");
+      return Any(false);
+    }
+    SPtr<VulkanSwapChain> vulkanSwapchain
+      = std::static_pointer_cast<VulkanSwapChain>(inSwapchain);
+    CH_ASSERT(vulkanSwapchain && "VulkanSwapChain is null");
 
-  // context["instance"] = m_vulkanData->instance;
-  // context["device"] = m_vulkanData->device;
-  // context["physicalDevice"] = m_vulkanData->physicalDevice;
-  // SPtr<VulkanCommandQueue> vulkanGraphicsQueue =
-  //   std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
-  // context["graphicsQueue"] = vulkanGraphicsQueue->getHandle();
-  // context["graphicsQueueFamilyIndex"] = m_graphicsQueueFamilyIndex;
+    SPtr<IDescriptorPool> descriptorPool;
+    if (!AnyUtils::tryGetValue<SPtr<IDescriptorPool>>(args[2], descriptorPool)) {
+      CH_LOG_ERROR(Vulkan, "DescriptorPool is expired");
+      return Any(false);
+    }
+    SPtr<VulkanCommandQueue> vulkanQueue
+      = std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
+    SPtr<VulkanRenderPass> vulkanRenderPass
+      = std::static_pointer_cast<VulkanRenderPass>(vulkanSwapchain->getRenderPass());
 
-  return context;
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = m_vulkanData->instance;
+    init_info.PhysicalDevice = m_vulkanData->physicalDevice;
+    init_info.Device = m_vulkanData->device;
+    init_info.QueueFamily = m_graphicsQueueFamilyIndex;
+    init_info.Queue = vulkanQueue->getHandle();
+    //init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
+    init_info.RenderPass = vulkanRenderPass->getHandle();
+    init_info.Subpass = 0;
+    init_info.MinImageCount = 2;
+    init_info.ImageCount = inSwapchain->getTextureCount();
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.DescriptorPoolSize = 8;
+
+    ImGui_ImplVulkan_Init(&init_info);
+    return Any(true); // success
+#endif // USING(CH_DISPLAY_SDL3)
+    return Any(false); // successs
+#else
+    CH_PAMRAMETER_UNUSED(args);
+    CH_LOG_ERROR(Vulkan, "ImGui is not supported in this build");
+    return Any(false); // not supported
+#endif
+  };
+
+  m_functionMap["renderImGui"] = [this](const Vector<Any>& args) -> Any {
+#if USING (CH_VK_IMGUI)
+    SPtr<ICommandBuffer> inCmdBuffer;
+    if (!AnyUtils::tryGetValue<SPtr<ICommandBuffer>>(args[0], inCmdBuffer)) {
+      CH_LOG_ERROR(Vulkan, "CommandBuffer is expired");
+      return Any(false);
+    }
+    SPtr<VulkanCommandBuffer> cmdBuffer = std::static_pointer_cast<VulkanCommandBuffer>(inCmdBuffer);
+    CH_ASSERT(cmdBuffer && "VulkanCommandBuffer is null");
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer->getHandle());
+
+    return Any(true);
+#else
+    CH_LOG_ERROR(Vulkan, "ImGui is not supported in this build");
+    return Any(false);
+#endif
+  };
+
+  m_functionMap["newFrameImGui"] = [this](const Vector<Any>& args) -> Any {
+#if USING (CH_VK_IMGUI)
+    ImGui_ImplVulkan_NewFrame();
+    return Any(true);
+#endif // USING (CH_VK_IMGUI)
+    CH_PAMRAMETER_UNUSED(args);
+    return Any(false);
+  };
+
 }
 
+/*
+*/
+Any
+VulkanAPI::execute(const String& functionName, const Vector<Any>& args) {
+  auto it = m_functionMap.find(functionName);
+  if (it != m_functionMap.end()) {
+    return it->second(args);
+  }
+  CH_LOG_WARNING(Vulkan, "Unknown function: {}", functionName);
+  return Any{};
+}
 
 /*
 */
 VulkanAPI& g_vulkanAPI() {
   return reinterpret_cast<VulkanAPI&>(IGraphicsAPI::instance());
 }
+
 } // namespace chEngineSDK

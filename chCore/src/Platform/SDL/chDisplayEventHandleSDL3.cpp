@@ -305,10 +305,8 @@ namespace chEngineSDK {
 void
 DisplayEventHandle::update() {
   SDL_Event event;
-
-  m_updateInjection(std::move(Vector<Any>{event}));
-
   while (SDL_PollEvent(&event)) {
+    m_updateInjection(std::move(Vector<Any>{event}));
     switch (event.type) {
     case SDL_EVENT_QUIT:
       addEvent(PlatformEventType::Close);

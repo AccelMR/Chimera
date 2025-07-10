@@ -108,8 +108,8 @@ class VulkanAPI : public IGraphicsAPI {
   void
   waitForDeviceIdle();
 
-  NODISCARD Map<String, Any>
-  getAPIContext() const override;
+  virtual Any
+  execute(const String& functionName, const Vector<Any>& args = {}) override;
 
  private:
 
@@ -137,6 +137,9 @@ class VulkanAPI : public IGraphicsAPI {
   bool
   createSurface(WeakPtr<DisplaySurface> display);
 
+  void
+  initializeFunctionMap();
+
   UniquePtr<VulkanData> m_vulkanData;
 
   SPtr<ICommandQueue> m_graphicsQueue;
@@ -144,6 +147,8 @@ class VulkanAPI : public IGraphicsAPI {
 
   SPtr<ICommandQueue> m_presentQueue;
   uint32 m_presentQueueFamilyIndex = 0;
+
+  Map<String, Function<Any(const Vector<Any>&)>> m_functionMap;
 };
 
 CH_CORE_EXPORT VulkanAPI& g_vulkanAPI();
