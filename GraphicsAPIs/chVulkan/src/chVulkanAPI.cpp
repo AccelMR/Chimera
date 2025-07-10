@@ -828,30 +828,27 @@ VulkanAPI::waitIdle() {
  */
 void
 VulkanAPI::initializeFunctionMap() {
-  m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
 #if USING (CH_VK_IMGUI)
-    bool load_result = ImGui_ImplVulkan_LoadFunctions(
-        VK_API_VERSION_1_2,
-        [](const char* function_name, void* user_data) -> PFN_vkVoidFunction {
-            VkInstance* instance = static_cast<VkInstance*>(user_data);
-            return vkGetInstanceProcAddr(*instance, function_name);
-        },
-        &m_vulkanData->instance
+  m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
+    bool bSuccedLoadingFunctions = ImGui_ImplVulkan_LoadFunctions(
+      VK_API_VERSION_1_2,
+      [](const char* function_name, void* user_data) -> PFN_vkVoidFunction {
+        VkInstance* instance = static_cast<VkInstance*>(user_data);
+        return vkGetInstanceProcAddr(*instance, function_name);
+      },
+      &m_vulkanData->instance
     );
-    if (!load_result) {
-      CH_LOG_ERROR(Vulkan, "Failed to load ImGui Vulkan functions");
-      return Any(false);
-    }
-  #if USING(CH_DISPLAY_SDL3)
+    CH_ASSERT(bSuccedLoadingFunctions && "Failed to load ImGui Vulkan functions");
+#if USING(CH_DISPLAY_SDL3)
     SPtr<DisplaySurface> displaySurface;
     if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[0], displaySurface)) {
       CH_LOG_ERROR(Vulkan, "DisplaySurface is expired");
       return Any(false);
     }
     CH_ASSERT(displaySurface && "DisplaySurface is null");
+
     SDL_Window* sdlWindow = displaySurface->getPlatformHandler();
     CH_ASSERT(sdlWindow && "SDL_Window is null");
-
     ImGui_ImplSDL3_InitForVulkan(sdlWindow);
 
     SPtr<ISwapChain> inSwapchain;
@@ -859,19 +856,13 @@ VulkanAPI::initializeFunctionMap() {
       CH_LOG_ERROR(Vulkan, "SwapChain is expired");
       return Any(false);
     }
-    SPtr<VulkanSwapChain> vulkanSwapchain
-      = std::static_pointer_cast<VulkanSwapChain>(inSwapchain);
+    auto vulkanSwapchain = std::static_pointer_cast<VulkanSwapChain>(inSwapchain);
     CH_ASSERT(vulkanSwapchain && "VulkanSwapChain is null");
 
-    SPtr<IDescriptorPool> descriptorPool;
-    if (!AnyUtils::tryGetValue<SPtr<IDescriptorPool>>(args[2], descriptorPool)) {
-      CH_LOG_ERROR(Vulkan, "DescriptorPool is expired");
-      return Any(false);
-    }
-    SPtr<VulkanCommandQueue> vulkanQueue
-      = std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
-    SPtr<VulkanRenderPass> vulkanRenderPass
-      = std::static_pointer_cast<VulkanRenderPass>(vulkanSwapchain->getRenderPass());
+    auto vulkanQueue = std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
+    CH_ASSERT(vulkanQueue && "VulkanCommandQueue is null");
+    auto vulkanRenderPass = std::static_pointer_cast<VulkanRenderPass>(vulkanSwapchain->getRenderPass());
+    CH_ASSERT(vulkanRenderPass && "VulkanRenderPass is null");
 
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = m_vulkanData->instance;
@@ -879,27 +870,24 @@ VulkanAPI::initializeFunctionMap() {
     init_info.Device = m_vulkanData->device;
     init_info.QueueFamily = m_graphicsQueueFamilyIndex;
     init_info.Queue = vulkanQueue->getHandle();
+    // TODO: Not sure how this works, but when we try to load a new texture we'll need to fix this
     //init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
     init_info.RenderPass = vulkanRenderPass->getHandle();
     init_info.Subpass = 0;
     init_info.MinImageCount = 2;
     init_info.ImageCount = inSwapchain->getTextureCount();
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    //TODO: hardcoded for now, need to be set by someone(?)
     init_info.DescriptorPoolSize = 8;
 
     ImGui_ImplVulkan_Init(&init_info);
-    return Any(true); // success
+    return Any(true);
 #endif // USING(CH_DISPLAY_SDL3)
-    return Any(false); // successs
-#else
-    CH_PAMRAMETER_UNUSED(args);
-    CH_LOG_ERROR(Vulkan, "ImGui is not supported in this build");
-    return Any(false); // not supported
-#endif
+    return Any(false);
   };
 
   m_functionMap["renderImGui"] = [this](const Vector<Any>& args) -> Any {
-#if USING (CH_VK_IMGUI)
     SPtr<ICommandBuffer> inCmdBuffer;
     if (!AnyUtils::tryGetValue<SPtr<ICommandBuffer>>(args[0], inCmdBuffer)) {
       CH_LOG_ERROR(Vulkan, "CommandBuffer is expired");
@@ -911,20 +899,13 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer->getHandle());
 
     return Any(true);
-#else
-    CH_LOG_ERROR(Vulkan, "ImGui is not supported in this build");
-    return Any(false);
-#endif
   };
 
   m_functionMap["newFrameImGui"] = [this](const Vector<Any>& args) -> Any {
-#if USING (CH_VK_IMGUI)
     ImGui_ImplVulkan_NewFrame();
     return Any(true);
-#endif // USING (CH_VK_IMGUI)
-    CH_PAMRAMETER_UNUSED(args);
-    return Any(false);
   };
+#endif // USING (CH_VK_IMGUI)
 
 }
 
@@ -936,7 +917,7 @@ VulkanAPI::execute(const String& functionName, const Vector<Any>& args) {
   if (it != m_functionMap.end()) {
     return it->second(args);
   }
-  CH_LOG_WARNING(Vulkan, "Unknown function: {}", functionName);
+  CH_LOG_ERROR(Vulkan, "Unknown function: {0}", functionName);
   return Any{};
 }
 
