@@ -11,8 +11,10 @@
 #if USING(CH_EDIOR)
 #include "chPrerequisitesCore.h"
 
+#include "chModule.h"
+
 namespace chEngineSDK {
-class CH_CORE_EXPORT AssetManagerImporter {
+class CH_CORE_EXPORT AssetManagerImporter : public Module<AssetManagerImporter> {
  public:
   /**
    * @brief Imports an asset from the specified import path to the asset path.
@@ -20,7 +22,10 @@ class CH_CORE_EXPORT AssetManagerImporter {
    * @param assetPath The destination path for the imported asset.
    * @return True if the import was successful, false otherwise.
    */
-  static bool importAsset(const Path& importPath, const Path& assetPath);
+  bool
+  importAsset(const Path& importPath, const Path& assetPath);
+
+ private:
 
 }; // class AssetManagerImporter
 } // namespace chEngineSDK

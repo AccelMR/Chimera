@@ -13,10 +13,9 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chIAsset.h"
 #include "chModule.h"
-
-#include "chLogDeclaration.h"
-
+#include "chLogger.h"
 
 namespace chEngineSDK {
 
@@ -34,6 +33,16 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
    * Destructor
    */
   ~AssetManager() = default;
+
+  bool
+  loadAsset(const SPtr<IAsset>& asset);
+
+  WeakPtr<IAsset>
+  createAsset(AssetType type, const String& name = "", const Path& originalPath = Path::EMPTY);
+
+ private:
+  Map<UUID, SPtr<IAsset>> m_assets;
+  Map<UUID, SPtr<IAsset>> m_loadedAssets;
 
 }; // class AssetManager
 } // namespace chEngineSDK

@@ -18,15 +18,8 @@
 #include "chLogger.h"
 #include "chPath.h"
 
-
-#if USING(CH_DEBUG_MODE)
-#define CH_ASSETSYSTEM_LOG_LEVEL All
-#else
-#define CH_ASSETSYSTEM_LOG_LEVEL Info
-#endif //USING(CH_DEBUG_MODE)
-
-
 namespace chEngineSDK {
-CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, CH_ASSETSYSTEM_LOG_LEVEL);
+
+CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, All);
 
 } // namespace chEngineSDK

@@ -4,14 +4,14 @@
  * @author AccelMR
  * @date 2022/06/27
  * @brief File system that is platform specific.
- *   
+ *
  */
  /************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chFileSystem.h"
 
@@ -40,6 +40,24 @@ bool
 FileSystem::isFile(const Path& path) {
   fs::path fsPath(path.toString());
   return fs::is_regular_file(fsPath);
+}
+
+/*
+*/
+/**
+ * @brief Checks if two paths are relative to each other.
+ */
+bool
+FileSystem::arePathsRelative(const Path& baseTarget, const Path& target) {
+  // Check if both paths are absolute or relative
+  if (baseTarget.isRelative() == target.isRelative()) {
+    const auto& basePathStr = baseTarget.toString();
+    const auto& targetPathStr = target.toString();
+    // Check if basePathStr is a prefix of targetPathStr
+    return targetPathStr.find(basePathStr) == 0;
+  }
+  // If one is absolute and the other is relative, they cannot be relative to each other
+  return false;
 }
 
 /**
@@ -74,8 +92,8 @@ FileSystem::exists(const Path& path) {
  */
 SPtr<DataStream>
 FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
-  const Path fullPath = path.isRelative() ? 
-    Path(fs::absolute(path.toString()).generic_string()) : 
+  const Path fullPath = path.isRelative() ?
+    Path(fs::absolute(path.toString()).generic_string()) :
     path;
 
   AccesModeFlag accessMode(ACCESS_MODE::kREAD);
@@ -148,7 +166,7 @@ FileSystem::fastRead(const Path& path) {
 /**
  * @brief Checks if a path is relative to another path.
  */
-bool 
+bool
 FileSystem::isPathRelative(const Path& basePath, const Path& targetPath) {
   // Check if both paths are absolute or relative
   if (basePath.isRelative() == targetPath.isRelative()) {
