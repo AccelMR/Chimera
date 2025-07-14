@@ -7,3 +7,6 @@
 [submodule "Externals/imgui"]
 	path = Externals/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "chEditor/externals/nativefiledialog-extended"]
+	path = chEditor/externals/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended.git
