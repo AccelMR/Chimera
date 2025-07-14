@@ -2,6 +2,8 @@ file(GLOB
   SOURCE_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/externals/*/*.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/externals/*/*.cpp
 )
 
 # ImGui Source Files - Solo SDL3 backend
@@ -15,6 +17,15 @@ set(IMGUI_SOURCES
 
   # Solo SDL3 backend (sin Vulkan)
   ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+)
+
+#set(NFD_PORTAL OFF d BOOL "Use xdg-desktop-portal instead of GTK" FORCE)
+add_subdirectory(externals/nativefiledialog-extended)
+
+set_target_properties(nfd PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
 # Debug postfix configuration
@@ -61,6 +72,10 @@ endmacro()
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment/AssetImporter)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment/AssetImporter/BaseAssetImports)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chEditor/externals/nativefiledialog-extended/src)
 
 # ImGui core configuration for Chimera Engine
 target_include_directories(chEditor PRIVATE
@@ -89,6 +104,7 @@ target_link_libraries(chEditor
   chCore
   chUtilities
   SDL3::SDL3
+  nfd
 )
 
 # C++20 compiler configuration

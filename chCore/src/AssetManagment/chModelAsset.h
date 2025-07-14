@@ -3,7 +3,7 @@
  * @file chModelAsset.h
  * @author AccelMR
  * @date 2025/04/26
- * @brief 
+ * @brief
  *  This file contains the ModelAsset class for managing model assets in the engine.
  */
 /************************************************************************/
@@ -17,27 +17,36 @@ namespace chEngineSDK {
 class CH_CORE_EXPORT ModelAsset : public IAsset
 {
  public:
-  ModelAsset() = default;
+  ModelAsset() = delete;
+  ModelAsset(const AssetMetadata& metadata)
+    : IAsset(metadata) {}
 
-  ~ModelAsset() override = default;
-
-  bool
-  load() override;
-
-  bool
-  unload() override;
+  ~ModelAsset() = default;
 
   bool
-  serialize(SPtr<DataStream> stream) override;
+  load() override { return true; }
 
   bool
-  deserialize(SPtr<DataStream> stream) override;
+  unload() override { return true; }
 
-  NODISCAR FORCEINLINE static AssetType
-  getStaticType() { return AssetType::Model; }
+  bool
+  _internalSerialize(SPtr<DataStream>) override { return true; }
+
+  bool
+  _internalDeserialize(SPtr<DataStream>) override { return true; }
 
  private:
+  friend class MeshManager;
   void
-  clearAssetData() override;
+  clearAssetData() override { }
+
+  FORCEINLINE void
+  setModel(const SPtr<Model>& model) {
+    m_model = model;
+  }
+
+  SPtr<Model> m_model; ///< The model data associated with this asset
 }; // class ModelAsset
+DECLARE_ASSET_TYPE(ModelAsset);
+
 } // namespace chEngineSDK

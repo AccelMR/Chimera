@@ -10,27 +10,12 @@
 /************************************************************************/
 #pragma once
 
-
 #include "chPrerequisitesCore.h"
 
+#include "chAssetTypeTraits.h"
 #include "chUUID.h"
-#include "chPath.h"
 
 namespace chEngineSDK {
-
-enum class AssetType : uint32 {
-  None = 0,
-  Mesh,
-  Model,
-  Material,
-  Texture,
-  Shader,
-  Prefab,
-
-  COUNT
-};
-
-std::ostream& operator<<(std::ostream& os, AssetType type);
 
 enum class AssetState : uint16 {
   None = 0,
@@ -43,77 +28,144 @@ enum class AssetState : uint16 {
   COUNT
 };
 
-struct AssetMetadata {
-  AssetType type = AssetType::None;
-  String name = "";
-  UUID uuid = UUID::null();
-  uint64 creationTime = ~0;
-  Path originalPath = Path::EMPTY;
-  Path cachedPath = Path::EMPTY;
-};
+// Align AssetMetadata to 8 bytes for optimal memory access on most platforms
+struct MS_ALIGN(8) AssetMetadata {
+  UUID uuid = UUID::null();      // 16 bytes
+  UUID assetType = UUID::null(); // 16 bytes
+  uint64 creationTime = ~0;      // 8 bytes
+
+  ANSICHAR typeName[32] = "Unknown";    // 32 bytes
+  ANSICHAR engineVersion[16] = "x.x.x"; // 16 bytes
+  ANSICHAR name[64] = "Unnamed";        // 64 bytes
+  ANSICHAR originalPath[256] = "";      // 256 bytes
+  ANSICHAR assetPath[256] = "";         // 256 bytes
+
+  // Total size: 16 + 16 + 8 + 32 + 16 + 64 + 256 + 256 = 664 bytes
+} GCC_PACK(8);
+static_assert(sizeof(AssetMetadata) % 8 == 0, "AssetMetadata is not 8-byte aligned!");
+
+namespace AssetMetadataUtils {
+
+template <size_t N>
+void
+copyString(ANSICHAR (&dest)[N], const char* src) {
+  if (src == nullptr) {
+    dest[0] = '\0';
+    return;
+  }
+
+  size_t len = strlen(src);
+  size_t copyLen = std::min(len, N - 1);
+
+  memcpy(dest, src, copyLen);
+  dest[copyLen] = '\0';
+}
+
+template <size_t N>
+void
+copyString(ANSICHAR (&dest)[N], const std::string& src) {
+  copyString(dest, src.c_str());
+}
+
+// Factory function for creating AssetMetadata
+AssetMetadata
+createAssetMetadata(const UUID* uuid, const UUID& assetType, uint64 creationTime,
+                    const char* typeName, const char* engineVersion, const char* name,
+                    const char* originalPath, const char* assetPath) {
+  AssetMetadata metadata{};
+
+  if (uuid) {
+    metadata.uuid = *uuid;
+  }
+  metadata.assetType = assetType;
+  metadata.creationTime = creationTime;
+
+  copyString(metadata.typeName, typeName);
+  copyString(metadata.engineVersion, engineVersion);
+  copyString(metadata.name, name);
+  copyString(metadata.originalPath, originalPath);
+  copyString(metadata.assetPath, assetPath);
+
+  return metadata;
+}
+} // namespace AssetMetadataUtils
 
 class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 {
  public:
-  IAsset() = default;
+  IAsset() = delete;
+  IAsset(const AssetMetadata& metadata)
+   : m_metadata(metadata), m_state(AssetState::Unloaded), m_refCount(0) {
+    CH_ASSERT(validateMetadata(metadata));
+  }
+  virtual ~IAsset() = default;
 
-  template<typename T>
+  template <typename T>
   NODISCARD FORCEINLINE SPtr<T>
-  as(){
+  as() {
     if (isTypeOf<T>()) {
       return std::static_pointer_cast<T>(shared_from_this());
     }
   }
 
-  template<typename T>
-  requires std::is_base_of<IAsset, T>::value
+  template <typename T>
+    requires std::is_base_of<IAsset, T>::value
   NODISCARD FORCEINLINE bool
   isTypeOf() const;
 
   NODISCARD FORCEINLINE bool
-  isLoaded() const { return m_state == AssetState::Loaded; }
+  isLoaded() const {
+    return m_state == AssetState::Loaded;
+  }
 
   NODISCARD FORCEINLINE bool
-  isLoading() const { return m_state == AssetState::Loading; }
+  isLoading() const {
+    return m_state == AssetState::Loading;
+  }
 
   NODISCARD FORCEINLINE bool
-  isUnloading() const { return m_state == AssetState::Unloading; }
+  isUnloading() const {
+    return m_state == AssetState::Unloading;
+  }
 
   NODISCARD FORCEINLINE bool
-  isUnloaded() const { return m_state == AssetState::Unloaded; }
+  isUnloaded() const {
+    return m_state == AssetState::Unloaded;
+  }
 
   NODISCARD FORCEINLINE bool
-  isFailed() const { return m_state == AssetState::Failed; }
+  isFailed() const {
+    return m_state == AssetState::Failed;
+  }
 
   uint32
-  getReferenceCount() const { return m_refCount.load(); }
-
-  NODISCARD FORCEINLINE const String&
-  getName() const { return m_metadata.name; }
-
-  void
-  setName(const String& name) { m_metadata.name = name; }
-
-  NODISCARD FORCEINLINE const Path&
-  getOriginalPath() const { return m_metadata.originalPath; }
-
-  void
-  setOriginalPath(const Path& path) { m_metadata.originalPath = path; }
-
-  NODISCARD FORCEINLINE const Path&
-  getCachedPath() const { return m_metadata.cachedPath; }
-
-  void
-  setCachedPath(const Path& path) { m_metadata.cachedPath = path; }
+  getReferenceCount() const {
+    return m_refCount.load();
+  }
 
   NODISCARD FORCEINLINE const UUID&
-  getUUID() const { return m_metadata.uuid; }
+  getUUID() const {
+    return m_metadata.uuid;
+  }
 
   NODISCARD FORCEINLINE AssetState
-  getState() const { return m_state; }
+  getState() const {
+    return m_state;
+  }
+
+  bool
+  serialize(SPtr<DataStream> stream);
+
+  bool
+  deserialize(SPtr<DataStream> stream);
 
  protected:
   friend class AssetManager;
+
+  void
+  setMetadata(const AssetMetadata& metadata) {
+    m_metadata = metadata;
+  }
 
   virtual void
   clearAssetData() = 0;
@@ -128,30 +180,27 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   save();
 
   virtual bool
-  serialize(SPtr<DataStream> stream) = 0;
+  _internalSerialize(SPtr<DataStream> stream) = 0;
 
   virtual bool
-  deserialize(SPtr<DataStream> stream) = 0;
-
-  NODISCARD FORCEINLINE AssetType
-  getType() const { return m_metadata.type; }
+  _internalDeserialize(SPtr<DataStream> stream) = 0;
 
   bool
-  validateMetadata(const AssetMetadata& ) const;
+  validateMetadata(const AssetMetadata&) const;
 
-  AssetMetadata m_metadata; ///< Metadata for the asset
-  AssetState m_state; ///< State of the asset
+  AssetMetadata m_metadata;  ///< Metadata for the asset
+  AssetState m_state;        ///< State of the asset
   Atomic<uint32> m_refCount; ///< Reference count for the asset
 
   Vector<UUID> m_referencedAssets; ///< List of referenced assets
 }; // class IAsset
 
 /*
-*/
-template<typename T>
-requires std::is_base_of<IAsset, T>::value
-bool 
+ */
+template <typename T>
+  requires std::is_base_of<IAsset, T>::value
+bool
 IAsset::isTypeOf() const {
-  return getType() == T::getStaticType();
-}
+  return AssetTypeTraits<T>::getTypeId() == m_metadata.assetType;
+} // isTypeOf
 } // namespace chEngineSDK

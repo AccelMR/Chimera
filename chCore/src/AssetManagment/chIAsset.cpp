@@ -20,25 +20,11 @@
 
 namespace chEngineSDK {
 
-std::ostream& operator<<(std::ostream& os, AssetType type){
-  switch (type) {
-    case AssetType::None: os << "None"; break;
-    case AssetType::Mesh: os << "Mesh"; break;
-    case AssetType::Model: os << "Model"; break;
-    case AssetType::Material: os << "Material"; break;
-    case AssetType::Texture: os << "Texture"; break;
-    case AssetType::Shader: os << "Shader"; break;
-    case AssetType::Prefab: os << "Prefab"; break;
-    default: os << "Unknown"; break;
-  }
-  return os;
-}
-
 /*
 */
 bool
 IAsset::save(){
-  const Path assetPath (m_metadata.cachedPath / m_metadata.name);
+  const Path assetPath(String(m_metadata.assetPath));
   if (assetPath.empty()) {
     CH_LOG(AssetSystem, Error, "Asset path {0} is empty", assetPath.toString());
     return false;
@@ -50,7 +36,7 @@ IAsset::save(){
     return false;
   }
 
-  stream << getType();
+  stream << m_metadata.assetType;
   stream << m_metadata.uuid;
 
   const uint32 referencedAssetsCount = static_cast<uint32>(m_referencedAssets.size());
@@ -59,7 +45,7 @@ IAsset::save(){
     stream << refUUID;
   }
 
-  const bool success = serialize(stream);
+  const bool success = _internalSerialize(stream);
   if (!success) {
     CH_LOG(AssetSystem, Error, "Failed to serialize asset {0}", m_metadata.name);
     return false;
@@ -77,7 +63,7 @@ IAsset::load(){
     return true;
   }
 
-  const Path assetPath(m_metadata.cachedPath / m_metadata.name);
+  const Path assetPath(m_metadata.assetPath);
   if (assetPath.empty() || !FileSystem::exists(assetPath)) {
     CH_LOG(AssetSystem, Error, "Asset path {0} is empty or doesn't exist", assetPath.toString());
     return false;
@@ -123,7 +109,7 @@ IAsset::load(){
     m_referencedAssets[i] = refUUID;
   }
 
-  const bool success = deserialize(stream);
+  const bool success = _internalDeserialize(stream);
 
   if (!success) {
     CH_LOG(AssetSystem, Error, "Failed to deserialize asset {0}", m_metadata.name);
@@ -165,8 +151,8 @@ IAsset::unload(){
 */
 bool
 IAsset::validateMetadata(const AssetMetadata& metadata) const {
-  if (metadata.name.empty()) {
-    CH_LOG(AssetSystem, Error, "Asset name is empty");
+  if (metadata.typeName[0] == '\0') { // Check if typeName is empty
+    CH_LOG(AssetSystem, Error, "Asset name is empty or 'Unnamed'");
     return false;
   }
 
@@ -178,7 +164,7 @@ IAsset::validateMetadata(const AssetMetadata& metadata) const {
   // }
 
   // This is the actual path inside the assets folder, needs to be always in the assets folder.
-  if (metadata.cachedPath.empty() || !FileSystem::exists(metadata.cachedPath)) {
+  if (metadata.assetPath[0] == '\0' || !FileSystem::exists(Path(metadata.assetPath))) {
     CH_LOG(AssetSystem, Error, "Cached path is empty or doesn't exist");
     return false;
   }

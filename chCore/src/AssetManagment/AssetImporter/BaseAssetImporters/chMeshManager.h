@@ -11,9 +11,14 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chAssetImporter.h"
+#include "chAssetTypeTraits.h"
+#include "chIAsset.h"
+
 #include "chModule.h"
 #include "chMesh.h"
 #include "chModel.h"
+#include "chUUID.h"
 
 //Forward declarations from Assimp
 class aiNode;
@@ -21,25 +26,42 @@ class aiMesh;
 class aiScene;
 
 namespace chEngineSDK {
-
-class CH_CORE_EXPORT MeshManager : public Module<MeshManager> {
+class CH_CORE_EXPORT MeshManager  : public IAssetImporter {
  public:
   MeshManager() = default;
   ~MeshManager() = default;
 
+  UUID
+  getImportType() const override{
+    static UUID importType = UUID::createFromName("MeshManagerImporter");
+    return importType;
+  }
+
+  Vector<String>
+  getSupportedExtensions() const override;
+
+  SPtr<IAsset>
+  importAsset(const Path& filePath, const String& assetName) override;
+
+  bool
+  canImport(const String& extension) const override{
+    const Vector<String> supportedExtensions = getSupportedExtensions();
+    return std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) != supportedExtensions.end();
+  }
+
   /**
    * Load a mesh from a file
-   * 
+   *
    * @param filename Path to the mesh file
    * @param meshName Name of the mesh (optional)
    * @return Pointer to the loaded mesh
    */
-  SPtr<Mesh> 
+  SPtr<Mesh>
   loadMesh(const Path& filename, const String& meshName = "");
 
   /**
    * Load a model from a file
-   * 
+   *
    * @param filename Path to the model file
    * @return Vector of pointers to the loaded meshes
    */
@@ -48,10 +70,10 @@ class CH_CORE_EXPORT MeshManager : public Module<MeshManager> {
 
   /**
    * Unload a mesh
-   * 
+   *
    * @param mesh Pointer to the mesh to unload
    */
-  void 
+  void
   unloadMesh(const WeakPtr<Mesh>& mesh);
 
  private:
@@ -77,8 +99,8 @@ class CH_CORE_EXPORT MeshManager : public Module<MeshManager> {
   processMesh(aiMesh* mesh, const aiScene* scene);
 
   void
-  processNodeForModel(aiNode* node, 
-                      const aiScene* scene, 
+  processNodeForModel(aiNode* node,
+                      const aiScene* scene,
                       SPtr<Model> model,
                       ModelNode* parentNode);
 
@@ -88,5 +110,6 @@ class CH_CORE_EXPORT MeshManager : public Module<MeshManager> {
   UnorderedMap<String, SPtr<Model>> m_models;
   Mutex m_mutex;
 };
+DECLARE_ASSET_TYPE(MeshManager);
 
 } // namespace chEngineSDK

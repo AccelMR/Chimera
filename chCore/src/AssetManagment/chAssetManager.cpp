@@ -12,14 +12,30 @@
 
 #include "chAssetManager.h"
 
+#include "chAssetTypeTraits.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chSupportedImport.h"
 #include "chLogger.h"
 #include "chPath.h"
 
-namespace chEngineSDK {
+// Base asset types
+#include "chModelAsset.h"
 
+namespace chEngineSDK {
 CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, All);
 
+/*
+*/
+void
+AssetManager::initialize() {
+  CH_LOG_DEBUG(AssetSystem, "Initializing AssetManager");
+
+  m_assetRegister = chMakeShared<AssetRegister>();
+
+  // Register asset creators
+  m_assetRegister->registerAssetCreator<ModelAsset>(AssetTypeTraits<ModelAsset>::getTypeId());
+
+  m_onRegisterAsset(m_assetRegister);
+}
 } // namespace chEngineSDK

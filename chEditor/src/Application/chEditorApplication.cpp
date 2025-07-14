@@ -10,15 +10,20 @@
 
 #include "chEditorApplication.h"
 
+#include "chAssetImporter.h"
+#include "chAssetManagerImporter.h"
 #include "chEventDispatcherManager.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
 #include "chIGraphicsAPI.h"
 #include "chIRenderPass.h"
 #include "chISwapChain.h"
+#include "chPath.h"
 #include "chLogger.h"
+#include "chMeshManager.h"
 
-// TODO: probably move this to its own classs
+// #if USING (CH_EDITOR_IMGUI)
+//  TODO: probably move this to its own classs
 #include "imgui.h"
 #if USING(CH_DISPLAY_SDL3)
 #include "imgui_impl_sdl3.h"
@@ -29,19 +34,22 @@
 
 #endif // USING(CH_DISPLAY_SDL3)
 
+#include <nfd.hpp>
+
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
 
 namespace ImguiVars {
-  static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
-  static bool bRenderImGui = false;    // Variable to control if ImGui should render
+static bool bShowDemoWindow =
+    false; // Variable to control the visibility of the ImGui demo window
+static bool bRenderImGui = false; // Variable to control if ImGui should render
 } // namespace ImguiVars
 
 namespace RenderVars {
-  static LinearColor backgroundColor = LinearColor::Pink; // Default background color for the editor
+static LinearColor backgroundColor =
+    LinearColor::Pink; // Default background color for the editor
 } // namespace RenderVars
-
 
 /*
  */
@@ -56,9 +64,9 @@ EditorApplication::~EditorApplication() {
 }
 
 /*
-*/
+ */
 NODISCARD LinearColor
-EditorApplication::getBackgroundColor() const{
+EditorApplication::getBackgroundColor() const {
   // Return the background color for the editor
   return RenderVars::backgroundColor;
 }
@@ -96,8 +104,7 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
 
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("Render")) {
-      ImGui::ColorEdit4("Background Color",
-                        RenderVars::backgroundColor.toFloatPtr(),
+      ImGui::ColorEdit4("Background Color", RenderVars::backgroundColor.toFloatPtr(),
                         ImGuiColorEditFlags_NoInputs);
 
       ImGui::Separator(); //--------------------------------------------------------------
@@ -106,12 +113,55 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
 
       ImGui::EndMenu();
     }
+
+    if (ImGui::BeginMenu("Asset")) {
+      if (ImGui::MenuItem("Import Model")) {
+        auto importer = AssetManagerImporter::instance().getImporter<MeshManager>();
+        CH_ASSERT(importer && "MeshManager importer must not be null.");
+
+        Vector<String> supportedExtensions = importer->getSupportedExtensions();
+
+        NFD::Guard nfdGuard;
+        NFD::UniquePath outPath;
+
+        String supportedExtensionsStr;
+        for (String& ext : supportedExtensions) {
+          ext = ext.substr(2, ext.size()-2); // Remove the leading dot
+          if (!supportedExtensionsStr.empty()) {
+            supportedExtensionsStr += ",";
+          }
+          supportedExtensionsStr += ext;
+        }
+
+        const Vector<nfdfilteritem_t> filters = {
+            {"Supported Files", supportedExtensionsStr.c_str()}
+        };
+        nfdresult_t result = NFD::OpenDialog(outPath, filters.data(), filters.size());
+        if (result == NFD_OKAY) {
+          CH_LOG_INFO(EditorApp, "Selected file: {0}", outPath.get());
+          const Path selectedFilePath(outPath.get());
+          SPtr<MeshManager> meshManager =
+              AssetManagerImporter::instance().getImporter<MeshManager>();
+          meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false));
+        }
+        else if (result == NFD_CANCEL) {
+          CH_LOG_INFO(EditorApp, "User cancelled the file selection.");
+        }
+        else {
+          CH_LOG_ERROR(EditorApp, "Error opening file dialog: {0}", NFD::GetError());
+        }
+      }
+      ImGui::EndMenu();
+    }
     ImGui::EndMainMenuBar();
   }
 
   if (ImguiVars::bShowDemoWindow) {
     ImGui::ShowDemoWindow(&ImguiVars::bShowDemoWindow);
   }
+
+  /*************** */ // ImGuiFileDialog usage example
+  /********************* */
 
   ImGui::Render();
   ImGuiIO& io = ImGui::GetIO();
@@ -132,13 +182,20 @@ EditorApplication::initializeEditorComponents() {
   SPtr<DisplaySurface> display = getDisplaySurface();
   CH_ASSERT(display && "Display surface must not be null.");
 
+  AssetManagerImporter::startUp();
+  AssetManagerImporter::instance().initialize();
+
+  AssetManager::startUp();
+  AssetManager::instance().initialize();
+
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
   (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
-  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
+  io.ConfigFlags |=
+      ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
   // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
   // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
 
@@ -146,11 +203,12 @@ EditorApplication::initializeEditorComponents() {
   ImGui::StyleColorsDark();
   // ImGui::StyleColorsLight();
 
+  const float mainScale =
 #if USING(CH_DISPLAY_SDL3)
-  const float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+      SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 #else
-  // Fallback to a default scale if SDL3 is not used
-  const float main_scale = 1.0f;
+      1.0f;
+  // Fallback to a default scale if SDL3 is not used1.0f;
 #endif // USING(CH_DISPLAY_SDL3)
 
   // Setup scaling
@@ -158,11 +216,11 @@ EditorApplication::initializeEditorComponents() {
 
   // Bake a fixed style scale. (until we have a solution for dynamic style
   // scaling, changing this requires resetting Style + calling this again)
-  style.ScaleAllSizes(main_scale);
+  style.ScaleAllSizes(mainScale);
 
   // unnecessary. We leave both here for documentation purpose)
   // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this
-  style.FontScaleDpi = main_scale;
+  style.FontScaleDpi = mainScale;
 
   // [Experimental] Automatically overwrite style.FontScaleDpi
   // in Begin() when Monitor DPI changes. This will scale fonts
@@ -180,13 +238,13 @@ EditorApplication::initializeEditorComponents() {
   }
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  graphicAPI.execute("initImGui", { display, getRenderComponents().swapChain });
+  graphicAPI.execute("initImGui", {display, getRenderComponents().swapChain});
 
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
 
   eventHandler->addUpdateInjection([this](const Vector<Any>& args) -> bool {
-# if USING(CH_DISPLAY_SDL3)
+#if USING(CH_DISPLAY_SDL3)
     CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
     if (args.empty()) {
       CH_LOG_ERROR(EditorApp, "No arguments passed to display event handler.");
@@ -201,11 +259,11 @@ EditorApplication::initializeEditorComponents() {
 
     // Process SDL3 events with ImGui
     return ImGui_ImplSDL3_ProcessEvent(&event);
-# else
+#else
     CH_PAMRAMETER_UNUSED(args);
     CH_LOG_ERROR(EditorApp, "SDL3 is not enabled. Cannot process SDL_Event.");
     return false;
-# endif // USING(CH_DISPLAY_SDL3)
+#endif // USING(CH_DISPLAY_SDL3)
   });
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -234,12 +292,9 @@ EditorApplication::bindEvents() {
     }
   });
 
-
   eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
-    switch (keyData.key)
-    {
-    case chKeyBoard::Key::F10:
-    {
+    switch (keyData.key) {
+    case chKeyBoard::Key::F10: {
       CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
       ImguiVars::bRenderImGui = !ImguiVars::bRenderImGui;
       if (ImguiVars::bRenderImGui) {
@@ -247,8 +302,7 @@ EditorApplication::bindEvents() {
       } else {
         CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
       }
-    }
-    break;
+    } break;
 
     default:
       break;
@@ -262,6 +316,7 @@ EditorApplication::bindEvents() {
   eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
     // Handle mouse button down events specific to the editor
   });
+
   eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
     // Handle mouse button up events specific to the editor
   });

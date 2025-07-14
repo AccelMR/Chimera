@@ -33,6 +33,11 @@ class CH_UTILITY_EXPORT chString
 {
  public:
 
+  static String
+  fromInt32(int32 value) {
+    return std::to_string(value);
+  }
+
   /**
    *   Creates a new string by replacing every character that matches 'from' with 'to'.
    *

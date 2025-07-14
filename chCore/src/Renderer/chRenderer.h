@@ -1,108 +1,104 @@
-/************************************************************************/
-/**
- * @file chRenderer.h
- * @author AccelMR
- * @date 2025/04/09
- */
-/************************************************************************/
-#pragma once
+// /************************************************************************/
+// /**
+//  * @file chRenderer.h
+//  * @author AccelMR
+//  * @date 2025/04/09
+//  */
+// /************************************************************************/
+// #pragma once
 
-#include "chPrerequisitesCore.h"
+// #include "chPrerequisitesCore.h"
 
-#include "chCamera.h"
-#include "chGraphicsTypes.h"
-#include "chModule.h"
+// #include "chCamera.h"
+// #include "chGraphicsTypes.h"
+// #include "chModule.h"
 
-#include "chMeshManager.h"
+// namespace chEngineSDK {
+// class ModelNode;
+// class CH_CORE_EXPORT Renderer : public Module<Renderer>
+// {
+//  public:
+//   virtual ~Renderer();
 
+//   void
+//   initialize(uint32 width, uint32 height, bool vsync = false);
 
-namespace chEngineSDK {
-class CH_CORE_EXPORT Renderer : public Module<Renderer> {
- public:
-  virtual ~Renderer();
+//   void
+//   render(const float deltaTime);
 
-  void
-  initialize(uint32 width,
-             uint32 height,
-             bool vsync = false);
+//  private:
+//   void
+//   createSyncObjects();
 
-  void
-  render(const float deltaTime);
+//   void
+//   initializeRenderResources();
 
- private:
-  void
-  createSyncObjects();
+//  private:
+//   void
+//   resize();
 
-  void
-  initializeRenderResources();
+//   void
+//   loadModel();
 
- private:
-  void
-  resize();
+//   void
+//   renderModel(const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
 
-  void
-  loadModel();
+//   void
+//   createRenderPass();
 
-  void
-  renderModel(const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
+//   void
+//   bindInputEvents();
 
-  void
-  createRenderPass();
+//   void
+//   cleanupModelResources();
 
-  void
-  bindInputEvents();
+//  private:
+//   SPtr<ISwapChain> m_swapChain;
 
-  void
-  cleanupModelResources();
+//   SPtr<ICommandPool> m_commandPool;
+//   Vector<SPtr<ICommandBuffer>> m_commandBuffers;
+//   SPtr<IPipeline> m_pipeline;
+//   SPtr<IRenderPass> m_renderPass;
+//   Vector<SPtr<IFrameBuffer>> m_framebuffers;
+//   SPtr<IBuffer> m_viewProjectionBuffer;
+//   SPtr<ISampler> m_sampler;
+//   SPtr<ITexture> m_texture;
+//   SPtr<ITextureView> m_textureView;
+//   SPtr<ITexture> m_depthTexture;
+//   SPtr<ITextureView> m_depthTextureView;
 
- private:
-  SPtr<ISwapChain> m_swapChain;
+//   SPtr<Model> m_currentModel;
+//   Vector<SPtr<IBuffer>> m_meshVertexBuffers;
+//   Vector<SPtr<IBuffer>> m_meshIndexBuffers;
+//   Vector<uint32> m_meshIndexCounts;
+//   Vector<IndexType> m_meshIndexTypes;
+//   UnorderedMap<SPtr<Mesh>, uint32> m_meshToIndexMap;
 
-  SPtr<ICommandPool> m_commandPool;
-  Vector<SPtr<ICommandBuffer>> m_commandBuffers;
-  SPtr<IPipeline> m_pipeline;
-  SPtr<IRenderPass> m_renderPass;
-  Vector<SPtr<IFrameBuffer>> m_framebuffers;
-  SPtr<IBuffer> m_viewProjectionBuffer;
-  SPtr<ISampler> m_sampler;
-  SPtr<ITexture> m_texture;
-  SPtr<ITextureView> m_textureView;
-  SPtr<ITexture> m_depthTexture;
-  SPtr<ITextureView> m_depthTextureView;
+//   SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
+//   SPtr<IDescriptorPool> m_descriptorPool;
+//   SPtr<IDescriptorSet> m_descriptorSet;
 
-  SPtr<Model> m_currentModel;
-  Vector<SPtr<IBuffer>> m_meshVertexBuffers;
-  Vector<SPtr<IBuffer>> m_meshIndexBuffers;
-  Vector<uint32> m_meshIndexCounts;
-  Vector<IndexType> m_meshIndexTypes;
-  UnorderedMap<SPtr<Mesh>, uint32> m_meshToIndexMap;
+//   struct NodeRenderResources {
+//     SPtr<IBuffer> uniformBuffer;
+//     SPtr<IDescriptorSet> descriptorSet;
+//   };
 
-  SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
-  SPtr<IDescriptorPool> m_descriptorPool;
-  SPtr<IDescriptorSet> m_descriptorSet;
+//   UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
 
-  struct NodeRenderResources {
-    SPtr<IBuffer> uniformBuffer;
-    SPtr<IDescriptorSet> descriptorSet;
-  };
+//   // Sincronización
+//   Vector<SPtr<ISemaphore>> m_imageAvailableSemaphores;
+//   Vector<SPtr<ISemaphore>> m_renderFinishedSemaphores;
+//   Vector<SPtr<IFence>> m_inFlightFences;
 
-  UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
+//   SPtr<IShader> m_vertexShader;
+//   SPtr<IShader> m_fragmentShader;
 
+//   UniquePtr<Camera> m_camera;
 
-  // Sincronización
-  Vector<SPtr<ISemaphore>> m_imageAvailableSemaphores;
-  Vector<SPtr<ISemaphore>> m_renderFinishedSemaphores;
-  Vector<SPtr<IFence>> m_inFlightFences;
+//   uint32 m_currentFrame = 0;
+//   static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
 
-  SPtr<IShader> m_vertexShader;
-  SPtr<IShader> m_fragmentShader;
-
-  UniquePtr<Camera> m_camera;
-
-  uint32 m_currentFrame = 0;
-  static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
-
-  uint32 m_width = 0;
-  uint32 m_height = 0;
-};
-} // namespace chEngineSDK
+//   uint32 m_width = 0;
+//   uint32 m_height = 0;
+// };
+// } // namespace chEngineSDK

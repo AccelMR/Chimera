@@ -139,19 +139,22 @@ using Vector = std::vector<T, A>;
 template<typename T, typename P = std::less<T>, typename A = Alloc<T>>
 using Set = std::set<T, P, A>;
 
+template<typename K>
+using Hash = std::hash<K>;
+
 /**
  * @brief An associative container that contains key-value pairs with unique keys.
  *        Search, insertion, and removal have average constant-time complexity.
  *
  * @tparam K Type of the keys. Must be unique.
  * @tparam T Type of the values.
- * @tparam Hash Optional hash function; by default, a specialisation of std::hash.
+ * @tparam Hash Optional hash function; by default, a specialisation of Hash.
  * @tparam Eq Optional function for equality comparison; by default, operator==.
  * @tparam A Optional allocator object for defining storage allocation model; by default, std::allocator.
  */
 template<typename K,
   typename T,
-  typename Hash = std::hash<K>,
+  typename Hash = Hash<K>,
   typename Eq = std::equal_to<K>,
   typename A = std::allocator<std::pair<const K, T>>>
 using UnorderedMap = std::unordered_map<K, T, Hash, Eq, A>;
@@ -161,12 +164,12 @@ using UnorderedMap = std::unordered_map<K, T, Hash, Eq, A>;
  *        Search, insertion, and removal operations have average constant-time complexity.
  *
  * @tparam K Type of the keys. Must be unique.
- * @tparam Hash Optional hash function; by default, a specialisation of std::hash.
+ * @tparam Hash Optional hash function; by default, a specialisation of Hash.
  * @tparam Eq Optional function for equality comparison; by default, operator==.
  * @tparam A Optional allocator object for defining storage allocation model; by default, std::allocator.
  */
 template<typename K,
-  typename Hash = std::hash<K>,
+  typename Hash = Hash<K>,
   typename Eq = std::equal_to<K>,
   typename A = std::allocator<K>>
   using UnorderedSet = std::unordered_set<K, Hash, Eq, A>;

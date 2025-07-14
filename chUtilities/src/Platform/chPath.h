@@ -12,7 +12,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 #include <filesystem>  // for std::filesystem
@@ -26,12 +26,12 @@ class CH_UTILITY_EXPORT Path {
    * Default constructor.
    */
   FORCEINLINE
-  Path() 
+  Path()
     : m_path() {}
 
   /**
    * Constructor from a simple string.
-   * 
+   *
    * @param path
    *    As string.
    */
@@ -39,22 +39,22 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Constructor from a C-string.
-   * 
+   *
    * @param path
    *    As C-string.
   */
-  explicit Path(const char* path) 
+  explicit Path(const ANSICHAR* path)
     : m_path(path) {}
 
 #if USING(CH_CPP17_OR_LATER)
   /**
    * Constructor from a filesystem path.
-   * 
+   *
    * @param path
    *    As filesystem path.
    */
   FORCEINLINE explicit
-  Path(const fs::path& path) 
+  Path(const fs::path& path)
     : m_path(path) {}
 
   /**
@@ -69,7 +69,7 @@ class CH_UTILITY_EXPORT Path {
 #if USING(CH_PLATFORM_WIN32)
   /**
    * Constructor from a wide string. Windows Only constructor.
-   * 
+   *
    * @param path
    *    As Wide string.
    */
@@ -84,15 +84,15 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Checks if path is relative.
-   * 
+   *
    * @return True if path is relative, false for absolute path.
    */
-  bool 
+  bool
   isRelative() const;
 
   /**
    * Constructs a string from this path.
-   * 
+   *
    * @return Path as a string.
    */
   String
@@ -106,19 +106,19 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Constructs a wide string from this path, platform-specific.
-   * 
+   *
    * @return Path as a wide string (Windows) or regular string (other platforms).
    */
 #if USING(CH_PLATFORM_WIN32)
   WString
 #else
   String
-#endif 
+#endif
   getPlatformString() const;
 
   /**
    * Checks if this Path exists in the system.
-   * 
+   *
    * @return True if exists, false otherwise.
    */
   bool
@@ -126,7 +126,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Checks if path is a directory.
-   * 
+   *
    * @return True if directory, false otherwise.
    */
   FORCEINLINE bool
@@ -134,7 +134,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Checks if path is a file.
-   * 
+   *
    * @return True if file, false otherwise.
    */
   FORCEINLINE bool
@@ -142,7 +142,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Sets and sanitizes the internal path.
-   * 
+   *
    * @param path
    *    The new string to be a path.
    */
@@ -151,7 +151,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Returns the file name of this path.
-   * 
+   *
    * @param extension
    *    Include extension if true.
    * @return File name as a string.
@@ -161,7 +161,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Returns the extension of this path.
-   * 
+   *
    * @return Extension as a string.
    */
   String
@@ -169,7 +169,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Returns the directory of this path.
-   * 
+   *
    * @return Directory as a string.
    */
   Path
@@ -177,7 +177,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Joins this path with another path.
-   * 
+   *
    * @param rhs
    *    The path to join with.
    * @return The joined path.
@@ -187,7 +187,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Operator for less than, required for sorting, maps, etc.
-   * 
+   *
    * @param other
    *    The path to compare to.
    * @return True if this path is less than the other path.
@@ -197,7 +197,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Operator for adding a string to this path.
-   * 
+   *
    * @param other
    *   The string to add.
    * @return The new path.
@@ -216,7 +216,7 @@ class CH_UTILITY_EXPORT Path {
 
   /**
    * Returns the underlying filesystem path.
-   * 
+   *
    * @return The underlying filesystem path.
    */
   friend std::ostream& operator<<(std::ostream& os, const Path& path) {
@@ -229,7 +229,7 @@ class CH_UTILITY_EXPORT Path {
  protected:
   friend class FileSystem;
   friend class FileDataStream;
-  
+
   fs::path m_path;  // Using C++17 std::filesystem::path
 };
 }  // namespace chEngineSDK

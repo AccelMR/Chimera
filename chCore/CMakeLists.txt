@@ -5,6 +5,10 @@ file(GLOB
     SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.cpp

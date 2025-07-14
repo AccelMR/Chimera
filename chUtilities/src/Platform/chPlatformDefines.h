@@ -29,6 +29,16 @@
 #define CH_VERSION_PATCH    0
 #define CH_VERSION_BUILD    1
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+// The version string macro - completely resolved at compile time
+#define CH_ENGINE_VERSION_STRING \
+    TOSTRING(CH_VERSION_MAJOR) "." \
+    TOSTRING(CH_VERSION_MINIOR) "." \
+    TOSTRING(CH_VERSION_PATCH) "." \
+    TOSTRING(CH_VERSION_BUILD)
+
 /************************************************************************/
 /**
  * Compiler type and version

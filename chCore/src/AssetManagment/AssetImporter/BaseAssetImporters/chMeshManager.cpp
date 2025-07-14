@@ -10,9 +10,11 @@
 
 #include "chMeshManager.h"
 
+#include "chAssetManager.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
+#include "chModelAsset.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -34,6 +36,35 @@ convertAssimpMatrix(const aiMatrix4x4& matrix) {
 } // namespace MeshManagerHelpers
 
 CH_LOG_DECLARE_STATIC(MeshSystem, All);
+
+/*
+*/
+Vector<String>
+MeshManager::getSupportedExtensions() const {
+  Assimp::Importer importer;
+  String  extensions;
+  importer.GetExtensionList(extensions);
+  return chString::splitString(extensions, ';');
+}
+
+/*
+*/
+SPtr<IAsset>
+MeshManager::importAsset(const Path& filePath, const String& assetName) {
+  CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
+  if (!FileSystem::isFile(filePath)) {
+    CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
+    return nullptr;
+  }
+
+  SPtr<Model> model = loadModel(filePath);
+  SPtr<ModelAsset> modelAsset = AssetManager::instance().
+    createAsset<ModelAsset>(assetName, Path("Assets/")).lock();
+  CH_ASSERT(modelAsset);
+
+  modelAsset->setModel(model);
+  return std::static_pointer_cast<IAsset>(modelAsset);
+}
 
 /*
 */

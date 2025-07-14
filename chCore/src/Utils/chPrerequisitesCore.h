@@ -20,11 +20,10 @@
 #define INVALID_INDEX -1
 #define INVALID_UNSIGNED_INDEX 0xFFFFFFFF
 
-// TODO: Make this a config variable or somehting
 #ifdef CH_EDITOR_ENABLED
-# define CH_EDIOR IN_USE
+# define CH_EDITOR IN_USE
 #else
-# define CH_EDIOR NOT_IN_USE
+# define CH_EDITOR NOT_IN_USE
 #endif
 
 #ifdef CH_SDL3_ENABLED
