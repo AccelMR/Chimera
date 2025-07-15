@@ -12,6 +12,7 @@
 
 #include "chAssetImporter.h"
 #include "chAssetManagerImporter.h"
+#include "chAssetManager.h"
 #include "chEventDispatcherManager.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
@@ -41,9 +42,8 @@ CH_LOG_DECLARE_STATIC(EditorApp, All);
 namespace chEngineSDK {
 
 namespace ImguiVars {
-static bool bShowDemoWindow =
-    false; // Variable to control the visibility of the ImGui demo window
-static bool bRenderImGui = false; // Variable to control if ImGui should render
+static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
+static bool bRenderImGui = true; // Variable to control if ImGui should render
 } // namespace ImguiVars
 
 namespace RenderVars {
@@ -140,8 +140,7 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
         if (result == NFD_OKAY) {
           CH_LOG_INFO(EditorApp, "Selected file: {0}", outPath.get());
           const Path selectedFilePath(outPath.get());
-          SPtr<MeshManager> meshManager =
-              AssetManagerImporter::instance().getImporter<MeshManager>();
+          auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
           meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false));
         }
         else if (result == NFD_CANCEL) {

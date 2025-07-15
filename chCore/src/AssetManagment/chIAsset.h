@@ -47,7 +47,7 @@ static_assert(sizeof(AssetMetadata) % 8 == 0, "AssetMetadata is not 8-byte align
 namespace AssetMetadataUtils {
 
 template <size_t N>
-void
+FORCEINLINE void
 copyString(ANSICHAR (&dest)[N], const char* src) {
   if (src == nullptr) {
     dest[0] = '\0';
@@ -62,13 +62,13 @@ copyString(ANSICHAR (&dest)[N], const char* src) {
 }
 
 template <size_t N>
-void
+FORCEINLINE void
 copyString(ANSICHAR (&dest)[N], const std::string& src) {
   copyString(dest, src.c_str());
 }
 
 // Factory function for creating AssetMetadata
-AssetMetadata
+FORCEINLINE AssetMetadata
 createAssetMetadata(const UUID* uuid, const UUID& assetType, uint64 creationTime,
                     const char* typeName, const char* engineVersion, const char* name,
                     const char* originalPath, const char* assetPath) {
@@ -153,11 +153,8 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
     return m_state;
   }
 
-  bool
-  serialize(SPtr<DataStream> stream);
-
-  bool
-  deserialize(SPtr<DataStream> stream);
+  NODISCARD bool
+  save();
 
  protected:
   friend class AssetManager;
@@ -176,14 +173,11 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD virtual bool
   unload();
 
-  NODISCARD bool
-  save();
+  virtual bool
+  serialize(SPtr<DataStream> stream) = 0;
 
   virtual bool
-  _internalSerialize(SPtr<DataStream> stream) = 0;
-
-  virtual bool
-  _internalDeserialize(SPtr<DataStream> stream) = 0;
+  deserialize(SPtr<DataStream> stream) = 0;
 
   bool
   validateMetadata(const AssetMetadata&) const;

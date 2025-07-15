@@ -63,6 +63,11 @@ MeshManager::importAsset(const Path& filePath, const String& assetName) {
   CH_ASSERT(modelAsset);
 
   modelAsset->setModel(model);
+  if (!modelAsset->save()) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
+    return nullptr;
+  }
+
   return std::static_pointer_cast<IAsset>(modelAsset);
 }
 

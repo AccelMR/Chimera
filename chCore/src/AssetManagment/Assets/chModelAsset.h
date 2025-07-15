@@ -23,6 +23,7 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
 
   ~ModelAsset() = default;
 
+ protected:
   bool
   load() override { return true; }
 
@@ -30,10 +31,10 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   unload() override { return true; }
 
   bool
-  _internalSerialize(SPtr<DataStream>) override { return true; }
+  serialize(SPtr<DataStream>) override;
 
   bool
-  _internalDeserialize(SPtr<DataStream>) override { return true; }
+  deserialize(SPtr<DataStream>) override { return true; }
 
  private:
   friend class MeshManager;

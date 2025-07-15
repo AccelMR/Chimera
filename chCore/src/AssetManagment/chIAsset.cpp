@@ -45,7 +45,7 @@ IAsset::save(){
     stream << refUUID;
   }
 
-  const bool success = _internalSerialize(stream);
+  const bool success = serialize(stream);
   if (!success) {
     CH_LOG(AssetSystem, Error, "Failed to serialize asset {0}", m_metadata.name);
     return false;
@@ -109,7 +109,7 @@ IAsset::load(){
     m_referencedAssets[i] = refUUID;
   }
 
-  const bool success = _internalDeserialize(stream);
+  const bool success = deserialize(stream);
 
   if (!success) {
     CH_LOG(AssetSystem, Error, "Failed to deserialize asset {0}", m_metadata.name);
