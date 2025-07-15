@@ -36,15 +36,21 @@ public:
   getHeight() const override { return m_renderHeight; }
 
   void
-  createMeshBuffers();
-
-  void
-  createNodeDescriptorResources();
+  setClearColors(const Vector<LinearColor>& clearColors) override{
+    m_clearColors = clearColors;
+  }
 
   void loadModel(const SPtr<Model>& model);
   void bindInputEvents();
 
  private:
+
+  void
+  createMeshBuffers();
+
+  void
+  createNodeDescriptorResources();
+
   void
   createRenderTargets();
 
@@ -64,6 +70,8 @@ public:
   SPtr<ITextureView> m_colorTargetView;
   SPtr<ITexture> m_depthTarget;
   SPtr<ITextureView> m_depthTargetView;
+
+  Vector<LinearColor> m_clearColors;
 
   SPtr<IRenderPass> m_renderPass;
   SPtr<IFrameBuffer> m_framebuffer;

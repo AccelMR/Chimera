@@ -883,8 +883,48 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplVulkan_NewFrame();
     return Any(true);
   };
-#endif // USING (CH_VK_IMGUI)
 
+  m_functionMap["addImGuiTexture"] = [this](const Vector<Any>& args) -> Any {
+    if (args.size() < 2) {
+      CH_LOG_ERROR(Vulkan, "addImGuiTexture requires at least 2 arguments: sampler and textureView");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+    SPtr<ISampler> sampler;
+    if (!AnyUtils::tryGetValue<SPtr<ISampler>>(args[0], sampler)) {
+      CH_LOG_ERROR(Vulkan, "Invalid sampler argument");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+    SPtr<ITextureView> textureView;
+    if (!AnyUtils::tryGetValue<SPtr<ITextureView>>(args[1], textureView)) {
+      CH_LOG_ERROR(Vulkan, "Invalid textureView argument");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+    // Cast to Vulkan objects
+    auto vulkanSampler = std::reinterpret_pointer_cast<VulkanSampler>(sampler);
+    auto vulkanTextureView = std::reinterpret_pointer_cast<VulkanTextureView>(textureView);
+
+    if (!vulkanSampler || !vulkanTextureView) {
+      CH_LOG_ERROR(Vulkan, "Failed to cast to Vulkan objects");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+
+    // Get Vulkan handles
+    VkSampler vkSampler = vulkanSampler->getHandle();
+    VkImageView vkImageView = static_cast<VkImageView>(vulkanTextureView->getRaw());
+
+    // Use ImGui's function to create the descriptor set
+    VkDescriptorSet descriptorSet = ImGui_ImplVulkan_AddTexture(
+        vkSampler, vkImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    auto descriptorSetWrapper =
+        chMakeShared<VulkanDescriptorSet>(m_vulkanData->device, descriptorSet);
+    return Any(std::static_pointer_cast<IDescriptorSet>(descriptorSetWrapper));
+  };
+#endif // USING (CH_VK_IMGUI)
 }
 
 /*

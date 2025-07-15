@@ -142,7 +142,7 @@ NastyRenderer::onRender(float deltaTime) {
   // Begin render pass
   RenderPassBeginInfo renderPassInfo{.renderPass = m_renderPass,
                                      .framebuffer = m_framebuffer,
-                                     .clearValues = {LinearColor::Black},
+                                     .clearValues = m_clearColors,
                                      .depthStencilClearValue = {{1.0f, 0}}};
 
   m_commandBuffer->beginRenderPass(renderPassInfo);
@@ -476,13 +476,6 @@ void
 NastyRenderer::loadModel(const SPtr<Model>& model) {
 
   cleanupModelResources();
-
-  // Load model using your model manager (uncomment when available)
-  //SPtr<Model> model = AssetManager::getInstance().getAsset<Model>();
-  // if (!model) {
-  //   CH_LOG_ERROR(NastyRendererSystem, "Failed to load model");
-  //   return;
-  // }
   m_currentModel = model;
 
   // For now, create a temporary model placeholder

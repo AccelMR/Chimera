@@ -11,28 +11,27 @@
 #include "chEditorApplication.h"
 
 #include "chAssetImporter.h"
-#include "chAssetManagerImporter.h"
 #include "chAssetManager.h"
+#include "chAssetManagerImporter.h"
 #include "chEventDispatcherManager.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
+#include "chIDescriptorSet.h"
 #include "chIGraphicsAPI.h"
 #include "chIRenderPass.h"
 #include "chISwapChain.h"
-#include "chPath.h"
+#include "chITextureView.h"
 #include "chLogger.h"
 #include "chMeshManager.h"
 #include "chModelAsset.h"
+#include "chPath.h"
 
-//#include "chRenderer.h"
-
-// #if USING (CH_EDITOR_IMGUI)
 //  TODO: probably move this to its own classs
 #include "imgui.h"
-#if USING(CH_DISPLAY_SDL3)
-#include "imgui_impl_sdl3.h"
 
-// TODO: For now only vulkan is supported
+#if USING(CH_DISPLAY_SDL3)
+
+#include "imgui_impl_sdl3.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
 
@@ -46,12 +45,12 @@ namespace chEngineSDK {
 
 namespace ImguiVars {
 static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
-static bool bRenderImGui = true; // Variable to control if ImGui should render
+static bool bRenderImGui = true;     // Variable to control if ImGui should render
 } // namespace ImguiVars
 
 namespace RenderVars {
-static LinearColor backgroundColor =
-    LinearColor::Pink; // Default background color for the editor
+static LinearColor backgroundColor = LinearColor::Pink; // Default background color for the editor
+static LinearColor rendererColor = LinearColor::Black; // Default renderer color
 } // namespace RenderVars
 
 /*
@@ -85,16 +84,11 @@ EditorApplication::onPostInitialize() {
 }
 
 /*
-*/
+ */
 RendererOutput
-EditorApplication::onRender(float){
-  return RendererOutput{
-    .colorTarget = nullptr,
-    .depthTarget = nullptr,
-    .width = 0,
-    .height = 0,
-    .isValid = false
-  };
+EditorApplication::onRender(float deltaTime) {
+  RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
+  return renderOut;
 }
 
 /*
@@ -106,7 +100,6 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
                              uint32 swapChainHeight) {
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  CH_PAMRAMETER_UNUSED(rendererOutput);
   CH_PAMRAMETER_UNUSED(swapChainWidth);
   CH_PAMRAMETER_UNUSED(swapChainHeight);
 
@@ -123,10 +116,18 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
 
   ImGui::NewFrame();
 
+  renderFullScreenRenderer(rendererOutput);
+
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("Render")) {
       ImGui::ColorEdit4("Background Color", RenderVars::backgroundColor.toFloatPtr(),
                         ImGuiColorEditFlags_NoInputs);
+
+      ImGui::Separator(); //--------------------------------------------------------------
+      if (ImGui::ColorEdit4("Renderer Color", RenderVars::rendererColor.toFloatPtr(),
+                            ImGuiColorEditFlags_NoInputs)) {
+        m_nastyRenderer->setClearColors({RenderVars::rendererColor});
+      }
 
       ImGui::Separator(); //--------------------------------------------------------------
 
@@ -141,64 +142,20 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
         CH_ASSERT(importer && "MeshManager importer must not be null.");
 
         Vector<String> supportedExtensions = importer->getSupportedExtensions();
-
-        NFD::Guard nfdGuard;
-        NFD::UniquePath outPath;
-
-        String supportedExtensionsStr;
-        for (String& ext : supportedExtensions) {
-          ext = ext.substr(2, ext.size()-2); // Remove the leading dot
-          if (!supportedExtensionsStr.empty()) {
-            supportedExtensionsStr += ",";
-          }
-          supportedExtensionsStr += ext;
-        }
-
-        const Vector<nfdfilteritem_t> filters = {
-            {"Supported Files", supportedExtensionsStr.c_str()}
-        };
-        nfdresult_t result = NFD::OpenDialog(outPath, filters.data(), filters.size());
-        if (result == NFD_OKAY) {
-          CH_LOG_INFO(EditorApp, "Selected file: {0}", outPath.get());
-          const Path selectedFilePath(outPath.get());
-          auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
-          auto importedModel =
-            std::reinterpret_pointer_cast<ModelAsset>(
-              meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false)));
-          if (importedModel) {
-            CH_LOG_INFO(EditorApp, "Successfully imported model: {0}", selectedFilePath.toString());
-            m_nastyRenderer->loadModel(importedModel->getModel());
-          }
-          else {
-            CH_LOG_ERROR(EditorApp, "Failed to import model: {0}", selectedFilePath.toString());
-          }
-        }
-        else if (result == NFD_CANCEL) {
-          CH_LOG_INFO(EditorApp, "User cancelled the file selection.");
-        }
-        else {
-          CH_LOG_ERROR(EditorApp, "Error opening file dialog: {0}", NFD::GetError());
-        }
+        openFileExplorer(FileSystem::absolutePath(chEnginePaths::ASSETS_PATH),
+                         supportedExtensions);
       }
       ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();
   }
-
-  if (ImguiVars::bShowDemoWindow) {
-    ImGui::ShowDemoWindow(&ImguiVars::bShowDemoWindow);
-  }
-
-  /*************** */ // ImGuiFileDialog usage example
-  /********************* */
-
-  ImGui::Render();
-  ImGuiIO& io = ImGui::GetIO();
-  // Update and Render additional Platform Windows
-  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault();
-  }
+    ImGui::Render();
+    ImGuiIO& io = ImGui::GetIO();
+    // Update and Render additional Platform Windows
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+      ImGui::UpdatePlatformWindows();
+      ImGui::RenderPlatformWindowsDefault();
+    }
 
   graphicAPI.execute("renderImGui", {commandBuffer});
 }
@@ -219,10 +176,91 @@ EditorApplication::initializeEditorComponents() {
 
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
+  m_nastyRenderer->setClearColors({RenderVars::rendererColor});
+
+  initImGui(display);
+
+  SamplerCreateInfo samplerInfo{};
+  samplerInfo.magFilter = SamplerFilter::Linear;
+  samplerInfo.minFilter = SamplerFilter::Linear;
+  samplerInfo.addressModeU = SamplerAddressMode::ClampToEdge;
+  samplerInfo.addressModeV = SamplerAddressMode::ClampToEdge;
+  samplerInfo.addressModeW = SamplerAddressMode::ClampToEdge;
+
+  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+  m_defaultSampler = graphicAPI.createSampler(samplerInfo);
+
+  CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
+}
+
+/*
+ */
+void
+EditorApplication::bindEvents() {
+  CH_LOG_INFO(EditorApp, "Binding editor events.");
+  CH_ASSERT(EventDispatcherManager::isStarted());
+
+  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
+
+  eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
+    // Handle key down events specific to the editor
+    if (data.hasModifier(KeyBoardModifier::LCTRL) ||
+        data.hasModifier(KeyBoardModifier::RCTRL)) {
+      if (data.key == chKeyBoard::Key::S) {
+        CH_LOG_DEBUG(EditorApp, "Ctrl+S pressed, saving the current document.");
+        // Handle Ctrl+S for saving the current document
+      } else if (data.key == chKeyBoard::Key::O) {
+        CH_LOG_DEBUG(EditorApp, "Ctrl+O pressed, opening a document.");
+        // Handle Ctrl+O for opening a document
+      }
+    }
+  });
+
+  eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
+    switch (keyData.key) {
+    case chKeyBoard::Key::F10: {
+      CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
+      ImguiVars::bRenderImGui = !ImguiVars::bRenderImGui;
+      if (ImguiVars::bRenderImGui) {
+        CH_LOG_DEBUG(EditorApp, "ImGui rendering enabled.");
+      } else {
+        CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
+      }
+    } break;
+
+    default:
+      break;
+    }
+  });
+
+  eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {
+    // Handle key pressed events specific to the editor
+  });
+
+  eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
+    // Handle mouse button down events specific to the editor
+  });
+
+  eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
+    // Handle mouse button up events specific to the editor
+  });
+
+  eventDispatcher.OnMouseMove.connect([this](const MouseMoveData&) {
+    // Handle mouse move events specific to the editor
+  });
+  eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData&) {
+    // Handle mouse wheel events specific to the editor
+  });
+}
+
+/*
+ */
+void
+EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
+  CH_LOG_INFO(EditorApp, "Initializing ImGui for the editor.");
 
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
-  (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
@@ -297,68 +335,94 @@ EditorApplication::initializeEditorComponents() {
     return false;
 #endif // USING(CH_DISPLAY_SDL3)
   });
-
-  CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
 }
 
 /*
  */
 void
-EditorApplication::bindEvents() {
-  CH_LOG_INFO(EditorApp, "Binding editor events.");
-  CH_ASSERT(EventDispatcherManager::isStarted());
+EditorApplication::openFileExplorer(const Path& pathToOpen, const Vector<String>& filters) {
+  NFD::Guard nfdGuard;
+  NFD::UniquePath outPath;
 
-  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
+  String supportedExtensionsStr;
+  for (const String& ext : filters) {
+    String extNoAst = ext.substr(2, ext.size() - 2); // Remove the leading dot
+    if (!supportedExtensionsStr.empty()) {
+      supportedExtensionsStr += ",";
+    }
+    supportedExtensionsStr += extNoAst;
+  }
 
-  eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
-    // Handle key down events specific to the editor
-    if (data.hasModifier(KeyBoardModifier::LCTRL) ||
-        data.hasModifier(KeyBoardModifier::RCTRL)) {
-      if (data.key == chKeyBoard::Key::S) {
-        CH_LOG_DEBUG(EditorApp, "Ctrl+S pressed, saving the current document.");
-        // Handle Ctrl+S for saving the current document
-      } else if (data.key == chKeyBoard::Key::O) {
-        CH_LOG_DEBUG(EditorApp, "Ctrl+O pressed, opening a document.");
-        // Handle Ctrl+O for opening a document
+  const Vector<nfdfilteritem_t> nfdFilter = {
+      {"Supported Files", supportedExtensionsStr.c_str()}};
+
+  nfdresult_t result = NFD::OpenDialog(outPath, nfdFilter.data(), nfdFilter.size(),
+                                       pathToOpen.toString().c_str());
+
+  if (result == NFD_OKAY) {
+    CH_LOG_INFO(EditorApp, "Selected file: {0}", outPath.get());
+
+    const Path selectedFilePath(outPath.get());
+
+    auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
+    auto importedModel = std::reinterpret_pointer_cast<ModelAsset>(
+        meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false)));
+
+    if (importedModel) {
+      CH_LOG_INFO(EditorApp, "Successfully imported model: {0}", selectedFilePath.toString());
+      m_nastyRenderer->loadModel(importedModel->getModel());
+    }
+    else {
+      CH_LOG_ERROR(EditorApp, "Failed to import model: {0}", selectedFilePath.toString());
+    }
+  }
+  else if (result == NFD_CANCEL) {
+    CH_LOG_INFO(EditorApp, "User cancelled the file selection.");
+  }
+  else {
+    CH_LOG_ERROR(EditorApp, "Error opening file dialog: {0}", NFD::GetError());
+  }
+}
+
+/*
+*/
+void
+EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput) {
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize({ 1280.0f, 720.0f }, ImGuiCond_Always);
+
+  ImGuiWindowFlags window_flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground;
+
+  if (ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
+    if (rendererOutput.colorTarget) {
+      auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
+
+      SPtr<IDescriptorSet> descriptorSet = nullptr;
+      if (it == m_textureDescriptorSets.end()) {
+        IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+        Any result = graphicAPI.execute(
+            "addImGuiTexture", {Any(m_defaultSampler), Any(rendererOutput.colorTarget)});
+
+        if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(result, descriptorSet) &&
+            descriptorSet) {
+          m_textureDescriptorSets[rendererOutput.colorTarget] = descriptorSet;
+        }
+      }
+      else {
+        descriptorSet = it->second;
+      }
+
+      if (descriptorSet) {
+        // La imagen ocupará toda la ventana
+        ImVec2 windowSize = ImGui::GetWindowSize();
+        ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), windowSize);
       }
     }
-  });
-
-  eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
-    switch (keyData.key) {
-    case chKeyBoard::Key::F10: {
-      CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
-      ImguiVars::bRenderImGui = !ImguiVars::bRenderImGui;
-      if (ImguiVars::bRenderImGui) {
-        CH_LOG_DEBUG(EditorApp, "ImGui rendering enabled.");
-      } else {
-        CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
-      }
-    } break;
-
-    default:
-      break;
-    }
-  });
-
-  eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {
-    // Handle key pressed events specific to the editor
-  });
-
-  eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
-    // Handle mouse button down events specific to the editor
-  });
-
-  eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
-    // Handle mouse button up events specific to the editor
-  });
-
-  eventDispatcher.OnMouseMove.connect([this](const MouseMoveData&) {
-    // Handle mouse move events specific to the editor
-  });
-  eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData&) {
-    // Handle mouse wheel events specific to the editor
-  });
+  }
+  ImGui::End();
 }
 
 } // namespace chEngineSDK

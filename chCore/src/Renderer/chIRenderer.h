@@ -68,5 +68,8 @@ class CH_CORE_EXPORT IRenderer
 
   virtual uint32
   getHeight() const = 0;
+
+  virtual void
+  setClearColors(const Vector<LinearColor>& clearColors) = 0;
 };
 } // namespace chEngineSDK

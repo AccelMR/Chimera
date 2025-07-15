@@ -20,6 +20,9 @@ public:
   VulkanDescriptorSet(VkDevice device, VkDescriptorSet descriptorSet);
   ~VulkanDescriptorSet() override;
 
+  NODISCARD FORCEINLINE void*
+  getRaw() const override { return static_cast<void*>(m_descriptorSet); }
+
   NODISCARD FORCEINLINE VkDescriptorSet
   getHandle() const { return m_descriptorSet; }
 

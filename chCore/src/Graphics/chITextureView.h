@@ -19,27 +19,29 @@ namespace chEngineSDK {
 class CH_CORE_EXPORT ITextureView {
  public:
   virtual ~ITextureView() = default;
-  
-  //NODISCARD virtual SPtr<ITexture> 
+
+  //NODISCARD virtual SPtr<ITexture>
   //getTexture() const = 0;
- 
-  NODISCARD virtual Format 
+
+  NODISCARD virtual Format
   getFormat() const = 0;
 
-  NODISCARD virtual TextureViewType 
+  NODISCARD virtual TextureViewType
   getViewType() const = 0;
 
-  NODISCARD virtual uint32 
+  NODISCARD virtual uint32
   getBaseMipLevel() const = 0;
 
-  NODISCARD virtual uint32 
+  NODISCARD virtual uint32
   getMipLevelCount() const = 0;
 
-  NODISCARD virtual uint32 
+  NODISCARD virtual uint32
   getBaseArrayLayer() const = 0;
 
-  NODISCARD virtual uint32 
+  NODISCARD virtual uint32
   getArrayLayerCount() const = 0;
 
+  NODISCARD virtual void*
+  getRaw() const = 0;
 };
 } // namespace chEngineSDK

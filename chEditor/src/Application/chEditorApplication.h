@@ -82,7 +82,19 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   void
   bindEvents();
 
+  void
+  initImGui(const SPtr<DisplaySurface>& display);
+
+  void
+  openFileExplorer(const Path& pathToOpen, const Vector<String>& filters = {});
+
+  void
+  renderFullScreenRenderer(const RendererOutput& rendererOutput);
+
  private:
   SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+
+  SPtr<ISampler> m_defaultSampler;
+  Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
 };
 } // namespace chEngineSDK
