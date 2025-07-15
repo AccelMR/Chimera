@@ -153,6 +153,9 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
     return m_state;
   }
 
+  NODISCARD FORCEINLINE const UUID&
+  getAssetType() const { return m_metadata.assetType; }
+
   NODISCARD bool
   save();
 

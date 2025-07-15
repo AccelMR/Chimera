@@ -151,6 +151,25 @@ class CH_UTILITY_EXPORT chString
    static String
    toLower(const String& str);
 
+   /**
+   *   Copies a string to a buffer of ANSICHAR.
+   * @param dest
+   *    The destination buffer to copy the string.
+   * @param src
+   *    The source string to copy.
+   * @param size
+   *    The size of the destination buffer. If 0, it will copy the entire string.
+   **/
+   FORCEINLINE
+   static void
+   copyToANSI(ANSICHAR* dest, const String& src, SIZE_T size = 0) {
+      if (size == 0) {
+        size = src.size();
+      }
+      std::memcpy(dest, src.c_str(), size * sizeof(ANSICHAR));
+      dest[size] = '\0'; // Ensure null-termination
+   }
+
   /**
    *   Creates a new all characters in a string to upper case.
    *

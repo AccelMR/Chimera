@@ -109,15 +109,22 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
  */
 SPtr<DataStream>
 FileSystem::createAndOpenFile(const Path& path) {
+  Path fullPath = path.isRelative() ?
+                  absolutePath(path) :
+                  path;
+
   // Get the parent directory of the file path
-  Path parentDir = path.getDirectory();
+  Path parentDir = fullPath.getDirectory();
 
   // Check if the directory exists, if not, create it
   if (!FileSystem::exists(parentDir)) {
-    FileSystem::createDirectories(parentDir);
+    if (!FileSystem::createDirectories(parentDir)){
+      std::cerr << "Failed to create directory: " << parentDir.toString() << std::endl;
+      return nullptr;
+    }
   }
 
-  return chMakeShared<FileDataStream>(path, ACCESS_MODE::kWRITE, true);
+  return chMakeShared<FileDataStream>(fullPath, ACCESS_MODE::kWRITE, true);
 }
 
 /**

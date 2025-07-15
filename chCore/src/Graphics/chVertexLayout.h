@@ -18,7 +18,7 @@
 #include "chVector2.h"
 
 namespace chEngineSDK {
-enum class VertexAttributeType {
+enum class VertexAttributeType : uint32 {
   Position,
   Normal,
   Color,
@@ -33,7 +33,7 @@ enum class VertexAttributeType {
   COUNT
 };
 
-enum class VertexFormat {
+enum class VertexFormat : uint32 {
   Float,
   Float2,
   Float3,
@@ -59,11 +59,12 @@ enum class VertexFormat {
 };
 
 struct VertexAttributeDesc {
-  VertexAttributeType type;
-  VertexFormat format;
-  uint32 offset;  // offset in bytes from the start of the vertex structure
-  uint32 binding; // to support multiple vertex buffers
-  String semanticName; // For custom attributes
+  VertexAttributeType type;      // 4 bytes
+  VertexFormat format;           // 4 bytes
+  uint32 offset;                 // 4 bytes
+  uint32 binding;                // 4 bytes
+  ANSICHAR semanticName[16];     // 16 bytes
+  // Total: 32 bytes, aligned to 4 bytes
 };
 
 class CH_CORE_EXPORT VertexLayout {
@@ -71,16 +72,16 @@ class CH_CORE_EXPORT VertexLayout {
   VertexLayout() = default;
   ~VertexLayout() = default;
 
-  void 
-  addAttribute(VertexAttributeType type, 
-               VertexFormat format, 
+  void
+  addAttribute(VertexAttributeType type,
+               VertexFormat format,
                uint32 offset = UINT32_MAX,
                uint32 binding = 0);
 
   void
-  addCustomAttribute(const String& semanticName, 
-                     VertexFormat format, 
-                     uint32 offset, 
+  addCustomAttribute(const String& semanticName,
+                     VertexFormat format,
+                     uint32 offset,
                      uint32 binding = 0);
 
   NODISCARD FORCEINLINE const Vector<VertexAttributeDesc>&
@@ -100,7 +101,7 @@ class CH_CORE_EXPORT VertexLayout {
   }
 
  private:
-  
+
   uint32
   calculateOffset(uint32 binding) const;
 
@@ -129,7 +130,7 @@ class CH_CORE_EXPORT VertexLayout {
 struct VertexPosColor {
   Vector3 position;
   LinearColor color;
-  
+
   static VertexLayout getLayout() {
     return VertexLayout::createPostionColorLayout();
   }
@@ -139,7 +140,7 @@ struct VertexNormalTexCoord {
   Vector3 position;
   Vector3 normal;
   Vector2 texCoord;
-  
+
   static VertexLayout getLayout() {
     return VertexLayout::createPositionNormalTexCoordLayout();
   }

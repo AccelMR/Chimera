@@ -11,6 +11,8 @@
 
 #include "chWindowedApplication.h"
 
+#include "chNastyRenderer.h"
+
 #if USING(CH_PLATFORM_WIN32)
 # if USING(CH_COMPILER_MSVC)
 #   if defined( CH_STATIC_LIB )
@@ -64,8 +66,14 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   virtual void
   onPostInitialize() override;
 
+  virtual RendererOutput
+  onRender(float deltaTime);
+
   virtual void
-  onRender(const float deltaTime, const SPtr<ICommandBuffer>& commandBuffer) override;
+  onPresent(const RendererOutput& rendererOutput,
+            const SPtr<ICommandBuffer>& commandBuffer,
+            uint32 swapChainWidth,
+            uint32 swapChainHeight);
 
  private:
   void
@@ -75,5 +83,6 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   bindEvents();
 
  private:
+  SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
 };
 } // namespace chEngineSDK

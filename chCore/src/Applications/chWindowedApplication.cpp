@@ -357,76 +357,64 @@ WindowedApplication::destroyRenderer() {
  */
 void
 WindowedApplication::render(const float deltaTime) {
-  // Basic render implementation with proper Vulkan synchronization
-  if (!m_renderComponents.swapChain || m_renderComponents.inFlightFences.empty()) {
-    return;
-  }
-
-  constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
-  uint32& currentFrame = m_renderComponents.currentFrame;
-
-  // Wait for previous frame to finish
+  auto& currentFrame = m_renderComponents.currentFrame;
   auto& currentFence = m_renderComponents.inFlightFences[currentFrame];
+
+  // Wait for previous frame
   if (!currentFence->wait(MAX_WAIT_TIME)) {
-    CH_LOG_WARNING(WindowedApp, "Frame {0} fence wait timed out.", currentFrame);
+    CH_LOG_WARNING(WindowedApp, "Frame {0} timed out.", currentFrame);
     return;
   }
   currentFence->reset();
 
-  // Acquire next image from swap chain
-  uint32 semaphoreIndex = currentFrame % m_renderComponents.imageAvailableSemaphores.size();
-  auto imageAvailableSem = m_renderComponents.imageAvailableSemaphores[semaphoreIndex];
+  // === STEP 1: Let derived class render scene ===
+  RendererOutput sceneOutput = onRender(deltaTime);
 
-  bool acquired = m_renderComponents.swapChain->acquireNextImage(imageAvailableSem, nullptr);
-
-  if (!acquired) {
-    CH_LOG_WARNING(WindowedApp, "Failed to acquire swap chain image.");
+  // === STEP 2: Handle swap chain presentation ===
+  auto imageAvailableSem = m_renderComponents.imageAvailableSemaphores[currentFrame];
+  if (!m_renderComponents.swapChain->acquireNextImage(imageAvailableSem)) {
+    resize(m_display->getWidth(), m_display->getHeight());
     return;
   }
 
   uint32 imageIndex = m_renderComponents.swapChain->getCurrentImageIndex();
-
-  // Validate image index
-  if (imageIndex >= m_renderComponents.commandBuffers.size()) {
-    CH_LOG_WARNING(WindowedApp, "Image index {0} out of range, skipping frame.", imageIndex);
-    return;
-  }
-
   auto& commandBuffer = m_renderComponents.commandBuffers[imageIndex];
   auto renderPass = m_renderComponents.swapChain->getRenderPass();
   auto framebuffer = m_renderComponents.swapChain->getFramebuffer(imageIndex);
 
-  // Record command buffer
+  // Begin command buffer and swap chain render pass
   commandBuffer->begin();
 
-  // Begin render pass with clear color
-  RenderPassBeginInfo renderPassBegin{.renderPass = renderPass,
-                                      .framebuffer = framebuffer,
-                                      .clearValues = {getBackgroundColor()}};
+  RenderPassBeginInfo renderPassBegin{
+    .renderPass = renderPass,
+    .framebuffer = framebuffer,
+    .clearValues = { getBackgroundColor() }
+  };
 
   commandBuffer->beginRenderPass(renderPassBegin);
 
-  // Call derived class render implementation
-  onRender(deltaTime, commandBuffer);
+  // === STEP 3: Let derived class present to swap chain ===
+  onPresent(sceneOutput,
+            commandBuffer,
+            m_renderComponents.swapChain->getWidth(),
+            m_renderComponents.swapChain->getHeight());
 
-  // End render pass
+  // End render pass and command buffer
   commandBuffer->endRenderPass();
   commandBuffer->end();
 
+  // Submit and present
   auto renderFinishedSem = m_renderComponents.renderFinishedSemaphores[imageIndex];
-
-  // Submit command buffer
-  SubmitInfo submitInfo{.commandBuffers = {commandBuffer},
-                        .waitSemaphores = {imageAvailableSem},
-                        .waitStages = {PipelineStage::ColorAttachmentOutput},
-                        .signalSemaphores = {renderFinishedSem}};
+  SubmitInfo submitInfo{
+    .commandBuffers = {commandBuffer},
+    .waitSemaphores = {imageAvailableSem},
+    .waitStages = {PipelineStage::ColorAttachmentOutput},
+    .signalSemaphores = {renderFinishedSem}
+  };
 
   m_renderComponents.graphicsQueue->submit({submitInfo}, currentFence);
-
-  // Present with image-specific semaphore
   m_renderComponents.swapChain->present({renderFinishedSem});
 
-  // Advance to next frame
   currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 

@@ -23,6 +23,9 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
 
   ~ModelAsset() = default;
 
+  NODISCARD FORCEINLINE SPtr<Model>
+  getModel() const { return m_model; }
+
  protected:
   bool
   load() override { return true; }

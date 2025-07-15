@@ -22,6 +22,9 @@
 #include "chPath.h"
 #include "chLogger.h"
 #include "chMeshManager.h"
+#include "chModelAsset.h"
+
+//#include "chRenderer.h"
 
 // #if USING (CH_EDITOR_IMGUI)
 //  TODO: probably move this to its own classs
@@ -82,12 +85,30 @@ EditorApplication::onPostInitialize() {
 }
 
 /*
+*/
+RendererOutput
+EditorApplication::onRender(float){
+  return RendererOutput{
+    .colorTarget = nullptr,
+    .depthTarget = nullptr,
+    .width = 0,
+    .height = 0,
+    .isValid = false
+  };
+}
+
+/*
  */
 void
-EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& commandBuffer) {
-  CH_PAMRAMETER_UNUSED(deltaTime);
+EditorApplication::onPresent(const RendererOutput& rendererOutput,
+                             const SPtr<ICommandBuffer>& commandBuffer,
+                             uint32 swapChainWidth,
+                             uint32 swapChainHeight) {
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+  CH_PAMRAMETER_UNUSED(rendererOutput);
+  CH_PAMRAMETER_UNUSED(swapChainWidth);
+  CH_PAMRAMETER_UNUSED(swapChainHeight);
 
   if (!ImguiVars::bRenderImGui) {
     // If ImGui rendering is disabled, skip the rendering process
@@ -141,7 +162,16 @@ EditorApplication::onRender(const float deltaTime, const SPtr<ICommandBuffer>& c
           CH_LOG_INFO(EditorApp, "Selected file: {0}", outPath.get());
           const Path selectedFilePath(outPath.get());
           auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
-          meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false));
+          auto importedModel =
+            std::reinterpret_pointer_cast<ModelAsset>(
+              meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false)));
+          if (importedModel) {
+            CH_LOG_INFO(EditorApp, "Successfully imported model: {0}", selectedFilePath.toString());
+            m_nastyRenderer->loadModel(importedModel->getModel());
+          }
+          else {
+            CH_LOG_ERROR(EditorApp, "Failed to import model: {0}", selectedFilePath.toString());
+          }
         }
         else if (result == NFD_CANCEL) {
           CH_LOG_INFO(EditorApp, "User cancelled the file selection.");
@@ -186,6 +216,9 @@ EditorApplication::initializeEditorComponents() {
 
   AssetManager::startUp();
   AssetManager::instance().initialize();
+
+  m_nastyRenderer = std::make_shared<NastyRenderer>();
+  m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
 
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();

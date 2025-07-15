@@ -13,6 +13,7 @@
 
 #include "chAssetManager.h"
 
+#include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chFileStream.h"
 
@@ -25,12 +26,16 @@ namespace chEngineSDK {
 bool
 IAsset::save(){
   const Path assetPath(String(m_metadata.assetPath));
-  if (assetPath.empty()) {
+  if (assetPath.empty() || !assetPath.isRelative()) {
     CH_LOG(AssetSystem, Error, "Asset path {0} is empty", assetPath.toString());
     return false;
   }
 
-  SPtr<DataStream> stream = FileSystem::createAndOpenFile(assetPath);
+
+   String assetName(m_metadata.name);
+   assetName += ".chAss";
+  const Path fullFilePath = assetPath.join(Path(assetName));
+  SPtr<DataStream> stream = FileSystem::createAndOpenFile(fullFilePath);
   if (!stream) {
     CH_LOG(AssetSystem, Error, "Failed to create asset file {0}", assetPath.toString());
     return false;
@@ -50,6 +55,8 @@ IAsset::save(){
     CH_LOG(AssetSystem, Error, "Failed to serialize asset {0}", m_metadata.name);
     return false;
   }
+
+  stream->close();
 
   CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name, assetPath.toString());
   return true;

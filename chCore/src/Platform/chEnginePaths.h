@@ -19,5 +19,7 @@ namespace chEnginePaths {
 
 static const Path ASSETS_PATH = Path("Assets");
 
+static const Path ASSETS_FULL_PATH = Path();
+
 } // namespace chEnginePaths
 } // namespace chEngineSDK

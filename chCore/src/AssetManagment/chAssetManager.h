@@ -120,6 +120,11 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   CH_LOG(AssetSystem, Debug, "Asset {0} created with UUID {1} at path {2}", name,
          assetUUID.toString(), assetPath.toString());
 
+
+  // DeleteMe
+  m_loadedAssets[refUUID] = asset;
+  m_assets[refUUID] = asset;
+
   return std::static_pointer_cast<TAsset>(asset);
 }
 

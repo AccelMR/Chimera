@@ -12,10 +12,13 @@
 
 #include "chVertexLayout.h"
 
+#include "chLogger.h"
 #include "chMath.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
+CH_LOG_DECLARE_STATIC(VertexLayoutLog, All);
+
 /*
 */
 VertexLayout
@@ -49,7 +52,7 @@ VertexLayout::addAttribute(VertexAttributeType type,
     .format = format,
     .offset = (offset == UINT32_MAX) ? calculateOffset(binding) : offset,
     .binding = binding,
-    .semanticName = chString::EMPTY
+    .semanticName = ""
   };
 
   m_attributes.push_back(desc);
@@ -64,13 +67,20 @@ VertexLayout::addCustomAttribute(const String& semanticName,
                                  VertexFormat format,
                                  uint32 offset /*= UINT32_MAX*/,
                                  uint32 binding/* = 0*/) {
+
+  if (semanticName.size() >= sizeof(semanticName)) {
+    CH_LOG(VertexLayoutLog, Warning,
+      "Semantic name '{0}' is too long for custom attribute. It will be truncated.",
+      semanticName);
+  }
   VertexAttributeDesc desc{
     .type = VertexAttributeType::Custom,
     .format = format,
     .offset = (offset == UINT32_MAX) ? calculateOffset(binding) : offset,
     .binding = binding,
-    .semanticName = semanticName
+    .semanticName = ""
   };
+  chString::copyToANSI(desc.semanticName, semanticName, sizeof(desc.semanticName) - 1);
 
   m_attributes.push_back(desc);
 
