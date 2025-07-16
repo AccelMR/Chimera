@@ -91,6 +91,9 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
   void
   renderFullScreenRenderer(const RendererOutput& rendererOutput);
 
+  void
+  renderAssetContent();
+
  private:
   SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
 

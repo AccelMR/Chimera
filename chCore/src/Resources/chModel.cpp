@@ -12,18 +12,23 @@
 #include "chVector3.h"
 #include "chVector4.h"
 
+#include "chStringUtils.h"
+
 namespace chEngineSDK {
 
 /*
  * ModelNode constructor
  */
 ModelNode::ModelNode(const String& nodeName, Model* ownerModel, ModelNode* parent)
- : m_name(nodeName),
+ : m_name(""),
    m_parent(parent),
    m_localTransform(Matrix4::IDENTITY),
    m_globalTransform(Matrix4::IDENTITY),
    m_model(ownerModel),
-   m_dirty(true) {}
+   m_dirty(true) {
+    // Copy the node name safely
+    chString::copyToANSI(m_name, nodeName, nodeName.size() + 1);
+   }
 
 /*
  * Add a child node
@@ -102,7 +107,7 @@ ModelNode::updateGlobalTransform() {
 
   if (m_parent) {
     m_globalTransform = m_parent->getGlobalTransform() * m_localTransform;
-  } 
+  }
   else if (m_model){
     m_globalTransform = m_model->getTransform() * m_localTransform;
   }
@@ -174,7 +179,7 @@ Model::createNode(const String& name, const Matrix4& localTransform, ModelNode* 
 
   if (parent) {
     parent->addChild(node);
-  } 
+  }
   else {
     m_rootNodes.push_back(node);
   }
@@ -272,16 +277,16 @@ Model::setTransform(const Matrix4& transform) {
   }
 }
 
-void 
+void
 Model::registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
   m_meshToNodesMap[mesh].push_back(node);
 }
 
-void 
+void
 Model::unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
   auto& nodes = m_meshToNodesMap[mesh];
   nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
-  
+
   if (nodes.empty()) {
       m_meshToNodesMap.erase(mesh);
   }
@@ -294,7 +299,7 @@ void
 Model::addNodeToStructures(ModelNode* node) {
   m_allNodes.push_back(node);
 
-  if (!node->getName().empty()) {
+  if (node->getName()[0] == '\0') {
     m_nodeMap[node->getName()] = node;
   }
 }
@@ -311,7 +316,7 @@ Model::removeNodeFromStructures(ModelNode* node) {
   }
 
   // Eliminar del mapa de nombres
-  if (!node->getName().empty()) {
+  if (node->getName()[0] != '\0') {
     m_nodeMap.erase(node->getName());
   }
 

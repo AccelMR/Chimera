@@ -693,7 +693,7 @@ NastyRenderer::bindInputEvents() {
     }
   });
 
-  HEvent listenKeys = eventDispatcher.OnKeyPressed.connect([&](const KeyBoardData& keydata) {
+  HEvent listenKeys = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
     if (!m_camera) {
       return;
     }
@@ -719,8 +719,15 @@ NastyRenderer::bindInputEvents() {
       m_camera->moveUp(-moveSpeed);
       break;
     case Key::R:
+      CH_LOG_INFO(NastyRendererSystem, "Resetting camera position to pos {0}, {1}, {2}",
+                  initialCameraPos.x, initialCameraPos.y, initialCameraPos.z);
       m_camera->setPosition(initialCameraPos);
       m_camera->lookAt(Vector3::ZERO);
+      break;
+    case Key::P:
+      CH_LOG_INFO(NastyRendererSystem, "Camera Position: ({0}, {1}, {2})",
+                  m_camera->getPosition().x, m_camera->getPosition().y,
+                  m_camera->getPosition().z);
       break;
     default:
       return;

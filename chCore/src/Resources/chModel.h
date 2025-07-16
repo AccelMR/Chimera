@@ -31,7 +31,7 @@ class CH_CORE_EXPORT ModelNode
   ~ModelNode() = default;
 
   // Getters
-  NODISCARD FORCEINLINE const String&
+  NODISCARD FORCEINLINE const ANSICHAR*
   getName() const { return m_name; }
 
   NODISCARD FORCEINLINE ModelNode*
@@ -83,7 +83,7 @@ class CH_CORE_EXPORT ModelNode
   markDirty();
 
  private:
-  String m_name;
+  ANSICHAR m_name[64]; ///< Node name
   ModelNode* m_parent;
   Vector<ModelNode*> m_children;
   Vector<SPtr<Mesh>> m_meshes;
@@ -217,7 +217,7 @@ class CH_CORE_EXPORT Model
    *
    * @return Number of meshes
    */
-  void 
+  void
   registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node);
 
   /**
@@ -226,7 +226,7 @@ class CH_CORE_EXPORT Model
    * @param mesh Mesh to unregister
    * @param node Node to unregister the mesh from
    */
-  void 
+  void
   unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node);
 
  private:

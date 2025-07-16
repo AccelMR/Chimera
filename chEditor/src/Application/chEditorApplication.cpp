@@ -151,20 +151,8 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
     }
     ImGui::EndMainMenuBar();
   }
-  if (ImGui::Begin("Assets", &ImguiVars::bShowContentWindow)) {
-    for (const auto& asset : m_assets) {
-      if (ImGui::Selectable(asset->getName())) {
-        CH_LOG_DEBUG(EditorApp, "Selected asset: {0}", asset->getName());
-        if (AssetManager::instance().loadAsset(asset)) {
-          if (asset->isTypeOf<ModelAsset>()) {
-            // If the asset is a ModelAsset, load it into the renderer
-            m_nastyRenderer->loadModel(asset->as<ModelAsset>()->getModel());
-          }
-        }
-      }
-    }
-  }
-  ImGui::End();
+
+  renderAssetContent();
 
   ImGui::Render();
   ImGuiIO& io = ImGui::GetIO();
@@ -196,6 +184,7 @@ EditorApplication::initializeEditorComponents() {
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
   m_nastyRenderer->setClearColors({RenderVars::rendererColor});
+  m_nastyRenderer->bindInputEvents();
 
   initImGui(display);
 
@@ -447,4 +436,26 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
   ImGui::End();
 }
 
+/*
+ */
+void
+EditorApplication::renderAssetContent() {
+  if (ImGui::Begin("Assets", &ImguiVars::bShowContentWindow)) {
+    for (const auto& asset : m_assets) {
+      const String ToShow =
+          chString::format("{0}: {1}", asset->getName(), asset->getTypeName());
+
+      if (ImGui::Selectable(ToShow.c_str())) {
+        CH_LOG_DEBUG(EditorApp, "Selected asset: {0}", asset->getName());
+        if (AssetManager::instance().loadAsset(asset)) {
+          if (asset->isTypeOf<ModelAsset>()) {
+            // If the asset is a ModelAsset, load it into the renderer
+            m_nastyRenderer->loadModel(asset->as<ModelAsset>()->getModel());
+          }
+        }
+      }
+    }
+  }
+  ImGui::End();
+}
 } // namespace chEngineSDK

@@ -83,9 +83,6 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   deserializeVertexLayout(SPtr<DataStream> stream, VertexLayout& layout,
                           uint32 expectedAttributeCount);
 
-  // Helper methods for raw data handling
-  void
-  setMeshVertexDataRaw(SPtr<Mesh> mesh, const Vector<uint8>& data, uint32 vertexCount);
   void
   setMeshIndexDataRaw(SPtr<Mesh> mesh, const Vector<uint8>& data, uint32 indexCount,
                       IndexType indexType);

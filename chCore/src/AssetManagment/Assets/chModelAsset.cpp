@@ -11,8 +11,8 @@
 
 #include "chFileStream.h"
 #include "chLogger.h"
-#include "chModel.h"
 #include "chMesh.h"
+#include "chModel.h"
 
 #include "chModelSerializationHeaders.h"
 
@@ -38,42 +38,25 @@ ModelAsset::serialize(SPtr<DataStream> stream) {
     ModelHeader modelHeader = {
         .version = 1,
         .nodeCount = m_model->getNodeCount(),
-        .uniqueMeshCount = static_cast<uint32>(m_model->getMeshToNodesMap().size()),
-        .nodeTreeDataSize = 0 // Will calculate during node serialization
+        .uniqueMeshCount = static_cast<uint32>(m_model->getMeshToNodesMap().size())
     };
 
-    // Reserve space for header (we'll update nodeTreeDataSize later)
-    uint64 headerPos = stream->tell();
-    stream<< modelHeader;
+    stream << modelHeader;
 
     // Serialize global model transform
     const Matrix4& globalTransform = m_model->getTransform();
     stream << globalTransform;
 
-    // Calculate and write node tree data size
-    uint64 nodeDataStartPos = stream->tell();
-
-    // Serialize Node Tree Structure
-    serializeNodeTree(stream);
-
-    uint64 nodeDataEndPos = stream->tell();
-    modelHeader.nodeTreeDataSize = static_cast<uint32>(nodeDataEndPos - nodeDataStartPos);
-
-    // Update header with correct node tree data size
-    uint64 currentPos = stream->tell();
-    stream->seek(headerPos);
-    stream << modelHeader;
-    stream->seek(currentPos);
-
-    // Serialize Unique Meshes
     serializeUniqueMeshes(stream);
+    serializeNodeTree(stream);
 
     CH_LOG(ModelAssetLog, Debug,
            "ModelAsset {0} serialized successfully with {1} nodes and {2} unique meshes",
            m_metadata.name, modelHeader.nodeCount, modelHeader.uniqueMeshCount);
 
     return true;
-  } catch (const std::exception& e) {
+  }
+  catch (const std::exception& e) {
     CH_LOG(ModelAssetLog, Error, "Exception during ModelAsset serialization: {0}", e.what());
     return false;
   }
@@ -109,7 +92,7 @@ ModelAsset::serializeNode(SPtr<DataStream> stream, ModelNode* node,
   }
 
   // Node basic data
-  stream << node->getName();
+  stream->write(node->getName(), 64);
   stream << node->getLocalTransform();
   stream << node->getGlobalTransform();
 
@@ -314,7 +297,7 @@ ModelAsset::deserializeNode(SPtr<DataStream> stream, ModelNode* parent,
   }
 
   // Read node basic data
-  String nodeName;
+  ANSICHAR nodeName[64];
   Matrix4 localTransform, globalTransform;
 
   stream >> nodeName;
@@ -419,11 +402,7 @@ ModelAsset::deserializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh) {
   if (meshHeader.vertexDataSize > 0) {
     Vector<uint8> vertexData(meshHeader.vertexDataSize);
     stream->read(vertexData.data(), meshHeader.vertexDataSize);
-
-    // Set vertex data using raw bytes (since we don't know the exact vertex type)
-    // This assumes Mesh has a method to set raw vertex data
-    // You may need to add this method to Mesh class:
-    setMeshVertexDataRaw(mesh, vertexData, meshHeader.vertexCount);
+    mesh->setVertexData(vertexData, meshHeader.vertexCount);
   }
 
   // Read index data
@@ -492,19 +471,6 @@ ModelAsset::deserializeVertexLayout(SPtr<DataStream> stream, VertexLayout& layou
   stream >> vertexSize;
 
   return true;
-}
-
-// Helper methods for setting raw data (you may need to add these to Mesh class)
-void
-ModelAsset::setMeshVertexDataRaw(SPtr<Mesh> , const Vector<uint8>& ,
-                                 uint32 ) {
-  // This assumes Mesh has a method to set raw vertex data
-  // You may need to add this to the Mesh class:
-  // mesh->setVertexDataRaw(data, vertexCount);
-
-  // Temporary workaround - you'll need to implement this in Mesh class
-  CH_LOG(ModelAssetLog, Warning,
-         "setMeshVertexDataRaw not implemented - add this method to Mesh class");
 }
 
 void

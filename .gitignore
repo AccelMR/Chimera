@@ -9,7 +9,7 @@ build/
 CMakeSettings.json
 
 # Exclude Resource
-resources/
-assets/
+[Rr]esources/
+[Aa]ssets/
 
 !resources/shaders/

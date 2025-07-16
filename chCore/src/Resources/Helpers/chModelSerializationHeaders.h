@@ -17,7 +17,6 @@ struct ModelHeader {
   uint32 version;
   uint32 nodeCount;
   uint32 uniqueMeshCount;
-  uint32 nodeTreeDataSize;
 };
 
 // Mesh header structure

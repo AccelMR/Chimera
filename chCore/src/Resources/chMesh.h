@@ -80,6 +80,12 @@ class CH_CORE_EXPORT Mesh
   NODISCARD FORCEINLINE const Vector<uint8>&
   getVertexData() const { return m_vertexData; }
 
+  FORCEINLINE void
+  setVertexData(const Vector<uint8>& data, uint32 vertexCount) {
+    m_vertexData = data;
+    m_vertexCount = vertexCount;
+  }
+
   /**
    * Access vertex data as specified type
    *
