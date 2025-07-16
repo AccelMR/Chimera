@@ -46,6 +46,7 @@ namespace chEngineSDK {
 namespace ImguiVars {
 static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
 static bool bRenderImGui = true;     // Variable to control if ImGui should render
+static bool bShowContentWindow = false; // Variable to control the visibility of the file explorer
 } // namespace ImguiVars
 
 namespace RenderVars {
@@ -142,13 +143,22 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
         CH_ASSERT(importer && "MeshManager importer must not be null.");
 
         Vector<String> supportedExtensions = importer->getSupportedExtensions();
-        openFileExplorer(FileSystem::absolutePath(chEnginePaths::ASSETS_PATH),
+        openFileExplorer(EnginePaths::getAbsoluteAssetFolder(),
                          supportedExtensions);
       }
       ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();
   }
+  if (ImGui::Begin("Assets", &ImguiVars::bShowContentWindow)) {
+    for (const auto& asset : m_assets) {
+      if (ImGui::Selectable(asset->getName())) {
+        CH_LOG_DEBUG(EditorApp, "Selected asset: {0}", asset->getName());
+      }
+    }
+  }
+  ImGui::End();
+
     ImGui::Render();
     ImGuiIO& io = ImGui::GetIO();
     // Update and Render additional Platform Windows
@@ -173,6 +183,8 @@ EditorApplication::initializeEditorComponents() {
 
   AssetManager::startUp();
   AssetManager::instance().initialize();
+  AssetManager::instance().lazyLoadAssetsFromDirectory(EnginePaths::getAbsoluteAssetFolder());
+  m_assets = AssetManager::instance().getAllAssets();
 
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());

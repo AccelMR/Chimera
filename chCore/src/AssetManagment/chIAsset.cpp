@@ -14,26 +14,25 @@
 #include "chAssetManager.h"
 
 #include "chEnginePaths.h"
-#include "chFileSystem.h"
 #include "chFileStream.h"
+#include "chFileSystem.h"
 
 #include "chLogger.h"
 
 namespace chEngineSDK {
 
 /*
-*/
+ */
 bool
-IAsset::save(){
+IAsset::save() {
   const Path assetPath(String(m_metadata.assetPath));
   if (assetPath.empty() || !assetPath.isRelative()) {
     CH_LOG(AssetSystem, Error, "Asset path {0} is empty", assetPath.toString());
     return false;
   }
 
-
-   String assetName(m_metadata.name);
-   assetName += ".chAss";
+  String assetName(m_metadata.name);
+  assetName += ".chAss";
   const Path fullFilePath = assetPath.join(Path(assetName));
   SPtr<DataStream> stream = FileSystem::createAndOpenFile(fullFilePath);
   if (!stream) {
@@ -41,14 +40,10 @@ IAsset::save(){
     return false;
   }
 
-  stream << m_metadata.assetType;
-  stream << m_metadata.uuid;
+  // Write metadata
+  stream->write(&m_metadata, sizeof(AssetMetadata));
 
-  const uint32 referencedAssetsCount = static_cast<uint32>(m_referencedAssets.size());
-  stream << referencedAssetsCount;
-  for (const UUID& refUUID : m_referencedAssets) {
-    stream << refUUID;
-  }
+  //TODO: Write referenced assets count
 
   const bool success = serialize(stream);
   if (!success) {
@@ -58,21 +53,23 @@ IAsset::save(){
 
   stream->close();
 
-  CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name, assetPath.toString());
+  CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name,
+         assetPath.toString());
   return true;
 }
 
 /*
-*/
+ */
 bool
-IAsset::load(){
+IAsset::load() {
   if (isLoaded()) {
     return true;
   }
 
   const Path assetPath(m_metadata.assetPath);
   if (assetPath.empty() || !FileSystem::exists(assetPath)) {
-    CH_LOG(AssetSystem, Error, "Asset path {0} is empty or doesn't exist", assetPath.toString());
+    CH_LOG(AssetSystem, Error, "Asset path {0} is empty or doesn't exist",
+           assetPath.toString());
     return false;
   }
 
@@ -131,9 +128,9 @@ IAsset::load(){
 }
 
 /*
-*/
+ */
 bool
-IAsset::unload(){
+IAsset::unload() {
   if (isUnloaded()) {
     return true;
   }
@@ -144,7 +141,7 @@ IAsset::unload(){
   //   //AssetManager::getInstance().unloadAsset(refUUID);
   // }
 
-  //clear the asset data
+  // clear the asset data
   clearAssetData();
   m_referencedAssets.clear();
 
@@ -155,33 +152,20 @@ IAsset::unload(){
 }
 
 /*
-*/
+ */
 bool
 IAsset::validateMetadata(const AssetMetadata& metadata) const {
-  if (metadata.typeName[0] == '\0') { // Check if typeName is empty
-    CH_LOG(AssetSystem, Error, "Asset name is empty or 'Unnamed'");
-    return false;
-  }
+  bool isValid = true;
+  const auto validateAsset = [&isValid](bool condition, const String& errorMessage) {
+    if (!condition) {
+      CH_LOG(AssetSystem, Error, errorMessage);
+      isValid = isValid && false;
+    }
+  };
+  validateAsset(!metadata.uuid.isNull(), "Asset UUID cannot be null");
+  validateAsset(!metadata.assetType.isNull(), "Asset type UUID cannot be null");
 
-  // This probably does not need to be checked since is the original path and can be empty or
-  // does not exist since it can be imported in a different machine.
-  // if (metadata.originalPath.empty()) {
-  //   CH_LOG(AssetSystem, Error, "Original path is empty");
-  //   return false;
-  // }
-
-  // This is the actual path inside the assets folder, needs to be always in the assets folder.
-  if (metadata.assetPath[0] == '\0' || !FileSystem::exists(Path(metadata.assetPath))) {
-    CH_LOG(AssetSystem, Error, "Cached path is empty or doesn't exist");
-    return false;
-  }
-
-  if (metadata.uuid.isNull()) {
-    CH_LOG(AssetSystem, Error, "UUID is null");
-    return false;
-  }
-
-  return true;
+  return isValid;
 }
 
 } // namespace chEngineSDK

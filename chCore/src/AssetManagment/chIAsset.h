@@ -44,60 +44,9 @@ struct MS_ALIGN(8) AssetMetadata {
 } GCC_PACK(8);
 static_assert(sizeof(AssetMetadata) % 8 == 0, "AssetMetadata is not 8-byte aligned!");
 
-namespace AssetMetadataUtils {
-
-template <size_t N>
-FORCEINLINE void
-copyString(ANSICHAR (&dest)[N], const char* src) {
-  if (src == nullptr) {
-    dest[0] = '\0';
-    return;
-  }
-
-  size_t len = strlen(src);
-  size_t copyLen = std::min(len, N - 1);
-
-  memcpy(dest, src, copyLen);
-  dest[copyLen] = '\0';
-}
-
-template <size_t N>
-FORCEINLINE void
-copyString(ANSICHAR (&dest)[N], const std::string& src) {
-  copyString(dest, src.c_str());
-}
-
-// Factory function for creating AssetMetadata
-FORCEINLINE AssetMetadata
-createAssetMetadata(const UUID* uuid, const UUID& assetType, uint64 creationTime,
-                    const char* typeName, const char* engineVersion, const char* name,
-                    const char* originalPath, const char* assetPath) {
-  AssetMetadata metadata{};
-
-  if (uuid) {
-    metadata.uuid = *uuid;
-  }
-  metadata.assetType = assetType;
-  metadata.creationTime = creationTime;
-
-  copyString(metadata.typeName, typeName);
-  copyString(metadata.engineVersion, engineVersion);
-  copyString(metadata.name, name);
-  copyString(metadata.originalPath, originalPath);
-  copyString(metadata.assetPath, assetPath);
-
-  return metadata;
-}
-} // namespace AssetMetadataUtils
-
 class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 {
  public:
-  IAsset() = delete;
-  IAsset(const AssetMetadata& metadata)
-   : m_metadata(metadata), m_state(AssetState::Unloaded), m_refCount(0) {
-    CH_ASSERT(validateMetadata(metadata));
-  }
   virtual ~IAsset() = default;
 
   template <typename T>
@@ -156,11 +105,24 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD FORCEINLINE const UUID&
   getAssetType() const { return m_metadata.assetType; }
 
+  NODISCARD FORCEINLINE const ANSICHAR*
+  getTypeName() const { return m_metadata.typeName; }
+
+  NODISCARD FORCEINLINE const ANSICHAR*
+  getName() const { return m_metadata.name; }
+
   NODISCARD bool
   save();
 
  protected:
   friend class AssetManager;
+  IAsset() {}
+  IAsset(const AssetMetadata& metadata)
+   : m_metadata(metadata), m_state(AssetState::Unloaded), m_refCount(0) {
+    CH_ASSERT(validateMetadata(metadata));
+  }
+
+ protected:
 
   void
   setMetadata(const AssetMetadata& metadata) {
@@ -177,10 +139,10 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   unload();
 
   virtual bool
-  serialize(SPtr<DataStream> stream) = 0;
+  serialize(SPtr<DataStream>) = 0;
 
   virtual bool
-  deserialize(SPtr<DataStream> stream) = 0;
+  deserialize(SPtr<DataStream>) = 0;
 
   bool
   validateMetadata(const AssetMetadata&) const;

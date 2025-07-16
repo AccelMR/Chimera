@@ -46,6 +46,9 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   bool
   loadAsset(const SPtr<IAsset>& asset);
 
+  void
+  lazyLoadAssetsFromDirectory(const Path& directory);
+
   /*
    *
    */
@@ -54,17 +57,29 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   createAsset(const String& name,
               const Path& assetPath); // Must be relative to the asset directory
 
+  FORCEINLINE Vector<SPtr<IAsset>>
+  getAllAssets() const {
+    Vector<SPtr<IAsset>> assets;
+    assets.reserve(m_assets.size());
+    for (const auto& pair : m_assets) {
+      assets.push_back(pair.second);
+    }
+    return assets;
+  }
+
+ private:
+  SPtr<IAsset>
+  lazyDeserialize(const SPtr<DataStream>& stream);
+
  private:
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
   Map<UUID, SPtr<IAsset>> m_loadedAssets; ///< Map of currently loaded assets by UUID
 
-  Event<bool(const SPtr<IAsset>&)>
-      m_onAssetLoaded; ///< Event triggered when an asset is loaded
+  Event<bool(const SPtr<IAsset>&)> m_onAssetLoaded; ///< Event triggered when an asset is loaded
   Event<bool(const SPtr<IAsset>&)> m_onAssetUnloaded; ///< Event triggered
 
   SPtr<AssetRegister> m_assetRegister; ///< Asset registry for creating assets
-  Event<bool(const SPtr<AssetRegister>&)>
-      m_onRegisterAsset; ///< Event triggered when an asset is registered
+  Event<bool(const SPtr<AssetRegister>&)> m_onRegisterAsset; ///< Event triggered when an asset is registered
 }; // class AssetManager
 
 /******************************************************************************************* */
@@ -76,19 +91,19 @@ WeakPtr<TAsset>
 AssetManager::createAsset(const String& name, const Path& assetPath) {
 
   bool validationPassed = true;
-  auto validateAsset = [&validationPassed](bool condition, const String& errorMessage) {
+  auto validateInfo = [&validationPassed](bool condition, const String& errorMessage) {
     if (!condition) {
       CH_LOG(AssetSystem, Error, errorMessage);
       validationPassed = false;
     }
   };
-  validateAsset(!name.empty(), "Asset name cannot be empty");
-  validateAsset(!assetPath.empty(), "Asset path cannot be empty");
-  validateAsset(FileSystem::exists(assetPath),
+  validateInfo(!name.empty(), "Asset name cannot be empty");
+  validateInfo(!assetPath.empty(), "Asset path cannot be empty");
+  validateInfo(FileSystem::exists(assetPath),
                 "Asset path does not exist: " + assetPath.toString());
-  validateAsset(FileSystem::arePathsRelative(chEnginePaths::ASSETS_PATH, assetPath),
+  validateInfo(FileSystem::arePathsRelative(EnginePaths::getAssetDirectory(), assetPath),
                 chString::format("Asset path must be relative to the asset directory: {0}",
-                                 chEnginePaths::ASSETS_PATH));
+                                 EnginePaths::getAssetDirectory().toString()));
   if (!validationPassed) {
     CH_LOG(AssetSystem, Error, "Failed to create asset due to validation errors");
     return WeakPtr<TAsset>();
@@ -97,19 +112,25 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   const String AssetTypeName = AssetTypeTraits<TAsset>::getTypeName();
   const UUID assetUUID = UUID::createFromName(AssetTypeName);
   AssetCreatorFunc assetCreator = m_assetRegister->getAssetCreator(assetUUID);
-  if (!assetCreator) {
+  if (assetCreator == nullptr) {
     CH_LOG(AssetSystem, Error, "No asset creator found for UUID: {0}", assetUUID.toString());
     return WeakPtr<TAsset>();
   }
 
   const UUID refUUID = UUID::createRandom();
-  AssetMetadata metadata = AssetMetadataUtils::createAssetMetadata(
-      &refUUID,
-      assetUUID,
-      0, // std::chrono::system_clock::now().time_since_epoch().count(),
-      AssetTypeTraits<TAsset>::getTypeName(), CH_ENGINE_VERSION_STRING, name.c_str(),
-      assetPath.toString().c_str(), assetPath.toString().c_str());
-  SPtr<IAsset> asset = std::static_pointer_cast<IAsset>(assetCreator(metadata));
+  AssetMetadata metadata;
+  metadata.uuid = refUUID;
+  metadata.assetType = assetUUID;
+  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
+  chString::copyToANSI(metadata.typeName, AssetTypeName, AssetTypeName.size() + 1);
+  chString::copyToANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING, sizeof(CH_ENGINE_VERSION_STRING));
+  chString::copyToANSI(metadata.name, name, name.size() + 1);
+  chString::copyToANSI(metadata.originalPath, assetPath.toString(),
+                        assetPath.toString().size() + 1);
+  chString::copyToANSI(metadata.assetPath, assetPath.toString(),
+                        assetPath.toString().size() + 1);
+
+  SPtr<IAsset> asset = assetCreator(metadata);
 
   if (!asset) {
     CH_LOG_ERROR(AssetSystem, "Failed to create asset of type {0} with UUID {1}",
@@ -119,7 +140,6 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
 
   CH_LOG(AssetSystem, Debug, "Asset {0} created with UUID {1} at path {2}", name,
          assetUUID.toString(), assetPath.toString());
-
 
   // DeleteMe
   m_loadedAssets[refUUID] = asset;

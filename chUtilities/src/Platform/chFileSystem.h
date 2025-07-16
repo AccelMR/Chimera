@@ -28,6 +28,9 @@ class CH_UTILITY_EXPORT FileSystem {
   isFile(const Path& path);
 
   NODISCARD static bool
+  isDirectory(const Path& path);
+
+  NODISCARD static bool
   arePathsRelative(const Path& baseTarget, const Path& target);
 
  /**

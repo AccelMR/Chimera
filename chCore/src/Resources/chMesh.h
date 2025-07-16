@@ -20,7 +20,7 @@ namespace chEngineSDK {
  * This is a simple data structure without much functionality.
  * It just stores the data needed for rendering a mesh.
  */
-class CH_CORE_EXPORT Mesh 
+class CH_CORE_EXPORT Mesh
 {
  public:
   Mesh() = default;
@@ -28,12 +28,12 @@ class CH_CORE_EXPORT Mesh
 
   /**
   * Set vertex data using a templated vertex type
-  * 
+  *
   * @tparam T Vertex type (e.g., VertexPosColor, VertexNormalTexCoord)
   * @param vertices Vector of vertex data
   */
   template<typename T>
-  void 
+  void
   setVertexData(const Vector<T>& vertices) {
     m_vertexCount = static_cast<uint32>(vertices.size());
     SIZE_T size = sizeof(T) * vertices.size();
@@ -46,7 +46,7 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Set index data using a templated index type
-   * 
+   *
    * @tparam T Index type (uint16 or uint32)
    * @param indices Vector of index data
   */
@@ -54,7 +54,7 @@ class CH_CORE_EXPORT Mesh
   void setIndexData(const Vector<T>& indices) {
     static_assert(std::is_same<T, uint16>::value || std::is_same<T, uint32>::value,
                  "Index type must be uint16 or uint32");
-                 
+
     m_indexCount = static_cast<uint32>(indices.size());
     m_indexType = std::is_same<T, uint16>::value ? IndexType::UInt16 : IndexType::UInt32;
     SIZE_T size = sizeof(T) * indices.size();
@@ -66,7 +66,7 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Set the vertex layout for the mesh
-   * 
+   *
    * @param layout Vertex layout
   */
   FORCEINLINE void
@@ -74,7 +74,7 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Get raw vertex data
-   * 
+   *
    * @return Pointer to vertex data
   */
   NODISCARD FORCEINLINE const Vector<uint8>&
@@ -82,7 +82,7 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Access vertex data as specified type
-   * 
+   *
    * @tparam T Vertex type (e.g., VertexPosColor, VertexNormalTexCoord)
    * @return Vector of vertex data
   */
@@ -102,7 +102,7 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Get vertex count
-   * 
+   *
    * @return Number of vertices
   */
   NODISCARD FORCEINLINE uint32
@@ -110,77 +110,77 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Get indices as uint16
-   * 
+   *
    * @return Vector of indices as uint16
   */
   NODISCARD Vector<uint16>
-  getIndicesAsUInt16() const { 
+  getIndicesAsUInt16() const {
     Vector<uint16> result;
     if (m_indexType != IndexType::UInt16 || m_indexData.empty()) {
       return result;
     }
-    
-    result.resize(m_indexCount);
-    std::memcpy(result.data(), m_indexData.data(), m_indexData.size());
-    return result;
-  }
-  
-  /**
-   * Get indices as uint32
-   * 
-   * @return Vector of indices as uint32
-  */
-  NODISCARD Vector<uint32>
-  getIndicesAsUInt32() const { 
-    Vector<uint32> result;
-    if (m_indexType != IndexType::UInt32 || m_indexData.empty()) {
-      return result;
-    }
-    
+
     result.resize(m_indexCount);
     std::memcpy(result.data(), m_indexData.data(), m_indexData.size());
     return result;
   }
 
-   
+  /**
+   * Get indices as uint32
+   *
+   * @return Vector of indices as uint32
+  */
+  NODISCARD Vector<uint32>
+  getIndicesAsUInt32() const {
+    Vector<uint32> result;
+    if (m_indexType != IndexType::UInt32 || m_indexData.empty()) {
+      return result;
+    }
+
+    result.resize(m_indexCount);
+    std::memcpy(result.data(), m_indexData.data(), m_indexData.size());
+    return result;
+  }
+
+
   /**
    * Get index count
-   * 
+   *
    * @return Number of indices
    */
-  NODISCARD FORCEINLINE uint32 
+  NODISCARD FORCEINLINE uint32
   getIndexCount() const { return m_indexCount; }
-  
+
   /**
    * Get index type
-   * 
+   *
    * @return Type of indices (16-bit or 32-bit)
    */
-  NODISCARD FORCEINLINE IndexType 
+  NODISCARD FORCEINLINE IndexType
   getIndexType() const { return m_indexType; }
-  
+
   /**
    * Get vertex layout
-   * 
+   *
    * @return Vertex layout
    */
-  NODISCARD FORCEINLINE const VertexLayout& 
+  NODISCARD FORCEINLINE const VertexLayout&
   getVertexLayout() const { return m_vertexLayout; }
-  
+
   /**
    * Check if the mesh has vertex data
-   * 
+   *
    * @return True if the mesh has vertex data
    */
-  NODISCARD FORCEINLINE bool 
+  NODISCARD FORCEINLINE bool
   hasVertexData() const { return !m_vertexData.empty(); }
-  
+
   /**
    * Check if the mesh has index data
-   * 
+   *
    * @return True if the mesh has index data
    */
-  NODISCARD FORCEINLINE bool 
+  NODISCARD FORCEINLINE bool
   hasIndexData() const { return !m_indexData.empty(); }
 
   /**
@@ -199,9 +199,12 @@ class CH_CORE_EXPORT Mesh
   NODISCARD FORCEINLINE SIZE_T
   getIndexDataSize() const { return m_indexData.size(); }
 
+  const Vector<uint8>&
+  getIndexData() const { return m_indexData; }
+
   /**
    * Extract all vertex positions from the mesh
-   * 
+   *
    * @return Vector of position vectors
    */
   NODISCARD Vector<Vector3>

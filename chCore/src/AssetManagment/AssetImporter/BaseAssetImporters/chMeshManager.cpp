@@ -59,7 +59,7 @@ MeshManager::importAsset(const Path& filePath, const String& assetName) {
 
   SPtr<Model> model = loadModel(filePath);
   SPtr<ModelAsset> modelAsset = AssetManager::instance().
-    createAsset<ModelAsset>(assetName, chEnginePaths::ASSETS_PATH).lock();
+    createAsset<ModelAsset>(assetName, EnginePaths::getAssetDirectory()).lock();
   CH_ASSERT(modelAsset);
 
   modelAsset->setModel(model);

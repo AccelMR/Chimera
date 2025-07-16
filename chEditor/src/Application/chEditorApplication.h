@@ -96,5 +96,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication {
 
   SPtr<ISampler> m_defaultSampler;
   Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
+
+  Vector<SPtr<IAsset>> m_assets;
 };
 } // namespace chEngineSDK

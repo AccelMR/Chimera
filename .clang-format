@@ -16,7 +16,7 @@ BraceWrapping:
   AfterNamespace: false
   AfterStruct: false
   AfterControlStatement: false
-  BeforeElse: false
+  BeforeElse: true
 # Place the return type on a separate line
 AlwaysBreakAfterReturnType: All
 # Align parameters with first parameter when wrapped
@@ -36,7 +36,7 @@ BreakConstructorInitializers: BeforeColon
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 1
 # Allow short if statements on a single line
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: false
 # Ensure proper spacing for operators
 SpaceBeforeAssignmentOperators: true
 # Always use braces for control statements

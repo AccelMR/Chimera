@@ -46,6 +46,9 @@ class ISwapChain;
 class ITexture;
 class ITextureView;
 
-
+class IAsset;
+class AssetRegister;
+class AssetMetadata;
+class IAssetManager;
 
 } // namespace chEngineSDK

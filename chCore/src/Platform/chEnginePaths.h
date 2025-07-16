@@ -11,15 +11,24 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chPath.h"
-
-
 namespace chEngineSDK {
-namespace chEnginePaths {
+class CH_CORE_EXPORT EnginePaths {
+ public:
+  /**
+   * Get the path to the assets directory. This is relative to the engine root.
+   *
+   * @return Path to the assets directory.
+   */
+  static Path
+  getAssetDirectory();
 
-static const Path ASSETS_PATH = Path("Assets");
+  /**
+   * Get the absolute path to the assets directory.
+   *
+   * @return Absolute path to the assets directory.
+   */
+  static Path
+  getAbsoluteAssetFolder();
+};
 
-static const Path ASSETS_FULL_PATH = Path();
-
-} // namespace chEnginePaths
 } // namespace chEngineSDK

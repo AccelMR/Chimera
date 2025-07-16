@@ -41,6 +41,19 @@ FileSystem::isFile(const Path& path) {
   fs::path fsPath(path.toString());
   return fs::is_regular_file(fsPath);
 }
+/*
+*/
+/**
+ * @brief Checks if a path is a directory.
+ * @param path
+ *   The path to check.
+ * @return True if the path is a directory, false otherwise.
+ */
+bool
+FileSystem::isDirectory(const Path& path) {
+    fs::path fsPath(path.toString());
+    return fs::is_directory(fsPath);
+}
 
 /*
 */

@@ -42,7 +42,7 @@ AssetManagerImporter::importAsset(const Path& absoluteImportFilePath,
     return false;
   }
 
-  const Path assetDir = chEnginePaths::ASSETS_PATH;
+  const Path assetDir = EnginePaths::getAssetDirectory();
   if (!FileSystem::arePathsRelative(assetDir, assetRelativePath)) {
     CH_LOG_ERROR(AssetImporterSystem, "Asset path {0} is not relative to the asset directory {1}", assetRelativePath, assetDir);
     return false;
