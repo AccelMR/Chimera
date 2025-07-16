@@ -21,7 +21,7 @@ enum class KeyBoardModifier : uint16;
 
 class Camera;
 
-class MeshManager;
+class MeshImpotrter;
 class Mesh;
 class Model;
 

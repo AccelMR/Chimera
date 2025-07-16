@@ -22,7 +22,7 @@
 #include "chISwapChain.h"
 #include "chITextureView.h"
 #include "chLogger.h"
-#include "chMeshManager.h"
+#include "chMeshImporter.h"
 #include "chModelAsset.h"
 #include "chPath.h"
 
@@ -141,8 +141,8 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
 
     if (ImGui::BeginMenu("Asset")) {
       if (ImGui::MenuItem("Import Model")) {
-        auto importer = AssetManagerImporter::instance().getImporter<MeshManager>();
-        CH_ASSERT(importer && "MeshManager importer must not be null.");
+        auto importer = AssetManagerImporter::instance().getImporter<MeshImpotrter>();
+        CH_ASSERT(importer && "MeshImpotrter importer must not be null.");
 
         Vector<String> supportedExtensions = importer->getSupportedExtensions();
         openFileExplorer(EnginePaths::getAbsoluteAssetFolder(), supportedExtensions);
@@ -374,7 +374,7 @@ EditorApplication::openFileExplorer(const Path& pathToOpen, const Vector<String>
 
     const Path selectedFilePath(outPath.get());
 
-    auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
+    auto meshManager = AssetManagerImporter::instance().getImporter<MeshImpotrter>();
     auto importedModel = std::reinterpret_pointer_cast<ModelAsset>(
         meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false)));
     m_assets = AssetManager::instance().getAllAssets();

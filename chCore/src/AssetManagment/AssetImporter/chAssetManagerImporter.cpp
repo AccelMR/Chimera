@@ -11,7 +11,7 @@ CH_LOG_DEFINE_CATEGORY_SHARED(AssetImporterSystem, All);
 #include "chAssetManager.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
-#include "chMeshManager.h"
+#include "chMeshImporter.h"
 #include "chPath.h"
 #include "chLogger.h"
 
@@ -24,7 +24,7 @@ AssetManagerImporter::initialize() {
 
   m_importerRegistry = chMakeShared<AssetImporterRegistry>();
 
-  m_importerRegistry->registerImporter<MeshManager>();
+  m_importerRegistry->registerImporter<MeshImpotrter>();
 
   // In case someone wants to register importers before the registry is initialized
   m_onRegisterImporter(m_importerRegistry);

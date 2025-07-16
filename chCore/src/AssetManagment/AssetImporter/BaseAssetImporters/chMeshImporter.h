@@ -1,10 +1,10 @@
 /************************************************************************/
 /**
- * @file chMeshManager.h
+ * @file chMeshImporter.h
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * MeshManager class for loading and managing mesh resources.
+ * MeshImpotrter class for loading and managing mesh resources.
  */
 /************************************************************************/
 #pragma once
@@ -26,10 +26,10 @@ class aiMesh;
 class aiScene;
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT MeshManager  : public IAssetImporter {
+class CH_CORE_EXPORT MeshImpotrter  : public IAssetImporter {
  public:
-  MeshManager() = default;
-  ~MeshManager() = default;
+  MeshImpotrter() = default;
+  ~MeshImpotrter() = default;
 
   UUID
   getImportType() const override{
@@ -110,6 +110,6 @@ class CH_CORE_EXPORT MeshManager  : public IAssetImporter {
   UnorderedMap<String, SPtr<Model>> m_models;
   Mutex m_mutex;
 };
-DECLARE_ASSET_TYPE(MeshManager);
+DECLARE_ASSET_TYPE(MeshImpotrter);
 
 } // namespace chEngineSDK

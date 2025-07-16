@@ -1,14 +1,14 @@
 /************************************************************************/
 /**
- * @file chMeshManager.cpp
+ * @file chMeshImporter.cpp
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * Implementation of the MeshManager class for loading and managing mesh resources.
+ * Implementation of the MeshImpotrter class for loading and managing mesh resources.
  */
 /************************************************************************/
 
-#include "chMeshManager.h"
+#include "chMeshImporter.h"
 
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -37,7 +37,7 @@ CH_LOG_DECLARE_STATIC(MeshSystem, All);
 /*
  */
 Vector<String>
-MeshManager::getSupportedExtensions() const {
+MeshImpotrter::getSupportedExtensions() const {
   Assimp::Importer importer;
   String extensions;
   importer.GetExtensionList(extensions);
@@ -47,7 +47,7 @@ MeshManager::getSupportedExtensions() const {
 /*
  */
 SPtr<IAsset>
-MeshManager::importAsset(const Path& filePath, const String& assetName) {
+MeshImpotrter::importAsset(const Path& filePath, const String& assetName) {
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
@@ -58,7 +58,7 @@ MeshManager::importAsset(const Path& filePath, const String& assetName) {
   SPtr<ModelAsset> modelAsset =
       AssetManager::instance()
           .createAsset<ModelAsset>(assetName, EnginePaths::getAssetDirectory())
-          .lock();
+          .lock(); //TODO: Use WeakPtr to avoid shared ownership issues
   CH_ASSERT(modelAsset);
 
   modelAsset->setModel(model);
@@ -73,7 +73,7 @@ MeshManager::importAsset(const Path& filePath, const String& assetName) {
 /*
  */
 SPtr<Mesh>
-MeshManager::loadMesh(const Path& meshPath, const String& meshName) {
+MeshImpotrter::loadMesh(const Path& meshPath, const String& meshName) {
   String name = meshName.empty() ? meshPath.getFileName() : meshName;
 
   auto it = m_meshes.find(name);
@@ -110,7 +110,7 @@ MeshManager::loadMesh(const Path& meshPath, const String& meshName) {
 /*
  */
 SPtr<Model>
-MeshManager::loadModel(const Path& filePath) {
+MeshImpotrter::loadModel(const Path& filePath) {
   CH_LOG_INFO(MeshSystem, "Loading model: {0}", filePath.toString());
 
   String modelName = filePath.getFileName();
@@ -154,14 +154,14 @@ MeshManager::loadModel(const Path& filePath) {
 /*
  */
 void
-MeshManager::unloadMesh(const WeakPtr<Mesh>& mesh) {
+MeshImpotrter::unloadMesh(const WeakPtr<Mesh>& mesh) {
   CH_PAMRAMETER_UNUSED(mesh);
 }
 
 /*
  */
 Vector<SPtr<Mesh>>
-MeshManager::processNode(aiNode* node, const aiScene* scene) {
+MeshImpotrter::processNode(aiNode* node, const aiScene* scene) {
   Vector<SPtr<Mesh>> meshes;
 
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
@@ -184,7 +184,7 @@ MeshManager::processNode(aiNode* node, const aiScene* scene) {
 /*
  */
 SPtr<Mesh>
-MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
+MeshImpotrter::processMesh(aiMesh* mesh, const aiScene* scene) {
   SPtr<Mesh> newMesh = chMakeShared<Mesh>();
 
   const bool hasPositions = mesh->HasPositions();
@@ -304,7 +304,7 @@ MeshManager::processMesh(aiMesh* mesh, const aiScene* scene) {
 }
 
 void
-MeshManager::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
+MeshImpotrter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
                                  ModelNode* parentNode) {
   Matrix4 nodeLocalTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
 
