@@ -35,16 +35,6 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
 
  protected:
   bool
-  load() override {
-    return true;
-  }
-
-  bool
-  unload() override {
-    return true;
-  }
-
-  bool
   serialize(SPtr<DataStream>) override;
 
  /**

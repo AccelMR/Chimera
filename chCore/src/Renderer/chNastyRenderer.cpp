@@ -475,15 +475,13 @@ NastyRenderer::initializeRenderResources() {
 void
 NastyRenderer::loadModel(const SPtr<Model>& model) {
 
-  cleanupModelResources();
-  m_currentModel = model;
-
-  // For now, create a temporary model placeholder
-  // You can replace this with actual model loading later
-  if (!m_currentModel) {
-    CH_LOG_WARNING(NastyRendererSystem, "No model manager available, skipping model load");
+  if (!model) {
+    CH_LOG_ERROR(NastyRendererSystem, "Cannot load null model");
     return;
   }
+
+  cleanupModelResources();
+  m_currentModel = model;
 
   // Create mesh buffers and descriptor resources
   createMeshBuffers();

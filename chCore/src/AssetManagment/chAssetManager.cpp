@@ -45,6 +45,48 @@ AssetManager::initialize() {
 
 /*
 */
+bool
+AssetManager::loadAsset(const SPtr<IAsset>& asset) {
+  if (!asset) {
+    CH_LOG_ERROR(AssetSystem, "Cannot load null asset");
+    return false;
+  }
+  if (asset->isLoaded()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is already loaded", asset->getName());
+    return true;
+  }
+  if (asset->isLoading()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is already loading", asset->getName());
+    return false;
+  }
+  if (asset->isUnloading()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is currently unloading", asset->getName());
+    return false;
+  }
+  if (asset->isUnloaded()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is unloaded, loading now", asset->getName());
+    asset->m_state = AssetState::Loading;
+  }
+  else if (asset->isFailed()) {
+    CH_LOG_ERROR(AssetSystem, "Asset {0} has failed state, cannot load", asset->getName());
+    return false;
+  }
+
+  CH_LOG_DEBUG(AssetSystem, "Loading asset {0}", asset->getName());
+  if (!asset->load()) {
+    CH_LOG_ERROR(AssetSystem, "Failed to load asset {0}", asset->getName());
+    asset->m_state = AssetState::Failed;
+    return false;
+  }
+  m_loadedAssets[asset->getUUID()] = asset;
+
+  CH_LOG_DEBUG(AssetSystem, "Asset {0} loaded successfully", asset->getName());
+
+  return true;
+}
+
+/*
+*/
 void
 AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   if (!FileSystem::isDirectory(directory)) {
@@ -70,6 +112,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
         CH_LOG_ERROR(AssetSystem, "Failed to lazy load asset from file: {0}", file.toString());
         continue;
       }
+      stream->close();
 
       m_assets[asset->getUUID()] = asset;
       CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());

@@ -44,13 +44,16 @@ CH_LOG_DECLARE_STATIC(EditorApp, All);
 namespace chEngineSDK {
 
 namespace ImguiVars {
-static bool bShowDemoWindow = false; // Variable to control the visibility of the ImGui demo window
-static bool bRenderImGui = true;     // Variable to control if ImGui should render
-static bool bShowContentWindow = false; // Variable to control the visibility of the file explorer
+static bool bShowDemoWindow =
+    false;                       // Variable to control the visibility of the ImGui demo window
+static bool bRenderImGui = true; // Variable to control if ImGui should render
+static bool bShowContentWindow =
+    false; // Variable to control the visibility of the file explorer
 } // namespace ImguiVars
 
 namespace RenderVars {
-static LinearColor backgroundColor = LinearColor::Pink; // Default background color for the editor
+static LinearColor backgroundColor =
+    LinearColor::Pink; // Default background color for the editor
 static LinearColor rendererColor = LinearColor::Black; // Default renderer color
 } // namespace RenderVars
 
@@ -96,8 +99,7 @@ EditorApplication::onRender(float deltaTime) {
  */
 void
 EditorApplication::onPresent(const RendererOutput& rendererOutput,
-                             const SPtr<ICommandBuffer>& commandBuffer,
-                             uint32 swapChainWidth,
+                             const SPtr<ICommandBuffer>& commandBuffer, uint32 swapChainWidth,
                              uint32 swapChainHeight) {
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
@@ -143,8 +145,7 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
         CH_ASSERT(importer && "MeshManager importer must not be null.");
 
         Vector<String> supportedExtensions = importer->getSupportedExtensions();
-        openFileExplorer(EnginePaths::getAbsoluteAssetFolder(),
-                         supportedExtensions);
+        openFileExplorer(EnginePaths::getAbsoluteAssetFolder(), supportedExtensions);
       }
       ImGui::EndMenu();
     }
@@ -154,18 +155,24 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
     for (const auto& asset : m_assets) {
       if (ImGui::Selectable(asset->getName())) {
         CH_LOG_DEBUG(EditorApp, "Selected asset: {0}", asset->getName());
+        if (AssetManager::instance().loadAsset(asset)) {
+          if (asset->isTypeOf<ModelAsset>()) {
+            // If the asset is a ModelAsset, load it into the renderer
+            m_nastyRenderer->loadModel(asset->as<ModelAsset>()->getModel());
+          }
+        }
       }
     }
   }
   ImGui::End();
 
-    ImGui::Render();
-    ImGuiIO& io = ImGui::GetIO();
-    // Update and Render additional Platform Windows
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-      ImGui::UpdatePlatformWindows();
-      ImGui::RenderPlatformWindowsDefault();
-    }
+  ImGui::Render();
+  ImGuiIO& io = ImGui::GetIO();
+  // Update and Render additional Platform Windows
+  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
+  }
 
   graphicAPI.execute("renderImGui", {commandBuffer});
 }
@@ -221,7 +228,8 @@ EditorApplication::bindEvents() {
       if (data.key == chKeyBoard::Key::S) {
         CH_LOG_DEBUG(EditorApp, "Ctrl+S pressed, saving the current document.");
         // Handle Ctrl+S for saving the current document
-      } else if (data.key == chKeyBoard::Key::O) {
+      }
+      else if (data.key == chKeyBoard::Key::O) {
         CH_LOG_DEBUG(EditorApp, "Ctrl+O pressed, opening a document.");
         // Handle Ctrl+O for opening a document
       }
@@ -235,7 +243,8 @@ EditorApplication::bindEvents() {
       ImguiVars::bRenderImGui = !ImguiVars::bRenderImGui;
       if (ImguiVars::bRenderImGui) {
         CH_LOG_DEBUG(EditorApp, "ImGui rendering enabled.");
-      } else {
+      }
+      else {
         CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
       }
     } break;
@@ -379,6 +388,7 @@ EditorApplication::openFileExplorer(const Path& pathToOpen, const Vector<String>
     auto meshManager = AssetManagerImporter::instance().getImporter<MeshManager>();
     auto importedModel = std::reinterpret_pointer_cast<ModelAsset>(
         meshManager->importAsset(selectedFilePath, selectedFilePath.getFileName(false)));
+    m_assets = AssetManager::instance().getAllAssets();
 
     if (importedModel) {
       CH_LOG_INFO(EditorApp, "Successfully imported model: {0}", selectedFilePath.toString());
@@ -397,12 +407,12 @@ EditorApplication::openFileExplorer(const Path& pathToOpen, const Vector<String>
 }
 
 /*
-*/
+ */
 void
 EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize({ 1280.0f, 720.0f }, ImGuiCond_Always);
+  ImGui::SetNextWindowSize({1280.0f, 720.0f}, ImGuiCond_Always);
 
   ImGuiWindowFlags window_flags =
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |

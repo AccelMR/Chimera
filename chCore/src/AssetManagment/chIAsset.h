@@ -55,6 +55,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
     if (isTypeOf<T>()) {
       return std::static_pointer_cast<T>(shared_from_this());
     }
+    return nullptr;
   }
 
   template <typename T>
@@ -132,10 +133,10 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   virtual void
   clearAssetData() = 0;
 
-  NODISCARD virtual bool
+  NODISCARD bool
   load();
 
-  NODISCARD virtual bool
+  NODISCARD bool
   unload();
 
   virtual bool

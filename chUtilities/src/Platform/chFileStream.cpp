@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chFileStream.h"
 
@@ -90,7 +90,7 @@ MemoryDataStream::MemoryDataStream(SIZE_T _size)
 
 /*
 */
-MemoryDataStream::MemoryDataStream(void* memory, SIZE_T _size, bool _freeOnClose /*= true*/) 
+MemoryDataStream::MemoryDataStream(void* memory, SIZE_T _size, bool _freeOnClose /*= true*/)
   : DataStream(ACCESS_MODE::kREAD | ACCESS_MODE::kWRITE),
     m_data(nullptr),
     m_freeOnClose(_freeOnClose)
@@ -227,9 +227,9 @@ MemoryDataStream::clone() const {
 
 /*
 */
-FileDataStream::FileDataStream(const Path&_path, 
-                               AccesModeFlag _accessMode /*= AccesModeFlag(ACCESS_MODE::kREAD)*/, 
-                               bool _freeOnClose /*= true*/ ) 
+FileDataStream::FileDataStream(const Path&_path,
+                               AccesModeFlag _accessMode /*= AccesModeFlag(ACCESS_MODE::kREAD)*/,
+                               bool _freeOnClose /*= true*/ )
   : DataStream(_accessMode),
     m_path(_path),
     m_freeOnClose(_freeOnClose) {
@@ -256,7 +256,7 @@ FileDataStream::~FileDataStream() {
 
 SIZE_T
 FileDataStream::read(void* buf, SIZE_T count) {
-  m_pInStream->read( static_cast<char *>(buf), static_cast<std::streamsize>(count) );
+  m_pInStream->read(static_cast<char *>(buf), static_cast<std::streamsize>(count));
   return static_cast<SIZE_T>(m_pInStream->gcount());
 }
 
@@ -364,6 +364,8 @@ FileDataStream::init() {
 
   //Should check ensure open succeeded, in case fail for some reason.
   if (m_pInStream->fail()) {
+    // trow an exception or log an error
+    std::runtime_error("Failed to open file: " + m_path.toString());
     std::cerr << "Failed to open file: " << m_path.toString() << std::endl;
     return;
   }
@@ -379,11 +381,11 @@ String
 DataStream::getAsString() {
  //Ensure read from begin of stream
   seek(0);
-  
+
   //Try reading header
   uint8 headerBytes[4];
   SIZE_T numHeaderBytes = read(headerBytes, 4);
-  
+
   SIZE_T dataOffset = 0;
   if (4 <= numHeaderBytes) {
     if (isUTF32LE(reinterpret_cast<char*>(headerBytes))) {
@@ -394,13 +396,13 @@ DataStream::getAsString() {
       return String(s.begin(), s.end());
     }
   }
-  
+
   if (0 == dataOffset && 3 <= numHeaderBytes) {
     if (isUTF8(reinterpret_cast<char*>(headerBytes))) {
       dataOffset = 3;
     }
   }
-  
+
   if (0 == dataOffset && 2 <= numHeaderBytes) {
     if (isUTF16LE(reinterpret_cast<char*>(headerBytes))) {
       dataOffset = 2;
@@ -410,25 +412,25 @@ DataStream::getAsString() {
       return String(s.begin(), s.end());
     }
   }
-  
+
   seek(dataOffset);
-  
+
   //Read the entire buffer - ideally in one read, but if the size of the
   //buffer is unknown, do multiple fixed size reads.
   SIZE_T bufSize = (m_size > 0 ? m_size : 4096);
- 
+
   auto* tempBuffer = static_cast<std::stringstream::char_type*>(malloc(bufSize));
-  
+
   std::stringstream result;
   while (!isAtEnd()) {
     SIZE_T numReadBytes = read(tempBuffer, bufSize);
     result.write(tempBuffer, numReadBytes);
   }
- 
+
   free(tempBuffer);
-  
+
   std::string string = result.str();
-  
+
   switch (dataOffset)
   {
     default:
