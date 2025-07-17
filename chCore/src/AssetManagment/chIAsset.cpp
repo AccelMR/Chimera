@@ -22,6 +22,23 @@
 namespace chEngineSDK {
 
 /*
+*/
+void
+IAsset::setOriginalPath(const ANSICHAR* originalPath) {
+  if (!originalPath || !*originalPath) {
+    CH_LOG(AssetSystem, Error, "Invalid original path for asset {0}", m_metadata.name);
+    return;
+  }
+
+  SIZE_T pathLength = chString::length(originalPath);
+  chString::copyANSI(m_metadata.originalPath, originalPath, pathLength + 1);
+  CH_LOG(AssetSystem, Debug, "Set original path for asset {0} to {1}", m_metadata.name,
+         m_metadata.originalPath);
+  //updateMetadata(m_metadata);
+}
+
+
+/*
  */
 bool
 IAsset::save() {
@@ -40,8 +57,7 @@ IAsset::save() {
     return false;
   }
 
-  // Write metadata
-  stream->write(&m_metadata, sizeof(AssetMetadata));
+  stream->write(static_cast<const void*>(&m_metadata), sizeof(AssetMetadata));
 
   //TODO: Write referenced assets count
 
@@ -55,6 +71,68 @@ IAsset::save() {
 
   CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name,
          assetPath.toString());
+  return true;
+}
+
+/*
+*/
+bool
+IAsset::rename(const ANSICHAR* newName) {
+  if (!newName || !*newName) {
+    CH_LOG(AssetSystem, Error, "Invalid new name for asset {0}", m_metadata.name);
+    return false;
+  }
+
+  if (chString::equals(m_metadata.name, newName)) {
+    CH_LOG(AssetSystem, Warning, "Asset {0} already has the name {1}", m_metadata.name,
+           newName);
+    return true;
+  }
+
+  String assetFullStr = String(m_metadata.assetPath) + "/" + String(m_metadata.name) + ".chAss";
+  const Path assetAbsPath(FileSystem::absolutePath(Path(assetFullStr)));
+
+  String newFullStr = String(m_metadata.assetPath) + "/" + String(newName) + ".chAss";
+  const Path newAssetPath(FileSystem::absolutePath(Path(newFullStr)));
+
+  const bool success = FileSystem::renameFile(assetAbsPath,
+                                              newAssetPath);
+  if (!success) {
+    CH_LOG(AssetSystem, Error, "Failed to rename asset {0} to {1}", m_metadata.name, newName);
+    return false;
+  }
+
+  // Update the metadata
+  chString::copyANSI(m_metadata.name, newName, sizeof(newName));
+
+  return updateMetadata(m_metadata);
+}
+
+/*
+ */
+bool
+IAsset::updateMetadata(const AssetMetadata& newMetadata) {
+  const Path assetPath(String(m_metadata.assetPath));
+  if (assetPath.empty() || !assetPath.isRelative()) {
+    return false;
+  }
+
+  String assetName(m_metadata.name);
+  assetName += ".chAss";
+  const Path fullFilePath = assetPath.join(Path(assetName));
+
+  // Open file in read/write mode instead of create mode
+  SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, false); // read/write
+  if (!stream) {
+    return false;
+  }
+
+  // Write only metadata at the beginning
+  stream->seek(0); // Go to start
+  stream->write(&newMetadata, sizeof(AssetMetadata));
+  stream->close();
+
+  m_metadata = newMetadata;
   return true;
 }
 
@@ -142,11 +220,6 @@ IAsset::unload() {
   }
 
   m_state = AssetState::Unloading;
-
-  // for (const UUID& refUUID : m_referencedAssets) {
-  //   //AssetManager::getInstance().unloadAsset(refUUID);
-  // }
-
   // clear the asset data
   clearAssetData();
   m_referencedAssets.clear();

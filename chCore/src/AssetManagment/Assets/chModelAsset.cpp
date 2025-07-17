@@ -268,6 +268,21 @@ ModelAsset::deserialize(SPtr<DataStream> stream) {
   }
 }
 
+/*
+*/
+void
+ModelAsset::clearAssetData() {
+  if (m_model) {
+    m_model.reset();
+    CH_LOG(ModelAssetLog, Debug, "Cleared model data for asset: {0}", m_metadata.name);
+  }
+  else {
+    CH_LOG(ModelAssetLog, Warning, "No model data to clear for asset: {0}", m_metadata.name);
+  }
+}
+
+/*
+*/
 bool
 ModelAsset::deserializeNodeTree(SPtr<DataStream> stream,
                                 const Vector<SPtr<Mesh>>& uniqueMeshes) {

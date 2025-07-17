@@ -20,7 +20,7 @@ class CH_CORE_EXPORT EnginePaths {
    * @return Path to the assets directory.
    */
   static Path
-  getAssetDirectory();
+  getGameAssetDirectory();
 
   /**
    * Get the absolute path to the assets directory.
@@ -28,7 +28,15 @@ class CH_CORE_EXPORT EnginePaths {
    * @return Absolute path to the assets directory.
    */
   static Path
-  getAbsoluteAssetFolder();
+  getAbsoluteGameAssetDirectory();
+
+  /**
+   * Get the path to the engine assets directory. This is relative to the engine root.
+   *
+   * @return Path to the engine assets directory.
+   */
+  static Path
+  getEngineAssetDirectory();
 };
 
 } // namespace chEngineSDK

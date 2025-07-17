@@ -21,6 +21,12 @@ namespace chEngineSDK{
 class CH_UTILITY_EXPORT FileSystem {
  public:
 
+  NODISCARD static bool
+  renameFile(const Path& oldPath, const Path& newPath);
+
+  NODISCARD static bool
+  removeFile(const Path& path);
+
   NODISCARD static Path
   absolutePath(const Path& path);
 

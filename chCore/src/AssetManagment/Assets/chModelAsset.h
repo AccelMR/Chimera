@@ -49,7 +49,7 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
  private:
   friend class MeshImpotrter;
   void
-  clearAssetData() override {}
+  clearAssetData() override;
 
   FORCEINLINE void
   setModel(const SPtr<Model>& model) {

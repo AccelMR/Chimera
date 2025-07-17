@@ -22,7 +22,7 @@ using namespace chEnginePathsVars;
 /*
 */
 Path
-EnginePaths::getAssetDirectory() {
+EnginePaths::getGameAssetDirectory() {
   // Get the absolute path to the assets directory
   return ASSETS_PATH;
 }
@@ -30,10 +30,25 @@ EnginePaths::getAssetDirectory() {
 /*
  */
 Path
-EnginePaths::getAbsoluteAssetFolder() {
+EnginePaths::getAbsoluteGameAssetDirectory() {
   // Get the absolute path to the assets directory
   static Path assetDir = FileSystem::absolutePath(ASSETS_PATH);
   return assetDir;
+}
+
+/*
+*/
+Path
+EnginePaths::getEngineAssetDirectory() {
+
+  static Path engineAssetDir = FileSystem::absolutePath(Path(
+    #if USING(CH_DEBUG_MODE)
+    "chEditor/assets"
+    #else
+    "EngineAssets/Release"
+    #endif
+  ));
+  return engineAssetDir;
 }
 
 } // namespace chEngineSDK

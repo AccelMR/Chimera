@@ -12,6 +12,8 @@
 
 #if USING(CH_EDITOR)
 #include "chUUID.h"
+#include "chIAsset.h"
+#include "chPath.h"
 
 namespace chEngineSDK {
 
@@ -32,6 +34,12 @@ class CH_CORE_EXPORT IAssetImporter {
 
   virtual bool
   canImport(const String& extension) const = 0;
+
+  FORCEINLINE virtual void
+  setOriginalPath(const SPtr<IAsset>& asset, const Path& originalPath) {
+    CH_ASSERT(asset);
+    asset->setOriginalPath(originalPath.toString().c_str());
+  }
 };
 
 } // namespace chEngineSDK

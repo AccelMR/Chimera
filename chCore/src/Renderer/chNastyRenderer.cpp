@@ -477,6 +477,11 @@ NastyRenderer::loadModel(const SPtr<Model>& model) {
 
   if (!model) {
     CH_LOG_ERROR(NastyRendererSystem, "Cannot load null model");
+    cleanupModelResources();
+    m_currentModel.reset();
+    NodeNames.clear();
+    NodeIndex = 0;
+    CH_LOG_INFO(NastyRendererSystem, "Model unloaded successfully");
     return;
   }
 

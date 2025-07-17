@@ -24,6 +24,36 @@ namespace fs = std::filesystem;
 /*
 */
 /**
+ * @brief Renames a file from oldPath to newPath.
+ */
+bool
+FileSystem::renameFile(const Path& oldPath, const Path& newPath) {
+  fs::path oldFsPath(oldPath.toString());
+  fs::path newFsPath(newPath.toString());
+  if (fs::exists(oldFsPath) && fs::is_regular_file(oldFsPath)) {
+    fs::rename(oldFsPath, newFsPath);
+    return true;
+  }
+  return false; // Old file does not exist or is not a regular file
+}
+
+/*
+*/
+/**
+ * @brief Removes a file at the specified path.
+ */
+bool
+FileSystem::removeFile(const Path& path) {
+  fs::path fsPath(path.toString());
+  if (fs::exists(fsPath) && fs::is_regular_file(fsPath)) {
+    return fs::remove(fsPath);
+  }
+  return false; // File does not exist or is not a regular file
+}
+
+/*
+*/
+/**
  * @brief Converts a path to an absolute path.
  */
 Path

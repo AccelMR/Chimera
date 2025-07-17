@@ -5,7 +5,7 @@
  * @date 2022/06/23
  * @brief String utilities file.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
@@ -18,7 +18,7 @@
 #include <format>
 #include <regex>
 
-namespace chEngineSDK{
+namespace chEngineSDK {
 /*
  * Description:
  *     Static class that will contain helper functions to use on Strings.
@@ -32,10 +32,17 @@ namespace chEngineSDK{
 class CH_UTILITY_EXPORT chString
 {
  public:
-
   static String
   fromInt32(int32 value) {
     return std::to_string(value);
+  }
+
+
+  static SIZE_T
+  length(const ANSICHAR* str) {
+    if (!str) { return 0; }
+
+    return std::strlen(str);
   }
 
   /**
@@ -99,7 +106,8 @@ class CH_UTILITY_EXPORT chString
   splitString(const String& toSplit, const String& separator);
 
   /**
-   *   Constructs a single string by a vector of Strings by adding a character between each string.
+   *   Constructs a single string by a vector of Strings by adding a character between each
+   *string.
    *
    * @param toJoin
    *    The vector to be merged.
@@ -111,7 +119,7 @@ class CH_UTILITY_EXPORT chString
    *   New constructed string from a list.
    **/
   static String
-  join(const Vector<String>& toJoin,const String& separator);
+  join(const Vector<String>& toJoin, const String& separator);
 
   /**
    *   Formats a string given with its respective arguments.
@@ -122,20 +130,20 @@ class CH_UTILITY_EXPORT chString
    * @return
    *  New string created from a formatted string.
    **/
-  template<typename... Args>
+  template <typename... Args>
   static String
   format(const String& _format, Args&&... args);
 
-  template<typename Arg>
+  template <typename Arg>
   static String
   format(const String& _format, Arg&& arg);
 
   FORCEINLINE static String
   format(const String& _format) {
-      return _format;
+    return _format;
   }
 
-  template<typename T>
+  template <typename T>
   static String
   toString(T&& value);
 
@@ -148,10 +156,10 @@ class CH_UTILITY_EXPORT chString
    * @return String
    *    The new created string
    **/
-   static String
-   toLower(const String& str);
+  static String
+  toLower(const String& str);
 
-   /**
+  /**
    *   Copies a string to a buffer of ANSICHAR.
    * @param dest
    *    The destination buffer to copy the string.
@@ -160,15 +168,29 @@ class CH_UTILITY_EXPORT chString
    * @param size
    *    The size of the destination buffer. If 0, it will copy the entire string.
    **/
-   FORCEINLINE
-   static void
-   copyToANSI(ANSICHAR* dest, const String& src, SIZE_T size = 0) {
-      if (size == 0) {
-        size = src.size();
-      }
-      std::memcpy(dest, src.c_str(), size * sizeof(ANSICHAR));
-      dest[size] = '\0'; // Ensure null-termination
-   }
+  FORCEINLINE
+  static void
+  copyToANSI(ANSICHAR* dest, const String& src, SIZE_T size = 0) {
+    if (size == 0) {
+      size = src.size();
+    }
+    std::memcpy(dest, src.c_str(), size * sizeof(ANSICHAR));
+    dest[size] = '\0'; // Ensure null-termination
+  }
+
+  FORCEINLINE static bool
+  copyANSI(ANSICHAR* dest, const ANSICHAR* src, SIZE_T size = 0) {
+    if (size == 0) {
+      size = std::strlen(src);
+    }
+    if (size > 0) {
+      std::memcpy(dest, src, size * sizeof(ANSICHAR));
+      // Write null-terminator within bounds
+      dest[size] = '\0';
+      return true;
+    }
+    return false;
+  }
 
   /**
    *   Creates a new all characters in a string to upper case.
@@ -179,36 +201,50 @@ class CH_UTILITY_EXPORT chString
    * @return String
    *    The new created string
    **/
-   static String
-   toUpper(const String& str);
+  static String
+  toUpper(const String& str);
 
-   /**
-    *   Left trims a string of any whitespace.
-    *
-    * @param str
-    *    The string to take reference.
-    **/
-   static String
-   lTrim(const String& str);
+  /**
+   *   Left trims a string of any whitespace.
+   *
+   * @param str
+   *    The string to take reference.
+   **/
+  static String
+  lTrim(const String& str);
 
-   /**
-    *   Right trims a string of any whitespace.
-    *
-    * @param str
-    *    The string to take reference.
-    **/
-   static String
-   rTrim(const String& str);
+  /**
+   *   Right trims a string of any whitespace.
+   *
+   * @param str
+   *    The string to take reference.
+   **/
+  static String
+  rTrim(const String& str);
 
-   /**
-    *   Trims a string of any whitespace for both right and left part.
-    *
-    * @param str
-    *    The string to take reference.
-    **/
-   static String
-   trim(const String& str);
+  /**
+   *   Trims a string of any whitespace for both right and left part.
+   *
+   * @param str
+   *    The string to take reference.
+   **/
+  static String
+  trim(const String& str);
 
+  NODISCARD static bool
+  equals(const String& str1, const ANSICHAR* str2) {
+    return str1 == str2;
+  }
+
+  NODISCARD static bool
+  equals(const String& str1, const String& str2) {
+    return str1 == str2;
+  }
+
+  NODISCARD static bool
+  equals(const ANSICHAR* str1, const ANSICHAR* str2) {
+    return std::strcmp(str1, str2) == 0;
+  }
 
  public:
   static const String WHITESPACE;
@@ -216,15 +252,15 @@ class CH_UTILITY_EXPORT chString
 };
 
 /*
-*/
+ */
 template <typename T>
 String
-chString::toString(T&& value)
-{
+chString::toString(T&& value) {
   // Para strings, permitir movimiento directo
   if constexpr (std::is_same_v<std::decay_t<T>, String> ||
                 std::is_same_v<std::decay_t<T>, std::string>) {
-    if constexpr (std::is_lvalue_reference_v<T> && std::is_const_v<std::remove_reference_t<T>>) {
+    if constexpr (std::is_lvalue_reference_v<T> &&
+                  std::is_const_v<std::remove_reference_t<T>>) {
       return value;
     }
     else if constexpr (std::is_lvalue_reference_v<T>) {
@@ -312,7 +348,7 @@ chString::format(const String& _format, Args&&... args) {
   return result;
 }
 
-template<typename Arg>
+template <typename Arg>
 String
 chString::format(const String& _format, Arg&& arg) {
   SIZE_T pos = _format.find("{0}");
@@ -330,4 +366,4 @@ chString::format(const String& _format, Arg&& arg) {
 
   return result;
 }
-}
+} // namespace chEngineSDK

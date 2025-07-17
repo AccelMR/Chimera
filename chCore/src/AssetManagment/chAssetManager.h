@@ -46,8 +46,22 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   bool
   loadAsset(const SPtr<IAsset>& asset);
 
+  bool
+  unloadAsset(const UUID& assetUUID);
+
+  bool
+  renameAsset(const UUID& assetUUID, const ANSICHAR* newName);
+
+  bool
+  renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName);
+
   void
   lazyLoadAssetsFromDirectory(const Path& directory);
+
+#if USING(CH_EDITOR)
+  bool
+  removeAsset(const UUID& assetUUID);
+#endif // Editor-specific functionality
 
   /*
    *
@@ -101,9 +115,9 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   validateInfo(!assetPath.empty(), "Asset path cannot be empty");
   validateInfo(FileSystem::exists(assetPath),
                 "Asset path does not exist: " + assetPath.toString());
-  validateInfo(FileSystem::arePathsRelative(EnginePaths::getAssetDirectory(), assetPath),
+  validateInfo(FileSystem::arePathsRelative(EnginePaths::getGameAssetDirectory(), assetPath),
                 chString::format("Asset path must be relative to the asset directory: {0}",
-                                 EnginePaths::getAssetDirectory().toString()));
+                                 EnginePaths::getGameAssetDirectory().toString()));
   if (!validationPassed) {
     CH_LOG(AssetSystem, Error, "Failed to create asset due to validation errors");
     return WeakPtr<TAsset>();
@@ -125,8 +139,6 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   chString::copyToANSI(metadata.typeName, AssetTypeName, AssetTypeName.size() + 1);
   chString::copyToANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING, sizeof(CH_ENGINE_VERSION_STRING));
   chString::copyToANSI(metadata.name, name, name.size() + 1);
-  chString::copyToANSI(metadata.originalPath, assetPath.toString(),
-                        assetPath.toString().size() + 1);
   chString::copyToANSI(metadata.assetPath, assetPath.toString(),
                         assetPath.toString().size() + 1);
 

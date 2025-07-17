@@ -112,11 +112,16 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD FORCEINLINE const ANSICHAR*
   getName() const { return m_metadata.name; }
 
+  NODISCARD FORCEINLINE const ANSICHAR*
+  getOriginalPath() const { return m_metadata.originalPath; }
+
   NODISCARD bool
   save();
 
  protected:
   friend class AssetManager;
+  friend class IAssetImporter;
+
   IAsset() {}
   IAsset(const AssetMetadata& metadata)
    : m_metadata(metadata), m_state(AssetState::Unloaded), m_refCount(0) {
@@ -125,10 +130,17 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
  protected:
 
+  NODISCARD bool
+  rename(const ANSICHAR* newName);
+
+  bool
+  updateMetadata(const AssetMetadata& newMetadata);
+
+  FORCEINLINE void
+  setMetadata(const AssetMetadata& metadata) { m_metadata = metadata; }
+
   void
-  setMetadata(const AssetMetadata& metadata) {
-    m_metadata = metadata;
-  }
+  setOriginalPath(const ANSICHAR* originalPath);
 
   virtual void
   clearAssetData() = 0;

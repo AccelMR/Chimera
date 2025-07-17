@@ -87,6 +87,73 @@ AssetManager::loadAsset(const SPtr<IAsset>& asset) {
 
 /*
 */
+bool
+AssetManager::unloadAsset(const UUID& assetUUID) {
+  auto it = m_loadedAssets.find(assetUUID);
+  if (it == m_loadedAssets.end()) {
+    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
+    return false;
+  }
+
+  SPtr<IAsset> asset = it->second;
+  if (asset->isUnloaded()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is already unloaded", asset->getName());
+    return true;
+  }
+
+  if (asset->isLoading()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is currently loading, cannot unload", asset->getName());
+    return false;
+  }
+  if (asset->isUnloading()) {
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is currently unloading", asset->getName());
+    return false;
+  }
+
+  CH_LOG_DEBUG(AssetSystem, "Unloading asset {0}", asset->getName());
+  if (!asset->unload()) {
+    CH_LOG_ERROR(AssetSystem, "Failed to unload asset {0}", asset->getName());
+    return false;
+  }
+  m_loadedAssets.erase(it);
+  return true;
+}
+
+/*
+*/
+bool
+AssetManager::renameAsset(const UUID& assetUUID, const ANSICHAR* newName) {
+  auto it = m_assets.find(assetUUID);
+  if (it == m_assets.end()) {
+    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
+    return false;
+  }
+  SPtr<IAsset> asset = it->second;
+  return renameAsset(asset, newName);
+}
+
+/*
+*/
+bool
+AssetManager::renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName) {
+  if (!asset) {
+    CH_LOG_ERROR(AssetSystem, "Cannot rename null asset");
+    return false;
+  }
+
+  if (!asset->rename(newName)) {
+    CH_LOG_ERROR(AssetSystem, "Failed to rename asset {0} to {1}", asset->getName(), newName);
+    return false;
+  }
+
+  CH_LOG_DEBUG(AssetSystem, "Renamed asset {0} to {1}",
+               asset->getName(), newName);
+  return true;
+}
+
+
+/*
+*/
 void
 AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   if (!FileSystem::isDirectory(directory)) {
@@ -118,6 +185,30 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
       CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());
   }
 }
+
+#if USING(CH_EDITOR)
+/*
+*/
+bool
+AssetManager::removeAsset(const UUID& assetUUID) {
+  auto it = m_assets.find(assetUUID);
+  if (it == m_assets.end()) {
+    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
+    return false;
+  }
+
+  SPtr<IAsset> asset = it->second;
+  if (asset->isLoaded() && !asset->unload()) {
+    CH_LOG_ERROR(AssetSystem, "Failed to unload asset {0} before removal", asset->getName());
+    return false;
+  }
+
+  m_assets.erase(it);
+  CH_LOG_DEBUG(AssetSystem, "Removed asset: {0}", asset->getName());
+  return true;
+}
+
+#endif // Editor-specific functionality
 
 /*
 */
