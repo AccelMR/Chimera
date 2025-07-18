@@ -665,6 +665,9 @@ NastyRenderer::bindInputEvents() {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
   HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
+    if (!m_bIsfocused) {
+      return;
+    }
     if (keydata.key == Key::P && m_camera) {
       Vector3 cameraPosition = m_camera->getPosition();
       CH_LOG_INFO(NastyRendererSystem, "Camera Position: ({0}, {1}, {2})", cameraPosition.x,
@@ -699,7 +702,7 @@ NastyRenderer::bindInputEvents() {
   });
 
   HEvent listenKeys = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
-    if (!m_camera) {
+    if (!m_camera || !m_bIsfocused) {
       return;
     }
 
@@ -743,14 +746,14 @@ NastyRenderer::bindInputEvents() {
 
   HEvent listenWheel =
       eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
-        if (m_camera && wheelData.deltaY != 0) {
+        if (m_camera && wheelData.deltaY != 0 && m_bIsfocused) {
           m_camera->moveForward(wheelData.deltaY * g_cameraMoveSpeed);
         }
       });
 
   HEvent listenMouse =
       eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
-        if (!m_camera) {
+        if (!m_camera || !m_bIsfocused) {
           return;
         }
 

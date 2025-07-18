@@ -10,6 +10,7 @@
 
 #include "chAssetManager.h"
 #include "chLogger.h"
+#include "chMath.h"
 #include "chUIHelpers.h"
 
 #include "chNastyRenderer.h"
@@ -30,13 +31,13 @@ using namespace chEngineSDK::chUIHelpers;
 CH_LOG_DECLARE_STATIC(ContentAssetUILog, All);
 
 namespace ContentAssetUIVars {
- // Variable to control the visibility of the file explorer
+// Variable to control the visibility of the file explorer
 static bool bShowContentWindow = false;
-}
+} // namespace ContentAssetUIVars
 using namespace ContentAssetUIVars;
 
 /*
-*/
+ */
 void
 ContentAssetUI::refreshAssets() {
   m_assets = AssetManager::instance().getAllAssets();
@@ -130,12 +131,12 @@ ContentAssetUI::renderContentAssetUI() {
     if (gridView) {
       // Grid view implementation
       float windowWidth = ImGui::GetContentRegionAvail().x;
-      int columns = static_cast<int>(windowWidth / (gridSize + 10.0f));
+      int32 columns = static_cast<int32>(windowWidth / (gridSize + 10.0f));
       if (columns < 1) {
         columns = 1;
       }
 
-      int currentColumn = 0;
+      int32 currentColumn = 0;
 
       for (const auto& asset : m_assets) {
         // Filter by search
@@ -212,9 +213,29 @@ ContentAssetUI::renderContentAssetUI() {
           displayName = displayName.substr(0, 9) + "...";
         }
 
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                             (gridSize - ImGui::CalcTextSize(displayName.c_str()).x) * 0.5f);
-        ImGui::Text("%s", displayName.c_str());
+        if (!renderInlineRename(asset, displayName)) {
+          // Normal text rendering
+          ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                               (gridSize - ImGui::CalcTextSize(displayName.c_str()).x) * 0.5f);
+
+          // Make the text clickable for rename
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+
+          String textButtonId =
+              chString::format("{0}##text_{1}", displayName, asset->getUUID().toString());
+          if (ImGui::Button(textButtonId.c_str())) {
+            // Single click - could be used for selection or other actions
+          }
+
+          // Double-click to start rename
+          if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            startInlineRename(asset);
+          }
+
+          ImGui::PopStyleColor(3);
+        }
 
         // Asset state indicator
         ImVec4 stateColor = getAssetStateColor(asset);
@@ -328,11 +349,20 @@ ContentAssetUI::renderContentAssetUI() {
 
           // Name column
           ImGui::TableSetColumnIndex(1);
-          String selectableId = chString::format("{0}##asset_{1}", asset->getName(),
-                                                 asset->getUUID().toString());
-          if (ImGui::Selectable(selectableId.c_str(), false,
-                                ImGuiSelectableFlags_SpanAllColumns)) {
-            handleAssetSelection(asset);
+
+          if (!renderInlineRename(asset, asset->getName())) {
+            // Normal selectable item
+            String selectableId = chString::format("{0}##asset_{1}", asset->getName(),
+                                                   asset->getUUID().toString());
+            if (ImGui::Selectable(selectableId.c_str(), false,
+                                  ImGuiSelectableFlags_SpanAllColumns)) {
+              handleAssetSelection(asset);
+            }
+
+            // Double-click to start rename
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+              startInlineRename(asset);
+            }
           }
 
           // Context menu
@@ -414,7 +444,8 @@ ContentAssetUI::renderDeleteConfirmationPopup() {
   }
 }
 
-// Helper method to handle asset selection
+/*
+ */
 void
 ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
   CH_LOG_DEBUG(ContentAssetUILog, "Selected asset: {0}", asset->getName());
@@ -436,7 +467,8 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
   }
 }
 
-// Helper method to render context menu for assets
+/*
+ */
 void
 ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
   if (ImGui::MenuItem("Load")) {
@@ -452,7 +484,8 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
   ImGui::Separator();
 
   if (ImGui::MenuItem("Rename")) {
-    AssetManager::instance().renameAsset(asset, "new_name");
+    startInlineRename(asset);
+    ImGui::CloseCurrentPopup();
   }
 
   if (ImGui::MenuItem("Show in Explorer")) {
@@ -476,7 +509,8 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
   }
 }
 
-// Helper method to get asset state color
+/*
+ */
 ImVec4
 ContentAssetUI::getAssetStateColor(const SPtr<IAsset>& asset) {
   switch (asset->getState()) {
@@ -495,7 +529,8 @@ ContentAssetUI::getAssetStateColor(const SPtr<IAsset>& asset) {
   }
 }
 
-// Helper method to get asset state string
+/*
+ */
 String
 ContentAssetUI::getAssetStateString(const SPtr<IAsset>& asset) {
   switch (asset->getState()) {
@@ -512,6 +547,119 @@ ContentAssetUI::getAssetStateString(const SPtr<IAsset>& asset) {
   default:
     return "Unknown";
   }
+}
+
+/*
+ */
+void
+ContentAssetUI::startInlineRename(const SPtr<IAsset>& asset) {
+  if (!asset) {
+    return;
+  }
+
+  m_isRenaming = true;
+  m_renamingAsset = asset;
+  m_renameFocusRequested = true;
+
+  // Copy current name to buffer
+  chString::copyANSI(m_renameBuffer, asset->getName());
+
+  CH_LOG_DEBUG(ContentAssetUILog, "Started inline rename for asset: {0}", asset->getName());
+}
+
+/*
+ */
+void
+ContentAssetUI::finishInlineRename() {
+  if (!m_isRenaming || !m_renamingAsset) {
+    return;
+  }
+
+  String newName = String(m_renameBuffer);
+  newName = chString::trim(newName); // Remove leading/trailing whitespace
+
+  if (!newName.empty() && newName != m_renamingAsset->getName()) {
+    // Perform the actual rename
+    bool success = AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str());
+    if (success) {
+      CH_LOG_DEBUG(ContentAssetUILog, "Successfully renamed asset to: {0}", newName);
+    }
+    else {
+      CH_LOG_ERROR(ContentAssetUILog, "Failed to rename asset to: {0}", newName);
+    }
+  }
+
+  cancelInlineRename();
+}
+
+/*
+ */
+void
+ContentAssetUI::cancelInlineRename() {
+  m_isRenaming = false;
+  m_renamingAsset = nullptr;
+  m_renameFocusRequested = false;
+  memset(m_renameBuffer, 0, sizeof(m_renameBuffer));
+}
+
+/*
+ */
+bool
+ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset, const String& ) {
+  // Check if this is the asset being renamed
+  bool isThisAssetRenaming =
+      m_isRenaming && m_renamingAsset && m_renamingAsset->getUUID() == asset->getUUID();
+
+  if (isThisAssetRenaming) {
+    // Calculate text width for proper sizing
+    ImVec2 textSize = ImGui::CalcTextSize(m_renameBuffer);
+    float inputWidth = Math::max(textSize.x + 20.0f, 100.0f); // Minimum width of 100px
+
+    // Style the input to look more like regular text
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 0.4f, 0.4f, 0.9f));
+
+    ImGui::SetNextItemWidth(inputWidth);
+
+    // Create unique ID for this input
+    String inputId = chString::format("##rename_{0}", asset->getUUID().toString());
+
+    // Handle focus request
+    if (m_renameFocusRequested) {
+      ImGui::SetKeyboardFocusHere();
+      m_renameFocusRequested = false;
+    }
+
+    // Render the input field
+    bool enterPressed = ImGui::InputText(
+        inputId.c_str(), m_renameBuffer, sizeof(m_renameBuffer),
+        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+    // Handle input completion
+    if (enterPressed || (!ImGui::IsItemActive() && !ImGui::IsItemFocused())) {
+      if (enterPressed) {
+        finishInlineRename();
+      }
+      else {
+        cancelInlineRename();
+      }
+    }
+
+    // Handle escape key to cancel
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+      cancelInlineRename();
+    }
+
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+
+    return true; // Indicate that rename widget was rendered
+  }
+
+  return false; // Normal text rendering should proceed
 }
 
 } // namespace chEngineSDK

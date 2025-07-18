@@ -54,10 +54,29 @@ class ContentAssetUI
   String
   getAssetStateString(const SPtr<IAsset>& asset);
 
+  // Helper methods
+  void
+  startInlineRename(const SPtr<IAsset>& asset);
+
+  void
+  finishInlineRename();
+
+  void
+  cancelInlineRename();
+
+  bool
+  renderInlineRename(const SPtr<IAsset>& asset, const String& displayName);
+
  private:
   Vector<SPtr<IAsset>> m_assets;
   SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
   bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
   SPtr<NastyRenderer> m_nastyRenderer; ///< Nasty renderer instance for rendering assets
+
+ // Inline rename functionality
+  bool m_isRenaming = false;
+  SPtr<IAsset> m_renamingAsset = nullptr;
+  char m_renameBuffer[256] = {0}; // Buffer for the new name
+  bool m_renameFocusRequested = false;
 }; // class ContentAssetUI
 } // namespace chEngineSDK

@@ -35,10 +35,12 @@ public:
   uint32
   getHeight() const override { return m_renderHeight; }
 
-  void
-  setClearColors(const Vector<LinearColor>& clearColors) override{
-    m_clearColors = clearColors;
-  }
+  FORCEINLINE void
+  setClearColors(const Vector<LinearColor>& clearColors) override
+  { m_clearColors = clearColors; }
+
+  FORCEINLINE void
+  setFocused(bool focused) { m_bIsfocused = focused; }
 
   void loadModel(const SPtr<Model>& model);
   void bindInputEvents();
@@ -65,6 +67,8 @@ public:
 
   void
   cleanupModelResources();
+
+  bool m_bIsfocused = false;
 
   SPtr<ITexture> m_colorTarget;
   SPtr<ITextureView> m_colorTargetView;
