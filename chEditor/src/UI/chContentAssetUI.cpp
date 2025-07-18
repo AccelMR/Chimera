@@ -43,351 +43,428 @@ ContentAssetUI::refreshAssets() {
   m_assets = AssetManager::instance().getAllAssets();
 }
 
-/*
- */
+// Main render function - now much cleaner
 void
 ContentAssetUI::renderContentAssetUI() {
   renderDeleteConfirmationPopup();
-  if (ImGui::Begin("Content Browser", &bShowContentWindow)) {
-    // Search bar
-    static char searchBuffer[256] = "";
-    ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::InputTextWithHint("##search", "Search assets...", searchBuffer,
-                                 sizeof(searchBuffer))) {
-      // Filter will be applied below
-    }
 
-    ImGui::Separator();
-
-    // Asset type filter buttons
-    static bool showAllTypes = true;
-    static bool showModels = true;
-    static bool showTextures = true;
-    static bool showMaterials = true;
-    static bool showOther = true;
-
-    if (ImGui::Button("All")) {
-      showAllTypes = true;
-      showModels = showTextures = showMaterials = showOther = true;
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("Models")) {
-      showAllTypes = false;
-      showModels = true;
-      showTextures = showMaterials = showOther = false;
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("Textures")) {
-      showAllTypes = false;
-      showTextures = true;
-      showModels = showMaterials = showOther = false;
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("Materials")) {
-      showAllTypes = false;
-      showMaterials = true;
-      showModels = showTextures = showOther = false;
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("Other")) {
-      showAllTypes = false;
-      showOther = true;
-      showModels = showTextures = showMaterials = false;
-    }
-
-    ImGui::Separator();
-
-    // View mode toggle
-    static bool gridView = true;
-    if (ImGui::RadioButton("Grid View", gridView)) {
-      gridView = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("List View", !gridView)) {
-      gridView = false;
-    }
-
-    // Grid size slider for grid view
-    static float gridSize = 80.0f;
-    if (gridView) {
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100.0f);
-      ImGui::SliderFloat("Size", &gridSize, 50.0f, 150.0f, "%.0f");
-    }
-
-    ImGui::Separator();
-
-    // Asset display area
-    ImGui::BeginChild("AssetArea", ImVec2(0, 0), false);
-
-    // Convert search to lowercase for case-insensitive search
-    String searchStr = String(searchBuffer);
-    std::transform(searchStr.begin(), searchStr.end(), searchStr.begin(), ::tolower);
-
-    if (gridView) {
-      // Grid view implementation
-      float windowWidth = ImGui::GetContentRegionAvail().x;
-      int32 columns = static_cast<int32>(windowWidth / (gridSize + 10.0f));
-      if (columns < 1) {
-        columns = 1;
-      }
-
-      int32 currentColumn = 0;
-
-      for (const auto& asset : m_assets) {
-        // Filter by search
-        if (!searchStr.empty()) {
-          String assetName = asset->getName();
-          std::transform(assetName.begin(), assetName.end(), assetName.begin(), ::tolower);
-          if (assetName.find(searchStr) == String::npos) {
-            continue;
-          }
-        }
-
-        // Filter by asset type
-        AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
-        if (!showAllTypes) {
-          bool shouldShow = false;
-          switch (assetIcon.type) {
-          case AssetType::Model:
-            shouldShow = showModels;
-            break;
-          case AssetType::Texture:
-            shouldShow = showTextures;
-            break;
-          case AssetType::Material:
-            shouldShow = showMaterials;
-            break;
-          default:
-            shouldShow = showOther;
-            break;
-          }
-          if (!shouldShow) {
-            continue;
-          }
-        }
-
-        if (assetIcon.type == AssetType::Unknown) {
-          continue; // Skip unknown asset types
-        }
-
-        // Position for grid layout
-        if (currentColumn > 0) {
-          ImGui::SameLine();
-        }
-
-        ImGui::PushID(asset->getUUID().toString().c_str());
-        ImGui::BeginGroup();
-
-        // Create unique ID for this asset
-        String buttonId = chString::format("##asset_{0}", asset->getUUID().toString());
-
-        // Asset icon button
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
-
-        if (ImGui::Button(buttonId.c_str(), ImVec2(gridSize, gridSize))) {
-          // Asset selection logic
-          handleAssetSelection(asset);
-        }
-
-        ImGui::PopStyleColor(3);
-
-        // Draw icon on button
-        ImVec2 buttonMin = ImGui::GetItemRectMin();
-        ImVec2 buttonMax = ImGui::GetItemRectMax();
-        ImVec2 iconPos = ImVec2(buttonMin.x + (gridSize - 32) * 0.5f,
-                                buttonMin.y + (gridSize - 32) * 0.5f - 10);
-
-        ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 32.0f, iconPos,
-                                            IM_COL32(255, 255, 255, 255), assetIcon.icon);
-
-        // Asset name (truncated if too long)
-        String displayName = asset->getName();
-        if (displayName.length() > 12) {
-          displayName = displayName.substr(0, 9) + "...";
-        }
-
-        if (!renderInlineRename(asset, displayName)) {
-          // Normal text rendering
-          ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                               (gridSize - ImGui::CalcTextSize(displayName.c_str()).x) * 0.5f);
-
-          // Make the text clickable for rename
-          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent
-          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f));
-          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-
-          String textButtonId =
-              chString::format("{0}##text_{1}", displayName, asset->getUUID().toString());
-          if (ImGui::Button(textButtonId.c_str())) {
-            // Single click - could be used for selection or other actions
-          }
-
-          // Double-click to start rename
-          if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            startInlineRename(asset);
-          }
-
-          ImGui::PopStyleColor(3);
-        }
-
-        // Asset state indicator
-        ImVec4 stateColor = getAssetStateColor(asset);
-        ImGui::GetWindowDrawList()->AddCircleFilled(
-            ImVec2(buttonMax.x - 8, buttonMin.y + 8), 3.0f,
-            ImGui::ColorConvertFloat4ToU32(stateColor));
-
-        ImGui::EndGroup();
-
-        // Make the group selectable for context menu
-        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-          ImGui::OpenPopup(
-              chString::format("AssetContext_{0}", asset->getUUID().toString()).c_str());
-        }
-
-        // Context menu with explicit ID
-        if (ImGui::BeginPopup(
-                chString::format("AssetContext_{0}", asset->getUUID().toString()).c_str())) {
-          renderAssetContextMenu(asset);
-          ImGui::EndPopup();
-        }
-
-        ImGui::PopID(); // Pop the unique ID for this asset
-
-        // Format createdAt (int64) as a readable date/time string
-        auto createdAt = asset->getCreatedAt();
-
-        // Convert from chrono ticks to time_t properly
-        auto timePoint = std::chrono::system_clock::time_point(
-            std::chrono::system_clock::duration(createdAt));
-        std::time_t createdAtTimeT = std::chrono::system_clock::to_time_t(timePoint);
-
-        ANSICHAR createdAtStr[64] = {};
-        if (struct tm* timeInfo = std::localtime(&createdAtTimeT)) {
-          std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", timeInfo);
-        }
-        else {
-          const String unkwon = "Unknown";
-          chString::copyToANSI(createdAtStr, unkwon, unkwon.size());
-        }
-
-        // Tooltip
-        if (ImGui::IsItemHovered()) {
-          ImGui::BeginTooltip();
-          ImGui::Text("UUID: %s", asset->getUUID().toString().c_str());
-          ImGui::Text("Name: %s", asset->getName());
-          ImGui::Text("Type: %s", asset->getTypeName());
-          ImGui::Text("Created At: %s", createdAtStr);
-          ImGui::Text("State: %s", getAssetStateString(asset).c_str());
-          ImGui::Text("Imported Path: %s", asset->getImportedPath());
-          ImGui::Text("Asset Path: %s", asset->getAssetPath());
-          ImGui::EndTooltip();
-        }
-
-        currentColumn = (currentColumn + 1) % columns;
-      }
-    }
-    else {
-      // List view implementation
-      if (ImGui::BeginTable("AssetTable", 4,
-                            ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
-                                ImGuiTableFlags_Borders)) {
-        ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableHeadersRow();
-
-        for (const auto& asset : m_assets) {
-          // Filter by search
-          if (!searchStr.empty()) {
-            String assetName = asset->getName();
-            std::transform(assetName.begin(), assetName.end(), assetName.begin(), ::tolower);
-            if (assetName.find(searchStr) == String::npos) {
-              continue;
-            }
-          }
-
-          // Filter by asset type
-          AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
-          if (!showAllTypes) {
-            bool shouldShow = false;
-            switch (assetIcon.type) {
-            case AssetType::Model:
-              shouldShow = showModels;
-              break;
-            case AssetType::Texture:
-              shouldShow = showTextures;
-              break;
-            case AssetType::Material:
-              shouldShow = showMaterials;
-              break;
-            default:
-              shouldShow = showOther;
-              break;
-            }
-            if (!shouldShow) {
-              continue;
-            }
-          }
-
-          if (assetIcon.type == AssetType::Unknown) {
-            continue; // Skip unknown asset types
-          }
-
-          ImGui::TableNextRow();
-
-          // Icon column
-          ImGui::TableSetColumnIndex(0);
-          ImGui::Text("%s", assetIcon.icon);
-
-          // Name column
-          ImGui::TableSetColumnIndex(1);
-
-          if (!renderInlineRename(asset, asset->getName())) {
-            // Normal selectable item
-            String selectableId = chString::format("{0}##asset_{1}", asset->getName(),
-                                                   asset->getUUID().toString());
-            if (ImGui::Selectable(selectableId.c_str(), false,
-                                  ImGuiSelectableFlags_SpanAllColumns)) {
-              handleAssetSelection(asset);
-            }
-
-            // Double-click to start rename
-            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-              startInlineRename(asset);
-            }
-          }
-
-          // Context menu
-          if (ImGui::BeginPopupContextItem()) {
-            renderAssetContextMenu(asset);
-            ImGui::EndPopup();
-          }
-
-          // Type column
-          ImGui::TableSetColumnIndex(2);
-          ImGui::Text("%s", asset->getTypeName());
-
-          // State column
-          ImGui::TableSetColumnIndex(3);
-          ImVec4 stateColor = getAssetStateColor(asset);
-          ImGui::TextColored(stateColor, "%s", getAssetStateString(asset).c_str());
-        }
-
-        ImGui::EndTable();
-      }
-    }
-
-    ImGui::EndChild();
+  if (!ImGui::Begin("Content Browser", &bShowContentWindow)) {
+    ImGui::End();
+    return;
   }
+
+  renderSearchBar();
+  renderAssetTypeFilters();
+  renderViewModeControls();
+  renderAssetDisplayArea();
+
   ImGui::End();
+}
+
+// Search bar rendering
+void
+ContentAssetUI::renderSearchBar() {
+  ImGui::SetNextItemWidth(-1.0f);
+
+  if (ImGui::InputTextWithHint("##search", "Search assets...", searchBuffer,
+                               sizeof(searchBuffer))) {
+    // Filter will be applied in display area
+  }
+
+  ImGui::Separator();
+}
+
+// Asset type filter buttons
+void
+ContentAssetUI::renderAssetTypeFilters() {
+  if (ImGui::Button("All")) {
+    showAllTypes = true;
+    showModels = showTextures = showMaterials = showOther = true;
+  }
+  ImGui::SameLine();
+
+  if (ImGui::Button("Models")) {
+    showAllTypes = false;
+    showModels = true;
+    showTextures = showMaterials = showOther = false;
+  }
+  ImGui::SameLine();
+
+  if (ImGui::Button("Textures")) {
+    showAllTypes = false;
+    showTextures = true;
+    showModels = showMaterials = showOther = false;
+  }
+  ImGui::SameLine();
+
+  if (ImGui::Button("Materials")) {
+    showAllTypes = false;
+    showMaterials = true;
+    showModels = showTextures = showOther = false;
+  }
+  ImGui::SameLine();
+
+  if (ImGui::Button("Other")) {
+    showAllTypes = false;
+    showOther = true;
+    showModels = showTextures = showMaterials = false;
+  }
+
+  ImGui::Separator();
+}
+
+// View mode and grid size controls
+void
+ContentAssetUI::renderViewModeControls() {
+  if (ImGui::RadioButton("Grid View", gridView)) {
+    gridView = true;
+  }
+  ImGui::SameLine();
+
+  if (ImGui::RadioButton("List View", !gridView)) {
+    gridView = false;
+  }
+
+  if (gridView) {
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f);
+    ImGui::SliderFloat("Size", &gridSize, 50.0f, 150.0f, "%.0f");
+  }
+
+  ImGui::Separator();
+}
+
+// Main asset display area
+void
+ContentAssetUI::renderAssetDisplayArea() {
+  ImGui::BeginChild("AssetArea", ImVec2(0, 0), false);
+
+  if (gridView) {
+    renderGridView();
+  }
+  else {
+    renderListView();
+  }
+
+  ImGui::EndChild();
+}
+
+// Grid view implementation
+void
+ContentAssetUI::renderGridView() {
+
+  float windowWidth = ImGui::GetContentRegionAvail().x;
+  int32 columns = static_cast<int32>(windowWidth / (gridSize + 10.0f));
+  if (columns < 1) {
+    columns = 1;
+  }
+
+  int32 currentColumn = 0;
+
+  for (const auto& asset : m_assets) {
+    if (!shouldShowAsset(asset)) {
+      continue;
+    }
+
+    renderGridAssetItem(asset, currentColumn, gridSize);
+    currentColumn = (currentColumn + 1) % columns;
+  }
+}
+
+// List view implementation
+void
+ContentAssetUI::renderListView() {
+  if (!ImGui::BeginTable("AssetTable", 4,
+                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
+                             ImGuiTableFlags_Borders)) {
+    return;
+  }
+
+  setupTableColumns();
+
+  for (const auto& asset : m_assets) {
+    if (!shouldShowAsset(asset)) {
+      continue;
+    }
+
+    renderListAssetItem(asset);
+  }
+
+  ImGui::EndTable();
+}
+
+// Check if asset should be shown based on filters
+bool
+ContentAssetUI::shouldShowAsset(const SPtr<IAsset>& asset) {
+  // Search filter
+  if (!passesSearchFilter(asset)) {
+    return false;
+  }
+
+  // Type filter
+  if (!passesTypeFilter(asset)) {
+    return false;
+  }
+
+  // Skip unknown asset types
+  AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
+  if (assetIcon.type == AssetType::Unknown) {
+    return false;
+  }
+
+  return true;
+}
+
+// Check search filter
+bool
+ContentAssetUI::passesSearchFilter(const SPtr<IAsset>& asset) {
+  String searchStr = String(searchBuffer);
+
+  if (searchStr.empty()) {
+    return true;
+  }
+
+  std::transform(searchStr.begin(), searchStr.end(), searchStr.begin(), ::tolower);
+
+  String assetName = asset->getName();
+  std::transform(assetName.begin(), assetName.end(), assetName.begin(), ::tolower);
+
+  return assetName.find(searchStr) != String::npos;
+}
+
+// Check type filter
+bool
+ContentAssetUI::passesTypeFilter(const SPtr<IAsset>& asset) {
+  if (showAllTypes) {
+    return true;
+  }
+
+  AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
+
+  switch (assetIcon.type) {
+  case AssetType::Model:
+    return showModels;
+  case AssetType::Texture:
+    return showTextures;
+  case AssetType::Material:
+    return showMaterials;
+  default:
+    return showOther;
+  }
+}
+
+// Setup table columns for list view
+void
+ContentAssetUI::setupTableColumns() {
+  ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+  ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+  ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableHeadersRow();
+}
+
+// Render single asset item in grid view
+void
+ContentAssetUI::renderGridAssetItem(const SPtr<IAsset>& asset,
+                                    int32 currentColumn,
+                                    float gridSize) {
+  if (currentColumn > 0) {
+    ImGui::SameLine();
+  }
+
+  ImGui::PushID(asset->getUUID().toString().c_str());
+  ImGui::BeginGroup();
+
+  renderAssetIconButton(asset, gridSize);
+  renderAssetNameInGrid(asset, gridSize);
+
+  ImGui::EndGroup();
+
+  renderAssetStateIndicator(asset);
+  handleAssetContextMenu(asset);
+  renderAssetTooltip(asset);
+
+  ImGui::PopID();
+}
+
+// Render single asset item in list view
+void
+ContentAssetUI::renderListAssetItem(const SPtr<IAsset>& asset) {
+  ImGui::TableNextRow();
+
+  // Icon column
+  ImGui::TableSetColumnIndex(0);
+  AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
+  ImGui::Text("%s", assetIcon.icon);
+
+  // Name column
+  ImGui::TableSetColumnIndex(1);
+  if (!renderInlineRename(asset, asset->getName())) {
+    renderSelectableAssetName(asset);
+  }
+
+  handleAssetContextMenu(asset);
+
+  // Type column
+  ImGui::TableSetColumnIndex(2);
+  ImGui::Text("%s", asset->getTypeName());
+
+  // State column
+  ImGui::TableSetColumnIndex(3);
+  ImVec4 stateColor = getAssetStateColor(asset);
+  ImGui::TextColored(stateColor, "%s", getAssetStateString(asset).c_str());
+}
+
+// Render asset icon button for grid view
+void
+ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset, float gridSize) {
+  String buttonId = chString::format("##asset_{0}", asset->getUUID().toString());
+  AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
+
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+
+  if (ImGui::Button(buttonId.c_str(), ImVec2(gridSize, gridSize))) {
+    handleAssetSelection(asset);
+  }
+
+  ImGui::PopStyleColor(3);
+
+  // Draw icon on button
+  ImVec2 buttonMin = ImGui::GetItemRectMin();
+  ImVec2 iconPos =
+      ImVec2(buttonMin.x + (gridSize - 32) * 0.5f, buttonMin.y + (gridSize - 32) * 0.5f - 10);
+
+  ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 32.0f, iconPos,
+                                      IM_COL32(255, 255, 255, 255), assetIcon.icon);
+}
+
+// Render asset name in grid view
+void
+ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset, float gridSize) {
+  String displayName = asset->getName();
+  if (displayName.length() > 12) {
+    displayName = displayName.substr(0, 9) + "...";
+  }
+
+  if (renderInlineRename(asset, displayName)) {
+    return;
+  }
+
+  // Center the text
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                       (gridSize - ImGui::CalcTextSize(displayName.c_str()).x) * 0.5f);
+
+  // Make the text clickable for rename
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+
+  String textButtonId =
+      chString::format("{0}##text_{1}", displayName, asset->getUUID().toString());
+
+  if (ImGui::Button(textButtonId.c_str())) {
+    // Single click - could be used for selection or other actions
+  }
+
+  // Double-click to start rename
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    startInlineRename(asset);
+  }
+
+  ImGui::PopStyleColor(3);
+}
+
+// Render selectable asset name for list view
+void
+ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset) {
+  String selectableId =
+      chString::format("{0}##asset_{1}", asset->getName(), asset->getUUID().toString());
+
+  if (ImGui::Selectable(selectableId.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) {
+    handleAssetSelection(asset);
+  }
+
+  // Double-click to start rename
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    startInlineRename(asset);
+  }
+}
+
+// Render asset state indicator
+void
+ContentAssetUI::renderAssetStateIndicator(const SPtr<IAsset>& asset) {
+    const ImVec4 stateColor = getAssetStateColor(asset);
+    const ImVec2 groupMin = ImGui::GetItemRectMin();
+    const ImVec2 groupMax = ImGui::GetItemRectMax();
+
+    // Proporciones basadas en gridSize
+    const float offsetRatio = 0.08f;  // 8% del tamaño del grid para el offset
+    const float radiusRatio = 0.05f;  // 5% del tamaño del grid para el radio
+
+    float offset = gridSize * offsetRatio;
+    float radius = gridSize * radiusRatio;
+
+    // Límites mínimos y máximos para que no se vea muy pequeño o muy grande
+    offset = Math::max(6.0f, Math::min(offset, 15.0f));
+    radius = Math::max(2.0f, Math::min(radius, 8.0f));
+
+    ImGui::GetWindowDrawList()->AddCircleFilled(
+        ImVec2(groupMax.x - offset, groupMin.y + offset),
+        radius,
+        ImGui::ColorConvertFloat4ToU32(stateColor)
+    );
+}
+
+// Handle asset context menu
+void
+ContentAssetUI::handleAssetContextMenu(const SPtr<IAsset>& asset) {
+  bool groupRightClicked =
+      ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+  String popupId = chString::format("AssetContext_{0}", asset->getUUID().toString());
+
+  if (groupRightClicked) {
+    ImGui::OpenPopup(popupId.c_str());
+  }
+
+  if (ImGui::BeginPopup(popupId.c_str())) {
+    renderAssetContextMenu(asset);
+    ImGui::EndPopup();
+  }
+}
+
+// Render asset tooltip
+void
+ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset) {
+  if (!ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+    return;
+  }
+
+  // Format createdAt (int64) as a readable date/time string
+  auto createdAt = asset->getCreatedAt();
+  auto timePoint =
+      std::chrono::system_clock::time_point(std::chrono::system_clock::duration(createdAt));
+  std::time_t createdAtTimeT = std::chrono::system_clock::to_time_t(timePoint);
+
+  ANSICHAR createdAtStr[64] = {};
+  if (struct tm* timeInfo = std::localtime(&createdAtTimeT)) {
+    std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", timeInfo);
+  }
+  else {
+    const String unknown = "Unknown";
+    chString::copyToANSI(createdAtStr, unknown, unknown.size());
+  }
+
+  ImGui::BeginTooltip();
+  ImGui::Text("UUID: %s", asset->getUUID().toString().c_str());
+  ImGui::Text("Name: %s", asset->getName());
+  ImGui::Text("Type: %s", asset->getTypeName());
+  ImGui::Text("Created At: %s", createdAtStr);
+  ImGui::Text("State: %s", getAssetStateString(asset).c_str());
+  ImGui::Text("Imported Path: %s", asset->getImportedPath());
+  ImGui::Text("Asset Path: %s", asset->getAssetPath());
+  ImGui::EndTooltip();
 }
 
 /*
@@ -488,16 +565,6 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
     ImGui::CloseCurrentPopup();
   }
 
-  if (ImGui::MenuItem("Show in Explorer")) {
-    // Implement file explorer opening logic
-    CH_LOG_DEBUG(ContentAssetUILog, "Opening file explorer for: {0}", asset->getName());
-  }
-
-  if (ImGui::MenuItem("Properties")) {
-    // Implement asset properties window
-    CH_LOG_DEBUG(ContentAssetUILog, "Opening properties for: {0}", asset->getName());
-  }
-
   ImGui::Separator();
 
   if (ImGui::MenuItem("Delete", nullptr, false, asset->isUnloaded())) {
@@ -579,12 +646,7 @@ ContentAssetUI::finishInlineRename() {
   newName = chString::trim(newName); // Remove leading/trailing whitespace
 
   if (!newName.empty() && newName != m_renamingAsset->getName()) {
-    // Perform the actual rename
-    bool success = AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str());
-    if (success) {
-      CH_LOG_DEBUG(ContentAssetUILog, "Successfully renamed asset to: {0}", newName);
-    }
-    else {
+    if (!AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str())) {
       CH_LOG_ERROR(ContentAssetUILog, "Failed to rename asset to: {0}", newName);
     }
   }
@@ -605,61 +667,64 @@ ContentAssetUI::cancelInlineRename() {
 /*
  */
 bool
-ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset, const String& ) {
+ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset, const String&) {
   // Check if this is the asset being renamed
-  bool isThisAssetRenaming =
+  const bool isThisAssetRenaming =
       m_isRenaming && m_renamingAsset && m_renamingAsset->getUUID() == asset->getUUID();
 
-  if (isThisAssetRenaming) {
-    // Calculate text width for proper sizing
-    ImVec2 textSize = ImGui::CalcTextSize(m_renameBuffer);
-    float inputWidth = Math::max(textSize.x + 20.0f, 100.0f); // Minimum width of 100px
+  if (!isThisAssetRenaming) {
+    return false; // Normal text rendering should proceed
+  }
+  // Calculate text width for proper sizing
+  ImVec2 textSize = ImGui::CalcTextSize(m_renameBuffer);
+  float inputWidth = Math::max(textSize.x + 20.0f, 100.0f); // Minimum width of 100px
 
-    // Style the input to look more like regular text
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 0.4f, 0.4f, 0.9f));
+  // Style the input to look more like regular text
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 0.8f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 0.4f, 0.4f, 0.9f));
 
-    ImGui::SetNextItemWidth(inputWidth);
+  ImGui::SetNextItemWidth(inputWidth);
 
-    // Create unique ID for this input
-    String inputId = chString::format("##rename_{0}", asset->getUUID().toString());
+  // Create unique ID for this input
+  String inputId = chString::format("##rename_{0}", asset->getUUID().toString());
 
-    // Handle focus request
-    if (m_renameFocusRequested) {
-      ImGui::SetKeyboardFocusHere();
-      m_renameFocusRequested = false;
-    }
+  // Handle focus request
+  if (m_renameFocusRequested) {
+    ImGui::SetKeyboardFocusHere();
+    m_renameFocusRequested = false;
+  }
 
-    // Render the input field
-    bool enterPressed = ImGui::InputText(
-        inputId.c_str(), m_renameBuffer, sizeof(m_renameBuffer),
-        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+  // Render the input field
+  bool enterPressed = ImGui::InputText(inputId.c_str(), m_renameBuffer, sizeof(m_renameBuffer),
+                                       ImGuiInputTextFlags_EnterReturnsTrue |
+                                           ImGuiInputTextFlags_AutoSelectAll);
 
-    // Handle input completion
-    if (enterPressed || (!ImGui::IsItemActive() && !ImGui::IsItemFocused())) {
-      if (enterPressed) {
-        finishInlineRename();
-      }
-      else {
-        cancelInlineRename();
-      }
-    }
-
-    // Handle escape key to cancel
+  // Handle input completion
+  if (enterPressed) {
+    finishInlineRename();
+  }
+  else if (ImGui::IsItemDeactivated()) {
+    // Input lost focus - check if escape was pressed
     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
       cancelInlineRename();
     }
-
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-
-    return true; // Indicate that rename widget was rendered
+    else {
+      finishInlineRename(); // Accept the change
+    }
   }
 
-  return false; // Normal text rendering should proceed
+  // Handle escape key to cancel
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    cancelInlineRename();
+  }
+
+  ImGui::PopStyleColor(3);
+  ImGui::PopStyleVar(2);
+
+  return true; // Indicate that rename widget was rendered
 }
 
 } // namespace chEngineSDK

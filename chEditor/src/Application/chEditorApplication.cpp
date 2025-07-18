@@ -23,14 +23,13 @@
 #include "chLogger.h"
 #include "chMeshImporter.h"
 #include "chModelAsset.h"
-#include "chUIHelpers.h"
 #include "chPath.h"
+#include "chUIHelpers.h"
 
 #include "chContentAssetUI.h"
 #include "chMainMenuBarUI.h"
 
 #include "imgui.h"
-
 
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
@@ -113,7 +112,8 @@ EditorApplication::initializeEditorComponents() {
 
   AssetManager::startUp();
   AssetManager::instance().initialize();
-  AssetManager::instance().lazyLoadAssetsFromDirectory(EnginePaths::getAbsoluteGameAssetDirectory());
+  AssetManager::instance().lazyLoadAssetsFromDirectory(
+      EnginePaths::getAbsoluteGameAssetDirectory());
 
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
@@ -218,11 +218,9 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
   graphicAPI.execute("initImGui", {display, getRenderComponents().swapChain});
 
-
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
   UIHelpers::bindEvnetWindowEvent(eventHandler);
-
 }
 
 /*
@@ -237,38 +235,33 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground;
 
-  if (ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
+  if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
+    ImGui::End();
+  }
+  m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
 
-    if (ImGui::IsWindowFocused()) {
-      m_nastyRenderer->setFocused(true);
+  if (rendererOutput.colorTarget) {
+    auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
+
+    SPtr<IDescriptorSet> descriptorSet = nullptr;
+    if (it == m_textureDescriptorSets.end()) {
+      IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+      Any result = graphicAPI.execute(
+          "addImGuiTexture", {Any(m_defaultSampler), Any(rendererOutput.colorTarget)});
+
+      if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(result, descriptorSet) &&
+          descriptorSet) {
+        m_textureDescriptorSets[rendererOutput.colorTarget] = descriptorSet;
+      }
     }
     else {
-      m_nastyRenderer->setFocused(false);
+      descriptorSet = it->second;
     }
 
-    if (rendererOutput.colorTarget) {
-      auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
-
-      SPtr<IDescriptorSet> descriptorSet = nullptr;
-      if (it == m_textureDescriptorSets.end()) {
-        IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-        Any result = graphicAPI.execute(
-            "addImGuiTexture", {Any(m_defaultSampler), Any(rendererOutput.colorTarget)});
-
-        if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(result, descriptorSet) &&
-            descriptorSet) {
-          m_textureDescriptorSets[rendererOutput.colorTarget] = descriptorSet;
-        }
-      }
-      else {
-        descriptorSet = it->second;
-      }
-
-      if (descriptorSet) {
-        // La imagen ocupará toda la ventana
-        ImVec2 windowSize = ImGui::GetWindowSize();
-        ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), windowSize);
-      }
+    if (descriptorSet) {
+      // La imagen ocupará toda la ventana
+      ImVec2 windowSize = ImGui::GetWindowSize();
+      ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), windowSize);
     }
   }
   ImGui::End();

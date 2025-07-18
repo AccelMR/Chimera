@@ -11,6 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 struct ImVec4;
+struct ImVec2;
 
 namespace chEngineSDK {
 class NastyRenderer;
@@ -23,11 +24,10 @@ class ContentAssetUI
   // Method to render the content asset UI
   void
   renderContentAssetUI();
-
   void
   refreshAssets();
 
-  //DELETEME
+  // DELETEME
   void
   setNastyRenderer(const SPtr<NastyRenderer>& renderer) {
     m_nastyRenderer = renderer;
@@ -54,29 +54,77 @@ class ContentAssetUI
   String
   getAssetStateString(const SPtr<IAsset>& asset);
 
-  // Helper methods
+  // Inline rename functionality
   void
   startInlineRename(const SPtr<IAsset>& asset);
-
   void
   finishInlineRename();
-
   void
   cancelInlineRename();
-
   bool
   renderInlineRename(const SPtr<IAsset>& asset, const String& displayName);
+
+  void
+  renderSearchBar();
+  void
+  renderAssetTypeFilters();
+  void
+  renderViewModeControls();
+  void
+  renderAssetDisplayArea();
+  void
+  renderGridView();
+  bool
+  passesSearchFilter(const SPtr<IAsset>& asset);
+  bool
+  passesTypeFilter(const SPtr<IAsset>& asset);
+  void
+  renderAssetIconButton(const SPtr<IAsset>& asset, float size = 64.0f);
+  void
+  renderAssetNameGrid(const SPtr<IAsset>& asset, float size = 64.0f);
+  void
+  renderAssetStateIndicator(const SPtr<IAsset>& asset);
+  void
+  renderListView();
+  void
+  renderAssetNameInGrid(const SPtr<IAsset>& asset, float size = 64.0f);
+  void
+  renderAssetTooltip(const SPtr<IAsset>& asset);
+  void
+  handleAssetContextMenu(const SPtr<IAsset>& asset);
+  void
+  renderSelectableAssetName(const SPtr<IAsset>& asset);
+  bool
+  shouldShowAsset(const SPtr<IAsset>& asset);
+  void
+  renderGridAssetItem(const SPtr<IAsset>& asset,
+                      int32 currentColumn,
+                      float gridSize);
+  void
+  setupTableColumns();
+  void
+  renderListAssetItem(const SPtr<IAsset>& asset);
 
  private:
   Vector<SPtr<IAsset>> m_assets;
   SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
   bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
-  SPtr<NastyRenderer> m_nastyRenderer; ///< Nasty renderer instance for rendering assets
+  SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
 
- // Inline rename functionality
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;
   char m_renameBuffer[256] = {0}; // Buffer for the new name
   bool m_renameFocusRequested = false;
+
+  bool showAllTypes = true;
+  bool showModels = true;
+  bool showTextures = true;
+  bool showMaterials = true;
+  bool showOther = true;
+  bool gridView = true;
+  float gridSize = 80.0f;
+  char searchBuffer[256] = "";
+  float indicatorRadius = 3.0f;
+
 }; // class ContentAssetUI
 } // namespace chEngineSDK
