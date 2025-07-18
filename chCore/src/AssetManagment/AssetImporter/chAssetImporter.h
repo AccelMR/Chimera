@@ -36,9 +36,9 @@ class CH_CORE_EXPORT IAssetImporter {
   canImport(const String& extension) const = 0;
 
   FORCEINLINE virtual void
-  setOriginalPath(const SPtr<IAsset>& asset, const Path& originalPath) {
+  setOriginalPath(const SPtr<IAsset>& asset, const Path& importedPath) {
     CH_ASSERT(asset);
-    asset->setOriginalPath(originalPath.toString().c_str());
+    asset->setOriginalPath(importedPath.toString().c_str());
   }
 };
 

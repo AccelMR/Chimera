@@ -4,6 +4,7 @@ Language: Cpp
 IndentWidth: 2
 TabWidth: 2
 UseTab: Never
+IndentPPDirectives: None
 # No indentation for namespaces
 NamespaceIndentation: None
 # Access modifiers are indented with 1 space

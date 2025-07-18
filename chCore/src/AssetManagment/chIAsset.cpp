@@ -24,16 +24,16 @@ namespace chEngineSDK {
 /*
 */
 void
-IAsset::setOriginalPath(const ANSICHAR* originalPath) {
-  if (!originalPath || !*originalPath) {
+IAsset::setOriginalPath(const ANSICHAR* importedPath) {
+  if (!importedPath || !*importedPath) {
     CH_LOG(AssetSystem, Error, "Invalid original path for asset {0}", m_metadata.name);
     return;
   }
 
-  SIZE_T pathLength = chString::length(originalPath);
-  chString::copyANSI(m_metadata.originalPath, originalPath, pathLength + 1);
+  SIZE_T pathLength = chString::length(importedPath);
+  chString::copyANSI(m_metadata.importedPath, importedPath, pathLength + 1);
   CH_LOG(AssetSystem, Debug, "Set original path for asset {0} to {1}", m_metadata.name,
-         m_metadata.originalPath);
+         m_metadata.importedPath);
   //updateMetadata(m_metadata);
 }
 

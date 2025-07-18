@@ -37,7 +37,7 @@ struct MS_ALIGN(8) AssetMetadata {
   ANSICHAR typeName[32] = "Unknown";    // 32 bytes
   ANSICHAR engineVersion[16] = "x.x.x"; // 16 bytes
   ANSICHAR name[64] = "Unnamed";        // 64 bytes
-  ANSICHAR originalPath[256] = "";      // 256 bytes
+  ANSICHAR importedPath[256] = "";      // 256 bytes
   ANSICHAR assetPath[256] = "";         // 256 bytes
 
   // Total size: 16 + 16 + 8 + 32 + 16 + 64 + 256 + 256 = 664 bytes
@@ -113,7 +113,13 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   getName() const { return m_metadata.name; }
 
   NODISCARD FORCEINLINE const ANSICHAR*
-  getOriginalPath() const { return m_metadata.originalPath; }
+  getImportedPath() const { return m_metadata.importedPath; }
+
+  NODISCARD FORCEINLINE const ANSICHAR*
+  getAssetPath() const { return m_metadata.assetPath; }
+
+  NODISCARD FORCEINLINE uint64
+  getCreatedAt() const { return m_metadata.creationTime; }
 
   NODISCARD bool
   save();
@@ -140,7 +146,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   setMetadata(const AssetMetadata& metadata) { m_metadata = metadata; }
 
   void
-  setOriginalPath(const ANSICHAR* originalPath);
+  setOriginalPath(const ANSICHAR* importedPath);
 
   virtual void
   clearAssetData() = 0;

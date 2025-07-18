@@ -1,5 +1,6 @@
-#include "chCommandParser.h"
 #include "chEditorApplication.h"
+
+#include "chCommandParser.h"
 #include "chException.h"
 #include "chLogger.h"
 #include "chStringUtils.h"
@@ -8,8 +9,8 @@ using namespace chEngineSDK;
 
 CH_LOG_DECLARE_STATIC(EditorMain, All);
 
-int32 main(int32 argc, char* argv[])
-{
+int32
+main(int32 argc, char* argv[]) {
   Logger::startUp();
   Logger& logger = Logger::instance();
   logger.setConsoleOutput(true);
@@ -24,18 +25,16 @@ int32 main(int32 argc, char* argv[])
 
   try {
     BaseApplication::startUp<EditorApplication>();
-    //BaseApplication::startUp();
+    // BaseApplication::startUp();
     BaseApplication& app = BaseApplication::instance();
     app.initialize();
     app.run();
     CH_LOG_INFO(EditorMain, "Chimera Editor finished successfully.");
 
     BaseApplication::shutDown();
-  }
-  catch(const Exception& e) {
+  } catch (const Exception& e) {
     CH_LOG_ERROR(EditorMain, "Exception caught: {0}", e.what());
-  }
-  catch(...) {
+  } catch (...) {
     CH_LOG_ERROR(EditorMain, "Unknown exception caught.");
   }
 
