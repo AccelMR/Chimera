@@ -148,6 +148,9 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   void
   setOriginalPath(const ANSICHAR* importedPath);
 
+  void
+  setAssetPath(const ANSICHAR* assetPath);
+
   virtual void
   clearAssetData() = 0;
 

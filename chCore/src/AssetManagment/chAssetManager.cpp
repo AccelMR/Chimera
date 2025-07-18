@@ -25,8 +25,7 @@
 namespace chEngineSDK {
 CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, All);
 
-namespace AssetManagerUtils {
-} // namespace AssetManagerUtils
+namespace AssetManagerUtils {} // namespace AssetManagerUtils
 using namespace AssetManagerUtils;
 
 /*
@@ -44,7 +43,7 @@ AssetManager::initialize() {
 }
 
 /*
-*/
+ */
 bool
 AssetManager::loadAsset(const SPtr<IAsset>& asset) {
   if (!asset) {
@@ -86,7 +85,7 @@ AssetManager::loadAsset(const SPtr<IAsset>& asset) {
 }
 
 /*
-*/
+ */
 bool
 AssetManager::unloadAsset(const UUID& assetUUID) {
   auto it = m_loadedAssets.find(assetUUID);
@@ -102,7 +101,8 @@ AssetManager::unloadAsset(const UUID& assetUUID) {
   }
 
   if (asset->isLoading()) {
-    CH_LOG_DEBUG(AssetSystem, "Asset {0} is currently loading, cannot unload", asset->getName());
+    CH_LOG_DEBUG(AssetSystem, "Asset {0} is currently loading, cannot unload",
+                 asset->getName());
     return false;
   }
   if (asset->isUnloading()) {
@@ -120,7 +120,7 @@ AssetManager::unloadAsset(const UUID& assetUUID) {
 }
 
 /*
-*/
+ */
 bool
 AssetManager::renameAsset(const UUID& assetUUID, const ANSICHAR* newName) {
   auto it = m_assets.find(assetUUID);
@@ -133,7 +133,7 @@ AssetManager::renameAsset(const UUID& assetUUID, const ANSICHAR* newName) {
 }
 
 /*
-*/
+ */
 bool
 AssetManager::renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName) {
   if (!asset) {
@@ -146,14 +146,12 @@ AssetManager::renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName) {
     return false;
   }
 
-  CH_LOG_DEBUG(AssetSystem, "Renamed asset {0} to {1}",
-               asset->getName(), newName);
+  CH_LOG_DEBUG(AssetSystem, "Renamed asset {0} to {1}", asset->getName(), newName);
   return true;
 }
 
-
 /*
-*/
+ */
 void
 AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   if (!FileSystem::isDirectory(directory)) {
@@ -163,32 +161,63 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
 
   Vector<Path> assetFiles;
   Vector<Path> assetDirectories;
-  FileSystem::getChildren(directory, assetFiles, assetDirectories);
-  for (const Path& file : assetFiles) {
+  // FileSystem::getChildren(directory, assetFiles, assetDirectories);
+
+  FileSystem::forEachFileChildRecursive(directory, [&](const Path& file) {
     if (file.getExtension() != ".chAss") {
       CH_LOG_DEBUG(AssetSystem, "Skipping non-asset file: {0}", file.toString());
-      continue;
+      return;
     }
-      SPtr<DataStream> stream = FileSystem::openFile(file, true);
-      if (!stream) {
-        CH_LOG_ERROR(AssetSystem, "Failed to open asset file: {0}", file.toString());
-        continue;
-      }
-      SPtr<IAsset> asset = lazyDeserialize(stream);
-      if (!asset) {
-        CH_LOG_ERROR(AssetSystem, "Failed to lazy load asset from file: {0}", file.toString());
-        continue;
-      }
-      stream->close();
+    SPtr<DataStream> stream = FileSystem::openFile(file, true);
+    if (!stream) {
+      CH_LOG_ERROR(AssetSystem, "Failed to open asset file: {0}", file.toString());
+      return;
+    }
+    SPtr<IAsset> asset = lazyDeserialize(stream);
+    if (!asset) {
+      CH_LOG_ERROR(AssetSystem, "Failed to lazy load asset from file: {0}", file.toString());
+      return;
+    }
+    stream->close();
 
-      m_assets[asset->getUUID()] = asset;
-      CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());
-  }
+    // Check if asset metadata asset path and this path are the same
+    const Path assetPath = FileSystem::absolutePath(Path(asset->getAssetPath()));
+
+    String relativePath = file.toString();
+    auto pos = relativePath.find("Assets/");
+    if (pos != String::npos) {
+      relativePath = relativePath.substr(pos);
+    }
+    //Remove Filename and extension
+    pos = relativePath.find_last_of('/');
+    if (pos != String::npos) {
+      relativePath = relativePath.substr(0, pos);
+    }
+
+    if (!chString::compare(asset->getAssetPath(), relativePath)) {
+      CH_LOG_WARNING(AssetSystem,
+                       "Asset path mismatch for {0}: expected {1}, found {2}.\n"
+                       "Will update asset path to match file location.",
+                       asset->getName(),
+                       assetPath,
+                       file.toString());
+
+      asset->setAssetPath(relativePath.c_str());
+      //TODO: this is nasty fix it.
+      // we can probably set a dirtyu flag and then save it later?
+      // Main issue ius that we are soft loading here so model data does not exist yet.
+      // This is a hacky fix, we should probably have a better way to handle this
+      asset->updateMetadata(asset->m_metadata);
+    }
+
+    m_assets[asset->getUUID()] = asset;
+    CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());
+  });
 }
 
 #if USING(CH_EDITOR)
 /*
-*/
+ */
 bool
 AssetManager::removeAsset(const UUID& assetUUID) {
   auto it = m_assets.find(assetUUID);
@@ -211,7 +240,7 @@ AssetManager::removeAsset(const UUID& assetUUID) {
 #endif // Editor-specific functionality
 
 /*
-*/
+ */
 SPtr<IAsset>
 AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
   if (!stream || !stream->isReadable()) {
@@ -235,7 +264,8 @@ AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
   CH_ASSERT(m_assetRegister);
   AssetCreatorFunc creator = m_assetRegister->getAssetCreator(metadata.assetType);
   if (!creator) {
-    CH_LOG_ERROR(AssetSystem, "No asset creator found for type: {0}", metadata.assetType.toString());
+    CH_LOG_ERROR(AssetSystem, "No asset creator found for type: {0}",
+                 metadata.assetType.toString());
     return nullptr;
   }
 

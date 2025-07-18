@@ -211,6 +211,18 @@ class CH_UTILITY_EXPORT Path {
   Path
   operator/(const Path& other) const;
 
+  /**
+   * Operator for equality check.
+   *
+   * @param other
+   *    The path to compare to.
+   * @return True if paths are equal, false otherwise.
+   */
+  FORCEINLINE bool
+  operator==(const Path& other) const{
+    return m_path == other.m_path;
+  }
+
   NODISCARD bool
   empty() const { return m_path.empty(); }
 

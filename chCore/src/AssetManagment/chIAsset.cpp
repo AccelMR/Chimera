@@ -37,6 +37,21 @@ IAsset::setOriginalPath(const ANSICHAR* importedPath) {
   //updateMetadata(m_metadata);
 }
 
+/*
+*/
+void
+IAsset::setAssetPath(const ANSICHAR* assetPath) {
+  if (!assetPath || !*assetPath) {
+    CH_LOG(AssetSystem, Error, "Invalid asset path for asset {0}", m_metadata.name);
+    return;
+  }
+  SIZE_T pathLength = chString::length(assetPath);
+  chString::copyANSI(m_metadata.assetPath, assetPath, pathLength + 1);
+  CH_LOG(AssetSystem, Debug, "Set asset path for asset {0} to {1}", m_metadata.name,
+         m_metadata.assetPath);
+  //updateMetadata(m_metadata);
+}
+
 
 /*
  */

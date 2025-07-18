@@ -158,5 +158,19 @@ class CH_UTILITY_EXPORT FileSystem {
   static void
   getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories);
 
+  FORCEINLINE static void
+  forEachFileChildRecursive(const Path& path, const std::function<void(const Path&)>& func) {
+    Vector<Path> files, directories;
+    getChildren(path, files, directories);
+
+    for (const auto& file : files) {
+      func(file);
+    }
+
+    for (const auto& dir : directories) {
+      func(dir);
+      forEachFileChildRecursive(dir, func); // Llamada recursiva
+    }
+  }
 };
 }

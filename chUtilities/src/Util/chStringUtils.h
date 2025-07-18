@@ -32,6 +32,26 @@ namespace chEngineSDK {
 class CH_UTILITY_EXPORT chString
 {
  public:
+  static bool
+  compare(const ANSICHAR* str1, const ANSICHAR* str2) {
+    return std::strcmp(str1, str2) == 0;
+  }
+
+  static bool
+  compare(const String& str1, const ANSICHAR* str2) {
+    return str1 == str2;
+  }
+
+  static bool
+  compare(const String& str1, const String& str2) {
+    return str1 == str2;
+  }
+
+  static bool
+  compare(const ANSICHAR* str1, const String& str2) {
+    return str2 == str1;
+  }
+
   static String
   fromInt32(int32 value) {
     return std::to_string(value);
