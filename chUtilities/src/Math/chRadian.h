@@ -50,7 +50,7 @@ public:
    * @param radian
    *   Float radian angle value.
    */
-  explicit Radian(float _radian) : m_radian(_radian) 
+  explicit Radian(float _radian) : m_radian(_radian)
   {}
 
   /**
@@ -88,7 +88,7 @@ public:
    *   Modify this radian with given value.
    */
   FORCEINLINE Radian&
-  operator=(const float& radian);
+  operator=(float radian);
 
 
   /**
@@ -314,7 +314,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator<(const float& radian) const;
+  operator<(float radian) const;
 
   /**
    *  Greater than operator overload.
@@ -326,7 +326,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator>(const float& radian) const;
+  operator>(float radian) const;
 
   /**
    *  Less-equals than operator overload.
@@ -338,7 +338,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator<=(const float& radian) const;
+  operator<=(float radian) const;
 
   /**
    *  Greater-equals than operator overload.
@@ -350,7 +350,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator>=(const float& radian) const;
+  operator>=(float radian) const;
 
   /**
    *  Equals than operator overload.
@@ -362,7 +362,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator==(const float& radian) const;
+  operator==(float radian) const;
 
   /**
    *  Not equals than operator overload.
@@ -374,7 +374,7 @@ public:
    *   Compares this Radian against given value.
    */
   FORCEINLINE bool
-  operator!=(const float& radian) const;
+  operator!=(float radian) const;
 
   /**
    *  Less than operator overload.
@@ -448,13 +448,13 @@ public:
   bool
   operator!=(const Degree& degree) const;
 
-  
+
   /**
    * @brief Overloaded multiplication operator for scaling a Radian object.
-   * 
+   *
    * This operator allows a Radian object to be multiplied by a scalar value,
    * effectively scaling the radian value by the given float.
-   * 
+   *
    * @param value The scalar value to multiply the Radian object by.
    * @return Radian A new Radian object representing the scaled value.
    */
@@ -480,7 +480,7 @@ private:
   *    Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator<(const float& floatRadian, const Radian& radian);
+  operator<(float floatRadian, const Radian& radian);
 
   /**
    *  Greater than operator overload.
@@ -495,7 +495,7 @@ private:
    *   Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator>(const float& floatRadian, const Radian& radian);
+  operator>(float floatRadian, const Radian& radian);
 
   /**
    *  Less-equals than operator overload.
@@ -510,7 +510,7 @@ private:
    *   Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator<=(const float& floatRadian, const Radian& radian);
+  operator<=(float floatRadian, const Radian& radian);
 
   /**
    *  Greater-equals than operator overload.
@@ -524,7 +524,7 @@ private:
    * @return Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator>=(const float& floatRadian, const Radian& radian);
+  operator>=(float floatRadian, const Radian& radian);
 
   /**
    *  Equals than operator overload.
@@ -539,7 +539,7 @@ private:
    *   Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator==(const float& floatRadian, const Radian& radian);
+  operator==(float floatRadian, const Radian& radian);
 
   /**
    *  Not equals than operator overload.
@@ -554,7 +554,7 @@ private:
    *   Compares a float against given Radian.
    */
   FORCEINLINE friend bool
-  operator!=(const float& floatRadian, const Radian& radian);
+  operator!=(float floatRadian, const Radian& radian);
 
 
 private:
@@ -581,7 +581,7 @@ Radian::valueRadian() const
 /*
 */
 FORCEINLINE Radian&
-Radian::operator=(const float& radian)
+Radian::operator=(float radian)
 {
   m_radian = radian;
   return *this;
@@ -640,7 +640,7 @@ Radian::operator<(const Radian& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator<(const float& radian) const
+Radian::operator<(float radian) const
 {
   return m_radian < radian;
 }
@@ -664,7 +664,7 @@ Radian::operator>=(const Radian& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator>(const float& radian) const
+Radian::operator>(float radian) const
 {
   return m_radian > radian;
 }
@@ -672,7 +672,7 @@ Radian::operator>(const float& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator>=(const float& radian) const
+Radian::operator>=(float radian) const
 {
   return m_radian >= radian;
 }
@@ -680,7 +680,7 @@ Radian::operator>=(const float& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator!=(const float& radian) const
+Radian::operator!=(float radian) const
 {
   return m_radian != radian;
 }
@@ -688,7 +688,7 @@ Radian::operator!=(const float& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator==(const float& radian) const
+Radian::operator==(float radian) const
 {
   return m_radian == radian;
 }
@@ -696,7 +696,7 @@ Radian::operator==(const float& radian) const
 /*
 */
 FORCEINLINE bool
-Radian::operator<=(const float& radian) const
+Radian::operator<=(float radian) const
 {
   return m_radian <= radian;
 }
@@ -727,7 +727,7 @@ Radian::operator<=(const Radian& radian) const
 /*
 */
 FORCEINLINE  bool
-operator<(const float& floatRadian, const Radian& radian)
+operator<(float floatRadian, const Radian& radian)
 {
   return floatRadian < radian.m_radian;
 }
@@ -735,7 +735,7 @@ operator<(const float& floatRadian, const Radian& radian)
 /*
 */
 FORCEINLINE bool
-operator>(const float& floatRadian, const Radian& radian)
+operator>(float floatRadian, const Radian& radian)
 {
   return floatRadian > radian.m_radian;
 }
@@ -743,7 +743,7 @@ operator>(const float& floatRadian, const Radian& radian)
 /*
 */
 FORCEINLINE bool
-operator>=(const float& floatRadian, const Radian& radian)
+operator>=(float floatRadian, const Radian& radian)
 {
   return floatRadian >= radian.m_radian;
 }
@@ -751,14 +751,14 @@ operator>=(const float& floatRadian, const Radian& radian)
 /*
 */
 FORCEINLINE bool
-operator<=(const float& floatRadian, const Radian& radian)
+operator<=(float floatRadian, const Radian& radian)
 {
   return floatRadian <= radian.m_radian;
 }
 /*
 */
 FORCEINLINE bool
-operator!=(const float& floatRadian, const Radian& radian)
+operator!=(float floatRadian, const Radian& radian)
 {
   return floatRadian != radian.m_radian;
 }
@@ -766,10 +766,9 @@ operator!=(const float& floatRadian, const Radian& radian)
 /*
 */
 FORCEINLINE bool
-operator==(const float& floatRadian, const Radian& radian)
+operator==(float floatRadian, const Radian& radian)
 {
   return floatRadian == radian.m_radian;
 }
 
 }
-

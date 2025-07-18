@@ -189,7 +189,7 @@ public:
    *    Vector2 new Vector2 created from this operation.
    */
   FORCEINLINE Vector2
-  operator*(const float& scalar) const;
+  operator*(float scalar) const;
 
   /**
    * Calculates the multiplication of this vector against a scalar.
@@ -201,7 +201,7 @@ public:
    *   THIS reference. Note that this function modifies this Vector.
    */
   FORCEINLINE Vector2&
-  operator*=(const float& scalar);
+  operator*=(float scalar);
 
   /**
    *   Adds two vectors and returns a new one created.
@@ -437,7 +437,7 @@ Vector2::operator!=(const Vector2& vector2) const
 /*
 */
 FORCEINLINE Vector2
-Vector2::operator*(const float& scalar) const
+Vector2::operator*(float scalar) const
 {
   return {x * scalar, y * scalar};
 }
@@ -445,7 +445,7 @@ Vector2::operator*(const float& scalar) const
 /*
 */
 FORCEINLINE Vector2&
-Vector2::operator*=(const float& scalar)
+Vector2::operator*=(float scalar)
 {
   x *= scalar;
   y *= scalar;

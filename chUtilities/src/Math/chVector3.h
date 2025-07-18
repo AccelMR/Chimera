@@ -54,15 +54,15 @@ public:
    **/
   explicit FORCEINLINE Vector3(const float f3[3]);
 
-  /** 
+  /**
    *   Copy constructor.
    **/
   FORCEINLINE Vector3(const Vector3& copyVector3);
 
   /**
    *    Constructor using the XYZ components from a 4D vector.
-   * 
-   * @param v 
+   *
+   * @param v
    *    4D Vector to copy from.
    */
   explicit Vector3(const Vector4& v);
@@ -155,49 +155,49 @@ public:
   FORCEINLINE Vector3
   getNormalized(float tolerance = Math::SMALL_NUMBER) const;
 
-  /** 
+  /**
    *   Computes projection of a vector based on z.
-   * 
+   *
    * @return Vector3
    *  Projected version of vector based on Z.
    **/
   FORCEINLINE Vector3
   projection(const Vector3& vector3) const;
 
-  /** 
+  /**
    *   Compares this Vector against another taking in count a tolerance.
-   * 
+   *
    * @param v
    *    Vector to compare against.
-   * 
+   *
    * @param tolerance
    *    Accepted tolerance to say both vectors are almost equal.
-   * 
-   * @return 
+   *
+   * @return
    *   True if the two vector are almost equal.
    **/
   FORCEINLINE bool
   nearEqual(const Vector3& v, const float& tolerance = Math::SMALL_NUMBER) const;
 
-  /** 
+  /**
    *   Computes the squared distance between this vector and a given one.
    *      For more exact distance use distance().
-   * 
+   *
    * @param v
    *   The vector to compute distance.
-   * 
+   *
    * @return
    *   Squared distance between two vectors.
    **/
   FORCEINLINE float
   sqrDistance(const Vector3& v) const;
 
-  /** 
+  /**
    *   Computes the distance between two points.
-   * 
+   *
    * @param v
    *    The point to check the distance.
-   * 
+   *
    * @return
    *  Distance between two points.
    **/
@@ -244,7 +244,7 @@ public:
    *  Vector2 new Vector2 created from this operation.
    */
   FORCEINLINE Vector3
-  operator*(const float& scalar) const;
+  operator*(float scalar) const;
 
   /**
    * Calculates the multiplication of this vector against a scalar.
@@ -256,7 +256,7 @@ public:
    *  Vector2 new Vector2 created from this operation.
    */
   FORCEINLINE Vector3&
-  operator*=(const float& scalar);
+  operator*=(float scalar);
 
   /*
   */
@@ -320,9 +320,9 @@ public:
   FORCEINLINE Vector3
   operator-() const;
 
-  /** 
+  /**
    *   Copy operator. Assign operator
-   * 
+   *
    * @param vector3
    *  The other vector to be set.
    **/
@@ -362,7 +362,7 @@ private:
    * @return
    *   Ostream of this class to string.
    */
-  friend ostream& operator<<(ostream& output, const Vector3& vector3) 
+  friend ostream& operator<<(ostream& output, const Vector3& vector3)
   {
     output << "(" << vector3.x << ", " << vector3.y << ", " << vector3.z << ")";
     return output;
@@ -446,9 +446,9 @@ Vector3::Vector3(const float f3[3]) : x(f3[0]), y(f3[1]), z(f3[2])
 /*
 */
 FORCEINLINE
-Vector3::Vector3(const Vector3& copyVector) 
-  : x(copyVector.x), 
-    y(copyVector.y), 
+Vector3::Vector3(const Vector3& copyVector)
+  : x(copyVector.x),
+    y(copyVector.y),
     z(copyVector.z)
 {}
 
@@ -505,7 +505,7 @@ Vector3::sqrDistance(const Vector3& v) const
 /*
 */
 FORCEINLINE float
-Vector3::distance(const Vector3& v) const 
+Vector3::distance(const Vector3& v) const
 {
   return Math::sqrt(sqrDistance(v));
 }
@@ -572,7 +572,7 @@ Vector3::operator!=(const Vector3& vector3) const
 /*
 */
 FORCEINLINE Vector3
-Vector3::operator*(const float& scalar) const
+Vector3::operator*(float scalar) const
 {
   return {x * scalar, y * scalar, z * scalar};
 }
@@ -580,7 +580,7 @@ Vector3::operator*(const float& scalar) const
 /*
 */
 FORCEINLINE Vector3&
-Vector3::operator*=(const float& scalar)
+Vector3::operator*=(float scalar)
 {
   x*= scalar;
   y*= scalar;

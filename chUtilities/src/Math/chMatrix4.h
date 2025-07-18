@@ -247,7 +247,7 @@ class Matrix4
    * @return Matrix4 A new matrix result
    */
   NODISCARD FORCEINLINE Matrix4
-  operator*(const float& value) const;
+  operator*(float value) const;
 
   /**
    * @brief Computes a multiplication between a matrix and a float, modifying this matrix
@@ -532,7 +532,7 @@ Matrix4::operator-(const Matrix4& other) const {
 /*
  */
 FORCEINLINE Matrix4
-Matrix4::operator*(const float& value) const {
+Matrix4::operator*(float value) const {
   Matrix4 Result;
 
   for (int32 i = 0; i < 4; ++i) {

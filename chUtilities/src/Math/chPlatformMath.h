@@ -51,7 +51,7 @@ public:
   * @return float The result of the square root of value.
   */
   static float
-  sqrt(const float& value);
+  sqrt(float value);
 
   /**
    *  Inverse square root of a value.
@@ -61,7 +61,7 @@ public:
    * @return float The inverse square root of value.
    */
   static float
-  invSqrt(const float& value);
+  invSqrt(float value);
 
   /**
    *   Computes pow of a given value.
@@ -76,7 +76,7 @@ public:
    *  The calculated pow.
    **/
   static float
-  pow(const float& value, const float vPow);
+  pow(float value, const float vPow);
 
   /**
    *   Computes absolute value.
@@ -88,7 +88,7 @@ public:
    *  The abs calculated.
    **/
   static float
-  abs(const float& value);
+  abs(float value);
 
   /**
    *   Computes the interpolation between val1 and val2 with a given time.
@@ -104,7 +104,7 @@ public:
    * @return
    **/
   FORCEINLINE static float
-  lerp(const float& val1, const float& val2, const float& time);
+  lerp(float val1, const float& val2, const float& time);
 
   /**
    *   Clamp a value within an inclusive range.
@@ -132,7 +132,7 @@ public:
    * @return
    **/
   FORCEINLINE static float
-  invLerp(const float& val1, const float& val2, const float& time);
+  invLerp(float val1, const float& val2, const float& time);
 
   /**
    *   Checks if given float is neither Nan nor infinite.
@@ -342,7 +342,7 @@ public:
     * @return Angle from value.
     */
   static Radian
-  acos(const float& valuealue);
+  acos(float valuealue);
 
   /**
    *  Arc-Sine result from float value.
@@ -352,7 +352,7 @@ public:
    * @return Angle from value.
    */
   static Radian
-  asin(const float& valuealue);
+  asin(float valuealue);
 
   /**
    *  Arc-Tangent result from float value.
@@ -362,7 +362,7 @@ public:
    * @return Angle from value.
    */
   static Radian
-  atan(const float& valuealue);
+  atan(float valuealue);
 
   /**
    *  Arc-Tangent 2 result from float value.
@@ -373,7 +373,7 @@ public:
    * @return Angle from value.
    */
   static Radian
-  atan2(const float& _x, const float& _y);
+  atan2(float _x, const float& _y);
 
   /**
    *  Hyperbolic Arc-Cosine result from Degree.
@@ -383,7 +383,7 @@ public:
    * @return Hyperbolic Arc-Cosine from value.
    */
   static Radian
-  acosh(const float& valuealue);
+  acosh(float valuealue);
 
   /**
    *  Hyperbolic Arc-Sine result from Degree.
@@ -393,7 +393,7 @@ public:
    * @return Hyperbolic Arc-Sine from value.
    */
   static Radian
-  asinh(const float& valuealue);
+  asinh(float valuealue);
 
   /**
    *  Hyperbolic Arc-Tangent result from Degree.
@@ -403,7 +403,7 @@ public:
    * @return Hyperbolic Arc-Tangent from value.
    */
   static Radian
-  atanh(const float& valuealue);
+  atanh(float valuealue);
 
   /**
    *  Ensure that a Degree angle is between +/- 180 by unwinding it.
@@ -422,7 +422,7 @@ public:
   unwindRadians(float radian);
 
   NODISCARD FORCEINLINE static bool
-  nearEqual(const float& a, const float& b, const float& epsilon = SMALL_NUMBER);
+  nearEqual(float a, const float& b, const float& epsilon = SMALL_NUMBER);
 
   /************************************************************************/
   /*
@@ -643,7 +643,7 @@ PlatformMath::unwindRadians(float radian)
 /*
 */
 FORCEINLINE float
-PlatformMath::lerp(const float& val1, const float& val2, const float& time)
+PlatformMath::lerp(float val1, const float& val2, const float& time)
 {
   return val1 + time * (val2 - val1);
 }
@@ -651,7 +651,7 @@ PlatformMath::lerp(const float& val1, const float& val2, const float& time)
 /*
 */
 FORCEINLINE float
-PlatformMath::invLerp(const float& val1, const float& val2, const float& time)
+PlatformMath::invLerp(float val1, const float& val2, const float& time)
 {
   return (time - val1) / (val2 - val1);
 }
@@ -702,7 +702,7 @@ PlatformMath::sin_cos( float *ScalarSin, float *ScalarCos, float Value )
 /*
 */
 FORCEINLINE bool
-PlatformMath::nearEqual(const float& a, const float& b, const float& epsilon) {
+PlatformMath::nearEqual(float a, const float& b, const float& epsilon) {
   return (abs(a - b) <= epsilon);
 }
 

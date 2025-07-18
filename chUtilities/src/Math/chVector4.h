@@ -49,7 +49,7 @@ public:
    *   Constructor from 4 floats.
    * NOTE: W can be ignored since it initializes as 1.0f
    **/
-  FORCEINLINE Vector4(const float& _x, const float& _y, const float& _z, const float& _w = 1.0f);
+  FORCEINLINE Vector4(float _x, const float& _y, const float& _z, const float& _w = 1.0f);
 
   /**
    *   Constructor from an 4 Array.
@@ -206,7 +206,7 @@ public:
    *  Vector2 new Vector2 created from this operation.
    */
   FORCEINLINE Vector4
-  operator*(const float& scalar) const;
+  operator*(float scalar) const;
 
   /**
    * Calculates the multiplication of this vector against a scalar.
@@ -218,7 +218,7 @@ public:
    *  Vector2 new Vector2 created from this operation.
    */
   FORCEINLINE Vector4&
-  operator*=(const float& scalar);
+  operator*=(float scalar);
 
   /**
    *   Adds two vectors and returns a new one created.
@@ -369,7 +369,7 @@ public:
  /*
  */
 FORCEINLINE
-Vector4::Vector4(const float& _x,
+Vector4::Vector4(float _x,
                  const float& _y,
                  const float& _z,
                  const float& _w)
@@ -493,7 +493,7 @@ Vector4::getNormalized(float tolerance /*= Math::SMALL_NUMBER*/) const
 /*
 */
 FORCEINLINE Vector4
-Vector4::operator*(const float& scalar) const
+Vector4::operator*(float scalar) const
 {
   return {x * scalar, y * scalar, z * scalar, w *scalar};
 }
@@ -501,7 +501,7 @@ Vector4::operator*(const float& scalar) const
 /*
 */
 FORCEINLINE Vector4&
-Vector4::operator*=(const float& scalar)
+Vector4::operator*=(float scalar)
 {
   x *= scalar;
   y *= scalar;

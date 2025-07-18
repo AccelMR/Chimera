@@ -59,7 +59,7 @@ const float PlatformMath::INV_PI = 1.0f / PI;
 /*
 */
 float
-PlatformMath::sqrt(const float& value)
+PlatformMath::sqrt(float value)
 {
   return std::sqrt(value);
 }
@@ -67,7 +67,7 @@ PlatformMath::sqrt(const float& value)
 /*
 */
 float
-PlatformMath::invSqrt(const float& value)
+PlatformMath::invSqrt(float value)
 {
   return 1.0f / sqrtf(value);
 }
@@ -75,7 +75,7 @@ PlatformMath::invSqrt(const float& value)
 /*
 */
 float
-PlatformMath::pow(const float& value, const float vPow)
+PlatformMath::pow(float value, const float vPow)
 {
   return std::pow(value, vPow);
 }
@@ -83,7 +83,7 @@ PlatformMath::pow(const float& value, const float vPow)
 /*
 */
 float
-PlatformMath::abs(const float& value)
+PlatformMath::abs(float value)
 {
   return std::abs(value);
 }
@@ -219,7 +219,7 @@ PlatformMath::tanh(const Degree& degree)
 /*
 */
 Radian
-PlatformMath::acos(const float& valuealue)
+PlatformMath::acos(float valuealue)
 {
   return Radian(acosf(valuealue));
 }
@@ -227,7 +227,7 @@ PlatformMath::acos(const float& valuealue)
 /*
 */
 Radian
-PlatformMath::asin(const float& valuealue)
+PlatformMath::asin(float valuealue)
 {
   return Radian(asinf(valuealue));
 }
@@ -235,14 +235,14 @@ PlatformMath::asin(const float& valuealue)
 /*
 */
 Radian
-PlatformMath::atan(const float& valuealue)
+PlatformMath::atan(float valuealue)
 {
   return Radian(atanf(valuealue));
 }
 /*
 */
 Radian
-PlatformMath::atan2(const float& y, const float& x)
+PlatformMath::atan2(float y, const float& x)
 {
   return Radian(atan2f(y, x));
 }
@@ -250,7 +250,7 @@ PlatformMath::atan2(const float& y, const float& x)
 /*
 */
 Radian
-PlatformMath::acosh(const float& valuealue)
+PlatformMath::acosh(float valuealue)
 {
   return Radian(std::acoshf(valuealue));
 }
@@ -258,7 +258,7 @@ PlatformMath::acosh(const float& valuealue)
 /*
 */
 Radian
-PlatformMath::asinh(const float& valuealue)
+PlatformMath::asinh(float valuealue)
 {
   return Radian(std::asinhf(valuealue));
 }
@@ -266,7 +266,7 @@ PlatformMath::asinh(const float& valuealue)
 /*
 */
 Radian
-PlatformMath::atanh(const float& valuealue)
+PlatformMath::atanh(float valuealue)
 {
   return Radian(std::atanhf(valuealue));
 }

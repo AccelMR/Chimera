@@ -87,7 +87,7 @@ public:
    *   This Degree with the new given Degree as float.
    */
   FORCEINLINE Degree&
-  operator=(const float& degree);
+  operator=(float degree);
 
   /**
    * Returns this angle as Radian value.
@@ -179,26 +179,26 @@ public:
   Degree&
   operator+=(const Radian& radian);
 
-  /** 
+  /**
    *   Multiplies this degree by a scalar.
-   * 
+   *
    * @param scalar
    * The scalar to be multiplied.
-   * 
+   *
    * @return Degree
    *  New Degree created from the multiplication;
    **/
   FORCEINLINE Degree
-  operator*(const float& scalar) const;
+  operator*(float scalar) const;
 
-  /** 
+  /**
    *   Multiplies by a scalar and saves the result in this object.
    *
    * @param scalar
    * The scalar to be multiplied.
    **/
   FORCEINLINE Degree&
-  operator*=(const float& scalar);
+  operator*=(float scalar);
 
   /**
    * Creates a new negative Degree with the  given Degree.
@@ -339,7 +339,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator<(const float& degree) const;
+  operator<(float degree) const;
 
   /**
    * Greater than operator overload.
@@ -351,7 +351,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator>(const float& degree) const;
+  operator>(float degree) const;
 
   /**
    * Less-equals than operator overload.
@@ -363,7 +363,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator<=(const float& degree) const;
+  operator<=(float degree) const;
 
   /**
    * Greater-equals than operator overload.
@@ -375,7 +375,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator>=(const float& degree) const;
+  operator>=(float degree) const;
 
   /**
    * Equals than operator overload.
@@ -387,7 +387,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator==(const float& degree) const;
+  operator==(float degree) const;
 
   /**
    * Not equals than operator overload.
@@ -399,7 +399,7 @@ public:
    *   Bool from condition.
    */
   FORCEINLINE bool
-  operator!=(const float& degree) const;
+  operator!=(float degree) const;
 
   /**
    * Less than operator overload.
@@ -493,7 +493,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator<(const float& floatDegree, const Degree& degree);
+  operator<(float floatDegree, const Degree& degree);
 
   /**
    * Greater than operator overload.
@@ -508,7 +508,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator>(const float& floatDegree, const Degree& degree);
+  operator>(float floatDegree, const Degree& degree);
 
   /**
    * Less-equals than operator overload.
@@ -523,7 +523,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator<=(const float& floatDegree, const Degree& degree);
+  operator<=(float floatDegree, const Degree& degree);
 
   /**
    * Greater-equals than operator overload.
@@ -538,7 +538,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator>=(const float& floatDegree, const Degree& degree);
+  operator>=(float floatDegree, const Degree& degree);
 
   /**
    * Equals than operator overload.
@@ -553,7 +553,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator==(const float& floatDegree, const Degree& degree);
+  operator==(float floatDegree, const Degree& degree);
 
   /**
    * Not equals than operator overload.
@@ -568,7 +568,7 @@ private:
    *   Compares a float against given Degree.
    */
   FORCEINLINE friend bool
-  operator!=(const float& floatDegree, const Degree& degree);
+  operator!=(float floatDegree, const Degree& degree);
 
 private:
 
@@ -594,7 +594,7 @@ Degree::valueDegree() const
 /*
 */
 FORCEINLINE Degree&
-Degree::operator=(const float& degree)
+Degree::operator=(float degree)
 {
   m_degree = degree;
   return *this;
@@ -620,7 +620,7 @@ Degree::operator+=(const Degree& degree)
 /*
 */
 FORCEINLINE Degree
-Degree::operator*(const float& scalar) const
+Degree::operator*(float scalar) const
 {
   Degree d = *this;
   d *= scalar;
@@ -630,7 +630,7 @@ Degree::operator*(const float& scalar) const
 /*
 */
 FORCEINLINE Degree&
-Degree::operator*=(const float& scalar)
+Degree::operator*=(float scalar)
 {
   m_degree *= scalar;
   return *this;
@@ -712,7 +712,7 @@ Degree::operator!=(const Degree& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator<(const float& degree) const
+Degree::operator<(float degree) const
 {
   return m_degree < degree;
 }
@@ -720,7 +720,7 @@ Degree::operator<(const float& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator>(const float& degree) const
+Degree::operator>(float degree) const
 {
   return m_degree > degree;
 }
@@ -728,7 +728,7 @@ Degree::operator>(const float& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator<=(const float& degree) const
+Degree::operator<=(float degree) const
 {
   return m_degree <= degree;
 }
@@ -736,7 +736,7 @@ Degree::operator<=(const float& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator>=(const float& degree) const
+Degree::operator>=(float degree) const
 {
   return m_degree >= degree;
 }
@@ -744,7 +744,7 @@ Degree::operator>=(const float& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator==(const float& degree) const
+Degree::operator==(float degree) const
 {
   return m_degree == degree;
 }
@@ -752,7 +752,7 @@ Degree::operator==(const float& degree) const
 /*
 */
 FORCEINLINE bool
-Degree::operator!=(const float& degree) const
+Degree::operator!=(float degree) const
 {
   return m_degree != degree;
 }
@@ -760,7 +760,7 @@ Degree::operator!=(const float& degree) const
 /*
 */
 FORCEINLINE  bool
-operator<(const float& floatDegree, const Degree& degree)
+operator<(float floatDegree, const Degree& degree)
 {
   return floatDegree < degree.m_degree;
 }
@@ -768,7 +768,7 @@ operator<(const float& floatDegree, const Degree& degree)
 /*
 */
 FORCEINLINE bool
-operator>(const float& floatDegree, const Degree& degree)
+operator>(float floatDegree, const Degree& degree)
 {
   return floatDegree > degree.m_degree;
 }
@@ -776,7 +776,7 @@ operator>(const float& floatDegree, const Degree& degree)
 /*
 */
 FORCEINLINE bool
-operator>=(const float& floatDegree, const Degree& degree)
+operator>=(float floatDegree, const Degree& degree)
 {
   return floatDegree >= degree.m_degree;
 }
@@ -784,14 +784,14 @@ operator>=(const float& floatDegree, const Degree& degree)
 /*
 */
 FORCEINLINE bool
-operator<=(const float& floatDegree, const Degree& degree)
+operator<=(float floatDegree, const Degree& degree)
 {
   return floatDegree <= degree.m_degree;
 }
 /*
 */
 FORCEINLINE bool
-operator!=(const float& floatDegree, const Degree& degree)
+operator!=(float floatDegree, const Degree& degree)
 {
   return floatDegree != degree.m_degree;
 }
@@ -799,7 +799,7 @@ operator!=(const float& floatDegree, const Degree& degree)
 /*
 */
 FORCEINLINE bool
-operator==(const float& floatDegree, const Degree& degree)
+operator==(float floatDegree, const Degree& degree)
 {
   return floatDegree == degree.m_degree;
 }
