@@ -17,7 +17,6 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chPath.h"
-#include "chSupportedImport.h"
 
 // Base asset types
 #include "chModelAsset.h"

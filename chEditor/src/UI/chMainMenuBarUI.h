@@ -21,6 +21,9 @@ class MainMenuBarUI {
   void
   renderMainMenuBar();
 
+  void
+  renderImportMenu();
+
   // DELETEME
   void
   setNastyRenderer(const SPtr<NastyRenderer>& renderer) {

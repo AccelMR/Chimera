@@ -10,6 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chAssetTypeTraits.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {
@@ -26,6 +27,7 @@ class AssetRegister {
     m_assetCreators[uuid] = [](const AssetMetadata& metadata) -> SPtr<IAsset> {
       return chMakeShared<TAsset>(metadata);
     };
+    m_assetTypeNames[uuid] = String(AssetTypeTraits<TAsset>::getTypeName());
   }
 
   AssetCreatorFunc
@@ -37,7 +39,18 @@ class AssetRegister {
     return nullptr;
   }
 
+  const String&
+  getAssetTypeName(const UUID& uuid) const {
+    auto it = m_assetCreators.find(uuid);
+    if (it != m_assetCreators.end()) {
+      return m_assetTypeNames.at(uuid);
+    }
+    static const String unknownType = "Unknown";
+    return unknownType;
+  }
+
  private:
   UnorderedMap<UUID, AssetCreatorFunc> m_assetCreators; ///< Map of asset creators by UUID
+  UnorderedMap<UUID, String> m_assetTypeNames; ///< Map of asset type names by UUID
 }; // class AssetRegistry
 } // namespace chEngineSDK

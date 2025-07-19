@@ -32,6 +32,12 @@
 # define CH_DISPLAY_SDL3 NOT_IN_USE
 #endif
 
+#ifdef CH_IMPORTERS_ENABLED
+# define CH_IMPORTERS IN_USE
+#else
+# define CH_IMPORTERS NOT_IN_USE
+#endif
+
 //DLL export
 #if USING(CH_PLATFORM_WIN32)
 # if USING(CH_COMPILER_MSVC)

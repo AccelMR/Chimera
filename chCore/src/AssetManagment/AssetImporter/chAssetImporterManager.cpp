@@ -1,17 +1,16 @@
 
-#include "chAssetManagerImporter.h"
+#include "chAssetImporterManager.h"
 
 #include "chLogger.h"
 CH_LOG_DEFINE_CATEGORY_SHARED(AssetImporterSystem, All);
 
-#if USING(CH_EDITOR)
+#if USING(CH_IMPORTERS)
 
 #include "chAssetImporter.h"
 #include "chAssetImporterRegistry.h"
 #include "chAssetManager.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
-#include "chMeshImporter.h"
 #include "chPath.h"
 #include "chLogger.h"
 
@@ -19,12 +18,10 @@ namespace chEngineSDK {
 /*
 */
 void
-AssetManagerImporter::initialize() {
+AssetImporterManager::initialize() {
   CH_LOG_DEBUG(AssetImporterSystem, "Initializing AssetImporterRegistry");
 
   m_importerRegistry = chMakeShared<AssetImporterRegistry>();
-
-  m_importerRegistry->registerImporter<MeshImpotrter>();
 
   // In case someone wants to register importers before the registry is initialized
   m_onRegisterImporter(m_importerRegistry);
@@ -32,20 +29,20 @@ AssetManagerImporter::initialize() {
 
 /*
 */
-bool
-AssetManagerImporter::importAsset(const Path& absoluteImportFilePath,
+SPtr<IAsset>
+AssetImporterManager::importAsset(const Path& absoluteImportFilePath,
                                   const Path& assetRelativePath) {
   CH_LOG_DEBUG(AssetImporterSystem, "Importing asset from {0} to {1}", absoluteImportFilePath, assetRelativePath);
 
   if (!FileSystem::exists(absoluteImportFilePath)) {
     CH_LOG_ERROR(AssetImporterSystem, "Import file path {0} does not exist", absoluteImportFilePath);
-    return false;
+    return nullptr;
   }
 
   const Path assetDir = EnginePaths::getGameAssetDirectory();
   if (!FileSystem::arePathsRelative(assetDir, assetRelativePath)) {
     CH_LOG_ERROR(AssetImporterSystem, "Asset path {0} is not relative to the asset directory {1}", assetRelativePath, assetDir);
-    return false;
+    return nullptr;
   }
 
   String baseName = absoluteImportFilePath.getFileName(false);
@@ -63,7 +60,7 @@ AssetManagerImporter::importAsset(const Path& absoluteImportFilePath,
   SPtr<DataStream> fileStream = FileSystem::createAndOpenFile(absoluteAssetFilePath);
   if (!fileStream) {
     CH_LOG_ERROR(AssetImporterSystem, "Failed to create or open file {0}", absoluteAssetFilePath);
-    return false;
+    return nullptr;
   }
 
   // Determine asset type based on file extension or content
@@ -71,15 +68,29 @@ AssetManagerImporter::importAsset(const Path& absoluteImportFilePath,
   SPtr<IAssetImporter> importer = m_importerRegistry->getImporterForExtension(extension);
   if (!importer) {
     CH_LOG_ERROR(AssetImporterSystem, "No importer found for file extension {0}", extension);
-    return false;
+    return nullptr;
   }
 
   CH_LOG_DEBUG(AssetImporterSystem, "Using importer {0} for file {1}",
-                                    importer->getImportType().toString(),
+                                    importer->getImporterType().toString(),
                                     absoluteImportFilePath);
 
-  SPtr<IAsset> asset = importer->importAsset(absoluteImportFilePath, baseName);
-  return true;
+  return importer->importAsset(absoluteImportFilePath, baseName);
+}
+
+/*
+*/
+Vector<String>
+AssetImporterManager::getSupportedAllExtensions() const {
+  CH_ASSERT(m_importerRegistry && "AssetImporterRegistry must be initialized before accessing importers.");
+  Vector<String> allExtensions;
+
+  for (const auto& importer : m_importerRegistry->getAllImporters()) {
+    Vector<String> extensions = importer->getSupportedExtensions();
+    allExtensions.insert(allExtensions.end(), extensions.begin(), extensions.end());
+  }
+
+  return allExtensions;
 }
 } // namespace chEngineSDK
-#endif // USING(CH_EDITOR)
+#endif //  USING(CH_IMPORTERS)

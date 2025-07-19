@@ -81,6 +81,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
     return assets;
   }
 
+  NODISCARD FORCEINLINE const String&
+  getAssetTypeName(const UUID& assetUUID) const {
+    CH_ASSERT(m_assetRegister && "AssetRegister must be initialized before accessing asset types.");
+    return m_assetRegister->getAssetTypeName(assetUUID);
+  }
+
  private:
   SPtr<IAsset>
   lazyDeserialize(const SPtr<DataStream>& stream);

@@ -73,8 +73,6 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment)
-INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment/AssetImporter)
-INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment/AssetImporter/BaseAssetImports)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chEditor/externals/nativefiledialog-extended/src)
 
 # ImGui core configuration for Chimera Engine
@@ -92,6 +90,7 @@ target_compile_options(chEditor PRIVATE
 target_compile_definitions(chEditor PRIVATE
   CH_EDITOR_ENABLED
   CH_SDL3_ENABLED
+  CH_IMPORTERS_ENABLED
   IMGUI_DISABLE_OBSOLETE_FUNCTIONS
   IMGUI_DISABLE_OBSOLETE_KEYIO
 )

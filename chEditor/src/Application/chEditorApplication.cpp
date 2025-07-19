@@ -9,9 +9,7 @@
 /************************************************************************/
 
 #include "chEditorApplication.h"
-#include "chAssetImporter.h"
 #include "chAssetManager.h"
-#include "chAssetManagerImporter.h"
 #include "chEventDispatcherManager.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
@@ -21,13 +19,17 @@
 #include "chISwapChain.h"
 #include "chITextureView.h"
 #include "chLogger.h"
-#include "chMeshImporter.h"
 #include "chModelAsset.h"
 #include "chPath.h"
 #include "chUIHelpers.h"
 
 #include "chContentAssetUI.h"
 #include "chMainMenuBarUI.h"
+
+#if USING(CH_IMPORTERS)
+#include "chAssetImporter.h"
+#include "chAssetImporterManager.h"
+#endif // USING(CH_IMPORTERS)
 
 #include "imgui.h"
 
@@ -107,8 +109,10 @@ EditorApplication::initializeEditorComponents() {
   SPtr<DisplaySurface> display = getDisplaySurface();
   CH_ASSERT(display && "Display surface must not be null.");
 
-  AssetManagerImporter::startUp();
-  AssetManagerImporter::instance().initialize();
+#if USING(CH_IMPORTERS)
+  AssetImporterManager::startUp();
+  AssetImporterManager::instance().initialize();
+#endif // USING(CH_IMPORTERS)
 
   AssetManager::startUp();
   AssetManager::instance().initialize();

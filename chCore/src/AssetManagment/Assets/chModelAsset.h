@@ -46,7 +46,6 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   bool
   deserialize(SPtr<DataStream>) override;
 
- private:
   friend class MeshImpotrter;
   void
   clearAssetData() override;

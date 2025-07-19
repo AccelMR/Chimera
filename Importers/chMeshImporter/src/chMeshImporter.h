@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#if USING(CH_IMPORTERS)
+
 #include "chAssetImporter.h"
 #include "chAssetTypeTraits.h"
 #include "chIAsset.h"
@@ -18,6 +20,7 @@
 #include "chModule.h"
 #include "chMesh.h"
 #include "chModel.h"
+#include "chModelAsset.h"
 #include "chUUID.h"
 
 //Forward declarations from Assimp
@@ -26,15 +29,20 @@ class aiMesh;
 class aiScene;
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT MeshImpotrter  : public IAssetImporter {
+class MeshImpotrter  : public IAssetImporter {
  public:
   MeshImpotrter() = default;
   ~MeshImpotrter() = default;
 
   UUID
-  getImportType() const override{
+  getImporterType() const override{
     static UUID importType = UUID::createFromName("MeshManagerImporter");
     return importType;
+  }
+
+  FORCEINLINE Vector<UUID>
+  getSupportedAssetTypes() const override {
+    return {AssetTypeTraits<ModelAsset>::getTypeId()};
   }
 
   Vector<String>
@@ -113,3 +121,4 @@ class CH_CORE_EXPORT MeshImpotrter  : public IAssetImporter {
 DECLARE_ASSET_TYPE(MeshImpotrter);
 
 } // namespace chEngineSDK
+#endif // USING(CH_IMPORTERS)

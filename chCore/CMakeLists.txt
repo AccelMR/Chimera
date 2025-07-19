@@ -1,16 +1,11 @@
 option(CH_EDITOR_ENABLED "Enable chEditor" ON)
 option(CH_SDL3_ENABLED "Enable SDL3 support" ON)
+option(CH_IMPORTERS_ENABLED "Enable SDL3 support" ON)
 
 file(GLOB
     SOURCE_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.cpp
 
 )
@@ -29,20 +24,6 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
 endif()
-
-# Configuración de Assimp
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
-set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-add_subdirectory(externals/assimp)
-
-# Configurar la salida de Assimp
-set_target_properties(assimp PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-)
 
 add_library(chCore SHARED ${SOURCE_FILES})
 
@@ -88,27 +69,30 @@ file(GLOB_RECURSE SDL_FILES
 )
 target_sources(chCore PRIVATE ${SDL_FILES})
 
-target_link_libraries(chCore PUBLIC chUtilities assimp SDL3::SDL3)
+target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3)
 
 target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../chCore/src/Platform/SDL
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/SDL
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/assimp/include
 )
 
-if (CH_EDITOR_ENABLED)
-  if (CH_SDL3_ENABLED)
-    target_compile_definitions(chCore PRIVATE
-      CH_EDITOR_ENABLED
-      CH_SDL3_ENABLED
-      IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-      IMGUI_DISABLE_OBSOLETE_KEYIO
-    )
-  else()
-    target_compile_definitions(chCore PRIVATE
-      CH_EDITOR_ENABLED
-      IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-      IMGUI_DISABLE_OBSOLETE_KEYIO
-    )
-  endif()
+set(COMPILE_DEFS "")
+
+if(CH_EDITOR_ENABLED)
+  list(APPEND COMPILE_DEFS CH_EDITOR_ENABLED)
 endif()
+
+if(CH_SDL3_ENABLED)
+  list(APPEND COMPILE_DEFS CH_SDL3_ENABLED)
+endif()
+
+if(CH_IMPORTERS_ENABLED)
+  list(APPEND COMPILE_DEFS CH_IMPORTERS_ENABLED)
+endif()
+
+list(APPEND COMPILE_DEFS
+  IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+  IMGUI_DISABLE_OBSOLETE_KEYIO
+)
+
+target_compile_definitions(chCore PRIVATE ${COMPILE_DEFS})

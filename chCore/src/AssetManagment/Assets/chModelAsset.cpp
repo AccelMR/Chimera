@@ -272,13 +272,11 @@ ModelAsset::deserialize(SPtr<DataStream> stream) {
 */
 void
 ModelAsset::clearAssetData() {
-  if (m_model) {
-    m_model.reset();
-    CH_LOG(ModelAssetLog, Debug, "Cleared model data for asset: {0}", m_metadata.name);
+  if (!m_model) {
+    CH_LOG(ModelAssetLog, Warning, "ModelAsset {0} has no model data to clear", m_metadata.name);
+    return;
   }
-  else {
-    CH_LOG(ModelAssetLog, Warning, "No model data to clear for asset: {0}", m_metadata.name);
-  }
+  m_model.reset();
 }
 
 /*

@@ -9,6 +9,7 @@
 /************************************************************************/
 
 #include "chMeshImporter.h"
+#if USING(CH_IMPORTERS)
 
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -347,3 +348,5 @@ MeshImpotrter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Mode
   }
 }
 } // namespace chEngineSDK
+
+#endif // USING(CH_IMPORTERS)

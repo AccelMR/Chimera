@@ -39,6 +39,8 @@
 #include <vector>
 #include <queue>
 
+#include <ranges>
+
 /************************************************************************/
 /**
  * Standard Containers defined as own

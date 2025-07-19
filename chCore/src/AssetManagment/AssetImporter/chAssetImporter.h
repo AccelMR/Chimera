@@ -24,7 +24,7 @@ class CH_CORE_EXPORT IAssetImporter {
   virtual ~IAssetImporter() = default;
 
   virtual UUID
-  getImportType() const = 0;
+  getImporterType() const = 0;
 
   virtual Vector<String>
   getSupportedExtensions() const = 0;
@@ -34,6 +34,15 @@ class CH_CORE_EXPORT IAssetImporter {
 
   virtual bool
   canImport(const String& extension) const = 0;
+
+  virtual Vector<UUID>
+  getSupportedAssetTypes() const = 0;;
+
+  template <typename AssetType = IAsset>
+  FORCEINLINE SPtr<AssetType>
+  importAsset(const Path& filePath, const String& assetName) {
+    return std::static_pointer_cast<AssetType>(importAsset(filePath, assetName));
+  }
 
   FORCEINLINE virtual void
   setOriginalPath(const SPtr<IAsset>& asset, const Path& importedPath) {
