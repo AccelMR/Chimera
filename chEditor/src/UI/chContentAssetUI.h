@@ -18,7 +18,7 @@ class NastyRenderer;
 class ContentAssetUI
 {
  public:
-  ContentAssetUI() = default;
+  ContentAssetUI();
   ~ContentAssetUI() = default;
 
   // Method to render the content asset UI
@@ -100,6 +100,13 @@ class ContentAssetUI
   renderGridAssetItem(const SPtr<IAsset>& asset,
                       int32 currentColumn,
                       float gridSize);
+
+  void
+  handleEmptyAreaContextMenu();
+
+  void
+  renderEmptyAreaContextMenu();
+
   void
   setupTableColumns();
   void

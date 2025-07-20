@@ -37,8 +37,6 @@ AssetManager::initialize() {
 
   // Register asset creators
   m_assetRegister->registerAssetCreator<ModelAsset>(AssetTypeTraits<ModelAsset>::getTypeId());
-
-  m_onRegisterAsset(m_assetRegister);
 }
 
 /*

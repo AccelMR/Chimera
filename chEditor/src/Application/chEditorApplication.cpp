@@ -140,7 +140,6 @@ EditorApplication::initializeEditorComponents() {
   m_defaultSampler = graphicAPI.createSampler(samplerInfo);
 
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
-  m_contentAssetUI->refreshAssets();
   m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
 
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
@@ -283,9 +282,9 @@ EditorApplication::loadImporters() {
   //AssetImporterManager& importerManager = AssetImporterManager::instance();
   const  Path importersPath(
 #if USING(CH_DEBUG_MODE)
-    "Importers"
+    "build/debug-x64/lib/Importers"
 #else // USING(CH_DEBUG_MODE)
-    "dunnoYetxP"
+    "Importers"
 #endif // USING(CH_DEBUG_MODE)
   );
   Vector<Path> files;

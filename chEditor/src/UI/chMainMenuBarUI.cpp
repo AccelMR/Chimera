@@ -75,7 +75,7 @@ MainMenuBarUI::renderImportMenu() {
   AssetManager& assetManager = AssetManager::instance();
   for (const auto& importer : importerManager.getAllImporters()) {
     for (const auto& assetType : importer->getSupportedAssetTypes()) {
-      const String& importerTypeName = assetManager.getAssetTypeName(assetType);
+      const String& importerTypeName = "Import " + assetManager.getAssetTypeName(assetType);
       if (ImGui::MenuItem(importerTypeName.c_str())) {
         const Path filePath = UIHelpers::openFileExplorer(
             EnginePaths::getAbsoluteGameAssetDirectory(), importer->getSupportedExtensions());

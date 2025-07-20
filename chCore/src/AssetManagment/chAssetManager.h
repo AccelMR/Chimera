@@ -87,6 +87,11 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
     return m_assetRegister->getAssetTypeName(assetUUID);
   }
 
+  FORCEINLINE HEvent
+  onAssetsChanged(const Function<void(const Vector<SPtr<IAsset>>& assets)>& callback) {
+    return m_onAssetsChanged.connect(callback);
+  }
+
  private:
   SPtr<IAsset>
   lazyDeserialize(const SPtr<DataStream>& stream);
@@ -95,11 +100,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
   Map<UUID, SPtr<IAsset>> m_loadedAssets; ///< Map of currently loaded assets by UUID
 
+  Event<void(const Vector<SPtr<IAsset>>&)> m_onAssetsChanged; ///< Event triggered when assets are changed
+
   Event<bool(const SPtr<IAsset>&)> m_onAssetLoaded; ///< Event triggered when an asset is loaded
   Event<bool(const SPtr<IAsset>&)> m_onAssetUnloaded; ///< Event triggered
 
   SPtr<AssetRegister> m_assetRegister; ///< Asset registry for creating assets
-  Event<bool(const SPtr<AssetRegister>&)> m_onRegisterAsset; ///< Event triggered when an asset is registered
 }; // class AssetManager
 
 /******************************************************************************************* */
@@ -162,6 +168,8 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   // DeleteMe
   m_loadedAssets[refUUID] = asset;
   m_assets[refUUID] = asset;
+
+  m_onAssetsChanged(std::move(getAllAssets()));
 
   return std::static_pointer_cast<TAsset>(asset);
 }

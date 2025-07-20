@@ -8,6 +8,11 @@
 /************************************************************************/
 #include "chContentAssetUI.h"
 
+#if USING(CH_IMPORTERS)
+#include "chAssetImporter.h"
+#include "chAssetImporterManager.h"
+#endif // USING(CH_IMPORTERS)
+
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chMath.h"
@@ -37,9 +42,12 @@ static bool bShowContentWindow = false;
 using namespace ContentAssetUIVars;
 
 /*
- */
-void
-ContentAssetUI::refreshAssets() {
+*/
+ContentAssetUI::ContentAssetUI() {
+  AssetManager::instance().onAssetsChanged(
+      [this](const Vector<SPtr<IAsset>>& assets) {
+        m_assets = assets;
+      });
   m_assets = AssetManager::instance().getAllAssets();
 }
 
@@ -145,6 +153,10 @@ ContentAssetUI::renderAssetDisplayArea() {
   else {
     renderListView();
   }
+
+  handleEmptyAreaContextMenu();
+
+  renderEmptyAreaContextMenu();
 
   ImGui::EndChild();
 }
@@ -265,8 +277,7 @@ ContentAssetUI::setupTableColumns() {
 
 // Render single asset item in grid view
 void
-ContentAssetUI::renderGridAssetItem(const SPtr<IAsset>& asset,
-                                    int32 currentColumn,
+ContentAssetUI::renderGridAssetItem(const SPtr<IAsset>& asset, int32 currentColumn,
                                     float gridSize) {
   if (currentColumn > 0) {
     ImGui::SameLine();
@@ -395,26 +406,24 @@ ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset) {
 // Render asset state indicator
 void
 ContentAssetUI::renderAssetStateIndicator(const SPtr<IAsset>& asset) {
-    const ImVec4 stateColor = getAssetStateColor(asset);
-    const ImVec2 groupMin = ImGui::GetItemRectMin();
-    const ImVec2 groupMax = ImGui::GetItemRectMax();
+  const ImVec4 stateColor = getAssetStateColor(asset);
+  const ImVec2 groupMin = ImGui::GetItemRectMin();
+  const ImVec2 groupMax = ImGui::GetItemRectMax();
 
-    // Proporciones basadas en gridSize
-    const float offsetRatio = 0.08f;  // 8% del tamaño del grid para el offset
-    const float radiusRatio = 0.05f;  // 5% del tamaño del grid para el radio
+  // Proporciones basadas en gridSize
+  const float offsetRatio = 0.08f; // 8% del tamaño del grid para el offset
+  const float radiusRatio = 0.05f; // 5% del tamaño del grid para el radio
 
-    float offset = gridSize * offsetRatio;
-    float radius = gridSize * radiusRatio;
+  float offset = gridSize * offsetRatio;
+  float radius = gridSize * radiusRatio;
 
-    // Límites mínimos y máximos para que no se vea muy pequeño o muy grande
-    offset = Math::max(6.0f, Math::min(offset, 15.0f));
-    radius = Math::max(2.0f, Math::min(radius, 8.0f));
+  // Límites mínimos y máximos para que no se vea muy pequeño o muy grande
+  offset = Math::max(6.0f, Math::min(offset, 15.0f));
+  radius = Math::max(2.0f, Math::min(radius, 8.0f));
 
-    ImGui::GetWindowDrawList()->AddCircleFilled(
-        ImVec2(groupMax.x - offset, groupMin.y + offset),
-        radius,
-        ImGui::ColorConvertFloat4ToU32(stateColor)
-    );
+  ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(groupMax.x - offset, groupMin.y + offset),
+                                              radius,
+                                              ImGui::ColorConvertFloat4ToU32(stateColor));
 }
 
 // Handle asset context menu
@@ -490,10 +499,10 @@ ContentAssetUI::renderDeleteConfirmationPopup() {
       // Buttons
       if (ImGui::Button("Delete", ImVec2(120, 0))) {
         // Perform deletion
-        const String assetWithExt(String(m_assetToDelete->getName()) + ".chAss");
-        const Path fullAssetToDelete =
-            EnginePaths::getAbsoluteGameAssetDirectory() / assetWithExt;
-        const bool bRemovedCorrectly = FileSystem::removeFile(fullAssetToDelete);
+        const String fullAssetToDelete =
+          chString::format("{0}/{1}.chAss", m_assetToDelete->getAssetPath(),
+                                            m_assetToDelete->getName());
+        const bool bRemovedCorrectly = FileSystem::removeFile(Path(fullAssetToDelete));
 
         if (bRemovedCorrectly) {
           AssetManager::instance().removeAsset(m_assetToDelete->getUUID());
@@ -727,4 +736,80 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset, const String&) {
   return true; // Indicate that rename widget was rendered
 }
 
+/*
+ */
+void
+ContentAssetUI::handleEmptyAreaContextMenu() {
+  // Early return if any item is hovered
+  if (ImGui::IsAnyItemHovered()) {
+    return;
+  }
+
+  // Early return if not hovering window
+  if (!ImGui::IsWindowHovered()) {
+    return;
+  }
+
+  // Check for right click in empty area
+  bool emptyAreaRightClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+
+  if (!emptyAreaRightClicked) {
+    return;
+  }
+
+  ImGui::OpenPopup("EmptyAreaContextMenu");
+}
+
+/*
+ */
+void
+ContentAssetUI::renderEmptyAreaContextMenu() {
+  if (!ImGui::BeginPopup("EmptyAreaContextMenu")) {
+    return;
+  }
+
+  // Make a menu that hass submenu importers
+  if (ImGui::BeginMenu("Import Asset")) {
+    ImGui::Separator();
+#if USING(CH_IMPORTERS)
+    AssetImporterManager& importerManager = AssetImporterManager::instance();
+    AssetManager& assetManager = AssetManager::instance();
+    for (const auto& importer : importerManager.getAllImporters()) {
+      for (const auto& assetType : importer->getSupportedAssetTypes()) {
+        const String& importerTypeName = assetManager.getAssetTypeName(assetType);
+        if (ImGui::MenuItem(importerTypeName.c_str())) {
+          const Path filePath =
+              UIHelpers::openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
+                                          importer->getSupportedExtensions());
+
+          if (filePath.empty()) {
+            CH_LOG_ERROR(ContentAssetUILog, "No file selected for import");
+          ImGui::EndMenu();
+          ImGui::EndPopup();
+          return; // Exit after handling import
+          }
+
+          auto importedAsset = importer->importAsset(filePath, filePath.getFileName(false));
+
+          if (!importedAsset) {
+            CH_LOG_ERROR(ContentAssetUILog, "Failed to import asset: {0}",
+                         filePath.toString());
+          ImGui::EndMenu();
+          ImGui::EndPopup();
+          return; // Exit after handling import
+          }
+
+          CH_LOG_INFO(ContentAssetUILog, "Successfully imported asset: {0} as {1}",
+                      filePath.toString(), importedAsset->getUUID().toString());
+          ImGui::EndMenu();
+          ImGui::EndPopup();
+          return; // Exit after handling import
+        }
+      }
+    }
+#endif // USING(CH_IMPORTERS)
+    ImGui::EndMenu();
+  }
+  ImGui::EndPopup();
+}
 } // namespace chEngineSDK
