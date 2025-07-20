@@ -14,6 +14,7 @@
 #include "chLogger.h"
 #include "chModelAsset.h"
 #include "chPath.h"
+#include "chTextureAsset.h"
 
 #include "../../assets/fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -68,9 +69,16 @@ UIHelpers::render(IGraphicsAPI& graphicAPI, const SPtr<ICommandBuffer>& commandB
 AssetIcon
 UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset) {
   if (asset->isTypeOf<ModelAsset>()) {
-    return {AssetType::Model,
+    return {
+            AssetType::Model,
             ICON_FA_CUBE,
             {String(ICON_FA_CUBE) + " " + asset->getName()}}; // Example icon for model assets
+  }
+  if (asset->isTypeOf<TextureAsset>()) {
+    return {
+            AssetType::Texture,
+            ICON_FA_IMAGE,
+            {String(ICON_FA_IMAGE) + " " + asset->getName()}}; // Example icon for texture assets
   }
   // Add more asset types and their corresponding icons as needed
   return {AssetType::Unknown, ICON_FA_FILE}; // Default icon for unknown asset types

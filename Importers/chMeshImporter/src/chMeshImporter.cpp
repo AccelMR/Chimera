@@ -80,7 +80,7 @@ MeshImporter::importAsset(const Path& filePath, const String& assetName) {
           .lock(); // TODO: Use WeakPtr to avoid shared ownership issues
   CH_ASSERT(modelAsset);
 
-  setOriginalPath(modelAsset, filePath);
+  setImportedPath(modelAsset, filePath);
   modelAsset->setModel(model);
 
   if (!modelAsset->save()) {
@@ -219,14 +219,12 @@ MeshImporter::processMesh(aiMesh* mesh, const aiScene* scene) {
 
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
       vertices[i].position = {
-          // mesh->mVertices[i].z,
-          // mesh->mVertices[i].x,
-          // mesh->mVertices[i].y
-          mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z
+          mesh->mVertices[i].z, mesh->mVertices[i].x, mesh->mVertices[i].y
+          //mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z
       };
       vertices[i].normal = {
-          //mesh->mNormals[i].z, mesh->mNormals[i].x, mesh->mNormals[i].y
-          mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z
+          mesh->mNormals[i].z, mesh->mNormals[i].x, mesh->mNormals[i].y
+          //mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z
       };
 
       if (hasTexCoords) {

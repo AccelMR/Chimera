@@ -22,8 +22,9 @@ class AssetRegister {
  public:
   template<typename TAsset>
   void
-  registerAssetCreator(const UUID& uuid) {
+  registerAssetCreator() {
     static_assert(std::is_base_of<IAsset, TAsset>::value, "TAsset must be derived from IAsset");
+    const UUID uuid = AssetTypeTraits<TAsset>::getTypeId();
     m_assetCreators[uuid] = [](const AssetMetadata& metadata) -> SPtr<IAsset> {
       return chMakeShared<TAsset>(metadata);
     };

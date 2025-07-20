@@ -36,9 +36,6 @@
 
 #include "chModel.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 namespace chEngineSDK {
 
 #if USING(CH_DEBUG_MODE)
@@ -56,19 +53,6 @@ struct ProjectionViewMatrix {
   Matrix4 modelMatrix;
 };
 
-Vector<uint8>
-loadImage(const Path& path, int32* width, int32* height, int32* channels) {
-  CH_ASSERT(FileSystem::isFile(path));
-
-  Vector<uint8> imageData;
-  uint8* data = stbi_load(path.toString().c_str(), width, height, channels, STBI_rgb_alpha);
-  if (data) {
-    imageData.resize((*width) * (*height) * (static_cast<SIZE_T>(STBI_rgb_alpha)));
-    memcpy(imageData.data(), data, imageData.size());
-    stbi_image_free(data);
-  }
-  return imageData;
-}
 } // namespace RendererHelpers
 
 // Global variables from original renderer
@@ -254,8 +238,6 @@ NastyRenderer::cleanup() {
   m_depthTarget.reset();
 
   // Reset material resources
-  m_textureView.reset();
-  m_texture.reset();
   m_sampler.reset();
   m_descriptorSetLayout.reset();
   m_descriptorPool.reset();
@@ -376,35 +358,6 @@ NastyRenderer::initializeRenderResources() {
   m_commandPool = graphicsAPI.createCommandPool(QueueType::Graphics);
   m_commandBuffer = m_commandPool->allocateCommandBuffer();
   m_renderFence = graphicsAPI.createFence(true);
-
-  // Load texture
-  int32 imageWidth = 0;
-  int32 imageHeight = 0;
-  int32 channel = 0;
-  Vector<uint8> imageData = RendererHelpers::loadImage(Path("resources/images/Rex_C.bmp"),
-                                                       &imageWidth, &imageHeight, &channel);
-
-  TextureCreateInfo textureCreateInfo{.type = TextureType::Texture2D,
-                                      .format = Format::R8G8B8A8_UNORM,
-                                      .width = static_cast<uint32>(imageWidth),
-                                      .height = static_cast<uint32>(imageHeight),
-                                      .depth = 1,
-                                      .mipLevels = 1,
-                                      .arrayLayers = 1,
-                                      .samples = SampleCount::Count1,
-                                      .usage =
-                                          TextureUsage::Sampled | TextureUsage::TransferDst,
-                                      .initialData = imageData.data(),
-                                      .initialDataSize = imageData.size()};
-  m_texture = graphicsAPI.createTexture(textureCreateInfo);
-
-  TextureViewCreateInfo textureViewCreateInfo{.format = Format::R8G8B8A8_UNORM,
-                                              .viewType = TextureViewType::View2D,
-                                              .baseMipLevel = 0,
-                                              .mipLevelCount = 1,
-                                              .baseArrayLayer = 0,
-                                              .arrayLayerCount = 1};
-  m_textureView = m_texture->createView(textureViewCreateInfo);
 
   // Create camera
   m_camera =

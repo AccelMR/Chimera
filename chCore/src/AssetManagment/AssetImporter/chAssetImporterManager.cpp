@@ -72,7 +72,10 @@ AssetImporterManager::importAsset(const Path& absoluteImportFilePath,
                                     importer->getImporterType().toString(),
                                     absoluteImportFilePath);
 
-  return importer->importAsset(absoluteImportFilePath, baseName);
+  auto asset = importer->importAsset(absoluteImportFilePath, baseName);
+  AssetManager& assetManager = AssetManager::instance();
+  assetManager.refreshAssets();
+  return asset;
 }
 
 /*

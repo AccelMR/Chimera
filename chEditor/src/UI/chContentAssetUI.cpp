@@ -15,10 +15,13 @@
 
 #include "chAssetManager.h"
 #include "chLogger.h"
+#include "chIGraphicsAPI.h"
+#include "chIDescriptorSet.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
-
 #include "chNastyRenderer.h"
+
+#include "chTextureAsset.h"
 
 #include "imgui.h"
 
@@ -44,11 +47,55 @@ using namespace ContentAssetUIVars;
 /*
 */
 ContentAssetUI::ContentAssetUI() {
-  AssetManager::instance().onAssetsChanged(
-      [this](const Vector<SPtr<IAsset>>& assets) {
-        m_assets = assets;
-      });
+  IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
+
+  SamplerCreateInfo samplerInfo{};
+  samplerInfo.magFilter = SamplerFilter::Linear;
+  samplerInfo.minFilter = SamplerFilter::Linear;
+  samplerInfo.addressModeU = SamplerAddressMode::ClampToEdge;
+  samplerInfo.addressModeV = SamplerAddressMode::ClampToEdge;
+  samplerInfo.addressModeW = SamplerAddressMode::ClampToEdge;
+  m_defaultSampler = graphicsAPI.createSampler(samplerInfo);
+
+
+  auto onAssetsChangedCallback = [&](const Vector<SPtr<IAsset>>& assets) {
+    CH_LOG_INFO(ContentAssetUILog, "Assets changed, updating UI.");
+    m_assets = assets;
+
+    for (const auto& asset : m_assets) {
+      if (asset->isTypeOf<TextureAsset>()) {
+        SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
+        if (textureAsset->isUnloaded() && !AssetManager::instance().loadAsset(textureAsset)){
+          CH_LOG_ERROR(ContentAssetUILog, "Failed to load texture asset: {}", asset->getName());
+          continue;
+        }
+        SPtr<ITexture> texture = textureAsset->getTexture();
+        if (!texture) {
+          CH_LOG_WARNING(ContentAssetUILog, "Texture asset {} has no texture data.", asset->getName());
+          continue;
+        }
+        SPtr<ITextureView> textureView = texture->createView({
+            .format = texture->getFormat(),
+            .viewType = TextureViewType::View2D});
+        if (!textureView) {
+          CH_LOG_ERROR(ContentAssetUILog, "Failed to create texture view for asset {}.", asset->getName());
+          continue;
+        }
+
+        SPtr<IDescriptorSet> descriptorSet = nullptr;
+        Any anyResult =
+            graphicsAPI.execute("addImGuiTexture", {Any(m_defaultSampler), Any(textureView)});
+        if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(anyResult, descriptorSet) &&
+            descriptorSet) {
+          m_assetThumbnails[asset->getUUID()] = {textureView, descriptorSet};
+        }
+      }
+    }
+  };
+  AssetManager::instance().onAssetsChanged(onAssetsChangedCallback);
+
   m_assets = AssetManager::instance().getAllAssets();
+  onAssetsChangedCallback(m_assets);
 }
 
 // Main render function - now much cleaner
@@ -336,9 +383,27 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset, float gridSize)
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
 
-  if (ImGui::Button(buttonId.c_str(), ImVec2(gridSize, gridSize))) {
-    handleAssetSelection(asset);
+  if (assetIcon.type == AssetType::Texture) {
+    auto it = m_assetThumbnails.find(asset->getUUID());
+    if (it == m_assetThumbnails.end()) {
+      CH_LOG_WARNING(ContentAssetUILog, "No thumbnail found for asset {0}.", asset->getName());
+      ImGui::Button(buttonId.c_str(), ImVec2(gridSize, gridSize));
+      ImGui::PopStyleColor(3);
+      return;
+    }
+    auto descriptorSet = it->second.second;
+    if (ImGui::ImageButton(buttonId.c_str(),
+                           reinterpret_cast<ImTextureID>(descriptorSet->getRaw()),
+                           ImVec2(gridSize, gridSize))) {
+      handleAssetSelection(asset);
+    }
   }
+  else {
+    if (ImGui::Button(buttonId.c_str(), ImVec2(gridSize, gridSize))) {
+      handleAssetSelection(asset);
+    }
+  }
+
 
   ImGui::PopStyleColor(3);
 
@@ -545,7 +610,7 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
       CH_LOG_DEBUG(ContentAssetUILog, "Loaded model asset: {0}", asset->getName());
     }
     // Add more asset type handling here as needed
-    // else if (asset->isTypeOf<TextureAsset>()) { ... }
+    //else if (asset->isTypeOf<TextureAsset>()) {  }
     // else if (asset->isTypeOf<MaterialAsset>()) { ... }
   }
   else {

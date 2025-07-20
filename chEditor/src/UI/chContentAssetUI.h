@@ -9,6 +9,7 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+#include "chUUID.h"
 
 struct ImVec4;
 struct ImVec2;
@@ -117,6 +118,8 @@ class ContentAssetUI
   SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
   bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
   SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
+  SPtr<ISampler> m_defaultSampler; ///< Default sampler for textures
+  UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;

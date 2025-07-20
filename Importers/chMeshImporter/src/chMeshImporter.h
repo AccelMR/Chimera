@@ -17,7 +17,6 @@
 #include "chAssetTypeTraits.h"
 #include "chIAsset.h"
 
-#include "chModule.h"
 #include "chMesh.h"
 #include "chModel.h"
 #include "chModelAsset.h"

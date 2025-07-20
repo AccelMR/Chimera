@@ -45,9 +45,9 @@ class CH_CORE_EXPORT IAssetImporter {
   }
 
   FORCEINLINE virtual void
-  setOriginalPath(const SPtr<IAsset>& asset, const Path& importedPath) {
+  setImportedPath(const SPtr<IAsset>& asset, const Path& importedPath) {
     CH_ASSERT(asset);
-    asset->setOriginalPath(importedPath.toString().c_str());
+    asset->setImportedPath(importedPath.toString().c_str());
   }
 };
 

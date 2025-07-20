@@ -84,8 +84,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
   add_subdirectory(GraphicsAPIs/chVulkan)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/Importers")
+  message("Directory exists.")
+  add_subdirectory(Importers)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   message("Directory exists.")
-  add_subdirectory(Importers/chMeshImporter)
   add_subdirectory(chEditor)
 endif()

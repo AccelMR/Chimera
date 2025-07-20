@@ -93,8 +93,13 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   }
 
  private:
+  friend class AssetImporterManager;
+
   SPtr<IAsset>
   lazyDeserialize(const SPtr<DataStream>& stream);
+
+  void
+  refreshAssets() { m_onAssetsChanged(std::move(getAllAssets())); }
 
  private:
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
@@ -169,7 +174,6 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   m_loadedAssets[refUUID] = asset;
   m_assets[refUUID] = asset;
 
-  m_onAssetsChanged(std::move(getAllAssets()));
 
   return std::static_pointer_cast<TAsset>(asset);
 }

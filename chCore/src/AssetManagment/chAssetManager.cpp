@@ -17,6 +17,7 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chPath.h"
+#include "chTextureAsset.h"
 
 // Base asset types
 #include "chModelAsset.h"
@@ -36,7 +37,8 @@ AssetManager::initialize() {
   m_assetRegister = chMakeShared<AssetRegister>();
 
   // Register asset creators
-  m_assetRegister->registerAssetCreator<ModelAsset>(AssetTypeTraits<ModelAsset>::getTypeId());
+  m_assetRegister->registerAssetCreator<ModelAsset>();
+  m_assetRegister->registerAssetCreator<TextureAsset>();
 }
 
 /*

@@ -24,7 +24,7 @@ namespace chEngineSDK {
 /*
 */
 void
-IAsset::setOriginalPath(const ANSICHAR* importedPath) {
+IAsset::setImportedPath(const ANSICHAR* importedPath) {
   if (!importedPath || !*importedPath) {
     CH_LOG(AssetSystem, Error, "Invalid original path for asset {0}", m_metadata.name);
     return;
@@ -180,7 +180,6 @@ IAsset::load() {
   CH_LOG(AssetSystem, Debug, "File size: {0}", stream->size());
   CH_LOG(AssetSystem, Debug, "Current position: {0}", stream->tell());
   CH_LOG(AssetSystem, Debug, "Is at end: {0}", stream->isAtEnd());
-  CH_LOG(AssetSystem, Debug, "Metadata size: {0}", sizeof(AssetMetadata));
 
   AssetMetadata metadata;
   stream->read(static_cast<void*>(&metadata), sizeof(metadata));
