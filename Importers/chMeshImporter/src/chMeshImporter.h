@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * MeshImpotrter class for loading and managing mesh resources.
+ * MeshImporter class for loading and managing mesh resources.
  */
 /************************************************************************/
 #pragma once
@@ -29,10 +29,10 @@ class aiMesh;
 class aiScene;
 
 namespace chEngineSDK {
-class MeshImpotrter  : public IAssetImporter {
+class MeshImporter  : public IAssetImporter {
  public:
-  MeshImpotrter() = default;
-  ~MeshImpotrter() = default;
+  MeshImporter() = default;
+  ~MeshImporter() = default;
 
   UUID
   getImporterType() const override{
@@ -118,7 +118,7 @@ class MeshImpotrter  : public IAssetImporter {
   UnorderedMap<String, SPtr<Model>> m_models;
   Mutex m_mutex;
 };
-DECLARE_ASSET_TYPE(MeshImpotrter);
+DECLARE_ASSET_TYPE(MeshImporter);
 
 } // namespace chEngineSDK
 #endif // USING(CH_IMPORTERS)

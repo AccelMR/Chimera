@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
@@ -25,8 +25,8 @@ using DynamicLibraryHandle = void*;
 
 namespace chEngineSDK{
 /*
- * Description: 
- *     Dynamic Library wrapper that is Platform Independent. 
+ * Description:
+ *     Dynamic Library wrapper that is Platform Independent.
  *
  * Sample usage:
  *
@@ -39,16 +39,16 @@ class CH_UTILITY_EXPORT DynamicLibrary
   * @brief Default constructor
   */
   DynamicLibrary() = delete;
-   
-  /** 
+
+  /**
    *   Constructs a Dynamic Library depending on its name.
    **/
   DynamicLibrary(String _name);
-  
-  /** 
+
+  /**
    *   Loads a dynamic library based on its name.
    **/
-  void 
+  void
   load();
 
  /*
@@ -56,28 +56,34 @@ class CH_UTILITY_EXPORT DynamicLibrary
   */
   ~DynamicLibrary() = default;
 
-  /** 
+  /**
    *   Unloads this dynamic library based on its name.
    **/
-  void 
+  void
   unload();
 
-  /** 
+  /**
    *   Returns the address of the given symbol from loaded library.
-   * 
+   *
    * @param strName
    *   The name of the symbol to search.
-   * 
+   *
    * @return
    *  Returns the handle to the needed symbol, nullptr if not found.
    **/
   void*
   getSymbol(const String& strName);
 
-  /** 
+  template <typename T>
+  FORCEINLINE T
+  getSymbol(const String& strName) {
+    return reinterpret_cast<T>(getSymbol(strName));
+  }
+
+  /**
    *   Returns the name of this dynamic library.
    **/
-  FORCEINLINE const String& 
+  FORCEINLINE const String&
   getName() const {
     return m_name;
   }
@@ -91,9 +97,8 @@ public:
 
 protected:
   String m_name;
-  DynamicLibraryHandle m_dynLibHandler; 
+  DynamicLibraryHandle m_dynLibHandler;
 
 };
 
 }
-

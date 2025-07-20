@@ -4,33 +4,32 @@
  * @author AccelMR
  * @date 2022/06/15
  * @brief Class that holds the actual data of a loaded Dynamic Library.
- *   
+ *
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chDynamicLibrary.h"
 
 #include "chFileSystem.h"
 #include "chPath.h"
 
-
-namespace chEngineSDK{
+namespace chEngineSDK {
 using std::move;
 
 /************************************************************************/
 /*
  * Platform specifics.
- */                                                                     
+ */
 /************************************************************************/
 #if USING(CH_PLATFORM_WIN32)
 #include "Win32/chWindows.h"
 
-const char* DynamicLibrary::EXTENSION = "dll"; 
+const char* DynamicLibrary::EXTENSION = "dll";
 const char* DynamicLibrary::PREFIX = nullptr;
 
 #elif USING(CH_PLATFORM_LINUX)
@@ -40,11 +39,9 @@ const char* DynamicLibrary::EXTENSION = "so";
 const char* DynamicLibrary::PREFIX = nullptr;
 #endif // USING(CH_PLATFORM_WIN32)
 
-namespace DynamicLibraryHelper
-{
-void* 
-getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name)
-{
+namespace DynamicLibraryHelper {
+void*
+getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name) {
 #if USING(CH_PLATFORM_LINUX)
   return dlsym(handle, name);
 #elif USING(CH_PLATFORM_WIN32)
@@ -55,20 +52,34 @@ getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name)
 }
 
 void*
-loadLibraryPlatformSpecific(const char* name)
-{
+loadLibraryPlatformSpecific(const char* name) {
 #if USING(CH_PLATFORM_LINUX)
-  return dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
+  void* handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
+  if (!handle) {
+    std::cerr << "Error al cargar '" << name << "': " << dlerror() << std::endl;
+
+    // Intenta con ruta absoluta como fallback
+    fs::path absolutePath = fs::absolute(name);
+    handle = dlopen(absolutePath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+    if (!handle) {
+      std::cerr << "Error con ruta absoluta '" << absolutePath << "': " << dlerror()
+                << std::endl;
+    }
+  }
+  return handle;
 #elif USING(CH_PLATFORM_WIN32)
-  return LoadLibraryEx(name, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  HMODULE handle = LoadLibraryEx(name, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  if (!handle) {
+    std::cerr << "Error al cargar '" << name << "': " << GetLastError() << std::endl;
+  }
+  return handle;
 #endif
-  CH_EXCEPT(InternalErrorException, "Could not load library " + String(name));
+  CH_EXCEPT(InternalErrorException, "Plataforma no soportada para: " + String(name));
   return nullptr;
 }
 
 bool
-unloadLibraryPlatformSpecific(DynamicLibraryHandle handle)
-{
+unloadLibraryPlatformSpecific(DynamicLibraryHandle handle) {
 #if USING(CH_PLATFORM_LINUX)
   return dlclose(handle);
 #elif USING(CH_PLATFORM_WIN32)
@@ -79,46 +90,38 @@ unloadLibraryPlatformSpecific(DynamicLibraryHandle handle)
 } // namespace DynamicLibraryHelper
 using namespace DynamicLibraryHelper;
 
-
 /*
-*/
-DynamicLibrary::DynamicLibrary(String _name) 
-  : m_name(std::move(_name)),
-    m_dynLibHandler(nullptr)
-{
+ */
+DynamicLibrary::DynamicLibrary(String _name)
+ : m_name(std::move(_name)), m_dynLibHandler(nullptr) {
   load();
 }
 
 /*
-*/
+ */
 void
-DynamicLibrary::load()
-{
-  m_dynLibHandler = static_cast<DynamicLibraryHandle>(
-                      loadLibraryPlatformSpecific(m_name.c_str()));
+DynamicLibrary::load() {
+  m_dynLibHandler =
+      static_cast<DynamicLibraryHandle>(loadLibraryPlatformSpecific(m_name.c_str()));
   if (!m_dynLibHandler) {
-    CH_EXCEPT(InternalErrorException, "Could not load dynamic library " + m_name);
+    // CH_EXCEPT(InternalErrorException, "Could not load dynamic library " + m_name);
   }
 }
 
 /*
-*/
+ */
 void
-DynamicLibrary::unload()
-{
+DynamicLibrary::unload() {
   if (unloadLibraryPlatformSpecific(m_dynLibHandler)) {
     CH_EXCEPT(InternalErrorException, "Could not unload dynamic library " + m_name);
   }
 }
 
 /*
-*/
+ */
 void*
-DynamicLibrary::getSymbol(const String& strName)
-{
-  return static_cast<void *>(getSymbolPlatformSpecific(m_dynLibHandler, strName.c_str()));
+DynamicLibrary::getSymbol(const String& strName) {
+  return static_cast<void*>(getSymbolPlatformSpecific(m_dynLibHandler, strName.c_str()));
 }
 
 } // namespace chEngineSDK
-
-

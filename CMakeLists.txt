@@ -86,6 +86,6 @@ endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   message("Directory exists.")
-  #add_subdirectory(Importers/chMeshImporter)
+  add_subdirectory(Importers/chMeshImporter)
   add_subdirectory(chEditor)
 endif()

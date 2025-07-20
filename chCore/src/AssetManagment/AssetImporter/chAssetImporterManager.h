@@ -74,10 +74,16 @@ class CH_CORE_EXPORT AssetImporterManager : public Module<AssetImporterManager>
     return m_importerRegistry->getImporterForAssetType<AssetType>();
   }
 
- private:
-  SPtr<AssetImporterRegistry> m_importerRegistry;
-  Event<bool(const SPtr<AssetImporterRegistry>&)> m_onRegisterImporter;
+  template <typename AssetImporterType = IAssetImporter>
+  FORCEINLINE void
+  registerImporter() {
+    CH_ASSERT(m_importerRegistry &&
+              "AssetImporterRegistry must be initialized before registering importers.");
+    m_importerRegistry->registerImporter<AssetImporterType>();
+  }
 
+ private:
+  UniquePtr<AssetImporterRegistry> m_importerRegistry;
 }; // class AssetImporterManager
 } // namespace chEngineSDK
 #endif  // USING(CH_EDITOR)

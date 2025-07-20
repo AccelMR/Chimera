@@ -242,12 +242,18 @@ FileSystem::getChildren(const Path& path, Vector<Path>& files, Vector<Path>& dir
   }
 
   for (const auto& entry : fs::directory_iterator(fsPath)) {
-    Path childPath(entry.path().generic_string());
-    if (entry.is_directory()) {
-      directories.push_back(childPath);
+    const auto& entryPath = entry.path();
+
+    if (fs::is_directory(entry)) {
+      directories.push_back(Path(entryPath.generic_string()));
     }
     else {
-      files.push_back(childPath);
+      // Use status to properly identify file types
+      auto status = entry.status();
+      if (fs::is_regular_file(status) ||
+          fs::is_other(status)) { // This might catch .so/.dll files
+        files.push_back(Path(entryPath.generic_string()));
+      }
     }
   }
 }

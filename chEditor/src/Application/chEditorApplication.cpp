@@ -11,6 +11,7 @@
 #include "chEditorApplication.h"
 #include "chAssetManager.h"
 #include "chEventDispatcherManager.h"
+#include "chDynamicLibManager.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
 #include "chIDescriptorSet.h"
@@ -22,6 +23,7 @@
 #include "chModelAsset.h"
 #include "chPath.h"
 #include "chUIHelpers.h"
+#include "chStringUtils.h"
 
 #include "chContentAssetUI.h"
 #include "chMainMenuBarUI.h"
@@ -112,6 +114,7 @@ EditorApplication::initializeEditorComponents() {
 #if USING(CH_IMPORTERS)
   AssetImporterManager::startUp();
   AssetImporterManager::instance().initialize();
+  loadImporters();
 #endif // USING(CH_IMPORTERS)
 
   AssetManager::startUp();
@@ -269,6 +272,51 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
     }
   }
   ImGui::End();
+}
+
+/*
+*/
+void
+EditorApplication::loadImporters() {
+  CH_LOG_INFO(EditorApp, "Loading asset importers.");
+#if USING(CH_IMPORTERS)
+  //AssetImporterManager& importerManager = AssetImporterManager::instance();
+  const  Path importersPath(
+#if USING(CH_DEBUG_MODE)
+    "Importers"
+#else // USING(CH_DEBUG_MODE)
+    "dunnoYetxP"
+#endif // USING(CH_DEBUG_MODE)
+  );
+  Vector<Path> files;
+  Vector<Path> directories;
+  FileSystem::getChildren(importersPath, files, directories);
+  for (const Path& file : files) {
+    if (file.getExtension() == ".so" ||
+        file.getExtension() == ".dll") { //ugly but works for now
+        //TODO:  fix this, loadDynamicLibrary adds a d at the end of the file name
+        // but these dlls are not named with a d at the end
+        // so we need to remove the d from the end of the file name
+        String fileName = file.getFileName(false);
+        fileName.pop_back();
+        WeakPtr <DynamicLibrary> library =
+            DynamicLibraryManager::instance().loadDynLibrary(fileName,
+                                                             FileSystem::absolutePath(importersPath));
+      if (library.expired()) {
+        CH_LOG_ERROR(EditorApp, "Failed to load importer library: {0}", file.toString());
+        continue;
+      }
+      typedef void (*LoadPluginFunc)();
+      LoadPluginFunc loadPlugin = library.lock()->getSymbol<LoadPluginFunc>("loadPlugin");
+      if (!loadPlugin) {
+        CH_LOG_ERROR(EditorApp, "Failed to find loadPlugin function in {0}", file.toString());
+        continue;
+      }
+      loadPlugin(); // This should register the importer
+      CH_LOG_INFO(EditorApp, "Loaded importer library: {0}", file.toString());
+    }
+  }
+  #endif // USING(CH_IMPORTERS)
 }
 
 } // namespace chEngineSDK

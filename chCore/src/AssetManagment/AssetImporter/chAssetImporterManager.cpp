@@ -21,10 +21,7 @@ void
 AssetImporterManager::initialize() {
   CH_LOG_DEBUG(AssetImporterSystem, "Initializing AssetImporterRegistry");
 
-  m_importerRegistry = chMakeShared<AssetImporterRegistry>();
-
-  // In case someone wants to register importers before the registry is initialized
-  m_onRegisterImporter(m_importerRegistry);
+  m_importerRegistry = chMakeUnique<AssetImporterRegistry>();
 }
 
 /*

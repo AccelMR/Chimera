@@ -34,6 +34,14 @@ set_target_properties(assimp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
+set_target_properties(chMeshImporter PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Importers
+    OUTPUT_NAME "chMeshImporter"
+    PREFIX ""
+    #want to add a postfix if we are in debug mode
+    DEBUG_POSTFIX "d"
+    INSTALL_RPATH "$ORIGIN"
+)
 
 macro(INCLUDESUBFOLDERS curdir)
     file(GLOB_RECURSE children LIST_DIRECTORIES true ${curdir}/*)

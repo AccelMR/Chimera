@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * Implementation of the MeshImpotrter class for loading and managing mesh resources.
+ * Implementation of the MeshImporter class for loading and managing mesh resources.
  */
 /************************************************************************/
 
@@ -38,7 +38,7 @@ CH_LOG_DECLARE_STATIC(MeshSystem, All);
 /*
  */
 Vector<String>
-MeshImpotrter::getSupportedExtensions() const {
+MeshImporter::getSupportedExtensions() const {
   Assimp::Importer importer;
   String extensions;
   importer.GetExtensionList(extensions);
@@ -61,7 +61,7 @@ MeshImpotrter::getSupportedExtensions() const {
 /*
  */
 SPtr<IAsset>
-MeshImpotrter::importAsset(const Path& filePath, const String& assetName) {
+MeshImporter::importAsset(const Path& filePath, const String& assetName) {
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
@@ -94,7 +94,7 @@ MeshImpotrter::importAsset(const Path& filePath, const String& assetName) {
 /*
  */
 SPtr<Mesh>
-MeshImpotrter::loadMesh(const Path& meshPath, const String& meshName) {
+MeshImporter::loadMesh(const Path& meshPath, const String& meshName) {
   String name = meshName.empty() ? meshPath.getFileName() : meshName;
 
   auto it = m_meshes.find(name);
@@ -131,7 +131,7 @@ MeshImpotrter::loadMesh(const Path& meshPath, const String& meshName) {
 /*
  */
 SPtr<Model>
-MeshImpotrter::loadModel(const Path& filePath) {
+MeshImporter::loadModel(const Path& filePath) {
   CH_LOG_INFO(MeshSystem, "Loading model: {0}", filePath.toString());
 
   String modelName = filePath.getFileName();
@@ -175,14 +175,14 @@ MeshImpotrter::loadModel(const Path& filePath) {
 /*
  */
 void
-MeshImpotrter::unloadMesh(const WeakPtr<Mesh>& mesh) {
+MeshImporter::unloadMesh(const WeakPtr<Mesh>& mesh) {
   CH_PAMRAMETER_UNUSED(mesh);
 }
 
 /*
  */
 Vector<SPtr<Mesh>>
-MeshImpotrter::processNode(aiNode* node, const aiScene* scene) {
+MeshImporter::processNode(aiNode* node, const aiScene* scene) {
   Vector<SPtr<Mesh>> meshes;
 
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
@@ -205,7 +205,7 @@ MeshImpotrter::processNode(aiNode* node, const aiScene* scene) {
 /*
  */
 SPtr<Mesh>
-MeshImpotrter::processMesh(aiMesh* mesh, const aiScene* scene) {
+MeshImporter::processMesh(aiMesh* mesh, const aiScene* scene) {
   SPtr<Mesh> newMesh = chMakeShared<Mesh>();
 
   const bool hasPositions = mesh->HasPositions();
@@ -323,7 +323,7 @@ MeshImpotrter::processMesh(aiMesh* mesh, const aiScene* scene) {
 }
 
 void
-MeshImpotrter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
+MeshImporter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
                                    ModelNode* parentNode) {
   Matrix4 nodeLocalTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
 

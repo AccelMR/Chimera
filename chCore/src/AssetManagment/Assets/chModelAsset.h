@@ -33,6 +33,12 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
     return m_model;
   }
 
+  FORCEINLINE void
+  setModel(const SPtr<Model>& model) {
+    m_model = model;
+  }
+
+
  protected:
   bool
   serialize(SPtr<DataStream>) override;
@@ -46,14 +52,8 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   bool
   deserialize(SPtr<DataStream>) override;
 
-  friend class MeshImpotrter;
   void
   clearAssetData() override;
-
-  FORCEINLINE void
-  setModel(const SPtr<Model>& model) {
-    m_model = model;
-  }
 
   void
   serializeNodeTree(SPtr<DataStream> stream);
