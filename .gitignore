@@ -13,3 +13,10 @@ CMakeSettings.json
 [Aa]ssets/
 
 !resources/shaders/
+
+#eclude dlls or shared libraries
+*.dll
+*.so
+
+#exclude .ini
+*.ini
