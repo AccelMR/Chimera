@@ -47,6 +47,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   loadAsset(const SPtr<IAsset>& asset);
 
   bool
+  unloadAsset(const SPtr<IAsset>& asset);
+
+  bool
+  loadAsset(const UUID& assetUUID);
+
+  bool
   unloadAsset(const UUID& assetUUID);
 
   bool
@@ -93,13 +99,17 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   }
 
  private:
-  friend class AssetImporterManager;
+  friend class IAssetImporter;
+
+  void
+  registerNewAsset(const SPtr<IAsset>& asset) {
+    CH_ASSERT(asset && "Asset cannot be null");
+    m_assets[asset->getUUID()] = asset;
+    m_onAssetsChanged(std::move(getAllAssets()));
+  }
 
   SPtr<IAsset>
   lazyDeserialize(const SPtr<DataStream>& stream);
-
-  void
-  refreshAssets() { m_onAssetsChanged(std::move(getAllAssets())); }
 
  private:
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded

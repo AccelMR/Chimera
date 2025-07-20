@@ -13,6 +13,7 @@
 #if USING(CH_EDITOR)
 #include "chUUID.h"
 #include "chIAsset.h"
+#include "chAssetManager.h"
 #include "chPath.h"
 
 namespace chEngineSDK {
@@ -44,10 +45,10 @@ class CH_CORE_EXPORT IAssetImporter {
     return std::static_pointer_cast<AssetType>(importAsset(filePath, assetName));
   }
 
-  FORCEINLINE virtual void
-  setImportedPath(const SPtr<IAsset>& asset, const Path& importedPath) {
-    CH_ASSERT(asset);
-    asset->setImportedPath(importedPath.toString().c_str());
+  void
+  registerNewAsset(const SPtr<IAsset>& asset) {
+    CH_ASSERT(asset && "Asset cannot be null");
+    AssetManager::instance().registerNewAsset(asset);
   }
 };
 

@@ -71,11 +71,7 @@ AssetImporterManager::importAsset(const Path& absoluteImportFilePath,
   CH_LOG_DEBUG(AssetImporterSystem, "Using importer {0} for file {1}",
                                     importer->getImporterType().toString(),
                                     absoluteImportFilePath);
-
-  auto asset = importer->importAsset(absoluteImportFilePath, baseName);
-  AssetManager& assetManager = AssetManager::instance();
-  assetManager.refreshAssets();
-  return asset;
+  return importer->importAsset(absoluteImportFilePath, baseName);
 }
 
 /*

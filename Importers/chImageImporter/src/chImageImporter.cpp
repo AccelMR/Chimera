@@ -63,15 +63,19 @@ ImageImporter::importAsset(const Path& filePath, const String& assetName) {
     return nullptr;
   }
 
-  SPtr<TextureAsset> textureAsset = AssetManager::instance()
-    .createAsset<TextureAsset>(assetName, EnginePaths::getGameAssetDirectory())
-    .lock(); // Use WeakPtr to avoid shared ownership issues
-  CH_ASSERT(textureAsset);
+  AssetMetadata metadata;
+  metadata.uuid = UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<TextureAsset>::getTypeId();
+  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
+  chString::copyANSI(metadata.typeName, AssetTypeTraits<TextureAsset>::getTypeName());
+  chString::copyANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  chString::copyToANSI(metadata.name, assetName);
 
-  setImportedPath(textureAsset, filePath);
-  textureAsset->setTextureData(imageData,
-                               static_cast<uint32>(width),
-                               static_cast<uint32>(height));
+  const Path importedPath = FileSystem::absolutePath(Path(filePath));
+  chString::copyToANSI(metadata.importedPath, importedPath.toString());
+  chString::copyToANSI(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
+
+  SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(metadata, imageData, width, height);
 
   if (!textureAsset->save()) {
     CH_LOG_ERROR(ImageImporterLog, "Failed to save texture asset: " + assetName);
@@ -79,6 +83,7 @@ ImageImporter::importAsset(const Path& filePath, const String& assetName) {
   }
 
   CH_LOG_INFO(ImageImporterLog, "Imported image asset: {0} from {1}", assetName, filePath.toString());
+  registerNewAsset(textureAsset);
   return std::static_pointer_cast<IAsset>(textureAsset);
 }
 

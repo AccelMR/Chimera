@@ -84,16 +84,14 @@ AssetManager::loadAsset(const SPtr<IAsset>& asset) {
 }
 
 /*
- */
+*/
 bool
-AssetManager::unloadAsset(const UUID& assetUUID) {
-  auto it = m_loadedAssets.find(assetUUID);
-  if (it == m_loadedAssets.end()) {
-    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
+AssetManager::unloadAsset(const SPtr<IAsset>& asset) {
+  if (!asset) {
+    CH_LOG_ERROR(AssetSystem, "Cannot unload null asset");
     return false;
   }
 
-  SPtr<IAsset> asset = it->second;
   if (asset->isUnloaded()) {
     CH_LOG_DEBUG(AssetSystem, "Asset {0} is already unloaded", asset->getName());
     return true;
@@ -114,8 +112,36 @@ AssetManager::unloadAsset(const UUID& assetUUID) {
     CH_LOG_ERROR(AssetSystem, "Failed to unload asset {0}", asset->getName());
     return false;
   }
-  m_loadedAssets.erase(it);
+  m_loadedAssets.erase(asset->getUUID());
   return true;
+}
+
+/*
+*/
+bool
+AssetManager::loadAsset(const UUID& assetUUID) {
+  auto it = m_assets.find(assetUUID);
+  if (it == m_assets.end()) {
+    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
+    return false;
+  }
+  return loadAsset(it->second);
+
+}
+
+/*
+ */
+bool
+AssetManager::unloadAsset(const UUID& assetUUID) {
+  auto it = m_loadedAssets.find(assetUUID);
+  if (it == m_loadedAssets.end()) {
+    CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found in loaded assets",
+                 assetUUID.toString());
+    return false;
+  }
+
+  SPtr<IAsset> asset = it->second;
+  return unloadAsset(asset);
 }
 
 /*

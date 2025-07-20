@@ -74,19 +74,25 @@ MeshImporter::importAsset(const Path& filePath, const String& assetName) {
     return nullptr;
   }
 
-  SPtr<ModelAsset> modelAsset =
-      AssetManager::instance()
-          .createAsset<ModelAsset>(assetName, EnginePaths::getGameAssetDirectory())
-          .lock(); // TODO: Use WeakPtr to avoid shared ownership issues
-  CH_ASSERT(modelAsset);
+  AssetMetadata metadata;
+  metadata.uuid = UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<ModelAsset>::getTypeId();
+  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
+  chString::copyANSI(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
+  chString::copyANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  chString::copyToANSI(metadata.name, assetName);
 
-  setImportedPath(modelAsset, filePath);
-  modelAsset->setModel(model);
+  const Path importedPath = FileSystem::absolutePath(Path(filePath));
+  chString::copyToANSI(metadata.importedPath, importedPath.toString());
+  chString::copyToANSI(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
+
+  SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
 
   if (!modelAsset->save()) {
     CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
     return nullptr;
   }
+  registerNewAsset(modelAsset);
 
   return std::static_pointer_cast<IAsset>(modelAsset);
 }

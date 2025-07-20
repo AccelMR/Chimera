@@ -146,9 +146,6 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   setMetadata(const AssetMetadata& metadata) { m_metadata = metadata; }
 
   void
-  setImportedPath(const ANSICHAR* importedPath);
-
-  void
   setAssetPath(const ANSICHAR* assetPath);
 
   virtual void

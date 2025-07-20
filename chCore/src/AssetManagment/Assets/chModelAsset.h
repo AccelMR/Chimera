@@ -25,6 +25,10 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
  public:
   ModelAsset() = delete;
   ModelAsset(const AssetMetadata& metadata) : IAsset(metadata) {}
+  ModelAsset(const AssetMetadata& metadata, const SPtr<Model>& model)
+    : IAsset(metadata), m_model(model) {
+    CH_ASSERT(m_model && "Model cannot be null");
+  }
 
   ~ModelAsset() = default;
 
@@ -32,12 +36,6 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   getModel() const {
     return m_model;
   }
-
-  FORCEINLINE void
-  setModel(const SPtr<Model>& model) {
-    m_model = model;
-  }
-
 
  protected:
   bool
