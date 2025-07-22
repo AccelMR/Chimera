@@ -11,7 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chAssetImporter.h"
-#include "chAssetTypeTraits.h"
+#include "chTypeTraits.h"
 
 #include "chTextureAsset.h"
 

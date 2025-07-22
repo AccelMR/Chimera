@@ -12,7 +12,7 @@
 
 #include "chAssetManager.h"
 
-#include "chAssetTypeTraits.h"
+#include "chTypeTraits.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
@@ -189,7 +189,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   // FileSystem::getChildren(directory, assetFiles, assetDirectories);
 
   FileSystem::forEachFileChildRecursive(directory, [&](const Path& file) {
-    if (file.getExtension() != ".chAss") {
+    if (file.getExtension() != EnginePaths::getEngineAssetExtension()) {
       CH_LOG_DEBUG(AssetSystem, "Skipping non-asset file: {0}", file.toString());
       return;
     }

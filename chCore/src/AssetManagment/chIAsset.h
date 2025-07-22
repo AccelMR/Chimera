@@ -12,13 +12,14 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chAssetTypeTraits.h"
+#include "chTypeTraits.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {
 
 enum class AssetState : uint16 {
   None = 0,
+
   Loading,
   Loaded,
   Unloading,

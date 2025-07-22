@@ -14,7 +14,7 @@
 #if USING(CH_IMPORTERS)
 
 #include "chAssetImporter.h"
-#include "chAssetTypeTraits.h"
+#include "chTypeTraits.h"
 #include "chIAsset.h"
 
 #include "chMesh.h"

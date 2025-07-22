@@ -37,6 +37,14 @@ class CH_CORE_EXPORT EnginePaths {
    */
   static Path
   getEngineAssetDirectory();
+
+  /**
+   * Get the absolute path to the engine assets directory.
+   *
+   * @return Absolute path to the engine assets directory.
+   */
+  static String
+  getEngineAssetExtension();
 };
 
 } // namespace chEngineSDK

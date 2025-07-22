@@ -123,7 +123,7 @@ class ContentAssetUI
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;
-  char m_renameBuffer[256] = {0}; // Buffer for the new name
+  ANSICHAR m_renameBuffer[256] = {0}; // Buffer for the new name
   bool m_renameFocusRequested = false;
 
   bool showAllTypes = true;

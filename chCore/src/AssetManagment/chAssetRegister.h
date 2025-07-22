@@ -10,7 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chAssetTypeTraits.h"
+#include "chTypeTraits.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {

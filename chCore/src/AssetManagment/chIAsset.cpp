@@ -48,7 +48,7 @@ IAsset::save() {
   }
 
   String assetName(m_metadata.name);
-  assetName += ".chAss";
+  assetName += EnginePaths::getEngineAssetExtension();
   const Path fullFilePath = assetPath.join(Path(assetName));
   SPtr<DataStream> stream = FileSystem::createAndOpenFile(fullFilePath);
   if (!stream) {
@@ -88,10 +88,10 @@ IAsset::rename(const ANSICHAR* newName) {
     return true;
   }
 
-  String assetFullStr = String(m_metadata.assetPath) + "/" + String(m_metadata.name) + ".chAss";
+  String assetFullStr = String(m_metadata.assetPath) + "/" + String(m_metadata.name) + EnginePaths::getEngineAssetExtension();
   const Path assetAbsPath(FileSystem::absolutePath(Path(assetFullStr)));
 
-  String newFullStr = String(m_metadata.assetPath) + "/" + String(newName) + ".chAss";
+  String newFullStr = String(m_metadata.assetPath) + "/" + String(newName) + EnginePaths::getEngineAssetExtension();
   const Path newAssetPath(FileSystem::absolutePath(Path(newFullStr)));
 
   const bool success = FileSystem::renameFile(assetAbsPath,
@@ -117,7 +117,7 @@ IAsset::updateMetadata(const AssetMetadata& newMetadata) {
   }
 
   String assetName(m_metadata.name);
-  assetName += ".chAss";
+  assetName += EnginePaths::getEngineAssetExtension();
   const Path fullFilePath = assetPath.join(Path(assetName));
 
   // Open file in read/write mode instead of create mode
@@ -152,7 +152,7 @@ IAsset::load() {
 
   m_state = AssetState::Loading;
 
-  const Path fullFilePath = assetPath.join(Path(String(m_metadata.name) + ".chAss"));
+  const Path fullFilePath = assetPath.join(Path(String(m_metadata.name) + EnginePaths::getEngineAssetExtension()));
   SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, true);
 
   if (!stream || !stream->isReadable()) {

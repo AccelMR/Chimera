@@ -45,13 +45,19 @@ public:
   void loadModel(const SPtr<Model>& model);
   void bindInputEvents();
 
+  void setTextureView(const SPtr<ITextureView>& textureView) {
+    m_texture.reset();
+    m_textureView = textureView;
+  }
+
+  void
+  createNodeDescriptorResources();
+
  private:
 
   void
   createMeshBuffers();
 
-  void
-  createNodeDescriptorResources();
 
   void
   createRenderTargets();

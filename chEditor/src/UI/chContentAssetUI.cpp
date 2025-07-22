@@ -78,7 +78,7 @@ ContentAssetUI::ContentAssetUI() {
             .format = texture->getFormat(),
             .viewType = TextureViewType::View2D});
         if (!textureView) {
-          CH_LOG_ERROR(ContentAssetUILog, "Failed to create texture view for asset {}.", asset->getName());
+          CH_LOG_ERROR(ContentAssetUILog, "Failed to create texture view for asset {0}.", asset->getName());
           continue;
         }
 
@@ -535,6 +535,7 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset) {
   ImGui::Text("UUID: %s", asset->getUUID().toString().c_str());
   ImGui::Text("Name: %s", asset->getName());
   ImGui::Text("Type: %s", asset->getTypeName());
+  ImGui::Text("Type UUID: %s", asset->getAssetType().toString().c_str());
   ImGui::Text("Created At: %s", createdAtStr);
   ImGui::Text("State: %s", getAssetStateString(asset).c_str());
   ImGui::Text("Imported Path: %s", asset->getImportedPath());
@@ -610,8 +611,17 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
       m_nastyRenderer->loadModel(asset->as<ModelAsset>()->getModel());
       CH_LOG_DEBUG(ContentAssetUILog, "Loaded model asset: {0}", asset->getName());
     }
-    // Add more asset type handling here as needed
-    //else if (asset->isTypeOf<TextureAsset>()) {  }
+    else if (asset->isTypeOf<TextureAsset>()) {
+      SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
+      SPtr<ITexture> texture = textureAsset->getTexture();
+      if (texture) {
+        m_nastyRenderer->setTextureView(std::move(texture->createView({
+            .format = texture->getFormat(),
+            .viewType = TextureViewType::View2D})));
+        m_nastyRenderer->createNodeDescriptorResources();
+        CH_LOG_DEBUG(ContentAssetUILog, "Loaded texture asset: {0}", asset->getName());
+      }
+     }
     // else if (asset->isTypeOf<MaterialAsset>()) { ... }
   }
   else {

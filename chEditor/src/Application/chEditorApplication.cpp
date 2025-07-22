@@ -235,11 +235,16 @@ void
 EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize({1280.0f, 720.0f}, ImGuiCond_Always);
+  ImGui::SetNextWindowSize({static_cast<float>(rendererOutput.width-50),
+                            static_cast<float>(rendererOutput.height-50)},
+    ImGuiCond_Always);
 
-  ImGuiWindowFlags window_flags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground;
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
+                                  ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoSavedSettings |
+                                  ImGuiWindowFlags_NoBringToFrontOnFocus |
+                                  ImGuiWindowFlags_NoFocusOnAppearing;
 
   if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
     ImGui::End();
