@@ -608,17 +608,17 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
 
     // Handle different asset types
     if (asset->isTypeOf<ModelAsset>()) {
-      m_nastyRenderer->loadModel(asset->as<ModelAsset>()->getModel());
+      //m_multiStageRenderer->loadModel(std::static_pointer_cast<ModelAsset>(asset)->getModel());
       CH_LOG_DEBUG(ContentAssetUILog, "Loaded model asset: {0}", asset->getName());
     }
     else if (asset->isTypeOf<TextureAsset>()) {
       SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
       SPtr<ITexture> texture = textureAsset->getTexture();
       if (texture) {
-        m_nastyRenderer->setTextureView(std::move(texture->createView({
-            .format = texture->getFormat(),
-            .viewType = TextureViewType::View2D})));
-        m_nastyRenderer->createNodeDescriptorResources();
+        // m_nastyRenderer->setTextureView(std::move(texture->createView({
+        //     .format = texture->getFormat(),
+        //     .viewType = TextureViewType::View2D})));
+        //m_nastyRenderer->createNodeDescriptorResources();
         CH_LOG_DEBUG(ContentAssetUILog, "Loaded texture asset: {0}", asset->getName());
       }
      }
@@ -640,7 +640,8 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
   if (ImGui::MenuItem("Unload", nullptr, false, asset->isLoaded())) {
     CH_LOG_DEBUG(ContentAssetUILog, "Unloading asset: {0}", asset->getName());
     AssetManager::instance().unloadAsset(asset->getUUID());
-    m_nastyRenderer->loadModel(nullptr);
+    //m_nastyRenderer->loadModel(nullptr);
+    //m_multiStageRenderer->loadModel(nullptr);
   }
 
   ImGui::Separator();

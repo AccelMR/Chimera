@@ -27,6 +27,7 @@
 
 #include "chContentAssetUI.h"
 #include "chMainMenuBarUI.h"
+#include "chOutputLogUI.h"
 
 #if USING(CH_IMPORTERS)
 #include "chAssetImporter.h"
@@ -37,8 +38,19 @@
 
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
+#include "chMultiStageRenderer.h"
+#include "chRenderStageIO.h"
+#include "chRenderStageFactory.h"
+#include "Stages/chGBufferStage.h"
+
 namespace chEngineSDK {
 using namespace chEngineSDK::chUIHelpers;
+
+Radian g_FOV(Degree(45.0f));
+float g_farPlane = 10000.0f;
+float g_nearPlane = 0.1f;
+Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
+
 
 /*
  */
@@ -74,7 +86,8 @@ EditorApplication::onPostInitialize() {
  */
 RendererOutput
 EditorApplication::onRender(float deltaTime) {
-  RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
+  //RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
+  RendererOutput renderOut = m_multiStageRenderer->onRender(deltaTime);
   return renderOut;
 }
 
@@ -99,6 +112,7 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
   renderFullScreenRenderer(rendererOutput);
   m_mainMenuBar->renderMainMenuBar();
   m_contentAssetUI->renderContentAssetUI();
+  m_outputLogUI->renderOutputLogUI();
 
   UIHelpers::render(graphicAPI, commandBuffer);
 }
@@ -122,10 +136,23 @@ EditorApplication::initializeEditorComponents() {
   AssetManager::instance().lazyLoadAssetsFromDirectory(
       EnginePaths::getAbsoluteGameAssetDirectory());
 
-  m_nastyRenderer = std::make_shared<NastyRenderer>();
-  m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
-  m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
-  m_nastyRenderer->bindInputEvents();
+  // m_nastyRenderer = std::make_shared<NastyRenderer>();
+  // m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
+  // m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
+  // m_nastyRenderer->bindInputEvents();
+
+  RenderStageFactory::startUp();
+  RenderStageFactory::instance().registerStageType<GBufferStage>();
+
+  m_multiStageRenderer = chMakeShared<MultiStageRenderer>();
+
+  auto gbufferStage = RenderStageFactory::instance().createStage<GBufferStage>();
+  m_gbufferStageId = m_multiStageRenderer->addStage(gbufferStage);
+
+  m_multiStageRenderer->initialize(display->getWidth(), display->getHeight());
+  m_multiStageRenderer->setClearColors({UIHelpers::rendererColor});
+
+  setupSceneData();
 
   initImGui(display);
 
@@ -140,10 +167,21 @@ EditorApplication::initializeEditorComponents() {
   m_defaultSampler = graphicAPI.createSampler(samplerInfo);
 
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
-  m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
+  //m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
+  m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
 
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
-  m_mainMenuBar->setNastyRenderer(m_nastyRenderer);
+  //m_mainMenuBar->setNastyRenderer(m_nastyRenderer);
+  m_mainMenuBar->setMultiStageRenderer(m_multiStageRenderer);
+
+  m_outputLogUI = chMakeUnique<OutputLogUI>();
+  m_outputLogUI->setMultiStageRenderer(m_multiStageRenderer);
+  m_outputLogUI->appendLogEntries(Logger::instance().getBufferedLogs());
+  Logger::instance().onLogWritten(
+      [this](const LogBufferEntry& entry) {
+        m_outputLogUI->addLogEntry(entry);
+      });
+
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
 }
@@ -227,6 +265,9 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
   UIHelpers::bindEvnetWindowEvent(eventHandler);
+
+  width = display->getWidth();
+  height = display->getHeight();
 }
 
 /*
@@ -249,7 +290,7 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
   if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
     ImGui::End();
   }
-  m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
+  //m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
 
   if (rendererOutput.colorTarget) {
     auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
@@ -321,6 +362,36 @@ EditorApplication::loadImporters() {
     }
   }
   #endif // USING(CH_IMPORTERS)
+}
+
+/*
+*/
+void
+EditorApplication::setupSceneData() {
+    // Create basic scene data
+  RenderStageIO sceneData;
+
+  // Create a basic camera (you can customize this)
+  auto cameraData = chMakeShared<CameraData>();
+  auto camera = chMakeShared<Camera>(initialCameraPos,
+                                     Vector3::ZERO,
+                                     width,
+                                     height);
+  camera->setProjectionType(CameraProjectionType::Perspective);
+  camera->setFieldOfView(g_FOV);
+  camera->setClipPlanes(g_nearPlane, g_farPlane);
+  camera->updateMatrices();
+  cameraData->camera = camera;
+
+  // Create a basic model (you can customize this)
+  auto modelData = chMakeShared<ModelData>();
+
+  sceneData.setOutput<CameraData>(cameraData);
+  sceneData.setOutput<ModelData>(modelData);
+
+  m_multiStageRenderer->setSceneData(sceneData);
+
+  CH_LOG_INFO(EditorApp, "Scene data configured for multi-stage renderer");
 }
 
 } // namespace chEngineSDK

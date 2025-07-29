@@ -18,9 +18,11 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include "chEventSystem.h"
 #include "chLogDeclaration.h"
 #include "chModule.h"
 #include "chStringUtils.h"
+
 
 #ifdef CH_ENABLE_LOG_VERBOSE
 #define CH_LOG_VERBOSE USE_IF(USING(CH_DEBUG_MODE))
@@ -30,6 +32,35 @@
 
 namespace chEngineSDK {
 class DataStream;
+
+/**
+ * @brief Log entry structure for display
+ */
+struct LogBufferEntry {
+  String timestamp;
+  LogVerbosity verbosity;
+  String category;
+  String message;
+  String sourceFile;
+  int32 sourceLine;
+  String sourceFunctionName;
+
+  LogBufferEntry() = default;
+  LogBufferEntry(const String& inTimestamp,
+           LogVerbosity inVerbosity,
+           const String& inCategoryName,
+           const String& inLogMessage,
+           const String& inSourceFileName = "",
+           int32 inSourceLineNumber = 0,
+           const String& inSourceFunctionName = "")
+   : timestamp(inTimestamp),
+     verbosity(inVerbosity),
+     category(inCategoryName),
+     message(inLogMessage),
+     sourceFile(inSourceFileName),
+     sourceLine(inSourceLineNumber),
+     sourceFunctionName(inSourceFunctionName) {}
+};
 
 /**
  * @brief Configuration options for log categories
@@ -102,9 +133,9 @@ class CH_UTILITY_EXPORT LogCategory
    * @param function Function name
    */
   void
-  log(LogVerbosity verbosity, const 
-      String& message, 
-      const ANSICHAR* file = nullptr, 
+  log(LogVerbosity verbosity, const
+      String& message,
+      const ANSICHAR* file = nullptr,
       int32 line = 0,
       const ANSICHAR* function = nullptr) const;
 
@@ -117,9 +148,9 @@ class CH_UTILITY_EXPORT LogCategory
    * @param function Function name
    */
   void
-  log(LogVerbosity verbosity, 
-      const String&& message, 
-      const ANSICHAR* file = nullptr, 
+  log(LogVerbosity verbosity,
+      const String&& message,
+      const ANSICHAR* file = nullptr,
       int32 line = 0,
       const ANSICHAR* function = nullptr) const;
 
@@ -179,6 +210,21 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   }
 
   /**
+   * @brief Set Buffering for log messages
+   * @param enabled True to enable buffering, false to disable
+   * @param maxSize Maximum number of messages to buffer Default is 500
+   */
+  void
+  setBufferingEnabled(bool enabled, uint32 maxSize = 500);
+
+  /**
+   * @brief Get the current log buffer
+   * @return Vector of buffered log entries
+   */
+  NODISCARD const Vector<LogBufferEntry>&
+  getBufferedLogs() const;
+
+  /**
    * @brief Enable/disable file output
    * @param enabled True to enable, false to disable
    * @param filename Optional filename to use
@@ -212,6 +258,17 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   writeLogMessage(const LogCategory& category, LogVerbosity verbosity, String&& message,
                   const ANSICHAR* file = nullptr, int32 line = 0, const ANSICHAR* function = nullptr);
 
+
+  /**
+   * @brief Event triggered when a log entry is written
+   * @param callback Function to call when a log entry is written
+   * @return Event handle
+  */
+  HEvent
+  onLogWritten(Function<void(const LogBufferEntry&)> callback) {
+    return m_logWrittenEvent.connect(callback);
+  }
+
  protected:
   /**
    * @brief Constructor
@@ -242,6 +299,12 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   String m_logFilename;
   SPtr<DataStream> m_logFile;
   RecursiveMutex m_mutex;
+  Event<void(const LogBufferEntry&)> m_logWrittenEvent;
+
+
+  Vector<LogBufferEntry> m_logBuffer;
+  uint32 m_maxBufferSize = 500;  // Keep last 500 logs
+  bool m_bufferingEnabled = false;
 };
 
 /**

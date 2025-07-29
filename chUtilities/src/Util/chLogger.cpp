@@ -98,6 +98,8 @@ static const String COLOR_RESET = "\033[0m";
 LogCategory::LogCategory(const String& name, const LogCategoryConfig& config)
  : m_name(name), m_config(config) {}
 
+/*
+*/
 void
 LogCategory::log(LogVerbosity verbosity, const String& message, const ANSICHAR* file, int32 line,
                  const ANSICHAR* function) const {
@@ -124,8 +126,12 @@ LogCategory::log(LogVerbosity verbosity, const String&& message, const ANSICHAR*
 // Logger Implementation
 //--------------------------------------------------------------------------
 
+/*
+*/
 Logger::Logger() : m_consoleOutput(true), m_fileOutput(false) {}
 
+/*
+*/
 Logger::~Logger() {
   if (m_fileOutput && m_logFile) {
     m_logFile->close();
@@ -133,11 +139,15 @@ Logger::~Logger() {
   }
 }
 
+/*
+*/
 void
 Logger::onStartUp() {
   // Initialize the logger
 }
 
+/*
+*/
 void
 Logger::onShutDown() {
   if (m_fileOutput && m_logFile) {
@@ -148,6 +158,8 @@ Logger::onShutDown() {
   m_categories.clear();
 }
 
+/*
+*/
 void
 Logger::registerCategory(LogCategory& category) {
   RecursiveLock lock(m_mutex);
@@ -162,6 +174,8 @@ Logger::registerCategory(LogCategory& category) {
   m_categories.push_back(&category);
 }
 
+/*
+*/
 LogCategory*
 Logger::findCategory(const String& name) {
   RecursiveLock lock(m_mutex);
@@ -175,6 +189,8 @@ Logger::findCategory(const String& name) {
   return nullptr;
 }
 
+/*
+*/
 void
 Logger::setGlobalVerbosity(LogVerbosity verbosity) {
   RecursiveLock lock(m_mutex);
@@ -184,6 +200,30 @@ Logger::setGlobalVerbosity(LogVerbosity verbosity) {
   }
 }
 
+/*
+*/
+void
+Logger::setBufferingEnabled(bool enabled, uint32 maxSize) {
+  RecursiveLock lock(m_mutex);
+  m_bufferingEnabled = enabled;
+  m_maxBufferSize = maxSize;
+
+  if (!enabled) {
+    m_logBuffer.clear();
+  }
+
+  m_logBuffer.reserve(m_maxBufferSize);
+}
+
+/*
+*/
+NODISCARD const Vector<LogBufferEntry>&
+Logger::getBufferedLogs() const  {
+  return m_logBuffer;
+}
+
+/*
+*/
 void
 Logger::setFileOutput(bool enabled, const String& filename) {
   RecursiveLock lock(m_mutex);
@@ -208,7 +248,7 @@ Logger::setFileOutput(bool enabled, const String& filename) {
           std::cerr << "Failed to open log file: " << m_logFilename << std::endl;
         }
       }
-    } 
+    }
     catch (const Exception& e) {
       m_fileOutput = false;
       if (m_consoleOutput) {
@@ -219,10 +259,10 @@ Logger::setFileOutput(bool enabled, const String& filename) {
 }
 
 void
-Logger::writeLogMessage(const LogCategory& category, 
+Logger::writeLogMessage(const LogCategory& category,
                         LogVerbosity verbosity,
-                        const String& message, 
-                        const ANSICHAR* file, 
+                        const String& message,
+                        const ANSICHAR* file,
                         int32 line,
                         const ANSICHAR* function) {
   RecursiveLock lock(m_mutex);
@@ -265,16 +305,27 @@ Logger::writeLogMessage(const LogCategory& category,
     formattedMessage += "\n";
     m_logFile->write(formattedMessage.data(), formattedMessage.size());
   }
+
+  // Buffer the log entry if buffering is enabled
+  if (m_bufferingEnabled) {
+    m_logBuffer.emplace_back(timestamp, verbosity, category.getName(), message, file, line,
+                             function);
+
+    // Apply size limit with early return
+    if (m_logBuffer.size() > m_maxBufferSize) {
+      m_logBuffer.erase(m_logBuffer.begin());
+    }
+  }
 }
 
 /*
  */
 void
 Logger::writeLogMessage(const LogCategory& category, \
-                        LogVerbosity verbosity, 
+                        LogVerbosity verbosity,
                         String&& message,
-                        const ANSICHAR* file, 
-                        int32 line, 
+                        const ANSICHAR* file,
+                        int32 line,
                         const ANSICHAR* function) {
   RecursiveLock lock(m_mutex);
 

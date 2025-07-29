@@ -193,6 +193,12 @@ using Map = std::map<K, T, Compare, A>;
 template< typename T, class Container = std::deque<T>>
 using Queue =  std::queue<T, Container>;
 
+/**
+ *    Deque wrapper.
+ **/
+template<typename T, class A = Alloc<T>>
+using Deque = std::deque<T, A>;
+
 /************************************************************************/
 /*
  * Smart pointers

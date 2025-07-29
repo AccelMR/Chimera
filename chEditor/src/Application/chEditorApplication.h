@@ -13,6 +13,8 @@
 
 #include "chNastyRenderer.h"
 
+#include "chUUID.h"
+
 #if USING(CH_PLATFORM_WIN32)
 # if USING(CH_COMPILER_MSVC)
 #   if defined( CH_STATIC_LIB )
@@ -51,6 +53,9 @@ struct ImVec4;
 namespace chEngineSDK {
 class ContentAssetUI;
 class MainMenuBarUI;
+class OutputLogUI;
+
+class MultiStageRenderer;
 
 class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
 {
@@ -95,13 +100,23 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   void
   loadImporters();
 
+  void
+  setupSceneData();
+
  private:
-  SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+  //SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+
+  SPtr<MultiStageRenderer> m_multiStageRenderer;
+  UUID m_gbufferStageId;
 
   SPtr<ISampler> m_defaultSampler;
   Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
 
   UniquePtr<ContentAssetUI> m_contentAssetUI; ///< Content Asset UI instance
   UniquePtr<MainMenuBarUI> m_mainMenuBar; ///< Main menu bar instance
+  UniquePtr<OutputLogUI> m_outputLogUI; ///< Output log UI instance
+
+  uint32 width = 0; ///< Width of the editor window
+  uint32 height = 0; ///< Height of the editor window
 };
 } // namespace chEngineSDK`

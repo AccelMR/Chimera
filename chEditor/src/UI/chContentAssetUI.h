@@ -10,6 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 #include "chUUID.h"
+#include "chMultiStageRenderer.h"
 
 struct ImVec4;
 struct ImVec2;
@@ -30,8 +31,8 @@ class ContentAssetUI
 
   // DELETEME
   void
-  setNastyRenderer(const SPtr<NastyRenderer>& renderer) {
-    m_nastyRenderer = renderer;
+  setMultiStageRenderer(SPtr<MultiStageRenderer> renderer) {
+    m_multiStageRenderer = std::move(renderer);
   }
 
  private:
@@ -117,7 +118,8 @@ class ContentAssetUI
   Vector<SPtr<IAsset>> m_assets;
   SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
   bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
-  SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
+  //SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
+  SPtr<MultiStageRenderer> m_multiStageRenderer; ///< Multi-stage renderer instance
   SPtr<ISampler> m_defaultSampler; ///< Default sampler for textures
   UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;
 

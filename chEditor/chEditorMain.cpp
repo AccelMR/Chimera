@@ -16,6 +16,7 @@ main(int32 argc, char* argv[]) {
   logger.setConsoleOutput(true);
   logger.setFileOutput(true, "resources/engine/logs/ChimeraEditor.log");
   logger.setGlobalVerbosity(LogVerbosity::Debug);
+  logger.setBufferingEnabled(true, 500);
 
   CH_LOG_INFO(EditorMain, "Chimera Editor started.");
 
