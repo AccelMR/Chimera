@@ -46,7 +46,7 @@ class OutputLogUI
 
  public:
   OutputLogUI();
-  ~OutputLogUI() = default;
+  ~OutputLogUI();
 
   void
   setMultiStageRenderer(const SPtr<MultiStageRenderer>& renderer) {
@@ -173,6 +173,8 @@ class OutputLogUI
 
   // Renderer reference
   SPtr<MultiStageRenderer> m_nastyRenderer;
+
+  HEvent m_logWrittenEvent;
 };
 
 } // namespace chEngineSDK

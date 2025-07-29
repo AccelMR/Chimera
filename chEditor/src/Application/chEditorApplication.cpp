@@ -61,6 +61,7 @@ EditorApplication::EditorApplication() {
 /*
  */
 EditorApplication::~EditorApplication() {
+  m_outputLogUI.reset();
   CH_LOG_INFO(EditorApp, "Destroying EditorApplication instance.");
 }
 

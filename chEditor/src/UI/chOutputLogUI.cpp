@@ -24,6 +24,17 @@ OutputLogUI::OutputLogUI() {
 
   // Initialize with all categories enabled by default
   m_filter.enabledCategories.clear();
+
+  m_logWrittenEvent = Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
+                                                                this,
+                                                                std::placeholders::_1));
+}
+
+/*
+*/
+OutputLogUI::~OutputLogUI() {
+  CH_LOG_DEBUG(OutputLogUILog, "Destroying OutputLogUI instance.");
+  m_logWrittenEvent.~HEvent();
 }
 
 /*

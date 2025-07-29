@@ -316,6 +316,9 @@ Logger::writeLogMessage(const LogCategory& category,
       m_logBuffer.erase(m_logBuffer.begin());
     }
   }
+  // Trigger the log written event
+  m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
+                              file ? file : "", line, function ? function : ""));
 }
 
 /*

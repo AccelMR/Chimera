@@ -11,7 +11,7 @@
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
@@ -20,7 +20,7 @@ namespace chEngineSDK{
 using std::function;
 using std::forward;
 /*
- * Description: 
+ * Description:
  *     This class works as a node in a double linked list and will need data needed
  *     to handle the event, meaning a function pointer.
  */
@@ -53,12 +53,12 @@ class BaseConnectionNode
 };
 
 /*
- * Description: 
+ * Description:
  *     This will act as the main node of the list and controller of it.
  */
 class ConnectionController {
  public:
- /** 
+ /**
   *   Default constructor.
   **/
   FORCEINLINE ConnectionController() = default;
@@ -86,31 +86,31 @@ class ConnectionController {
     }
   }
 
-  /** 
+  /**
    *   Adds a new connection to the connection list.
-   * 
+   *
    * @param _connection
    *   The new connection to be added to the connection list.
    **/
   FORCEINLINE void
   connect(BaseConnectionNode* _connection);
 
-  /** 
+  /**
    *   Removes a connection from from the connection list.
-   * 
+   *
    * @param _connection
    *   The connection that will be removed from the connection list.
    **/
   FORCEINLINE void
   disconnect(BaseConnectionNode* _connection);
 
-  /** 
+  /**
    *   Clears the whole list of connections.
    **/
   FORCEINLINE void
   clear();
 
-  /* 
+  /*
   * Releases the connection of this controller
   */
   FORCEINLINE void
@@ -129,7 +129,7 @@ class ConnectionController {
 };
 
 /*
- * Description: 
+ * Description:
  *     Handler of event. This class just contains basic stuff to communicate with
  *  the actual data.
  */
@@ -141,7 +141,7 @@ class HEvent {
     this->operator=(e);
   }
 
-  /** 
+  /**
    *   Constructor with a node.
    **/
   FORCEINLINE explicit HEvent(SPtr<ConnectionController> _controller, BaseConnectionNode* _node)
@@ -150,7 +150,7 @@ class HEvent {
     ++m_connection->m_size;
   }
 
-  /** 
+  /**
    *   Default destructor.
    **/
   FORCEINLINE ~HEvent() {
@@ -158,8 +158,8 @@ class HEvent {
       m_controller->freeHandle(m_connection);
     }
   }
-  
-  /** 
+
+  /**I thiot
    *   Disconnects the internal subscriber from event.
    **/
   FORCEINLINE void
@@ -181,13 +181,13 @@ class HEvent {
 };
 
 /*
- * Description: 
+ * Description:
  *     Actual event that will keep track of the whole list of subscribers and will
  *  call them.
  *
  * Sample usage:
  *  See class Event in chEventSystem.h
- * 
+ *
  *
  */
 template<class ReturnType, class... Args>
@@ -198,26 +198,26 @@ class TEvent {
       function<ReturnType(Args...)> m_function;
    };
  public:
- /** 
+ /**
   *   Base constructor.
   **/
   FORCEINLINE TEvent() {
     m_connectionController =  chMakeShared<ConnectionController>();
   }
 
-  /** 
+  /**
    *   Base destructor.
    **/
   FORCEINLINE  ~TEvent() {
     clear();
   }
 
-  /** 
+  /**
    *   Connects a new subscriber to this event and returns a handler to that subscriber.
-   * 
+   *
    * @param func
    *   The template function pointer to be called.
-   *  
+   *
    * @return HEvent
    *  Handler to the subscriber.
    **/
@@ -229,9 +229,9 @@ class TEvent {
     return HEvent(m_connectionController, connData);
   }
 
-  /** 
+  /**
    *   Calls all subscribers connected to this event.
-   * 
+   *
    * @param args
    *   Any parameter already defined as template.
    **/
@@ -249,8 +249,8 @@ class TEvent {
     }
   }
 
-  /** 
-   *   Clears the whole list of subscribed connections. 
+  /**
+   *   Clears the whole list of subscribed connections.
    **/
   FORCEINLINE void
   clear() {
@@ -277,13 +277,14 @@ class Event<ReturnType(Args...)> : public TEvent<ReturnType, Args...>
 /************************************************************************/
 /*
  * Implementation
- */                                                                     
+ */
 /************************************************************************/
 
 /*
 */
 void
 ConnectionController::connect(BaseConnectionNode* _connection) {
+  CH_ASSERT(nullptr != _connection && "Connection must not be null.");
   _connection->m_prev = m_lastConnection;
 
   if (nullptr != m_lastConnection) {
@@ -308,6 +309,7 @@ ConnectionController::disconnect(BaseConnectionNode* _connection) {
   --_connection->m_size;
 
   if (0 == _connection->m_size) {
+    free(_connection);
     delete _connection;
   }
 }
