@@ -19,22 +19,21 @@ CH_LOG_DECLARE_STATIC(OutputLogUILog, All);
 
 /*
  */
-OutputLogUI::OutputLogUI() {
+OutputLogUI::OutputLogUI()
+  : m_logWrittenEvent(Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
+                                                                this,
+                                                                std::placeholders::_1)))
+{
   CH_LOG_DEBUG(OutputLogUILog, "Creating OutputLogUI instance.");
-
   // Initialize with all categories enabled by default
   m_filter.enabledCategories.clear();
-
-  m_logWrittenEvent = Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
-                                                                this,
-                                                                std::placeholders::_1));
 }
-
 /*
 */
 OutputLogUI::~OutputLogUI() {
-  CH_LOG_DEBUG(OutputLogUILog, "Destroying OutputLogUI instance.");
-  m_logWrittenEvent.~HEvent();
+  m_logWrittenEvent.disconnect();
+  // Optional: Brief wait to ensure no in-flight calls
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
 /*

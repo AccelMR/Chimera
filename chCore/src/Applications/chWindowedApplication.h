@@ -146,6 +146,9 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   SPtr<DisplaySurface> m_display;
 
   ApplicationRenderContext m_renderComponents;
+
+  HEvent m_resizeEvent; ///< Event for handling display resize
+  HEvent m_closeEvent;  ///< Event for handling application close
 };
 
 } // namespace chEngineSDK

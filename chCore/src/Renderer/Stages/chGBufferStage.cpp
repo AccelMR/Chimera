@@ -51,7 +51,6 @@ GBufferStage::GBufferStage() {
 /*
  */
 GBufferStage::~GBufferStage() {
-  CH_LOG_INFO(GBufferStageLog, "GBufferStage destroyed");
   cleanup();
 }
 
@@ -162,8 +161,6 @@ GBufferStage::resize(uint32 width, uint32 height) {
  */
 void
 GBufferStage::cleanup() {
-  CH_LOG_INFO(GBufferStageLog, "Cleaning up GBufferStage");
-
   if (IGraphicsAPI::instancePtr()) {
     auto& graphicsAPI = IGraphicsAPI::instance();
     graphicsAPI.waitIdle();
@@ -196,8 +193,6 @@ GBufferStage::cleanup() {
   m_roughnessTarget.reset();
   m_depthTarget.reset();
   m_motionTarget.reset();
-
-  CH_LOG_INFO(GBufferStageLog, "GBufferStage cleanup completed");
 }
 
 /*

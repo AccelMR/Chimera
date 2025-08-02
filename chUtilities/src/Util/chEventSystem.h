@@ -5,7 +5,7 @@
  * @date 2022/06/15
  * @brief This file will define every stuff needed for the event system.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
@@ -15,10 +15,9 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
-
-namespace chEngineSDK{
-using std::function;
+namespace chEngineSDK {
 using std::forward;
+using std::function;
 /*
  * Description:
  *     This class works as a node in a double linked list and will need data needed
@@ -27,27 +26,26 @@ using std::forward;
 class BaseConnectionNode
 {
  public:
- /*
-  *   Default constructor
-  */
-  FORCEINLINE BaseConnectionNode() = default;
+  /*
+   *   Default constructor
+   */
+  FORCEINLINE
+  BaseConnectionNode() = default;
 
- /*
-  *   Default destructor
-  */
-  FORCEINLINE virtual ~BaseConnectionNode() {
-    CH_ASSERT(!m_size && !m_isActive);
-  }
+  /*
+   *   Default destructor
+   */
+  FORCEINLINE virtual ~BaseConnectionNode() { CH_ASSERT(!m_size && !m_isActive); }
 
   FORCEINLINE virtual void
-   deactivate() {
+  deactivate() {
     m_isActive = false;
   }
 
  public:
-
   BaseConnectionNode* m_prev = nullptr;
   BaseConnectionNode* m_next = nullptr;
+
   uint32 m_size = 0;
   bool m_isActive = true;
 };
@@ -56,29 +54,17 @@ class BaseConnectionNode
  * Description:
  *     This will act as the main node of the list and controller of it.
  */
-class ConnectionController {
+class ConnectionController
+{
  public:
- /**
-  *   Default constructor.
-  **/
-  FORCEINLINE ConnectionController() = default;
+  /**
+   *   Default constructor.
+   **/
+  FORCEINLINE
+  ConnectionController() = default;
 
   FORCEINLINE ~ConnectionController() {
     BaseConnectionNode* conn = m_connections;
-    while (nullptr != conn) {
-      BaseConnectionNode* next = conn->m_next;
-      delete conn;
-      conn = next;
-    }
-
-    conn = m_freeConnections;
-    while (nullptr != conn) {
-      BaseConnectionNode* next = conn->m_next;
-      delete conn;
-      conn = next;
-    }
-
-    conn = m_newConnection;
     while (nullptr != conn) {
       BaseConnectionNode* next = conn->m_next;
       delete conn;
@@ -111,8 +97,8 @@ class ConnectionController {
   clear();
 
   /*
-  * Releases the connection of this controller
-  */
+   * Releases the connection of this controller
+   */
   FORCEINLINE void
   freeHandle(BaseConnectionNode* conn);
 
@@ -120,12 +106,32 @@ class ConnectionController {
   free(BaseConnectionNode* conn);
 
   BaseConnectionNode* m_connections = nullptr;
-  BaseConnectionNode* m_freeConnections = nullptr;
   BaseConnectionNode* m_lastConnection = nullptr;
-  BaseConnectionNode* m_newConnection = nullptr;
 
   RecursiveMutex m_mutex;
   bool m_isCurrentlyInUse = false;
+
+ private:
+  void
+  removeFromList(BaseConnectionNode* conn) {
+    if (conn->m_prev) {
+      conn->m_prev->m_next = conn->m_next;
+    }
+    else {
+      m_connections = conn->m_next;
+    }
+
+    if (conn->m_next) {
+      conn->m_next->m_prev = conn->m_prev;
+    }
+    else {
+      m_lastConnection = conn->m_prev;
+    }
+
+    // Resetear punteros para seguridad
+    conn->m_prev = nullptr;
+    conn->m_next = nullptr;
+  }
 };
 
 /*
@@ -133,20 +139,37 @@ class ConnectionController {
  *     Handler of event. This class just contains basic stuff to communicate with
  *  the actual data.
  */
-class HEvent {
+class HEvent
+{
  public:
   HEvent() = default;
 
-  FORCEINLINE HEvent(const HEvent& e) {
-    this->operator=(e);
+  HEvent(const HEvent& e) = delete;
+  HEvent& operator=(const HEvent& e) = delete;
+
+  HEvent(HEvent&& other) noexcept
+   : m_connection(other.m_connection), m_controller(other.m_controller) {
+    other.m_connection = nullptr; // !!
+  }
+
+  HEvent& operator=(HEvent&& other) noexcept {
+    if (this != &other) {
+      if (m_connection){
+        m_controller->freeHandle(m_connection);
+      }
+      m_connection = other.m_connection;
+      m_controller = std::move(other.m_controller);
+      other.m_connection = nullptr; // !!
+    }
+    return *this;
   }
 
   /**
    *   Constructor with a node.
    **/
-  FORCEINLINE explicit HEvent(SPtr<ConnectionController> _controller, BaseConnectionNode* _node)
-    : m_connection(_node),
-      m_controller(_controller) {
+  FORCEINLINE explicit HEvent(SPtr<ConnectionController> _controller,
+                              BaseConnectionNode* _node)
+   : m_connection(_node), m_controller(_controller) {
     ++m_connection->m_size;
   }
 
@@ -155,7 +178,9 @@ class HEvent {
    **/
   FORCEINLINE ~HEvent() {
     if (nullptr != m_connection) {
-      m_controller->freeHandle(m_connection);
+      m_controller->disconnect(m_connection);
+      m_connection = nullptr;
+      m_controller = nullptr;
     }
   }
 
@@ -165,14 +190,9 @@ class HEvent {
   FORCEINLINE void
   disconnect();
 
-  FORCEINLINE HEvent& operator=(const HEvent& rhs) {
-    m_connection = rhs.m_connection;
-    m_controller = rhs.m_controller;
-
-    if (nullptr != m_connection) {
-      ++m_connection->m_size;
-    }
-    return *this;
+  FORCEINLINE bool
+  isValid() const {
+    return (nullptr != m_connection || nullptr != m_controller);
   }
 
  private:
@@ -190,27 +210,27 @@ class HEvent {
  *
  *
  */
-template<class ReturnType, class... Args>
-class TEvent {
+template <class ReturnType, class... Args> class TEvent
+{
  private:
-   struct BasicConnectionNode : BaseConnectionNode {
-    public:
-      function<ReturnType(Args...)> m_function;
-   };
+  struct BasicConnectionNode : BaseConnectionNode {
+   public:
+    function<ReturnType(Args...)> m_function;
+  };
+
  public:
- /**
-  *   Base constructor.
-  **/
-  FORCEINLINE TEvent() {
-    m_connectionController =  chMakeShared<ConnectionController>();
+  /**
+   *   Base constructor.
+   **/
+  FORCEINLINE
+  TEvent() {
+    m_connectionController = chMakeShared<ConnectionController>();
   }
 
   /**
    *   Base destructor.
    **/
-  FORCEINLINE  ~TEvent() {
-    clear();
-  }
+  FORCEINLINE ~TEvent() { clear(); }
 
   /**
    *   Connects a new subscriber to this event and returns a handler to that subscriber.
@@ -221,8 +241,8 @@ class TEvent {
    * @return HEvent
    *  Handler to the subscriber.
    **/
-  FORCEINLINE HEvent
-  connect(function<ReturnType(Args...)> func) const{
+  NODISCARD FORCEINLINE HEvent
+  connect(function<ReturnType(Args...)> func) const {
     auto* connData = new BasicConnectionNode();
     m_connectionController->connect(connData);
     connData->m_function = func;
@@ -236,16 +256,24 @@ class TEvent {
    *   Any parameter already defined as template.
    **/
   FORCEINLINE void
-  operator()(Args... args) const{
+  operator()(Args... args) const {
     SPtr<ConnectionController> controller = m_connectionController;
+    RecursiveLock lock(controller->m_mutex);
 
-    auto* connection = static_cast<BasicConnectionNode*>(m_connectionController->m_connections);
+    Vector<function<ReturnType(Args...)>> activeCallbacks;
+
+    auto* connection = static_cast<BasicConnectionNode*>(controller->m_connections);
     while (nullptr != connection) {
-      auto* next = static_cast<BasicConnectionNode*>(connection->m_next);
-      if (nullptr != connection->m_function) {
-        connection->m_function(forward<Args>(args)...);
+      if (connection->m_isActive && connection->m_function) {
+        activeCallbacks.push_back(connection->m_function);
       }
-      connection = next;
+      connection = static_cast<BasicConnectionNode*>(connection->m_next);
+    }
+
+    lock.unlock();
+
+    for (auto& callback : activeCallbacks) {
+      callback(forward<Args>(args)...);
     }
   }
 
@@ -266,13 +294,12 @@ class TEvent {
 /**   SO YOU MAY USE FUNCTION LIKE SYNTAX FOR DECLARING EVENT SIGNATURE    */
 /***************************************************************************/
 
-template<typename Signature>
-class Event;
+template <typename Signature> class Event;
 
-template<class ReturnType, class... Args>
+template <class ReturnType, class... Args>
 class Event<ReturnType(Args...)> : public TEvent<ReturnType, Args...>
-  {};
-
+{
+};
 
 /************************************************************************/
 /*
@@ -281,7 +308,7 @@ class Event<ReturnType(Args...)> : public TEvent<ReturnType, Args...>
 /************************************************************************/
 
 /*
-*/
+ */
 void
 ConnectionController::connect(BaseConnectionNode* _connection) {
   CH_ASSERT(nullptr != _connection && "Connection must not be null.");
@@ -293,29 +320,33 @@ ConnectionController::connect(BaseConnectionNode* _connection) {
 
   m_lastConnection = _connection;
 
-  //First connection
+  // First connection
   if (nullptr == m_connections) {
     m_connections = _connection;
   }
 }
 
 /*
-*/
+ */
 void
 ConnectionController::disconnect(BaseConnectionNode* _connection) {
   RecursiveLock lock(m_mutex);
+  if (!_connection || !_connection->m_isActive) {
+    return;
+  }
 
   _connection->deactivate();
   --_connection->m_size;
 
   if (0 == _connection->m_size) {
-    free(_connection);
+    // Eliminación física inmediata
+    removeFromList(_connection); // Función auxiliar que implementaremos
     delete _connection;
   }
 }
 
 /*
-*/
+ */
 void
 ConnectionController::clear() {
   RecursiveLock lock(m_mutex);
@@ -337,49 +368,23 @@ ConnectionController::clear() {
 }
 
 /*
-*/
+ */
 void
 ConnectionController::freeHandle(BaseConnectionNode* conn) {
   RecursiveLock lock(m_mutex);
+  if (!conn) {
+    return;
+  }
 
   --conn->m_size;
   if (0 == conn->m_size && !conn->m_isActive) {
-    free(conn);
+    removeFromList(conn);
+    delete conn;
   }
 }
 
 /*
-*/
-void
-ConnectionController::free(BaseConnectionNode* conn) {
-  if (nullptr != conn->m_prev) {
-    conn->m_prev->m_next = conn->m_next;
-  }
-  else {
-    m_connections = conn->m_next;
-  }
-
-  if (nullptr != conn->m_next) {
-    conn->m_next->m_prev = conn->m_prev;
-  }
-  else {
-    m_lastConnection = conn->m_prev;
-  }
-
-  conn->m_prev = nullptr;
-  conn->m_next = nullptr;
-
-  if (nullptr != m_freeConnections) {
-    conn->m_next = m_freeConnections;
-    m_freeConnections->m_prev = conn;
-  }
-
-  m_freeConnections = conn;
-  m_freeConnections->~BaseConnectionNode();
-}
-
-/*
-*/
+ */
 void
 HEvent::disconnect() {
   if (nullptr != m_connection) {
@@ -388,4 +393,4 @@ HEvent::disconnect() {
     m_controller = nullptr;
   }
 }
-}
+} // namespace chEngineSDK

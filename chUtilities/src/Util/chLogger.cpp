@@ -317,8 +317,8 @@ Logger::writeLogMessage(const LogCategory& category,
     }
   }
   // Trigger the log written event
-  m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
-                              file ? file : "", line, function ? function : ""));
+  m_logWrittenEvent(std::move(LogBufferEntry(timestamp, verbosity, category.getName(), message,
+                              file ? file : "", line, function ? function : "")));
 }
 
 /*

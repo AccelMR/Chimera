@@ -110,9 +110,9 @@ class CH_CORE_EXPORT DisplayEventHandle
 
 
 
-  FORCEINLINE void
+  NODISCARD FORCEINLINE HEvent
   addUpdateInjection(Function<bool(const Vector<Any>&)> updateFunc) {
-    m_updateInjection.connect(std::move(updateFunc));
+    return m_updateInjection.connect(std::move(updateFunc));
   }
 
  protected:
@@ -140,6 +140,7 @@ class CH_CORE_EXPORT DisplayEventHandle
   PlatformPtr m_platformPtr;
 
   const Event<bool(const Vector<Any>&)> m_updateInjection;
+
 };
 
 /************************************************************************/

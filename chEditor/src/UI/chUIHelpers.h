@@ -10,6 +10,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chEventSystem.h"
+
 namespace chEngineSDK {
 namespace chUIHelpers {
 enum class AssetType { Model, Texture, Material, Shader, Unknown };
@@ -38,8 +40,8 @@ class UIHelpers {
   static void
   initFontConfig();
 
-  static void
-  bindEvnetWindowEvent(const SPtr<DisplayEventHandle>& eventHandler);
+  NODISCARD static HEvent
+  bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler);
 
   static Path
   openFileExplorer(const Path& pathToOpen, const Vector<String>& filters = {});
@@ -51,7 +53,6 @@ class UIHelpers {
   static float baseFontSize; // Default font size for ImGui
   static LinearColor backgroundColor; // Background color for the editor
   static LinearColor rendererColor; // Renderer color for the editor
-
 }; // class UIHelpers
 
 } // namespace chUIHelpers

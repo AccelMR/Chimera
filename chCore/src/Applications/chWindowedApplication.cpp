@@ -44,8 +44,6 @@ WindowedApplication::WindowedApplication() {}
 /*
  */
 WindowedApplication::~WindowedApplication() {
-  CH_LOG_INFO(WindowedApp, "Destroying WindowedApplication.");
-
   for (auto& fence : m_renderComponents.inFlightFences) {
     if (fence && !fence->wait(MAX_WAIT_TIME)) {
       CH_LOG_WARNING(WindowedApp, "Fence wait timed out or failed to reset.");
@@ -56,8 +54,6 @@ WindowedApplication::~WindowedApplication() {
   m_renderComponents.imageAvailableSemaphores.clear();
   m_renderComponents.renderFinishedSemaphores.clear();
   m_renderComponents.inFlightFences.clear();
-
-  CH_LOG_INFO(WindowedApp, "WindowedApplication destroyed successfully.");
 }
 
 /*
@@ -502,8 +498,8 @@ WindowedApplication::bindEvents() {
 
   auto& eventDispatcher = EventDispatcherManager::instance();
 
-  HEvent listenCloseEvent = eventDispatcher.OnClose.connect([&]() { m_running = false; });
-  HEvent listenResize = eventDispatcher.OnResize.connect(
+  m_closeEvent = eventDispatcher.OnClose.connect([&]() { m_running = false; });
+  m_resizeEvent = eventDispatcher.OnResize.connect(
       [&](uint32 width, uint32 height) { resize(width, height); });
 }
 

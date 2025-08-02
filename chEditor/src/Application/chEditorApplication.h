@@ -118,5 +118,9 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
 
   uint32 width = 0; ///< Width of the editor window
   uint32 height = 0; ///< Height of the editor window
+  HEvent m_updateInjection; ///< Event for updating ImGui with SDL events
+
+  HEvent m_onKeyDownEvent; ///< Event for handling key down events
+  HEvent m_onKeyUpEvent; ///< Event for handling key up events
 };
 } // namespace chEngineSDK`

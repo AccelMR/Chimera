@@ -29,7 +29,6 @@ MultiStageRenderer::MultiStageRenderer() {
 /*
  */
 MultiStageRenderer::~MultiStageRenderer() {
-  CH_LOG_INFO( MultiStageRendererLog, "MultiStageRenderer destroyed");
   cleanup();
 }
 
@@ -72,8 +71,6 @@ MultiStageRenderer::onRender(float deltaTime) {
  */
 void
 MultiStageRenderer::resize(uint32 width, uint32 height) {
-  CH_LOG_INFO( MultiStageRendererLog, "Resizing MultiStageRenderer to {0}x{1}", width, height);
-
   m_renderWidth = width;
   m_renderHeight = height;
 
@@ -83,16 +80,12 @@ MultiStageRenderer::resize(uint32 width, uint32 height) {
       stageInstance.stage->resize(width, height);
     }
   }
-
-  CH_LOG_INFO( MultiStageRendererLog, "MultiStageRenderer resized successfully");
 }
 
 /*
  */
 void
 MultiStageRenderer::cleanup() {
-  CH_LOG_INFO( MultiStageRendererLog, "Cleaning up MultiStageRenderer");
-
   // Cleanup all stages
   for (auto& stageInstance : m_stages) {
     if (stageInstance.stage) {
@@ -103,8 +96,6 @@ MultiStageRenderer::cleanup() {
   m_stages.clear();
   m_stageMap.clear();
   m_sceneData.clear();
-
-  CH_LOG_INFO( MultiStageRendererLog, "MultiStageRenderer cleanup completed");
 }
 
 /*

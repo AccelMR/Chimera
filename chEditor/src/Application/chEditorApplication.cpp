@@ -51,7 +51,6 @@ float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
 Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 
-
 /*
  */
 EditorApplication::EditorApplication() {
@@ -62,7 +61,6 @@ EditorApplication::EditorApplication() {
  */
 EditorApplication::~EditorApplication() {
   m_outputLogUI.reset();
-  CH_LOG_INFO(EditorApp, "Destroying EditorApplication instance.");
 }
 
 /*
@@ -196,7 +194,7 @@ EditorApplication::bindEvents() {
 
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
-  eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
+  m_onKeyDownEvent = eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
     // Handle key down events specific to the editor
     if (data.hasModifier(KeyBoardModifier::LCTRL) ||
         data.hasModifier(KeyBoardModifier::RCTRL)) {
@@ -211,7 +209,7 @@ EditorApplication::bindEvents() {
     }
   });
 
-  eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
+  m_onKeyUpEvent = eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
     switch (keyData.key) {
     case chKeyBoard::Key::F10: {
       CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
@@ -229,24 +227,24 @@ EditorApplication::bindEvents() {
     }
   });
 
-  eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {
-    // Handle key pressed events specific to the editor
-  });
+  // eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {
+  //   // Handle key pressed events specific to the editor
+  // });
 
-  eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
-    // Handle mouse button down events specific to the editor
-  });
+  // eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
+  //   // Handle mouse button down events specific to the editor
+  // });
 
-  eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
-    // Handle mouse button up events specific to the editor
-  });
+  // eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
+  //   // Handle mouse button up events specific to the editor
+  // });
 
-  eventDispatcher.OnMouseMove.connect([this](const MouseMoveData&) {
-    // Handle mouse move events specific to the editor
-  });
-  eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData&) {
-    // Handle mouse wheel events specific to the editor
-  });
+  // eventDispatcher.OnMouseMove.connect([this](const MouseMoveData&) {
+  //   // Handle mouse move events specific to the editor
+  // });
+  // eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData&) {
+  //   // Handle mouse wheel events specific to the editor
+  // });
 }
 
 /*
@@ -265,7 +263,8 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
 
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
-  UIHelpers::bindEvnetWindowEvent(eventHandler);
+  m_updateInjection = UIHelpers::bindEventWindow(eventHandler);
+  CH_ASSERT(m_updateInjection.isValid() && "Update injection event must be valid.");
 
   width = display->getWidth();
   height = display->getHeight();

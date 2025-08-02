@@ -213,14 +213,14 @@ UIHelpers::initFontConfig() {
 
 /*
  */
-void
-UIHelpers::bindEvnetWindowEvent(const SPtr<DisplayEventHandle>& eventHandler) {
+NODISCARD HEvent
+UIHelpers::bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler) {
   if (!eventHandler) {
     CH_LOG_ERROR(UIImguiHelper, "Event handler is null. Cannot bind SDL_Event processing.");
-    return;
+    return HEvent(); // Return an invalid event handle
   }
 
-  eventHandler->addUpdateInjection([](const Vector<Any>& args) -> bool {
+  return eventHandler->addUpdateInjection([](const Vector<Any>& args) -> bool {
 #if USING(CH_DISPLAY_SDL3)
     CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
     if (args.empty()) {
