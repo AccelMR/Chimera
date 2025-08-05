@@ -16,8 +16,6 @@
 struct ImVec4;
 namespace chEngineSDK {
 // Forward declarations
-class NastyRenderer;
-
 /**
  * @brief UI component for displaying and filtering engine log output
  */
@@ -47,12 +45,6 @@ class OutputLogUI
  public:
   OutputLogUI();
   ~OutputLogUI();
-
-  void
-  setMultiStageRenderer(const SPtr<MultiStageRenderer>& renderer) {
-    m_nastyRenderer = renderer;
-  }
-
   /**
    * @brief Main rendering function for the output log window
    */
@@ -109,6 +101,12 @@ class OutputLogUI
     applySizeLimits();
   }
 
+  /**
+   * @brief Update the list of available categories from log entries
+   */
+  void
+  updateAvailableCategories();
+
  private:
   /**
    * @brief Render the filter controls (verbosity, categories, search)
@@ -127,12 +125,6 @@ class OutputLogUI
    */
   void
   renderLogEntryRow(const LogBufferEntry& entry, int32 index);
-
-  /**
-   * @brief Update the list of available categories from log entries
-   */
-  void
-  updateAvailableCategories();
 
   /**
    * @brief Get color for log verbosity level
@@ -170,9 +162,6 @@ class OutputLogUI
   // UI state
   bool m_needsScrollToBottom = false;
   bool m_needsFilterUpdate = true;
-
-  // Renderer reference
-  SPtr<MultiStageRenderer> m_nastyRenderer;
 
   HEvent m_logWrittenEvent;
 };

@@ -30,10 +30,17 @@ class VulkanShader : public IShader {
     return m_entryPoint;
   }
 
+  NODISCARD UUID
+  getShaderId() const override {
+    return m_shaderId;
+  }
+
  private:
   VkShaderModule m_shaderModule = VK_NULL_HANDLE;
   VkDevice m_device = VK_NULL_HANDLE;
   ShaderStage m_type = ShaderStage::Vertex;
   String m_entryPoint;
+
+  UUID m_shaderId;
 };
 } // namespace chEngineSDK

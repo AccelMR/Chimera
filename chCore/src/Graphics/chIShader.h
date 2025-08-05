@@ -15,10 +15,15 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
+class UUID;
+
 class CH_CORE_EXPORT IShader {
  public:
   IShader() = default;
   virtual ~IShader() = default;
+
+  virtual UUID
+  getShaderId() const = 0;
 };
 
 } // namespace chEngineSDK

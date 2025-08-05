@@ -166,20 +166,19 @@ EditorApplication::initializeEditorComponents() {
   m_defaultSampler = graphicAPI.createSampler(samplerInfo);
 
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
-  //m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
   m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
 
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
-  //m_mainMenuBar->setNastyRenderer(m_nastyRenderer);
   m_mainMenuBar->setMultiStageRenderer(m_multiStageRenderer);
 
   m_outputLogUI = chMakeUnique<OutputLogUI>();
-  m_outputLogUI->setMultiStageRenderer(m_multiStageRenderer);
   m_outputLogUI->appendLogEntries(Logger::instance().getBufferedLogs());
   Logger::instance().onLogWritten(
       [this](const LogBufferEntry& entry) {
         m_outputLogUI->addLogEntry(entry);
       });
+
+  m_outputLogUI->updateAvailableCategories();
 
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -205,6 +204,11 @@ EditorApplication::bindEvents() {
       else if (data.key == chKeyBoard::Key::O) {
         CH_LOG_DEBUG(EditorApp, "Ctrl+O pressed, opening a document.");
         // Handle Ctrl+O for opening a document
+      }
+
+      if (data.key == chKeyBoard::Key::F5) {
+        CH_LOG_DEBUG(EditorApp, "Ctrl+F5 pressed, reloading the current document.");
+        m_outputLogUI->updateAvailableCategories();
       }
     }
   });

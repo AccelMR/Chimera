@@ -11,6 +11,7 @@
 #include "chRenderDataBase.h"
 #include "chCamera.h"
 #include "chModel.h"
+#include "chIMaterial.h"
 #include "chTypeTraits.h"
 
 namespace chEngineSDK {
@@ -20,6 +21,8 @@ struct CameraData;
 DECLARE_TYPE_TRAITS(CameraData)
 struct ModelData;
 DECLARE_TYPE_TRAITS(ModelData)
+struct MaterialData;
+DECLARE_TYPE_TRAITS(MaterialData);
 
 /**
  * @brief Camera data for rendering
@@ -48,6 +51,19 @@ struct CH_CORE_EXPORT ModelData : public RenderStageData {
 
   bool isValid() const override {
     return model != nullptr;
+  }
+};
+
+struct MaterialData : public RenderStageData {
+  Vector<SPtr<IMaterial>> materials;
+  Map<UUID, SIZE_T> materialMap; // meshId -> materialIndex
+
+  UUID getTypeId() const override {
+    return TypeTraits<MaterialData>::getTypeId();
+  }
+
+  bool isValid() const override {
+    return !materials.empty();
   }
 };
 

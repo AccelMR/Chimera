@@ -80,55 +80,47 @@ GBufferStage::initialize(uint32 width, uint32 height) {
 /*
  */
 bool
-GBufferStage::execute(const RenderStageIO& inputs, RenderStageIO& outputs, float deltaTime) {
-  // Early return if not enabled
-  if (!m_enabled) {
+GBufferStage::execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& inputs, RenderStageIO& outputs, float deltaTime) {
+  if (!commandBuffer) {
     return false;
   }
 
-  // Camera is required
-  if (!inputs.hasValidInput<CameraData>()) {
-    CH_LOG_WARNING(GBufferStageLog, "Missing or invalid camera data");
+  // Get material data from inputs
+  MaterialData materialData;
+  if (!AnyUtils::tryGetValue<MaterialData>(inputs, materialData)){
+    CH_LOG_WARNING(GBufferStageLog, "No material data provided to GBufferStage");
     return false;
   }
 
-  // Model is optional - get it if available
-  auto cameraData = inputs.getInput<CameraData>();
-  auto modelData = inputs.getInput<ModelData>(); // Can be nullptr
-
-  // Render geometry to G-Buffer
-  if (!renderGeometry(cameraData->camera,
-                     modelData ? modelData->model : nullptr,
-                     deltaTime)) {
-    CH_LOG_ERROR(GBufferStageLog, "Failed to render geometry");
+  if (!materialData->isValid()) {
+    CH_LOG_WARNING(GBufferStageLog, "Invalid material data provided to GBufferStage");s
     return false;
   }
 
-  // Create and populate output data (same as before)
-  auto albedoOutput = chMakeShared<AlbedoData>();
-  albedoOutput->texture = m_albedoView;
-  outputs.setOutput<AlbedoData>(albedoOutput);
+  // Begin render pass...
 
-  auto normalOutput = chMakeShared<NormalData>();
-  normalOutput->texture = m_normalView;
-  outputs.setOutput<NormalData>(normalOutput);
+  // Render each material group
+  for (const auto& material : materialData->materials) {
+    if (!material || !material->isValid()) {
+      continue;
+    }
 
-  auto metallicOutput = chMakeShared<MetallicData>();
-  metallicOutput->texture = m_metallicView;
-  outputs.setOutput<MetallicData>(metallicOutput);
+    // Get or create pipeline for this materiaI think we al
+    auto pipeline = getPipelineForMaterial(material);
+    if (!pipeline) {
+      continue;
+    }
 
-  auto roughnessOutput = chMakeShared<RoughnessData>();
-  roughnessOutput->texture = m_roughnessView;
-  outputs.setOutput<RoughnessData>(roughnessOutput);
+    commandBuffer->bindPipeline(pipeline);
 
-  auto depthOutput = chMakeShared<DepthData>();
-  depthOutput->texture = m_depthView;
-  outputs.setOutput<DepthData>(depthOutput);
+    // Bind material parameters as uniforms/descriptors
+    bindMaterialParameters(commandBuffer, material);
 
-  auto motionOutput = chMakeShared<MotionVectorData>();
-  motionOutput->texture = m_motionView;
-  outputs.setOutput<MotionVectorData>(motionOutput);
+    // Render meshes that use this material
+    renderMeshesWithMaterial(commandBuffer, material, materialData);
+  }
 
+  // End render pass and set outputs...
   return true;
 }
 

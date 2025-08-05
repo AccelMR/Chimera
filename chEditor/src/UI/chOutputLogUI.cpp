@@ -8,7 +8,6 @@
 /************************************************************************/
 #include "chOutputLogUI.h"
 
-#include "chNastyRenderer.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -77,14 +76,14 @@ OutputLogUI::renderFilterControls() {
   if (ImGui::Checkbox("Fatal", &m_filter.showFatal)) filterChanged = true;
 
   // Search bar
-  ImGui::SetNextItemWidth(-200.0f);
+  //ImGui::SetNextItemWidth(-250.0f);
   if (ImGui::InputTextWithHint("##search", "Search logs...", m_searchBuffer,
                                sizeof(m_searchBuffer))) {
     m_filter.searchText = String(m_searchBuffer);
     filterChanged = true;
   }
 
-  ImGui::SameLine();
+  //ImGui::SameLine();
   if (ImGui::Button("Clear")) {
     clearLog();
   }
@@ -328,6 +327,10 @@ OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const {
     case LogVerbosity::NoLogging:
       if (!showTrace) return false;
       break;
+  }
+
+  if (enabledCategories.empty()) {
+    return false; // No filters applied
   }
 
   // Check category filter

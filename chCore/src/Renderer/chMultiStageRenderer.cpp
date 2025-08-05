@@ -250,7 +250,7 @@ MultiStageRenderer::executeRenderPipeline(float deltaTime) {
     currentOutputs.clear();
 
     // Execute stage
-    bool success = stageInstance.stage->execute(currentInputs, currentOutputs, deltaTime);
+    bool success = stageInstance.stage->execute(nullptr, currentInputs, currentOutputs, deltaTime);
 
     // Early return on stage failure
     if (!success) {

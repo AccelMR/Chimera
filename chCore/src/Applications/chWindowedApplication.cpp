@@ -465,7 +465,9 @@ WindowedApplication::resize(uint32 width, uint32 height) {
     commandBuffer = m_renderComponents.commandPool->allocateCommandBuffer();
   }
 
-  CH_LOG_INFO(WindowedApp, "Display and swap chain resized successfully.");
+  CH_LOG_INFO(WindowedApp,
+              "Display and swap chain resized successfully. New size: {0}x{1}",
+              swapChainWidth, swapChainHeight);
 }
 
 /*

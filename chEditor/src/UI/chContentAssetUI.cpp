@@ -89,7 +89,7 @@ ContentAssetUI::ContentAssetUI() {
             descriptorSet) {
           m_assetThumbnails[asset->getUUID()] = {textureView, descriptorSet};
         }
-        //AssetManager::instance().unloadAsset(asset);
+        AssetManager::instance().unloadAsset(asset);
       }
     }
   };

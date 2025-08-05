@@ -79,10 +79,13 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
 
   void
   initialize(uint32 width, uint32 height) override;
+
   bool
-  execute(const RenderStageIO& inputs, RenderStageIO& outputs, float deltaTime) override;
+  execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& inputs, RenderStageIO& outputs, float deltaTime) override;
+
   void
   resize(uint32 width, uint32 height) override;
+
   void
   cleanup() override;
 
@@ -99,8 +102,12 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
 
   String
   getDisplayModeName() const {
-    static const char* names[] = {"Combined",      "Albedo Only",    "Normal Only",
-                                  "Metallic Only", "Roughness Only", "Depth Only",
+    static const char* names[] = {"Combined",
+                                  "Albedo Only",
+                                  "Normal Only",
+                                  "Metallic Only",
+                                  "Roughness Only",
+                                  "Depth Only",
                                   "Motion Only"};
     return String(names[static_cast<int>(m_debugDisplayMode)]);
   }
@@ -121,8 +128,14 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
   void
   createCommandResources();
 
+  SPtr<IPipeline>
+  getPipelineForMaterial(const SPtr<IMaterial>& material);
+
   bool
   renderGeometry(SPtr<Camera> camera, SPtr<Model> model, float deltaTime);
+
+  SPtr<IPipeline>
+  createPipelineForMaterial(const SPtr<IMaterial>& material);
 
   // G-Buffer render targets (6 targets)
   SPtr<ITexture> m_albedoTarget;    // RGB: albedo, A: unused
@@ -140,9 +153,10 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
   SPtr<ITextureView> m_depthView;
   SPtr<ITextureView> m_motionView;
 
+  Map<UUID, SPtr<IPipeline>> m_materialPipelines;
+
   // Render resources
   SPtr<IRenderPass> m_renderPass;
-  SPtr<IPipeline> m_pipeline;
   SPtr<IFrameBuffer> m_framebuffer;
   SPtr<ICommandPool> m_commandPool;
   SPtr<ICommandBuffer> m_commandBuffer;
