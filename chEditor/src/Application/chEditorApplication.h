@@ -104,7 +104,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   setupSceneData();
 
  private:
-  //SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+  SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
 
   SPtr<MultiStageRenderer> m_multiStageRenderer;
   UUID m_gbufferStageId;

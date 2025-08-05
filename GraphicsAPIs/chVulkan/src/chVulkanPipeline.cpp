@@ -223,7 +223,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
     .pColorBlendState = &colorBlending,
     .pDynamicState = &dynamicState,
     .layout = m_pipelineLayout,
-    .renderPass = VK_NULL_HANDLE,//vulkanRenderPass->getHandle(),
+    .renderPass = vulkanRenderPass->getHandle(),
     .subpass = createInfo.subpass,
     .basePipelineHandle = VK_NULL_HANDLE,
     .basePipelineIndex = 0

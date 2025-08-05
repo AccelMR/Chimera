@@ -80,7 +80,7 @@ GBufferStage::initialize(uint32 width, uint32 height) {
 /*
  */
 bool
-GBufferStage::execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& inputs, RenderStageIO& outputs, float deltaTime) {
+GBufferStage::execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& inputs, RenderStageIO&, float) {
   if (!commandBuffer) {
     return false;
   }
@@ -92,15 +92,15 @@ GBufferStage::execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& i
     return false;
   }
 
-  if (!materialData->isValid()) {
-    CH_LOG_WARNING(GBufferStageLog, "Invalid material data provided to GBufferStage");s
+  if (!materialData.isValid()) {
+    CH_LOG_WARNING(GBufferStageLog, "Invalid material data provided to GBufferStage");
     return false;
   }
 
   // Begin render pass...
 
   // Render each material group
-  for (const auto& material : materialData->materials) {
+  for (const auto& material : materialData.materials) {
     if (!material || !material->isValid()) {
       continue;
     }
@@ -114,10 +114,10 @@ GBufferStage::execute(SPtr<ICommandBuffer> commandBuffer, const RenderStageIO& i
     commandBuffer->bindPipeline(pipeline);
 
     // Bind material parameters as uniforms/descriptors
-    bindMaterialParameters(commandBuffer, material);
+    //bindMaterialParameters(commandBuffer, material);
 
     // Render meshes that use this material
-    renderMeshesWithMaterial(commandBuffer, material, materialData);
+    //renderMeshesWithMaterial(commandBuffer, material, materialData);
   }
 
   // End render pass and set outputs...
@@ -166,7 +166,7 @@ GBufferStage::cleanup() {
   m_commandBuffer.reset();
   m_commandPool.reset();
   m_fence.reset();
-  m_pipeline.reset();
+  //m_pipeline.reset();
   m_framebuffer.reset();
   m_renderPass.reset();
 

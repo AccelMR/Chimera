@@ -31,8 +31,10 @@ VulkanShader::VulkanShader(VkDevice device, const ShaderCreateInfo& createInfo)
 
   // Generate a unique ID for this shader
 
-  const String shaderIdString = StringUtils::format("{0}{1}{2}", m_entryPoint, m_type, createInfo.filePath);
-  m_shaderId = UUID::createFromName();
+  const String shaderIdString = chString::format("{0}{1}{2}", m_entryPoint,
+                                                              static_cast<uint32>(m_type),
+                                                              createInfo.filePath);
+  m_shaderId = UUID::createFromName(shaderIdString);
 }
 
 /*

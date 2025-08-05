@@ -13,6 +13,7 @@
 
 #include "chVulkanPrerequisites.h"
 #include "chIShader.h"
+#include "chUUID.h"
 
 namespace chEngineSDK {
 class VulkanShader : public IShader {

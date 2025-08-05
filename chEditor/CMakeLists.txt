@@ -73,6 +73,7 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/Renderer)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chEditor/externals/nativefiledialog-extended/src)
 
 # ImGui core configuration for Chimera Engine

@@ -26,6 +26,8 @@ OutputLogUI::OutputLogUI()
   CH_LOG_DEBUG(OutputLogUILog, "Creating OutputLogUI instance.");
   // Initialize with all categories enabled by default
   m_filter.enabledCategories.clear();
+
+  appendLogEntries(Logger::instance().getBufferedLogs());
 }
 /*
 */

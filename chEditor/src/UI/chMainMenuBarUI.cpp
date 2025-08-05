@@ -44,7 +44,7 @@ MainMenuBarUI::renderMainMenuBar() {
     ImGui::Separator(); //--------------------------------------------------------------
     if (ImGui::ColorEdit4("Renderer Color", UIHelpers::rendererColor.toFloatPtr(),
                           ImGuiColorEditFlags_NoInputs)) {
-      m_multiStageRenderer->setClearColors({UIHelpers::rendererColor});
+      //m_multiStageRenderer->setClearColors({UIHelpers::rendererColor});
     }
 
     ImGui::Separator(); //--------------------------------------------------------------

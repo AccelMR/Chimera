@@ -85,8 +85,8 @@ EditorApplication::onPostInitialize() {
  */
 RendererOutput
 EditorApplication::onRender(float deltaTime) {
-  //RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
-  RendererOutput renderOut = m_multiStageRenderer->onRender(deltaTime);
+  RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
+  //RendererOutput renderOut = m_multiStageRenderer->onRender(deltaTime);
   return renderOut;
 }
 
@@ -135,10 +135,10 @@ EditorApplication::initializeEditorComponents() {
   AssetManager::instance().lazyLoadAssetsFromDirectory(
       EnginePaths::getAbsoluteGameAssetDirectory());
 
-  // m_nastyRenderer = std::make_shared<NastyRenderer>();
-  // m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
-  // m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
-  // m_nastyRenderer->bindInputEvents();
+  m_nastyRenderer = std::make_shared<NastyRenderer>();
+  m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
+  m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
+  m_nastyRenderer->bindInputEvents();
 
   RenderStageFactory::startUp();
   RenderStageFactory::instance().registerStageType<GBufferStage>();
@@ -166,20 +166,11 @@ EditorApplication::initializeEditorComponents() {
   m_defaultSampler = graphicAPI.createSampler(samplerInfo);
 
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
-  m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
-
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
-  m_mainMenuBar->setMultiStageRenderer(m_multiStageRenderer);
-
   m_outputLogUI = chMakeUnique<OutputLogUI>();
-  m_outputLogUI->appendLogEntries(Logger::instance().getBufferedLogs());
-  Logger::instance().onLogWritten(
-      [this](const LogBufferEntry& entry) {
-        m_outputLogUI->addLogEntry(entry);
-      });
 
+  m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
   m_outputLogUI->updateAvailableCategories();
-
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
 }

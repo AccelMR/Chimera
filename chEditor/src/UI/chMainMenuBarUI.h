@@ -25,15 +25,6 @@ class MainMenuBarUI {
 
   void
   renderImportMenu();
-
-  // DELETEME
-  void
-  setMultiStageRenderer(SPtr<MultiStageRenderer> renderer) {
-    m_multiStageRenderer = std::move(renderer);
-  }
-
  private:
-  //SPtr<NastyRenderer> m_nastyRenderer; ///< Renderer to set clear colors and
-  SPtr<MultiStageRenderer> m_multiStageRenderer;
 };
 }  // namespace chEngineSDK

@@ -129,7 +129,7 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
   createCommandResources();
 
   SPtr<IPipeline>
-  getPipelineForMaterial(const SPtr<IMaterial>& material);
+  getPipelineForMaterial(const SPtr<IMaterial>& material) { return m_materialPipelines[material->getMaterialId()]; }
 
   bool
   renderGeometry(SPtr<Camera> camera, SPtr<Model> model, float deltaTime);
