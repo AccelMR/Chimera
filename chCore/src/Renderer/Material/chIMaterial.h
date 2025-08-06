@@ -11,6 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chColor.h"
+#include "chGraphicsTypes.h"
 #include "chMatrix4.h"
 #include "chLinearColor.h"
 #include "chVector2.h"
@@ -221,6 +222,9 @@ class CH_CORE_EXPORT IMaterial
 
   virtual bool
   isCompatibleWith(const VertexLayout& layout) const = 0;
+
+  virtual MaterialParameter
+  getParameter(const String& name) const = 0;
 
  protected:
   class MaterialManager;

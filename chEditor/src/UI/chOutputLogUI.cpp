@@ -19,10 +19,8 @@ CH_LOG_DECLARE_STATIC(OutputLogUILog, All);
 /*
  */
 OutputLogUI::OutputLogUI()
-  : m_logWrittenEvent(Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
-                                                                this,
-                                                                std::placeholders::_1)))
-{
+ : m_logWrittenEvent(Logger::instance().onLogWritten(
+       std::bind(&OutputLogUI::addLogEntry, this, std::placeholders::_1))) {
   CH_LOG_DEBUG(OutputLogUILog, "Creating OutputLogUI instance.");
   // Initialize with all categories enabled by default
   m_filter.enabledCategories.clear();
@@ -30,7 +28,7 @@ OutputLogUI::OutputLogUI()
   appendLogEntries(Logger::instance().getBufferedLogs());
 }
 /*
-*/
+ */
 OutputLogUI::~OutputLogUI() {
   m_logWrittenEvent.disconnect();
   // Optional: Brief wait to ensure no in-flight calls
@@ -66,28 +64,29 @@ OutputLogUI::renderFilterControls() {
   ImGui::SameLine();
 
   bool filterChanged = false;
+  bool* levels[] = { &m_filter.showDebug, &m_filter.showInfo, &m_filter.showWarning, &m_filter.showError, &m_filter.showFatal };
+  static const ANSICHAR* labels[] = { "Debug", "Info", "Warning", "Error", "Fatal" };
 
-  if (ImGui::Checkbox("Debug", &m_filter.showDebug)) filterChanged = true;
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Info", &m_filter.showInfo)) filterChanged = true;
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Warning", &m_filter.showWarning)) filterChanged = true;
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Error", &m_filter.showError)) filterChanged = true;
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Fatal", &m_filter.showFatal)) filterChanged = true;
+  const SIZE_T numLevels = sizeof(labels) / sizeof(labels[0]);
+  for (SIZE_T i = 0; i < numLevels; ++i) {
+    if (ImGui::Checkbox(labels[i], levels[i])) {
+      filterChanged = true;
+    }
+    if (i < numLevels - 1) {
+      ImGui::SameLine();
+    }
+  }
 
-  // Search bar
-  //ImGui::SetNextItemWidth(-250.0f);
-  if (ImGui::InputTextWithHint("##search", "Search logs...", m_searchBuffer,
+  const float availableWidth = ImGui::GetContentRegionAvail().x;
+  const float searchWidth = availableWidth  * 0.4f; // 40% of available width
+
+  ImGui::SetNextItemWidth(searchWidth);
+  if (ImGui::InputTextWithHint("##search",
+                               "Search logs...",
+                               m_searchBuffer,
                                sizeof(m_searchBuffer))) {
     m_filter.searchText = String(m_searchBuffer);
     filterChanged = true;
-  }
-
-  //ImGui::SameLine();
-  if (ImGui::Button("Clear")) {
-    clearLog();
   }
 
   ImGui::SameLine();
@@ -97,44 +96,63 @@ OutputLogUI::renderFilterControls() {
     }
   }
 
-  // Category filters
-  if (!m_availableCategories.empty()) {
-    ImGui::Text("Categories:");
-    ImGui::SameLine();
-
-    if (ImGui::Button("All")) {
-      for (const auto& category : m_availableCategories) {
-        m_filter.enabledCategories.insert(category);
-      }
-      filterChanged = true;
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("None")) {
-      m_filter.enabledCategories.clear();
-      filterChanged = true;
-    }
-
-    // Show category checkboxes
-    for (const auto& category : m_availableCategories) {
-      bool isEnabled = m_filter.enabledCategories.find(category) != m_filter.enabledCategories.end();
-
-      if (ImGui::Checkbox(category.c_str(), &isEnabled)) {
-        if (isEnabled) {
-          m_filter.enabledCategories.insert(category);
-        } else {
-          m_filter.enabledCategories.erase(category);
-        }
-        filterChanged = true;
-      }
-      ImGui::SameLine();
-    }
-    ImGui::NewLine();
+  ImGui::SameLine();
+  if (ImGui::Button("Clear")) {
+    clearLog();
   }
 
   if (filterChanged) {
     m_needsFilterUpdate = true;
   }
+
+  if (m_availableCategories.empty()) {
+    ImGui::Text("No categories available.");
+    return;
+  }
+
+  ImGui::Text("Categories:");
+  ImGui::SameLine();
+
+  // Create a combo box for category selection
+  String previewText = std::format("({} selected)", m_filter.enabledCategories.size());
+
+  if (ImGui::BeginCombo("##CategoryFilter", previewText.c_str())) {
+    // All/None buttons at the top
+    if (ImGui::Selectable("Select All")) {
+      for (const auto& category : m_availableCategories) {
+        m_filter.enabledCategories.insert(category);
+      }
+      filterChanged = true;
+    }
+
+    if (ImGui::Selectable("Select None")) {
+      m_filter.enabledCategories.clear();
+      filterChanged = true;
+    }
+
+    ImGui::Separator();
+
+    // Individual category checkboxes
+    for (const auto& category : m_availableCategories) {
+      bool isEnabled =
+          m_filter.enabledCategories.find(category) != m_filter.enabledCategories.end();
+
+      if (ImGui::Checkbox(category.c_str(), &isEnabled)) {
+        if (isEnabled) {
+          m_filter.enabledCategories.insert(category);
+        }
+        else {
+          m_filter.enabledCategories.erase(category);
+        }
+        filterChanged = true;
+      }
+    }
+
+    m_needsFilterUpdate = filterChanged;
+
+    ImGui::EndCombo();
+  }
+  ImGui::NewLine();
 }
 
 /*
@@ -160,8 +178,8 @@ OutputLogUI::renderLogEntries() {
   // Log entries table
   if (ImGui::BeginTable("LogTable", 5,
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                        ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
-                        ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable)) {
+                            ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+                            ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable)) {
 
     // Setup columns
     ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -195,8 +213,8 @@ OutputLogUI::renderLogEntryRow(const LogBufferEntry& entry, int32) {
 
   // Set row color based on verbosity
   ImVec4 color = getVerbosityColor(entry.verbosity);
-  ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                        ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 0.3f)));
+  ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::ColorConvertFloat4ToU32(ImVec4(
+                                                        color.x, color.y, color.z, 0.3f)));
 
   // Level column with icon
   ImGui::TableSetColumnIndex(0);
@@ -271,12 +289,18 @@ OutputLogUI::updateAvailableCategories() {
 ImVec4
 OutputLogUI::getVerbosityColor(LogVerbosity verbosity) const {
   switch (verbosity) {
-    case LogVerbosity::Fatal:   return ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Red
-    case LogVerbosity::Error:   return ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
-    case LogVerbosity::Warning: return ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
-    case LogVerbosity::Info:    return ImVec4(0.0f, 1.0f, 0.0f, 1.0f);  // Green
-    case LogVerbosity::Debug:   return ImVec4(0.0f, 0.8f, 1.0f, 1.0f);  // Light Blue
-    default:                    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);  // White
+  case LogVerbosity::Fatal:
+    return ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+  case LogVerbosity::Error:
+    return ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
+  case LogVerbosity::Warning:
+    return ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+  case LogVerbosity::Info:
+    return ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green
+  case LogVerbosity::Debug:
+    return ImVec4(0.0f, 0.8f, 1.0f, 1.0f); // Light Blue
+  default:
+    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
   }
 }
 
@@ -285,12 +309,18 @@ OutputLogUI::getVerbosityColor(LogVerbosity verbosity) const {
 const char*
 OutputLogUI::getVerbosityIcon(LogVerbosity verbosity) const {
   switch (verbosity) {
-    case LogVerbosity::Debug:   return "DBG";
-    case LogVerbosity::Info:    return "INF";
-    case LogVerbosity::Warning: return "WRN";
-    case LogVerbosity::Error:   return "ERR";
-    case LogVerbosity::Fatal:   return "FTL";
-    default:                    return "UNK";
+  case LogVerbosity::Debug:
+    return "DBG";
+  case LogVerbosity::Info:
+    return "INF";
+  case LogVerbosity::Warning:
+    return "WRN";
+  case LogVerbosity::Error:
+    return "ERR";
+  case LogVerbosity::Fatal:
+    return "FTL";
+  default:
+    return "UNK";
   }
 }
 
@@ -311,24 +341,36 @@ bool
 OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const {
   // Check verbosity filter
   switch (entry.verbosity) {
-    case LogVerbosity::Debug:
-      if (!showDebug) return false;
-      break;
-    case LogVerbosity::Info:
-      if (!showInfo) return false;
-      break;
-    case LogVerbosity::Warning:
-      if (!showWarning) return false;
-      break;
-    case LogVerbosity::Error:
-      if (!showError) return false;
-      break;
-    case LogVerbosity::Fatal:
-      if (!showFatal) return false;
-      break;
-    case LogVerbosity::NoLogging:
-      if (!showTrace) return false;
-      break;
+  case LogVerbosity::Debug:
+    if (!showDebug) {
+      return false;
+    }
+    break;
+  case LogVerbosity::Info:
+    if (!showInfo) {
+      return false;
+    }
+    break;
+  case LogVerbosity::Warning:
+    if (!showWarning) {
+      return false;
+    }
+    break;
+  case LogVerbosity::Error:
+    if (!showError) {
+      return false;
+    }
+    break;
+  case LogVerbosity::Fatal:
+    if (!showFatal) {
+      return false;
+    }
+    break;
+  case LogVerbosity::NoLogging:
+    if (!showTrace) {
+      return false;
+    }
+    break;
   }
 
   if (enabledCategories.empty()) {
@@ -350,7 +392,8 @@ OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const {
     std::transform(messageLower.begin(), messageLower.end(), messageLower.begin(), ::tolower);
 
     String categoryLower = entry.category;
-    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(), ::tolower);
+    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(),
+                   ::tolower);
 
     if (messageLower.find(searchLower) == String::npos &&
         categoryLower.find(searchLower) == String::npos) {
