@@ -184,7 +184,7 @@ ContentAssetUI::renderViewModeControls() {
   if (gridView) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100.0f);
-    ImGui::SliderFloat("Size", &gridSize, 50.0f, 150.0f, "%.0f");
+    ImGui::SliderFloat("Size", &gridSize, 50.0f, 300.0f, "%.0f");
   }
 
   ImGui::Separator();

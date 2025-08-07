@@ -62,9 +62,12 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
 
   Vector<UUID>
   getProvidedOutputTypes() const override {
-    return {TypeTraits<AlbedoData>::getTypeId(),   TypeTraits<NormalData>::getTypeId(),
-            TypeTraits<MetallicData>::getTypeId(), TypeTraits<RoughnessData>::getTypeId(),
-            TypeTraits<DepthData>::getTypeId(),    TypeTraits<MotionVectorData>::getTypeId()};
+    return {TypeTraits<AlbedoData>::getTypeId(),
+            TypeTraits<NormalData>::getTypeId(),
+            TypeTraits<MetallicData>::getTypeId(),
+            TypeTraits<RoughnessData>::getTypeId(),
+            TypeTraits<DepthData>::getTypeId(),
+            TypeTraits<EmissiveData>::getTypeId()};
   }
 
   uint32
@@ -138,12 +141,13 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
   createPipelineForMaterial(const SPtr<IMaterial>& material);
 
   // G-Buffer render targets (6 targets)
-  SPtr<ITexture> m_albedoTarget;    // RGB: albedo, A: unused
-  SPtr<ITexture> m_normalTarget;    // RGB: world normal, A: unused
-  SPtr<ITexture> m_metallicTarget;  // R: metallic, GBA: unused
-  SPtr<ITexture> m_roughnessTarget; // R: roughness, GBA: unused
-  SPtr<ITexture> m_depthTarget;     // Depth buffer
-  SPtr<ITexture> m_motionTarget;    // RG: motion vectors, BA: unused
+  SPtr<ITexture> m_albedoTarget;
+  SPtr<ITexture> m_normalTarget;
+  SPtr<ITexture> m_metallicTarget;
+  SPtr<ITexture> m_roughnessTarget;
+  SPtr<ITexture> m_depthTarget;
+  SPtr<ITexture> m_emissiveTarget;
+  //SPtr<ITexture> m_motionTarget;
 
   // Texture views
   SPtr<ITextureView> m_albedoView;
@@ -151,7 +155,8 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
   SPtr<ITextureView> m_metallicView;
   SPtr<ITextureView> m_roughnessView;
   SPtr<ITextureView> m_depthView;
-  SPtr<ITextureView> m_motionView;
+  SPtr<ITextureView> m_emissiveView;
+  //SPtr<ITextureView> m_motionView;
 
   Map<UUID, SPtr<IPipeline>> m_materialPipelines;
 

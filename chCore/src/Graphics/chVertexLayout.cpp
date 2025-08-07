@@ -42,6 +42,20 @@ VertexLayout::createPositionNormalTexCoordLayout() {
 
 /*
 */
+VertexLayout
+VertexLayout::createGBufferLayout() {
+  VertexLayout layout;
+  layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
+  layout.addAttribute(VertexAttributeType::Normal, VertexFormat::Float3);
+  layout.addAttribute(VertexAttributeType::TexCoord0, VertexFormat::Float2);
+  layout.addAttribute(VertexAttributeType::Tangent, VertexFormat::Float3);
+  layout.addAttribute(VertexAttributeType::Bitangent, VertexFormat::Float3);
+  layout.addAttribute(VertexAttributeType::Color, VertexFormat::Float4);
+  return layout;
+}
+
+/*
+*/
 void
 VertexLayout::addAttribute(VertexAttributeType type,
              VertexFormat format,

@@ -114,6 +114,7 @@ class CH_CORE_EXPORT VertexLayout {
  public:
   static VertexLayout createPostionColorLayout();
   static VertexLayout createPositionNormalTexCoordLayout();
+  static VertexLayout createGBufferLayout();
 
  private:
   Vector<VertexAttributeDesc> m_attributes;
@@ -145,4 +146,17 @@ struct VertexNormalTexCoord {
     return VertexLayout::createPositionNormalTexCoordLayout();
   }
 };
+
+struct VertexGBuffer {
+  Vector3 position;
+  Vector3 normal;
+  Vector2 texCoord;
+  Vector3 tangent;
+  Vector3 bitangent;
+  Vector4 color;
+
+  static VertexLayout getLayout() {
+    return VertexLayout::createGBufferLayout();
+  }
+}
 } // namespace chEngineSDK

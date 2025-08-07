@@ -28,6 +28,8 @@ struct RoughnessData;
 DECLARE_TYPE_TRAITS(RoughnessData)
 struct MotionVectorData;
 DECLARE_TYPE_TRAITS(MotionVectorData)
+struct EmissiveData;
+DECLARE_TYPE_TRAITS(EmissiveData)
 
 /**
  * @brief Base class for texture-based render data
@@ -91,6 +93,14 @@ struct CH_CORE_EXPORT RoughnessData : public TextureData {
 struct CH_CORE_EXPORT MotionVectorData : public TextureData {
   UUID getTypeId() const override {
     return TypeTraits<MotionVectorData>::getTypeId();
+  }
+};
+
+/*
+*/
+struct CH_CORE_EXPORT EmissiveData : public TextureData {
+  UUID getTypeId() const override {
+    return TypeTraits<EmissiveData>::getTypeId();
   }
 };
 } // namespace chEngineSDK

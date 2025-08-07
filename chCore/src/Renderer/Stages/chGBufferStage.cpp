@@ -176,7 +176,6 @@ GBufferStage::cleanup() {
   m_metallicView.reset();
   m_roughnessView.reset();
   m_depthView.reset();
-  m_motionView.reset();
 
   // Reset textures
   m_albedoTarget.reset();
@@ -184,7 +183,6 @@ GBufferStage::cleanup() {
   m_metallicTarget.reset();
   m_roughnessTarget.reset();
   m_depthTarget.reset();
-  m_motionTarget.reset();
 }
 
 /*
@@ -291,13 +289,13 @@ GBufferStage::createGBufferTargets() {
     .samples = SampleCount::Count1,
     .usage = TextureUsage::ColorAttachment | TextureUsage::Sampled
   };
-  m_motionTarget = graphicsAPI.createTexture(motionInfo);
+  m_emissiveTarget = graphicsAPI.createTexture(motionInfo);
 
   TextureViewCreateInfo motionViewInfo{
     .format = Format::R16G16B16A16_SFLOAT,
     .viewType = TextureViewType::View2D
   };
-  m_motionView = m_motionTarget->createView(motionViewInfo);
+  m_emissiveView = m_emissiveTarget->createView(motionViewInfo);
 
   // Depth Target
   TextureCreateInfo depthInfo{
@@ -429,7 +427,7 @@ GBufferStage::createGBufferRenderPass() {
     .renderPass = m_renderPass,
     .attachments = {
       m_albedoView, m_normalView, m_metallicView,
-      m_roughnessView, m_motionView, m_depthView
+      m_roughnessView, m_emissiveView, m_depthView
     },
     .width = m_width,
     .height = m_height,

@@ -59,41 +59,105 @@ OutputLogUI::renderOutputLogUI() {
  */
 void
 OutputLogUI::renderFilterControls() {
-  // Verbosity level filters
-  ImGui::Text("Verbosity Levels:");
-  ImGui::SameLine();
-
-  bool filterChanged = false;
-  bool* levels[] = { &m_filter.showDebug, &m_filter.showInfo, &m_filter.showWarning, &m_filter.showError, &m_filter.showFatal };
-  static const ANSICHAR* labels[] = { "Debug", "Info", "Warning", "Error", "Fatal" };
-
-  const SIZE_T numLevels = sizeof(labels) / sizeof(labels[0]);
-  for (SIZE_T i = 0; i < numLevels; ++i) {
-    if (ImGui::Checkbox(labels[i], levels[i])) {
-      filterChanged = true;
-    }
-    if (i < numLevels - 1) {
-      ImGui::SameLine();
-    }
+  if (m_availableCategories.empty()) {
+    ImGui::Text("No categories available.");
+    return;
   }
 
-  const float availableWidth = ImGui::GetContentRegionAvail().x;
-  const float searchWidth = availableWidth  * 0.4f; // 40% of available width
+  bool filterChanged = false;
+  // const float availableWidth = ImGui::GetContentRegionAvail().x;
 
-  ImGui::SetNextItemWidth(searchWidth);
-  if (ImGui::InputTextWithHint("##search",
-                               "Search logs...",
-                               m_searchBuffer,
+  // Helper lambda for combo with All/None buttons
+  auto renderCombo = [&](const char* label, const char* comboId, auto renderContent) {
+    ImGui::Text("%s:", label);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(150.0f); // Full width for search input
+    if (ImGui::BeginCombo(comboId, "Select")) {
+      // All/None buttons first (consistent for both)
+      if (ImGui::Button("All")) {
+        renderContent(true); // true = select all
+        filterChanged = true;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("None")) {
+        renderContent(false); // false = deselect all
+        filterChanged = true;
+      }
+      ImGui::Separator();
+
+      // Individual checkboxes
+      renderContent(-1); // -1 = render checkboxes only
+      ImGui::EndCombo();
+    }
+  };
+
+
+
+  renderCombo("Categories", "##CategoryCombo", [&](int32 action) {
+    if (action == 1) { // All
+      for (const auto& cat : m_availableCategories) {
+        m_filter.enabledCategories.insert(cat);
+      }
+    }
+    else if (action == 0) { // None
+      m_filter.enabledCategories.clear();
+    }
+    else { // Render checkboxes
+      for (const auto& category : m_availableCategories) {
+        bool isEnabled = m_filter.enabledCategories.count(category) > 0;
+        if (ImGui::Checkbox(category.c_str(), &isEnabled)) {
+          if (isEnabled) {
+            m_filter.enabledCategories.insert(category);
+          }
+          else {
+            m_filter.enabledCategories.erase(category);
+          }
+          filterChanged = true;
+        }
+      }
+    }
+  });
+
+  ImGui::SameLine();
+
+  // Row 1: Verbosity and Categories (identical behavior)
+  renderCombo("Verbosity", "##VerbosityCombo", [&](int32 action) {
+    static const char* labels[] = {"Debug", "Info", "Warning", "Error", "Fatal"};
+    bool* levels[] = {&m_filter.showDebug, &m_filter.showInfo, &m_filter.showWarning,
+                      &m_filter.showError, &m_filter.showFatal};
+    static constexpr size_t numLevels = sizeof(labels) / sizeof(labels[0]);
+
+    if (action == 1) { // All
+      for (size_t i = 0; i < numLevels; ++i) {
+        *levels[i] = true;
+      }
+    }
+    else if (action == 0) { // None
+      for (size_t i = 0; i < numLevels; ++i) {
+        *levels[i] = false;
+      }
+    }
+    else { // Render checkboxes
+      for (size_t i = 0; i < numLevels; ++i) {
+        if (ImGui::Checkbox(labels[i], levels[i])) {
+          filterChanged = true;
+        }
+      }
+    }
+  });
+
+
+  // Row 2: Search (50%) + Auto-scroll + Clear (right aligned)
+  // ImGui::SetNextItemWidth(availableWidth * 0.5f);
+  if (ImGui::InputTextWithHint("##search", "Search logs...", m_searchBuffer,
                                sizeof(m_searchBuffer))) {
     m_filter.searchText = String(m_searchBuffer);
     filterChanged = true;
   }
 
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Auto-scroll", &m_autoScroll)) {
-    if (m_autoScroll) {
-      m_needsScrollToBottom = true;
-    }
+  ImGui::SameLine(/*availableWidth - 140.0f*/);
+  if (ImGui::Checkbox("Auto-scroll", &m_autoScroll) && m_autoScroll) {
+    m_needsScrollToBottom = true;
   }
 
   ImGui::SameLine();
@@ -104,55 +168,6 @@ OutputLogUI::renderFilterControls() {
   if (filterChanged) {
     m_needsFilterUpdate = true;
   }
-
-  if (m_availableCategories.empty()) {
-    ImGui::Text("No categories available.");
-    return;
-  }
-
-  ImGui::Text("Categories:");
-  ImGui::SameLine();
-
-  // Create a combo box for category selection
-  String previewText = std::format("({} selected)", m_filter.enabledCategories.size());
-
-  if (ImGui::BeginCombo("##CategoryFilter", previewText.c_str())) {
-    // All/None buttons at the top
-    if (ImGui::Selectable("Select All")) {
-      for (const auto& category : m_availableCategories) {
-        m_filter.enabledCategories.insert(category);
-      }
-      filterChanged = true;
-    }
-
-    if (ImGui::Selectable("Select None")) {
-      m_filter.enabledCategories.clear();
-      filterChanged = true;
-    }
-
-    ImGui::Separator();
-
-    // Individual category checkboxes
-    for (const auto& category : m_availableCategories) {
-      bool isEnabled =
-          m_filter.enabledCategories.find(category) != m_filter.enabledCategories.end();
-
-      if (ImGui::Checkbox(category.c_str(), &isEnabled)) {
-        if (isEnabled) {
-          m_filter.enabledCategories.insert(category);
-        }
-        else {
-          m_filter.enabledCategories.erase(category);
-        }
-        filterChanged = true;
-      }
-    }
-
-    m_needsFilterUpdate = filterChanged;
-
-    ImGui::EndCombo();
-  }
-  ImGui::NewLine();
 }
 
 /*

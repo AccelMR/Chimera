@@ -134,7 +134,7 @@ class ContentAssetUI
   bool showMaterials = true;
   bool showOther = true;
   bool gridView = true;
-  float gridSize = 80.0f;
+  float gridSize = 120.0f;
   char searchBuffer[256] = "";
   float indicatorRadius = 3.0f;
 
