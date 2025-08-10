@@ -460,7 +460,7 @@ GBufferStage::createGBufferPipeline() {
  */
 void
 GBufferStage::createCommandResources() {
-    auto& graphicsAPI = IGraphicsAPI::instance();
+  auto& graphicsAPI = IGraphicsAPI::instance();
 
   // Create command pool for graphics operations
   m_commandPool = graphicsAPI.createCommandPool(QueueType::Graphics);

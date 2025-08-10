@@ -355,7 +355,8 @@ ModelAsset::deserializeNode(SPtr<DataStream> stream, ModelNode* parent,
 }
 
 bool
-ModelAsset::deserializeUniqueMeshes(SPtr<DataStream> stream, Vector<SPtr<Mesh>>& uniqueMeshes,
+ModelAsset::deserializeUniqueMeshes(SPtr<DataStream> stream,
+                                    Vector<SPtr<Mesh>>& uniqueMeshes,
                                     uint32 expectedMeshCount) {
   if (!stream) {
     return false;

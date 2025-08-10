@@ -59,47 +59,78 @@ OutputLogUI::renderOutputLogUI() {
  */
 void
 OutputLogUI::renderFilterControls() {
+  enum class ComboAction {
+    RenderCheckboxes = -1,
+    None = 0,
+    All = 1
+  };
+
   if (m_availableCategories.empty()) {
     ImGui::Text("No categories available.");
     return;
   }
 
   bool filterChanged = false;
-  // const float availableWidth = ImGui::GetContentRegionAvail().x;
 
   // Helper lambda for combo with All/None buttons
-  auto renderCombo = [&](const char* label, const char* comboId, auto renderContent) {
+  auto renderCombo = [&](const ANSICHAR* label,
+                         const ANSICHAR* comboId,
+                         const ANSICHAR* comboName,
+                         auto renderContent) {
     ImGui::Text("%s:", label);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(150.0f); // Full width for search input
-    if (ImGui::BeginCombo(comboId, "Select")) {
+    if (ImGui::BeginCombo(comboId, comboName)) {
       // All/None buttons first (consistent for both)
       if (ImGui::Button("All")) {
-        renderContent(true); // true = select all
+        renderContent(ComboAction::All);
         filterChanged = true;
       }
       ImGui::SameLine();
       if (ImGui::Button("None")) {
-        renderContent(false); // false = deselect all
+        renderContent(ComboAction::None);
         filterChanged = true;
       }
       ImGui::Separator();
 
       // Individual checkboxes
-      renderContent(-1); // -1 = render checkboxes only
+      renderContent(ComboAction::RenderCheckboxes);
       ImGui::EndCombo();
     }
   };
 
+  const bool bAllCategoriesOn = m_filter.enabledCategories.size() == m_availableCategories.size();
+  const bool bAllCategoriesOff = m_filter.enabledCategories.empty();
+  const String categoryComboName = bAllCategoriesOn
+                                    ? "All"
+                                    : (bAllCategoriesOff
+                                      ? "None"
+                                      : "Mixed");
 
+  const bool bAllVerbosityOn = m_filter.showDebug &&
+                               m_filter.showInfo &&
+                               m_filter.showWarning &&
+                               m_filter.showError &&
+                               m_filter.showFatal;
+  const bool bAllVerbosityOff = !(m_filter.showDebug ||
+                                  m_filter.showInfo ||
+                                  m_filter.showWarning ||
+                                  m_filter.showError ||
+                                  m_filter.showFatal);
 
-  renderCombo("Categories", "##CategoryCombo", [&](int32 action) {
-    if (action == 1) { // All
+  const String verbosityComboName = bAllVerbosityOn
+                                      ? "All"
+                                      : (bAllVerbosityOff
+                                        ? "None"
+                                        : "Mixed");
+
+  renderCombo("Categories", "##CategoryCombo", categoryComboName.c_str(), [&](ComboAction action) {
+    if (action == ComboAction::All) {
       for (const auto& cat : m_availableCategories) {
         m_filter.enabledCategories.insert(cat);
       }
     }
-    else if (action == 0) { // None
+    else if (action == ComboAction::None) {
       m_filter.enabledCategories.clear();
     }
     else { // Render checkboxes
@@ -121,18 +152,18 @@ OutputLogUI::renderFilterControls() {
   ImGui::SameLine();
 
   // Row 1: Verbosity and Categories (identical behavior)
-  renderCombo("Verbosity", "##VerbosityCombo", [&](int32 action) {
-    static const char* labels[] = {"Debug", "Info", "Warning", "Error", "Fatal"};
+  renderCombo("Verbosity", "##VerbosityCombo", verbosityComboName.c_str(), [&](ComboAction action) {
+    static const ANSICHAR* labels[] = {"Debug", "Info", "Warning", "Error", "Fatal"};
     bool* levels[] = {&m_filter.showDebug, &m_filter.showInfo, &m_filter.showWarning,
                       &m_filter.showError, &m_filter.showFatal};
     static constexpr size_t numLevels = sizeof(labels) / sizeof(labels[0]);
 
-    if (action == 1) { // All
+    if (action == ComboAction::All) {
       for (size_t i = 0; i < numLevels; ++i) {
         *levels[i] = true;
       }
     }
-    else if (action == 0) { // None
+    else if (action == ComboAction::None) {
       for (size_t i = 0; i < numLevels; ++i) {
         *levels[i] = false;
       }
@@ -146,16 +177,14 @@ OutputLogUI::renderFilterControls() {
     }
   });
 
-
   // Row 2: Search (50%) + Auto-scroll + Clear (right aligned)
-  // ImGui::SetNextItemWidth(availableWidth * 0.5f);
   if (ImGui::InputTextWithHint("##search", "Search logs...", m_searchBuffer,
                                sizeof(m_searchBuffer))) {
     m_filter.searchText = String(m_searchBuffer);
     filterChanged = true;
   }
 
-  ImGui::SameLine(/*availableWidth - 140.0f*/);
+  ImGui::SameLine();
   if (ImGui::Checkbox("Auto-scroll", &m_autoScroll) && m_autoScroll) {
     m_needsScrollToBottom = true;
   }
@@ -297,6 +326,11 @@ OutputLogUI::updateAvailableCategories() {
   for (const auto& entry : m_logEntries) {
     m_availableCategories.insert(entry.category);
   }
+
+  m_filter.enabledCategories.clear();
+  for (const auto& category : m_availableCategories) {
+    m_filter.enabledCategories.insert(category);
+  }
 }
 
 /*
@@ -305,23 +339,23 @@ ImVec4
 OutputLogUI::getVerbosityColor(LogVerbosity verbosity) const {
   switch (verbosity) {
   case LogVerbosity::Fatal:
-    return ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+    return ImVec4(0.953f, 0.545f, 0.659f, 1.0f); // Red #f38ba8
   case LogVerbosity::Error:
-    return ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
+    return ImVec4(0.980f, 0.702f, 0.529f, 1.0f); // Peach #fab387
   case LogVerbosity::Warning:
-    return ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+    return ImVec4(0.976f, 0.886f, 0.686f, 1.0f); // Yellow #f9e2af
   case LogVerbosity::Info:
-    return ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green
+    return ImVec4(0.651f, 0.890f, 0.631f, 1.0f); // Green #a6e3a1
   case LogVerbosity::Debug:
-    return ImVec4(0.0f, 0.8f, 1.0f, 1.0f); // Light Blue
+    return ImVec4(0.537f, 0.863f, 0.922f, 1.0f); // Sky #89dceb
   default:
-    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
+    return ImVec4(0.804f, 0.839f, 0.957f, 1.0f); // Text #cdd6f4 (catppuccin white)
   }
 }
 
 /*
  */
-const char*
+const ANSICHAR*
 OutputLogUI::getVerbosityIcon(LogVerbosity verbosity) const {
   switch (verbosity) {
   case LogVerbosity::Debug:

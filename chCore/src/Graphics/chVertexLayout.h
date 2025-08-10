@@ -14,8 +14,9 @@
 #include "chPrerequisitesCore.h"
 
 #include "chLinearColor.h"
-#include "chVector3.h"
 #include "chVector2.h"
+#include "chVector3.h"
+#include "chVector4.h"
 
 namespace chEngineSDK {
 enum class VertexAttributeType : uint32 {
@@ -158,5 +159,5 @@ struct VertexGBuffer {
   static VertexLayout getLayout() {
     return VertexLayout::createGBufferLayout();
   }
-}
+};
 } // namespace chEngineSDK
