@@ -16,9 +16,7 @@
 #include "chPrerequisitesUtilities.h"
 
 #if USING(CH_PLATFORM_WIN32)
-struct HINSTANCE__;
-using hInstance = struct HINSTANCE__ *;
-using DynamicLibraryHandle = hInstance;
+using DynamicLibraryHandle = void*;
 #elif USING( CH_PLATFORM_LINUX )
 using DynamicLibraryHandle = void*;
 #endif

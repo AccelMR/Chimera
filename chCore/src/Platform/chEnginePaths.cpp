@@ -55,8 +55,8 @@ EnginePaths::getEngineAssetDirectory() {
 */
 String
 EnginePaths::getEngineAssetExtension() {
-  static constexpr String engineAssetExtension = ".chAss";
-  return engineAssetExtension;
+  static const ANSICHAR* engineAssetExtension = ".chAss";
+  return String(engineAssetExtension);
 }
 
 } // namespace chEngineSDK

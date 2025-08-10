@@ -96,14 +96,11 @@ target_compile_definitions(chEditor PRIVATE
   IMGUI_DISABLE_OBSOLETE_KEYIO
 )
 
-# Find required dependencies (SDL3 only, no Vulkan)
-find_package(SDL3 REQUIRED CONFIG)
 
 # Link main Chimera libraries
 target_link_libraries(chEditor
   chCore
   chUtilities
-  SDL3::SDL3
   nfd
 )
 

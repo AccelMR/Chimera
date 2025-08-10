@@ -45,7 +45,7 @@ getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name) {
 #if USING(CH_PLATFORM_LINUX)
   return dlsym(handle, name);
 #elif USING(CH_PLATFORM_WIN32)
-  return GetProcAddress(handle, name);
+  return GetProcAddress(reinterpret_cast<HMODULE>(handle), name);
 #endif
   CH_EXCEPT(InternalErrorException, "Could not get symbol " + String(name));
   return nullptr;
@@ -83,7 +83,7 @@ unloadLibraryPlatformSpecific(DynamicLibraryHandle handle) {
 #if USING(CH_PLATFORM_LINUX)
   return dlclose(handle);
 #elif USING(CH_PLATFORM_WIN32)
-  return FreeLibrary(handle);
+  return FreeLibrary(reinterpret_cast<HMODULE>(handle));
 #endif
   CH_EXCEPT(InternalErrorException, "Could not unload library");
 }

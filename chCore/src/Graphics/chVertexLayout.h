@@ -156,7 +156,8 @@ struct VertexGBuffer {
   Vector3 bitangent;
   Vector4 color;
 
-  static VertexLayout getLayout() {
+  static VertexLayout
+  getLayout() {
     return VertexLayout::createGBufferLayout();
   }
 };

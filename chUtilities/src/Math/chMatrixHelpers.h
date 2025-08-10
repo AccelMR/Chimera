@@ -61,7 +61,6 @@ class CH_UTILITY_EXPORT RotationTranslationMatrix : public Matrix4
    * @param rotator Rotation component
    * @param origin Translation component
    */
-  CH_UTILITY_EXPORT
   RotationTranslationMatrix(const Rotator& rotator, const Vector3& origin);
 };
 
@@ -111,7 +110,6 @@ class CH_UTILITY_EXPORT ScaleRotationTranslationMatrix : public Matrix4
    * @param rotator Rotation component
    * @param origin Translation component
    */
-  CH_UTILITY_EXPORT
   ScaleRotationTranslationMatrix(const Vector3& scale, const Rotator& rotator,
                                  const Vector3& origin);
 };
@@ -136,7 +134,6 @@ class CH_UTILITY_EXPORT PerspectiveMatrix : public Matrix4
    * @param near Distance to the near Z plane
    * @param far Distance to the far Z plane
    */
-  CH_UTILITY_EXPORT
   PerspectiveMatrix(const Radian& halfFOV, float width, float height, float near, float far);
 };
 
@@ -159,7 +156,6 @@ class CH_UTILITY_EXPORT LookAtMatrix : public Matrix4
    * @param lookAtPosition Point the camera is looking at
    * @param upVector Up vector for orientation
    */
-  CH_UTILITY_EXPORT
   LookAtMatrix(const Vector3& eyePosition, const Vector3& lookAtPosition,
                const Vector3& upVector);
 };

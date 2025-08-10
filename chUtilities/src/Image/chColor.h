@@ -377,10 +377,10 @@ Color::operator-=(const Color& color) {
 FORCEINLINE Color&
 Color::operator+=(const Color& color) {
   // Handle potential overflow
-  r = static_cast<uint8>(Math::min(static_cast<int>(r) + color.r, 255));
-  g = static_cast<uint8>(Math::min(static_cast<int>(g) + color.g, 255));
-  b = static_cast<uint8>(Math::min(static_cast<int>(b) + color.b, 255));
-  a = static_cast<uint8>(Math::min(static_cast<int>(a) + color.a, 255));
+  r = static_cast<uint8>(Math::min(static_cast<float>(r + color.r), 255.0f));
+  g = static_cast<uint8>(Math::min(static_cast<float>(g + color.g), 255.0f));
+  b = static_cast<uint8>(Math::min(static_cast<float>(b + color.b), 255.0f));
+  a = static_cast<uint8>(Math::min(static_cast<float>(a + color.a), 255.0f));
   return *this;
 }
 

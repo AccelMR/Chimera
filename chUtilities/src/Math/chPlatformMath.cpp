@@ -97,6 +97,7 @@ PlatformMath::isFinite(float value)
 }
 
 /*
+* TODO: make these template so we don't have to cast every time we use it with different types
 */
 float
 PlatformMath::min(const float x, const float y)

@@ -17,10 +17,11 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chPath.h"
-#include "chTextureAsset.h"
 
 // Base asset types
 #include "chModelAsset.h"
+#include "chTextureAsset.h"
+
 
 namespace chEngineSDK {
 CH_LOG_DEFINE_CATEGORY_SHARED(AssetSystem, All);
