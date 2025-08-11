@@ -73,7 +73,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(HAVE_LIBM   ON  CACHE BOOL "" FORCE)
   set(LIBM m)
 
-  add_subdirectory(chCore/externals/SDL3)
+  add_subdirectory(Externals/SDL3)
   set_target_properties(SDL3-shared PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
@@ -85,7 +85,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(CH_SDL3_ENABLED ON CACHE BOOL "Enable SDL3 support" FORCE)
   set(CH_IMPORTERS_ENABLED ON CACHE BOOL "Enable importers" FORCE)
   set(CH_VULKAN_IMGUI ON CACHE BOOL "Enable ImGui" FORCE)
-
 
 endif()
 
