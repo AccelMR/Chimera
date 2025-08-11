@@ -1,5 +1,5 @@
 [submodule "chCore/externals/SDL3"]
-	path = chCore/externals/SDL3
+	path = Externals/SDL3
 	url = https://github.com/libsdl-org/SDL.git
 [submodule "Externals/imgui"]
 	path = Externals/imgui
