@@ -8,6 +8,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chCamera.h"
+#include "chEventSystem.h"
 #include "chIRenderer.h"
 #include "chGraphicsTypes.h"
 
@@ -118,5 +119,10 @@ public:
     SPtr<IDescriptorSet> descriptorSet;
   };
   UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
+
+  HEvent listenKeyDown;
+  HEvent listenKeys;
+  HEvent listenWheel;
+  HEvent listenMouse;
 };
 } // namespace chEngineSDK

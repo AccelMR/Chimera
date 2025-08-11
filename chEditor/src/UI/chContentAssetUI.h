@@ -35,6 +35,11 @@ class ContentAssetUI
     m_multiStageRenderer = std::move(renderer);
   }
 
+  void
+  setNastyRenderer(SPtr<NastyRenderer> renderer) {
+    m_nastyRenderer = std::move(renderer);
+  }
+
  private:
   // Helper method to render asset deletion confirmation popup
   void
@@ -118,7 +123,7 @@ class ContentAssetUI
   Vector<SPtr<IAsset>> m_assets;
   SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
   bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
-  //SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
+  SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
   SPtr<MultiStageRenderer> m_multiStageRenderer; ///< Multi-stage renderer instance
   SPtr<ISampler> m_defaultSampler; ///< Default sampler for textures
   UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;

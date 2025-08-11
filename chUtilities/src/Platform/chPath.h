@@ -46,6 +46,17 @@ class CH_UTILITY_EXPORT Path {
   explicit Path(const ANSICHAR* path)
     : m_path(path) {}
 
+  /**
+   * Constructor from a vector of paths.
+   * @param paths
+   *    Vector of paths to join.
+   */
+  template<typename... Paths,
+           typename = std::enable_if_t<(std::is_same_v<Paths, Path> && ...)>>
+  explicit Path(const Paths&... paths) : m_path() {
+    (m_path /= ... /= paths.m_path); // Fold expression to join all paths
+  }
+
 #if USING(CH_CPP17_OR_LATER)
   /**
    * Constructor from a filesystem path.

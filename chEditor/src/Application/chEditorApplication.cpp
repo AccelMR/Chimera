@@ -170,6 +170,7 @@ EditorApplication::initializeEditorComponents() {
   m_outputLogUI = chMakeUnique<OutputLogUI>();
 
   m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
+  m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
   m_outputLogUI->updateAvailableCategories();
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");

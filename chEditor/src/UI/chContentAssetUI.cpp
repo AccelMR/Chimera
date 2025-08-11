@@ -608,6 +608,7 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
     // Handle different asset types
     if (asset->isTypeOf<ModelAsset>()) {
       //m_multiStageRenderer->loadModel(std::static_pointer_cast<ModelAsset>(asset)->getModel());
+      m_nastyRenderer->loadModel(std::static_pointer_cast<ModelAsset>(asset)->getModel());
       CH_LOG_DEBUG(ContentAssetUILog, "Loaded model asset: {0}", asset->getName());
     }
     else if (asset->isTypeOf<TextureAsset>()) {

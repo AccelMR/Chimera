@@ -43,6 +43,14 @@ class CH_CORE_EXPORT EnginePaths {
    *
    * @return Absolute path to the engine assets directory.
    */
+  static Path
+  getShaderDirectory();
+
+  /**
+   * Get the absolute path to the engine assets directory.
+   *
+   * @return Absolute path to the engine assets directory.
+   */
   static String
   getEngineAssetExtension();
 };

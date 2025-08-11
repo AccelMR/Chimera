@@ -12,6 +12,7 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chDegree.h"
+#include "chEnginePaths.h"
 #include "chEventDispatcherManager.h"
 #include "chEventSystem.h"
 #include "chFileSystem.h"
@@ -391,19 +392,23 @@ NastyRenderer::initializeRenderResources() {
                                       .maxAnisotropy = 16.0f};
   m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
 
+  const Path shaderDir = EnginePaths::getShaderDirectory();
+  const Path cubeVertexShader(shaderDir, Path("cubeVertex.spv"));
+  const Path cubeFragmentShader(shaderDir, Path("cubeFragment.spv"));
+
   // Load shaders
   ShaderCreateInfo shaderCreateInfo{
       .stage = ShaderStage::Vertex,
       .entryPoint = "main",
-      .sourceCode = FileSystem::fastRead(Path("resources/shaders/cubeVertex.spv")),
-      .filePath = "resources/shaders/cubeVertex.spv",
+      .sourceCode = FileSystem::fastRead(cubeVertexShader),
+      .filePath = cubeVertexShader.toString(),
       .defines = {}};
 
   ShaderCreateInfo fragmentShaderCreateInfo{
       .stage = ShaderStage::Fragment,
       .entryPoint = "main",
-      .sourceCode = FileSystem::fastRead(Path("resources/shaders/cubeFragment.spv")),
-      .filePath = "resources/shaders/cubeFragment.spv",
+      .sourceCode = FileSystem::fastRead(cubeFragmentShader),
+      .filePath = cubeFragmentShader.toString(),
       .defines = {}};
 
   m_vertexShader = graphicsAPI.createShader(shaderCreateInfo);
@@ -617,7 +622,7 @@ void
 NastyRenderer::bindInputEvents() {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
-  HEvent listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
+  listenKeyDown = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
     if (!m_bIsfocused) {
       return;
     }
@@ -654,7 +659,7 @@ NastyRenderer::bindInputEvents() {
     }
   });
 
-  HEvent listenKeys = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
+  listenKeys = eventDispatcher.OnKeyDown.connect([&](const KeyBoardData& keydata) {
     if (!m_camera || !m_bIsfocused) {
       return;
     }
@@ -662,27 +667,27 @@ NastyRenderer::bindInputEvents() {
     float moveSpeed = g_cameraMoveSpeed * 0.1f;
     switch (keydata.key) {
     case Key::W:
-      m_camera->moveForward(moveSpeed);
+      m_camera->moveForward(std::move(moveSpeed));
       break;
     case Key::S:
-      m_camera->moveForward(-moveSpeed);
+      m_camera->moveForward(std::move(-moveSpeed));
       break;
     case Key::A:
-      m_camera->moveRight(-moveSpeed);
+      m_camera->moveRight(std::move(-moveSpeed));
       break;
     case Key::D:
-      m_camera->moveRight(moveSpeed);
+      m_camera->moveRight(std::move(moveSpeed));
       break;
     case Key::Q:
-      m_camera->moveUp(moveSpeed);
+      m_camera->moveUp(std::move(moveSpeed));
       break;
     case Key::E:
-      m_camera->moveUp(-moveSpeed);
+      m_camera->moveUp(std::move(-moveSpeed));
       break;
     case Key::R:
       CH_LOG_INFO(NastyRendererSystem, "Resetting camera position to pos {0}, {1}, {2}",
                   initialCameraPos.x, initialCameraPos.y, initialCameraPos.z);
-      m_camera->setPosition(initialCameraPos);
+      m_camera->setPosition(std::move(initialCameraPos));
       m_camera->lookAt(Vector3::ZERO);
       break;
     case Key::P:
@@ -697,14 +702,14 @@ NastyRenderer::bindInputEvents() {
     projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   });
 
-  HEvent listenWheel =
+  listenWheel =
       eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
         if (m_camera && wheelData.deltaY != 0 && m_bIsfocused) {
-          m_camera->moveForward(wheelData.deltaY * g_cameraMoveSpeed);
+          m_camera->moveForward(std::move(wheelData.deltaY * g_cameraMoveSpeed));
         }
       });
 
-  HEvent listenMouse =
+  listenMouse =
       eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
         if (!m_camera || !m_bIsfocused) {
           return;
@@ -719,16 +724,18 @@ NastyRenderer::bindInputEvents() {
 
         if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
           if (isMouseButtonDownMiddle) {
-            m_camera->pan(-mouseData.deltaX * g_cameraPanSpeed,
-                          -mouseData.deltaY * g_cameraPanSpeed);
+            m_camera->pan(std::move(-mouseData.deltaX * g_cameraPanSpeed),
+                          std::move(-mouseData.deltaY * g_cameraPanSpeed));
           }
           if (isMouseButtonDown) {
-            m_camera->rotate(mouseData.deltaY * g_rotationSpeed,
-                             mouseData.deltaX * g_rotationSpeed, 0.0f);
+            m_camera->rotate(std::move(mouseData.deltaY * g_rotationSpeed),
+                             std::move(mouseData.deltaX * g_rotationSpeed), 0.0f);
           }
           projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
         }
       });
+
+
 
   CH_LOG_INFO(NastyRendererSystem, "Input events bound");
 }

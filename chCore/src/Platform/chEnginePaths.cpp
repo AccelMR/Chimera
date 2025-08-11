@@ -53,6 +53,20 @@ EnginePaths::getEngineAssetDirectory() {
 
 /*
 */
+Path
+EnginePaths::getShaderDirectory() {
+  static Path shaderDir = FileSystem::absolutePath(Path(
+    #if USING(CH_DEBUG_MODE)
+    "chCore/CoreAssets/shaders"
+    #else
+    "EngineAssets/Release"
+    #endif
+  ));
+  return shaderDir;
+}
+
+/*
+*/
 String
 EnginePaths::getEngineAssetExtension() {
   static const ANSICHAR* engineAssetExtension = ".chAss";
