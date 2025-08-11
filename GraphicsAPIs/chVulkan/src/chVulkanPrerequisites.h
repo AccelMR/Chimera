@@ -94,6 +94,8 @@ vkFormatToChFormat(VkFormat format) {
     return Format::D24_UNORM_S8_UINT;
     case VK_FORMAT_B8G8R8A8_SRGB:
       return Format::B8G8R8A8_SRGB;
+    case VK_FORMAT_B8G8R8A8_UNORM:
+      return Format::B8G8R8A8_UNORM;
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", format));
   }
@@ -113,6 +115,8 @@ chFormatToVkFormat(Format format) {
     return VK_FORMAT_D24_UNORM_S8_UINT;
     case Format::B8G8R8A8_SRGB:
       return VK_FORMAT_B8G8R8A8_SRGB;
+    case Format::B8G8R8A8_UNORM:
+      return VK_FORMAT_B8G8R8A8_UNORM;
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", static_cast<uint32>(format)));
   }

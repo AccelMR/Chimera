@@ -142,7 +142,7 @@ class ConnectionController
 class HEvent
 {
  public:
-  HEvent() = default;
+  HEvent() : m_connection(nullptr), m_controller(nullptr) {}
 
   HEvent(const HEvent& e) = delete;
   HEvent& operator=(const HEvent& e) = delete;
@@ -150,16 +150,18 @@ class HEvent
   HEvent(HEvent&& other) noexcept
    : m_connection(other.m_connection), m_controller(other.m_controller) {
     other.m_connection = nullptr; // !!
+    other.m_controller = nullptr;
   }
 
   HEvent& operator=(HEvent&& other) noexcept {
     if (this != &other) {
-      if (m_connection){
+      if (m_connection && m_controller){
         m_controller->freeHandle(m_connection);
       }
       m_connection = other.m_connection;
       m_controller = std::move(other.m_controller);
       other.m_connection = nullptr; // !!
+      other.m_controller = nullptr;
     }
     return *this;
   }
@@ -177,7 +179,7 @@ class HEvent
    *   Default destructor.
    **/
   FORCEINLINE ~HEvent() {
-    if (nullptr != m_connection) {
+    if (m_connection && m_controller) {
       m_controller->disconnect(m_connection);
       m_connection = nullptr;
       m_controller = nullptr;

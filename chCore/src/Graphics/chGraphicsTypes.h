@@ -69,6 +69,7 @@ enum class IndexType : uint32 {
 enum class Format : uint32 {
   Unknown = 0,
   R8G8B8A8_UNORM,
+  B8G8R8A8_UNORM,
   B8G8R8A8_SRGB,
   R16G16B16A16_SFLOAT,
   D32_SFLOAT,
