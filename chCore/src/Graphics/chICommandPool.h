@@ -14,7 +14,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT ICommandPool {
+class ICommandPool {
  public:
   ICommandPool() = default;
   virtual ~ICommandPool() = default;

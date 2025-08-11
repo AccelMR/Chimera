@@ -16,7 +16,7 @@
 
 namespace chEngineSDK {
 
-class CH_CORE_EXPORT ICommandQueue {
+class ICommandQueue {
  public:
   ICommandQueue() = default;
   virtual ~ICommandQueue() = default;

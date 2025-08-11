@@ -183,7 +183,7 @@ WindowedApplication::initializeGraphics() {
   const String& graphicsAPIName =
       CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
 
-#if USING(CH_DEBUG_MODE)
+#if USING(CH_DEBUG_MODE) && !USING(CH_PLATFORM_WIN32)
   const Path dllAbsolutePath =
       FileSystem::absolutePath(std::move(Path("build/debug-x64/lib")));
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,
@@ -192,7 +192,7 @@ WindowedApplication::initializeGraphics() {
 
   WeakPtr<DynamicLibrary> graphicsLib =
       DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName
-#if USING(CH_DEBUG_MODE)
+#if USING(CH_DEBUG_MODE) && !USING(CH_PLATFORM_WIN32)
                                                        ,
                                                        dllAbsolutePath
 #endif // CH_DEBUG_MODE
@@ -222,6 +222,7 @@ WindowedApplication::initializeGraphics() {
     CH_EXCEPT(InternalErrorException, "Graphics API instance is null after initialization.");
   }
 
+  CH_ASSERT(m_display && "Display must be initialized before graphics.");
   graphicsAPI->initialize({.weakDisplaySurface = m_display,
                            // TODO: probably want to change this or make the display return
                            // sidth of the drawable area

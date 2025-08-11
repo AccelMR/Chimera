@@ -13,7 +13,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT ISampler {
+class ISampler {
  public:
   virtual ~ISampler() = default;
 };

@@ -15,7 +15,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT IDescriptorSet {
+class IDescriptorSet {
  public:
   virtual ~IDescriptorSet() = default;
 

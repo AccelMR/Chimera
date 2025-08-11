@@ -15,7 +15,7 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT IDescriptorPool {
+class IDescriptorPool {
  public:
   virtual ~IDescriptorPool() = default;
   /**

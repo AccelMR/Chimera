@@ -15,7 +15,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT IDescriptorSetLayout {
+class IDescriptorSetLayout {
  public:
   virtual ~IDescriptorSetLayout() = default;
 };

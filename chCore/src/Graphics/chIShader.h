@@ -17,7 +17,7 @@
 namespace chEngineSDK {
 class UUID;
 
-class CH_CORE_EXPORT IShader {
+class IShader {
  public:
   IShader() = default;
   virtual ~IShader() = default;

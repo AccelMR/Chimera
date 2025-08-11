@@ -16,7 +16,7 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT ITextureView {
+class ITextureView {
  public:
   virtual ~ITextureView() = default;
 

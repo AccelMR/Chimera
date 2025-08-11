@@ -13,7 +13,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT IPipelineLayout {
+class IPipelineLayout {
  public:
   virtual ~IPipelineLayout() = default;
 };

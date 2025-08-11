@@ -17,7 +17,7 @@ class IMaterial;
 class IShader;
 class UUID;
 
-class CH_CORE_EXPORT MaterialManager : Module<MaterialManager>
+class CH_CORE_EXPORT MaterialManager : public Module<MaterialManager>
 {
  public:
   SPtr<IMaterial>

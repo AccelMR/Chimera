@@ -50,6 +50,4 @@ BreakBeforeTernaryOperators: true
 # Alinear operandos cuando se rompen en varias líneas
 AlignOperands: true
 
-# Permite romper líneas después de comas
-BreakBeforeComma: false
 ---

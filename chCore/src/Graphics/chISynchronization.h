@@ -15,13 +15,13 @@
 
 namespace chEngineSDK {
 
-class CH_CORE_EXPORT ISemaphore {
+class ISemaphore {
  public:
   ISemaphore() = default;
   virtual ~ISemaphore() = default;
 };
 
-class CH_CORE_EXPORT IFence {
+class IFence {
  public:
   IFence() = default;
   virtual ~IFence() = default;

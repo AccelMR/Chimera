@@ -14,7 +14,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT IFrameBuffer {
+class IFrameBuffer {
  public:
   virtual ~IFrameBuffer() = default;
   

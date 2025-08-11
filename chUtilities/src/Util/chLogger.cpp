@@ -308,8 +308,9 @@ Logger::writeLogMessage(const LogCategory& category,
 
   // Buffer the log entry if buffering is enabled
   if (m_bufferingEnabled) {
-    m_logBuffer.emplace_back(timestamp, verbosity, category.getName(), message, file, line,
-                             function);
+    m_logWrittenEvent(
+        std::move(LogBufferEntry(timestamp, verbosity, category.getName(), message,
+                                 file ? file : "", line, function ? function : "")));
 
     // Apply size limit with early return
     if (m_logBuffer.size() > m_maxBufferSize) {

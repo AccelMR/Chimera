@@ -1,116 +1,136 @@
-# CMake option to control ImGui integration (default: ON)
+# Requiere CMake 3.16+ para target_sources con archivos añadidos condicionalmente
+cmake_minimum_required(VERSION 3.16)
+
+# (Opcional) si ya está definido en el superproyecto, puedes omitirlo:
+# project(chVulkan LANGUAGES CXX)
+
+# ---------- Opciones ----------
 option(CH_VULKAN_IMGUI "Enable ImGui support in chVulkan plugin" ON)
 
+# ---------- Fuentes ----------
 file(GLOB SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
-
-# ImGui Vulkan backend source files (only if enabled)
-set(IMGUI_VULKAN_SOURCES "")
-if(CH_VULKAN_IMGUI)
-    set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/Externals/imgui)
-    set(IMGUI_VULKAN_SOURCES
-        ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-    )
-    message(STATUS "chVulkan: ImGui support ENABLED")
-else()
-    message(STATUS "chVulkan: ImGui support DISABLED")
-endif()
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+)
 
 set(CMAKE_DEBUG_POSTFIX "d")
-add_library(chVulkan SHARED ${SOURCE_FILES} ${IMGUI_VULKAN_SOURCES})
+add_library(chVulkan SHARED ${SOURCE_FILES})
 
 set_target_properties(chVulkan PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     OUTPUT_NAME "chVulkan"
-    PREFIX "")
+    PREFIX ""
+)
 
-macro(INCLUDESUBFOLDERS curdir)
-    file(GLOB children ${curdir}/*)
-    set(dirlist "")
-    foreach(child ${children})
-        if(IS_DIRECTORY ${child})
-            include_directories(${child})
+# ---------- Función para añadir subcarpetas como includes (por-target) ----------
+function(target_include_subfolders tgt base_dir)
+    file(GLOB _children LIST_DIRECTORIES true "${base_dir}/*")
+    foreach(_child IN LISTS _children)
+        if(IS_DIRECTORY "${_child}")
+            target_include_directories(${tgt} PRIVATE "${_child}")
         endif()
     endforeach()
-endmacro()
+endfunction()
 
-INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
-INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chUtilities/src)
-INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src)
-INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src/Platform)
+# Estructura de includes equivalente a tu macro original
+target_include_subfolders(chVulkan ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_subfolders(chVulkan ${CMAKE_CURRENT_SOURCE_DIR}/../../chUtilities/src)
+target_include_subfolders(chVulkan ${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src)
+target_include_subfolders(chVulkan ${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src/Platform)
 
-# ImGui include directories (only if enabled)
+# ---------- ImGui (solo si está habilitado) ----------
 if(CH_VULKAN_IMGUI)
+    set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/Externals/imgui)
+    message("ImGui directory: ${IMGUI_DIR}")
+    message(STATUS "chVulkan: ImGui support ENABLED")
+
+    target_sources(chVulkan PRIVATE
+        # Core ImGui sources
+        ${IMGUI_DIR}/imgui.cpp
+        ${IMGUI_DIR}/imgui_draw.cpp
+        ${IMGUI_DIR}/imgui_tables.cpp
+        ${IMGUI_DIR}/imgui_widgets.cpp
+        # Opcional: demo (útil para pruebas)
+        ${IMGUI_DIR}/imgui_demo.cpp
+        # Backend Vulkan
+        ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    )
+
+    if (CH_SDL3_ENABLED)
+        target_sources(chVulkan PRIVATE
+            ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+        )
+    endif()
+
     target_include_directories(chVulkan PRIVATE
         ${IMGUI_DIR}
         ${IMGUI_DIR}/backends
     )
-endif()
 
-# XCB configuration for Linux
-if(UNIX AND NOT APPLE)
-    # Manual XCB search (Arch Linux compatible solution)
-    find_path(XCB_INCLUDE_DIR NAMES xcb/xcb.h PATHS /usr/include)
-    find_library(XCB_LIBRARY NAMES xcb PATHS /usr/lib)
-
-    if(XCB_INCLUDE_DIR AND XCB_LIBRARY)
-        message(STATUS "Found XCB: ${XCB_LIBRARY}")
-        include_directories(${XCB_INCLUDE_DIR})
-    else()
-        message(FATAL_ERROR "XCB libraries not found! Install with: sudo pacman -S libxcb")
-    endif()
-
-    # Vulkan search
-    find_package(Vulkan REQUIRED)
-    if(Vulkan_FOUND)
-        message(STATUS "Found Vulkan: ${Vulkan_LIBRARIES}")
-        include_directories(${Vulkan_INCLUDE_DIRS})
-    endif()
-
-    # Necessary definitions for Vulkan/XCB
-    target_compile_definitions(chVulkan PRIVATE
-        VK_USE_PLATFORM_XCB_KHR
-        VK_USE_PLATFORM_XLIB_KHR
-    )
-endif()
-
-if(CH_SDL3_ENABLED)
-# Activate preprocesor CH_SDL3_ENABLED
-    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED)
-    message(STATUS "SDL3 support enabled in chVulkan")
-else()
-    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED=0)
-    message(STATUS "SDL3 support disabled in chVulkan")
-endif()
-
-
-# ImGui Vulkan specific definitions (only if enabled)
-if(CH_VULKAN_IMGUI)
     target_compile_definitions(chVulkan PRIVATE
         CH_VULKAN_IMGUI=1
         IMGUI_DISABLE_OBSOLETE_FUNCTIONS
         IMGUI_DISABLE_OBSOLETE_KEYIO
     )
 else()
+    message(STATUS "chVulkan: ImGui support DISABLED")
+    target_compile_definitions(chVulkan PRIVATE CH_VULKAN_IMGUI=0)
+endif()
+
+# ---------- SDL3 flag (sin cambiar tu lógica) ----------
+if(CH_SDL3_ENABLED)
+    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED)
+    message(STATUS "SDL3 support enabled in chVulkan")
+    target_link_libraries(chVulkan PRIVATE SDL3::SDL3)
+else()
+    target_compile_definitions(chVulkan PRIVATE CH_SDL3_ENABLED=0)
+    message(STATUS "SDL3 support disabled in chVulkan")
+endif()
+
+# ---------- Vulkan (común a todas las plataformas) ----------
+find_package(Vulkan REQUIRED)                # Exporta el target Vulkan::Vulkan
+target_link_libraries(chVulkan PRIVATE Vulkan::Vulkan)
+
+# ---------- Plataforma: Windows ----------
+if(WIN32)
+    # Define para surface Win32
+    target_compile_definitions(chVulkan PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+
+    # Si tu código crea ventanas Win32 o usa funciones del SDK, enlaza estas (seguras/no-controversiales)
+    target_link_libraries(chVulkan PRIVATE user32 gdi32 shell32)
+
+# ---------- Plataforma: Linux (X11/XCB) ----------
+elseif(UNIX AND NOT APPLE)
+    # XCB vía pkg-config (más robusto que rutas hardcodeadas)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(XCB REQUIRED xcb)
+
+    if(XCB_FOUND)
+        message(STATUS "Found XCB: ${XCB_LINK_LIBRARIES}")
+        target_include_directories(chVulkan PRIVATE ${XCB_INCLUDE_DIRS})
+        target_link_libraries(chVulkan PRIVATE ${XCB_LINK_LIBRARIES})
+    else()
+        message(FATAL_ERROR "XCB not found. En Arch: sudo pacman -S libxcb")
+    endif()
+
+    # X11 (si lo usas junto con XCB)
+    find_package(X11 REQUIRED)  # módulo clásico de CMake
+    if(X11_FOUND)
+        target_include_directories(chVulkan PRIVATE ${X11_INCLUDE_DIR})
+        target_link_libraries(chVulkan PRIVATE ${X11_LIBRARIES})
+    endif()
+
+    # Defines de plataformas Vulkan que ya usabas
     target_compile_definitions(chVulkan PRIVATE
-        CH_VULKAN_IMGUI=0
+        VK_USE_PLATFORM_XCB_KHR
+        VK_USE_PLATFORM_XLIB_KHR
     )
 endif()
 
-# Common library linking
+# ---------- Enlaces comunes ----------
 target_link_libraries(chVulkan PRIVATE chCore chUtilities)
 
-# Linux specific linking
-if(UNIX AND NOT APPLE)
-    target_link_libraries(chVulkan PRIVATE
-        ${XCB_LIBRARY}
-        ${Vulkan_LIBRARIES}
-        X11
-    )
-endif()
-
-# Configuration success message
+# ---------- Mensajes de configuración ----------
 if(CH_VULKAN_IMGUI)
     message(STATUS "chVulkan configured with ImGui Vulkan backend")
     message(STATUS "ImGui directory: ${IMGUI_DIR}")

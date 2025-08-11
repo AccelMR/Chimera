@@ -16,7 +16,7 @@
 #include "chPath.h"
 #include "chTextureAsset.h"
 
-#include "../../assets/fonts/IconsFontAwsome5.h"
+#include "../../EditorAssets/fonts/IconsFontAwsome5.h"
 #include "imgui.h"
 #include <nfd.hpp>
 
@@ -24,7 +24,6 @@
 
 #include "imgui_impl_sdl3.h"
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_video.h>
 
 #endif // USING(CH_DISPLAY_SDL3)
 

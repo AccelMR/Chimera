@@ -8,7 +8,8 @@
 /************************************************************************/
 #pragma once
 
-#include "chPrerequisitesUtilities.h"
+#include "chPrerequisitesCore.h"
+
 #include "chVector3.h"
 #include "chQuaternion.h"
 #include "chMatrix4.h"
@@ -30,7 +31,7 @@ enum class CameraProjectionType {
 /**
  * Class that represents a camera in 3D space
  */
-class CH_UTILITY_EXPORT Camera
+class CH_CORE_EXPORT Camera
 {
 public:
   /**

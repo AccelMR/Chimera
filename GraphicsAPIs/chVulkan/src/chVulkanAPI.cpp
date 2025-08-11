@@ -29,10 +29,10 @@
 #include "chVulkanTextureView.h"
 
 namespace chVulkanAPIHelpers {
-FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
+constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
     "VK_LAYER_KHRONOS_validation"};
 
-FORCEINLINE constexpr chEngineSDK::Array<const char*, 1> DEVICE_EXTENSIONS = {
+constexpr chEngineSDK::Array<const char*, 1> DEVICE_EXTENSIONS = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -401,15 +401,13 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
   }
 
 #if USING(CH_PLATFORM_WIN32)
-  Vector<const char*> vulkanExtensions = {};
-  uint32 vulkanExtensionCount = 0;
-  if (SDL_Vulkan_GetInstanceExtensions(&vulkanExtensionCount, nullptr)) {
-    vulkanExtensions.resize(vulkanExtensionCount);
-    SDL_Vulkan_GetInstanceExtensions(&vulkanExtensionCount, vulkanExtensions.data());
+  uint32 count = 0;
+  const ANSICHAR* const* exts = SDL_Vulkan_GetInstanceExtensions(&count);
+  if (!exts) {
+    CH_EXCEPT(VulkanErrorException, "Failed to get Vulkan instance extensions from SDL");
   }
-
-  if (vulkanExtensionCount > 0) {
-    extensions.insert(extensions.end(), vulkanExtensions.begin(), vulkanExtensions.end());
+  else {
+    extensions.insert(extensions.end(), exts, exts + count);
   }
 #endif // USING(CH_PLATFORM_WIN32)
 

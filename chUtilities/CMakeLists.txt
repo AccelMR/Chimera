@@ -41,3 +41,5 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 else()
   message(FATAL_ERROR "Unsupported operating system: ${CMAKE_SYSTEM_NAME}")
 endif()
+
+target_compile_definitions(chUtilities PRIVATE CH_UTILITY_EXPORTS)

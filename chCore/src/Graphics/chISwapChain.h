@@ -16,7 +16,7 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT ISwapChain {
+class ISwapChain {
  public:
   virtual ~ISwapChain() = default;
 

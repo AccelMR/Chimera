@@ -62,9 +62,17 @@ elseif(WIN32)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
+
+  set(SDL_SHARED ON  CACHE BOOL "" FORCE)
+  set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+  set(SDL_TEST   OFF CACHE BOOL "" FORCE)
+
   set(CH_EDITOR_ENABLED ON CACHE BOOL "Enable chEditor" FORCE)
   set(CH_SDL3_ENABLED ON CACHE BOOL "Enable SDL3 support" FORCE)
   set(CH_IMPORTERS_ENABLED ON CACHE BOOL "Enable importers" FORCE)
+  set(CH_VULKAN_IMGUI ON CACHE BOOL "Enable ImGui" FORCE)
+
+  add_subdirectory(chCore/externals/SDL3)
 endif()
 
 add_subdirectory(chUtilities)

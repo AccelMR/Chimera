@@ -23,7 +23,7 @@ enum class CommandBufferState: uint8{
   Invalid
 };
 
-class CH_CORE_EXPORT ICommandBuffer {
+class ICommandBuffer {
  public:
   ICommandBuffer() = default;
   virtual ~ICommandBuffer() = default;

@@ -31,7 +31,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Añadir SDL3 desde subdirectorio (siempre, sin importar el sistema)
-add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
+#add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
 
 # Crear la biblioteca principal
 add_library(chCore SHARED ${SOURCE_FILES})
@@ -64,7 +64,7 @@ target_include_directories(chCore PUBLIC
 target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../chCore/src/Platform/SDL
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/SDL
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include
+    ##${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include
 )
 
 # Archivos fuente específicos de SDL
@@ -77,7 +77,7 @@ target_sources(chCore PRIVATE ${SDL_FILES})
 target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3)
 
 # Definiciones de compilación
-set(COMPILE_DEFS "")
+set(COMPILE_DEFS "CH_CORE_EXPORTS")
 
 if(CH_EDITOR_ENABLED)
     list(APPEND COMPILE_DEFS CH_EDITOR_ENABLED)
