@@ -615,10 +615,10 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
       SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
       SPtr<ITexture> texture = textureAsset->getTexture();
       if (texture) {
-        // m_nastyRenderer->setTextureView(std::move(texture->createView({
-        //     .format = texture->getFormat(),
-        //     .viewType = TextureViewType::View2D})));
-        //m_nastyRenderer->createNodeDescriptorResources();
+        m_nastyRenderer->setTextureView(std::move(texture->createView({
+            .format = texture->getFormat(),
+            .viewType = TextureViewType::View2D})));
+        m_nastyRenderer->createNodeDescriptorResources();
         CH_LOG_DEBUG(ContentAssetUILog, "Loaded texture asset: {0}", asset->getName());
       }
      }

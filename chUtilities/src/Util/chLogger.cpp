@@ -267,17 +267,26 @@ Logger::writeLogMessage(const LogCategory& category,
                         const ANSICHAR* function) {
   RecursiveLock lock(m_mutex);
 
-  String timestamp = getCurrentTimeString();
-  String verbosityStr = getVerbosityName(verbosity);
+  const String timestamp = getCurrentTimeString();
+  const String verbosityStr = getVerbosityName(verbosity);
+
+  // Build sourceLocation only if we have useful data.
   String sourceLocation;
-
   if (file != nullptr && line > 0) {
-    String shortFile = file;
-    size_t lastSlash = shortFile.find_last_of("/\\");
-    if (lastSlash != String::npos) {
-      shortFile = shortFile.substr(lastSlash + 1);
-    }
+    // Avoid a full copy of 'file' when trimming: scan backward and take a view.
+    const ANSICHAR* fileBegin = file;
+    const ANSICHAR* p         = file;
+    const ANSICHAR* lastSlash = nullptr;
 
+    // Find last slash or backslash once.
+    for (; *p != '\0'; ++p) {
+      if (*p == '/' || *p == '\\') lastSlash = p;
+    }
+    const ANSICHAR* shortFileBegin = (lastSlash ? lastSlash + 1 : fileBegin);
+    const size_t shortFileLen      = static_cast<size_t>(p - shortFileBegin);
+
+    // Construct short file String once.
+    String shortFile(shortFileBegin, shortFileLen);
     sourceLocation = chString::format(" [{0}:{1}]", shortFile, line);
 
     if (function != nullptr) {
@@ -285,41 +294,50 @@ Logger::writeLogMessage(const LogCategory& category,
     }
   }
 
-  String formattedMessage =
-      chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}", timestamp, verbosityStr,
-                       category.getName(), sourceLocation, message);
+  // Pre-format the message once; do not mutate later.
+  const String formattedMessage =
+      chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}",
+                       timestamp, verbosityStr, category.getName(), sourceLocation, message);
 
-  // Write to console if enabled
+  // Console output (and stderr for fatal) only if enabled.
   if (m_consoleOutput) {
-    String colorCode = getVerbosityColor(verbosity);
+    const String colorCode = getVerbosityColor(verbosity);
     std::cout << colorCode << formattedMessage << COLOR_RESET << std::endl;
 
-    // For fatal errors, also write to stderr
     if (verbosity == LogVerbosity::Fatal) {
       std::cerr << colorCode << formattedMessage << COLOR_RESET << std::endl;
     }
   }
 
-  // Write to file if enabled
+  // File output without mutating 'formattedMessage'.
   if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
-    formattedMessage += "\n";
     m_logFile->write(formattedMessage.data(), formattedMessage.size());
+    static constexpr char newline = '\n';
+    m_logFile->write(&newline, 1);
   }
 
-  // Buffer the log entry if buffering is enabled
-  if (m_bufferingEnabled) {
-    m_logWrittenEvent(
-        std::move(LogBufferEntry(timestamp, verbosity, category.getName(), message,
-                                 file ? file : "", line, function ? function : "")));
+  // Prepare a reusable entry for buffer (keeps exact payload as antes).
+  const ANSICHAR* filePtr = file ? file : "";
+  const ANSICHAR* funcPtr = function ? function : "";
 
-    // Apply size limit with early return
+  // Buffering (and event inside) keep same behavior and order.
+  if (m_bufferingEnabled) {
+    // Event from buffering branch (originalmente se lanzaba aquí con un temporal movido).
+    m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
+                                     filePtr, line, funcPtr));
+
+    // Push into the circular-ish buffer (pop front si excede).
+    m_logBuffer.emplace_back(timestamp, verbosity, category.getName(), message,
+                             filePtr, line, funcPtr);
     if (m_logBuffer.size() > m_maxBufferSize) {
+      // Vector erase(begin) es O(n) y preserva comportamiento actual.
       m_logBuffer.erase(m_logBuffer.begin());
     }
   }
-  // Trigger the log written event
-  m_logWrittenEvent(std::move(LogBufferEntry(timestamp, verbosity, category.getName(), message,
-                              file ? file : "", line, function ? function : "")));
+
+  // Segundo disparo del evento fuera del bloque (se conserva tal cual).
+  m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
+                                   filePtr, line, funcPtr));
 }
 
 /*
