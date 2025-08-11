@@ -286,7 +286,7 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
   if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
     ImGui::End();
   }
-  //m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
+  m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
 
   if (rendererOutput.colorTarget) {
     auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);

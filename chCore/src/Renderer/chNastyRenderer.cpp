@@ -265,8 +265,8 @@ NastyRenderer::createRenderTargets() {
                                      .mipLevels = 1,
                                      .arrayLayers = 1,
                                      .samples = SampleCount::Count1,
-                                     .usage = TextureUsage::ColorAttachment |
-                                              TextureUsage::Sampled};
+                                     .usage = TextureUsage::ColorAttachment
+                                              | TextureUsage::Sampled};
   m_colorTarget = graphicsAPI.createTexture(colorTextureInfo);
 
   TextureViewCreateInfo colorViewInfo{.format = Format::R8G8B8A8_UNORM,
@@ -397,19 +397,18 @@ NastyRenderer::initializeRenderResources() {
   const Path cubeFragmentShader(shaderDir, Path("cubeFragment.spv"));
 
   // Load shaders
-  ShaderCreateInfo shaderCreateInfo{
-      .stage = ShaderStage::Vertex,
-      .entryPoint = "main",
-      .sourceCode = FileSystem::fastRead(cubeVertexShader),
-      .filePath = cubeVertexShader.toString(),
-      .defines = {}};
+  ShaderCreateInfo shaderCreateInfo{.stage = ShaderStage::Vertex,
+                                    .entryPoint = "main",
+                                    .sourceCode = FileSystem::fastRead(cubeVertexShader),
+                                    .filePath = cubeVertexShader.toString(),
+                                    .defines = {}};
 
-  ShaderCreateInfo fragmentShaderCreateInfo{
-      .stage = ShaderStage::Fragment,
-      .entryPoint = "main",
-      .sourceCode = FileSystem::fastRead(cubeFragmentShader),
-      .filePath = cubeFragmentShader.toString(),
-      .defines = {}};
+  ShaderCreateInfo fragmentShaderCreateInfo{.stage = ShaderStage::Fragment,
+                                            .entryPoint = "main",
+                                            .sourceCode =
+                                                FileSystem::fastRead(cubeFragmentShader),
+                                            .filePath = cubeFragmentShader.toString(),
+                                            .defines = {}};
 
   m_vertexShader = graphicsAPI.createShader(shaderCreateInfo);
   m_fragmentShader = graphicsAPI.createShader(fragmentShaderCreateInfo);
@@ -655,7 +654,7 @@ NastyRenderer::bindInputEvents() {
     if (keydata.key == Key::Num9) {
       ModelIndex = (ModelIndex + 1) % ModelPaths.size();
       CH_LOG_INFO(NastyRendererSystem, "Loading model: {0}", ModelPaths[ModelIndex]);
-      //loadModel();
+      // loadModel();
     }
   });
 
@@ -702,40 +701,36 @@ NastyRenderer::bindInputEvents() {
     projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   });
 
-  listenWheel =
-      eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
-        if (m_camera && wheelData.deltaY != 0 && m_bIsfocused) {
-          m_camera->moveForward(std::move(wheelData.deltaY * g_cameraMoveSpeed));
-        }
-      });
+  listenWheel = eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
+    if (m_camera && wheelData.deltaY != 0 && m_bIsfocused) {
+      m_camera->moveForward(std::move(wheelData.deltaY * g_cameraMoveSpeed));
+    }
+  });
 
-  listenMouse =
-      eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
-        if (!m_camera || !m_bIsfocused) {
-          return;
-        }
+  listenMouse = eventDispatcher.OnMouseMove.connect([&](const MouseMoveData& mouseData) {
+    if (!m_camera || !m_bIsfocused) {
+      return;
+    }
 
-        const bool isMouseButtonDown = eventDispatcher.isMouseButtonDown(MouseButton::Right);
-        const bool isMouseButtonDownMiddle =
-            eventDispatcher.isMouseButtonDown(MouseButton::Middle);
-        if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
-          return;
-        }
+    const bool isMouseButtonDown = eventDispatcher.isMouseButtonDown(MouseButton::Right);
+    const bool isMouseButtonDownMiddle =
+        eventDispatcher.isMouseButtonDown(MouseButton::Middle);
+    if (!isMouseButtonDown && !isMouseButtonDownMiddle) {
+      return;
+    }
 
-        if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
-          if (isMouseButtonDownMiddle) {
-            m_camera->pan(std::move(-mouseData.deltaX * g_cameraPanSpeed),
-                          std::move(-mouseData.deltaY * g_cameraPanSpeed));
-          }
-          if (isMouseButtonDown) {
-            m_camera->rotate(std::move(mouseData.deltaY * g_rotationSpeed),
-                             std::move(mouseData.deltaX * g_rotationSpeed), 0.0f);
-          }
-          projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
-        }
-      });
-
-
+    if (mouseData.deltaX != 0 || mouseData.deltaY != 0) {
+      if (isMouseButtonDownMiddle) {
+        m_camera->pan(std::move(-mouseData.deltaX * g_cameraPanSpeed),
+                      std::move(-mouseData.deltaY * g_cameraPanSpeed));
+      }
+      if (isMouseButtonDown) {
+        m_camera->rotate(std::move(mouseData.deltaY * g_rotationSpeed),
+                         std::move(mouseData.deltaX * g_rotationSpeed), 0.0f);
+      }
+      projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
+    }
+  });
 
   CH_LOG_INFO(NastyRendererSystem, "Input events bound");
 }
