@@ -405,8 +405,7 @@ NastyRenderer::initializeRenderResources() {
 
   ShaderCreateInfo fragmentShaderCreateInfo{.stage = ShaderStage::Fragment,
                                             .entryPoint = "main",
-                                            .sourceCode =
-                                                FileSystem::fastRead(cubeFragmentShader),
+                                            .sourceCode = FileSystem::fastRead(cubeFragmentShader),
                                             .filePath = cubeFragmentShader.toString(),
                                             .defines = {}};
 

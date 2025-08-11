@@ -43,7 +43,11 @@ EnginePaths::getEngineAssetDirectory() {
 
   static Path engineAssetDir = FileSystem::absolutePath(Path(
     #if USING(CH_DEBUG_MODE)
-    "chEditor/assets"
+#if USING(CH_PLATFORM_WIN32)
+      "../../../../chEditor/Content"
+#else
+    "chEditor/Content"
+#endif
     #else
     "EngineAssets/Release"
     #endif
@@ -52,14 +56,19 @@ EnginePaths::getEngineAssetDirectory() {
 }
 
 /*
+* m_path = L"C:\\Users\\accel\\OneDrive\\Documentos\\Chimera\\Chimera\\out\\chCore\\Content\\shaders\\cubeVertex.spv"
 */
 Path
 EnginePaths::getShaderDirectory() {
   static Path shaderDir = FileSystem::absolutePath(Path(
     #if USING(CH_DEBUG_MODE)
-    "chCore/Content/shaders"
+      #if USING(CH_PLATFORM_WIN32)
+      "../../../../chCore/Content/shaders"
+      #else
+        "chCore/Content/shaders"
+      #endif
     #else
-    "EngineAssets/Release"
+      "EngineAssets/Release"
     #endif
   ));
   return shaderDir;
