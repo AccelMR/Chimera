@@ -12,10 +12,11 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
 # add warning to highest warning level only for linux, on windows we have to use /W4 or /Wall
-if (WIN32)
-  add_compile_options(/W4)
+add_library(project_warnings INTERFACE)
+if (MSVC)
+  target_compile_options(project_warnings INTERFACE /W4 /WX)
 else()
-  add_compile_options(-Wall -Wextra -pedantic -Werror)
+  target_compile_options(project_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -62,17 +63,30 @@ elseif(WIN32)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
-
   set(SDL_SHARED ON  CACHE BOOL "" FORCE)
   set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-  set(SDL_TEST   OFF CACHE BOOL "" FORCE)
+  set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+  set(SDL_TESTS        OFF CACHE BOOL "" FORCE)
+  set(SDL_EXAMPLES     OFF CACHE BOOL "" FORCE)
+
+  set(SDL_LIBC ON  CACHE BOOL "" FORCE)
+  set(HAVE_LIBM   ON  CACHE BOOL "" FORCE)
+  set(LIBM m)
+
+  add_subdirectory(chCore/externals/SDL3)
+  set_target_properties(SDL3-shared PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    POSITION_INDEPENDENT_CODE ON  # Add this line
+  )
 
   set(CH_EDITOR_ENABLED ON CACHE BOOL "Enable chEditor" FORCE)
   set(CH_SDL3_ENABLED ON CACHE BOOL "Enable SDL3 support" FORCE)
   set(CH_IMPORTERS_ENABLED ON CACHE BOOL "Enable importers" FORCE)
   set(CH_VULKAN_IMGUI ON CACHE BOOL "Enable ImGui" FORCE)
 
-  add_subdirectory(chCore/externals/SDL3)
+
 endif()
 
 add_subdirectory(chUtilities)

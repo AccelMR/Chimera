@@ -5,8 +5,8 @@
 
 #pragma once
 
-#define FONT_ICON_FILE_NAME_FAR "chEditor/assets/fonts/fa-regular-400.ttf"
-#define FONT_ICON_FILE_NAME_FAS "chEditor/assets/fonts/fa-solid-900.ttf"
+#define FONT_ICON_FILE_NAME_FAR "chEditor/EditorAssets/fonts/fa-regular-400.ttf"
+#define FONT_ICON_FILE_NAME_FAS "chEditor/EditorAssets/fonts/fa-solid-900.ttf"
 
 #define ICON_MIN_FA 0xe005
 #define ICON_MAX_16_FA 0xf8ff
