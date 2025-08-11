@@ -434,14 +434,15 @@ OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const {
 
   // Check search filter
   if (!searchText.empty()) {
-    const String searchLower = searchText;
+    String searchLower = searchText;
     std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(), ::tolower);
 
-    const String messageLower = entry.message;
+    String messageLower = entry.message;
     std::transform(messageLower.begin(), messageLower.end(), messageLower.begin(), ::tolower);
 
-    const String categoryLower = entry.category;
-    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(), ::tolower);
+    String categoryLower = entry.category;
+    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(),
+                   ::tolower);
 
     if (messageLower.find(searchLower) == String::npos &&
         categoryLower.find(searchLower) == String::npos) {
