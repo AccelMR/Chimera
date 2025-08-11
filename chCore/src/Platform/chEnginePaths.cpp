@@ -57,7 +57,7 @@ Path
 EnginePaths::getShaderDirectory() {
   static Path shaderDir = FileSystem::absolutePath(Path(
     #if USING(CH_DEBUG_MODE)
-    "chCore/CoreAssets/shaders"
+    "chCore/Content/shaders"
     #else
     "EngineAssets/Release"
     #endif

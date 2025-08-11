@@ -16,7 +16,7 @@
 #include "chPath.h"
 #include "chTextureAsset.h"
 
-#include "../../EditorAssets/fonts/IconsFontAwsome5.h"
+#include "../../Content/fonts/IconsFontAwsome5.h"
 #include "imgui.h"
 #include <nfd.hpp>
 
