@@ -28,10 +28,13 @@ class CH_CORE_EXPORT MultiStageRenderer : public IRenderer
   // IRenderer interface
   void
   initialize(uint32 width, uint32 height) override;
+
   RendererOutput
   onRender(float deltaTime) override;
+
   void
   resize(uint32 width, uint32 height) override;
+
   void
   cleanup() override;
 
@@ -43,6 +46,7 @@ class CH_CORE_EXPORT MultiStageRenderer : public IRenderer
   getHeight() const override {
     return m_renderHeight;
   }
+
   void
   setClearColors(const Vector<LinearColor>& clearColors) override;
 
@@ -90,7 +94,7 @@ class CH_CORE_EXPORT MultiStageRenderer : public IRenderer
   getStageAs(const UUID& instanceId) const {
     static_assert(std::is_base_of_v<IRenderStage, T>, "T must inherit from IRenderStage");
     auto* stage = getStage(instanceId);
-    return dynamic_cast<T*>(stage);
+    return reinterpret_cast<T*>(stage);
   }
 
   /**

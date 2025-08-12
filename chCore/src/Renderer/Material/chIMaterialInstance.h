@@ -62,17 +62,4 @@ class CH_CORE_EXPORT IMaterialInstance
   virtual bool
   isCompatibleWith(const VertexLayout& layout) const = 0;
 };
-
-/**
- * @brief Data structure for passing material instances to render stages
- */
-struct MaterialInstanceData {
-  Vector<SPtr<IMaterialInstance>> instances;
-
-  bool
-  isValid() const {
-    return !instances.empty();
-  }
-};
-
 } // namespace chEngineSDK

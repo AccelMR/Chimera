@@ -123,4 +123,4 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   HEvent m_onKeyDownEvent; ///< Event for handling key down events
   HEvent m_onKeyUpEvent; ///< Event for handling key up events
 };
-} // namespace chEngineSDK`
+} // namespace chEngineSDK

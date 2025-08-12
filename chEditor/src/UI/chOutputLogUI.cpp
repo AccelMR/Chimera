@@ -19,8 +19,9 @@ CH_LOG_DECLARE_STATIC(OutputLogUILog, All);
 /*
  */
 OutputLogUI::OutputLogUI()
- : m_logWrittenEvent(Logger::instance().onLogWritten(
-       std::bind(&OutputLogUI::addLogEntry, this, std::placeholders::_1))) {
+ : m_logWrittenEvent(Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
+                                                               this,
+                                                               std::placeholders::_1))) {
   CH_LOG_DEBUG(OutputLogUILog, "Creating OutputLogUI instance.");
   // Initialize with all categories enabled by default
   m_filter.enabledCategories.clear();
