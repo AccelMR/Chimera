@@ -26,7 +26,7 @@ using std::ostream;
  *  m4.transpose();
  *
  */
-class Matrix4
+class CH_UTILITY_EXPORT Matrix4
 {
  public:
   /*
@@ -62,14 +62,12 @@ class Matrix4
   /**
    * @brief Constructor from four Vectors 4
    */
-  CH_UTILITY_EXPORT
   Matrix4(const Vector4& firstRow, const Vector4& secondRow, const Vector4& thirdRow,
           const Vector4& fourthRow);
 
   /**
    * @brief Constructor from four planes
    */
-  CH_UTILITY_EXPORT
   Matrix4(const Plane& InX, const Plane& InY, const Plane& InZ, const Plane& InW);
 
   /************************************************************************/
@@ -113,7 +111,7 @@ class Matrix4
    *
    * @return Matrix4 A new Matrix4 created from this
    */
-  CH_UTILITY_EXPORT NODISCARD Matrix4
+   NODISCARD Matrix4
   getInverse();
 
   /**
@@ -121,7 +119,7 @@ class Matrix4
    *
    * @return Rotator Representation of this matrix
    */
-  NODISCARD CH_UTILITY_EXPORT Rotator
+  NODISCARD  Rotator
   rotator() const;
 
   /**
@@ -130,7 +128,7 @@ class Matrix4
    *
    * @return Quaternion representing this rotation matrix
    */
-  NODISCARD CH_UTILITY_EXPORT Quaternion
+  NODISCARD  Quaternion
   toQuaternion() const;
 
   /**
@@ -139,7 +137,7 @@ class Matrix4
    * @param v Position vector to transform
    * @return Vector4 The transformed position
    */
-  NODISCARD CH_UTILITY_EXPORT Vector4
+  NODISCARD  Vector4
   transformPosition(const Vector3& v) const;
 
   /**
@@ -148,7 +146,7 @@ class Matrix4
    * @param v The vector to be transformed
    * @return Vector4 The new vector transformed in world space
    */
-  NODISCARD CH_UTILITY_EXPORT Vector4
+  NODISCARD  Vector4
   transformVector(const Vector3& v) const;
 
   /**
@@ -157,7 +155,7 @@ class Matrix4
    * @param p Vector to be transformed
    * @return Vector4 The new Vector created by the transformation
    */
-  NODISCARD CH_UTILITY_EXPORT Vector4
+  NODISCARD  Vector4
   transformVector4(const Vector4& p) const;
 
   /**
@@ -318,17 +316,17 @@ class Matrix4
   /**
    * All zero matrix
    */
-  static CH_UTILITY_EXPORT const Matrix4 ZERO;
+  static  const Matrix4 ZERO;
 
   /**
    * Identity Matrix
    */
-  static CH_UTILITY_EXPORT const Matrix4 IDENTITY;
+  static  const Matrix4 IDENTITY;
 
   /**
    * All one matrix
    */
-  static CH_UTILITY_EXPORT const Matrix4 UNITY;
+  static  const Matrix4 UNITY;
 
  protected:
   // Matrix data stored in row-major order (m[row][column])

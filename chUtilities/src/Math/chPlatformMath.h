@@ -155,8 +155,9 @@ public:
    * @param y
    *    Second value.
    **/
-  static float
-  min(const float x, const float y);
+  template <class T>
+  static T
+  min(const T x, const T y);
 
   /**
    *   Returns the highest between two values.
@@ -167,8 +168,9 @@ public:
    * @param y
    *    Second value.
    **/
-  static float
-  max(const float x, const float y);
+  template <class T>
+  static T
+  max(const T x, const T y);
 
   /**
    *   Computes the floating point remainder of the division operation value1/value2.
@@ -612,6 +614,22 @@ public:
  */
  /************************************************************************/
 
+/*
+*/
+template <class T>
+T
+PlatformMath::min(const T x, const T y) {
+  return x < y ? x : y;
+}
+
+/*
+*/
+template <class T>
+T
+PlatformMath::max(const T x, const T y) {
+  return x > y ? x : y;
+}
+
  /*
  */
 FORCEINLINE float
@@ -705,5 +723,4 @@ FORCEINLINE bool
 PlatformMath::nearEqual(float a, const float& b, const float& epsilon) {
   return (abs(a - b) <= epsilon);
 }
-
 } // namespace chEngineSDK

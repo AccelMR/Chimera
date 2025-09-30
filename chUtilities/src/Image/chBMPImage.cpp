@@ -103,7 +103,8 @@ BMPImage::create(uint32 width, uint32 height, BPP bpp) {
   m_bpp = bpp;
 
   m_bytesPerPixel = static_cast<int32>(m_bpp) / 8;
-  m_pitch = m_width * m_bytesPerPixel;
+  // Fix C4244 by casting to uint16 explicitly
+  m_pitch = static_cast<uint16>(m_width * m_bytesPerPixel);
 
   m_data = chMakeShared<MemoryDataStream>(m_pitch * m_height);
 }
@@ -293,7 +294,8 @@ BMPImage::bitBlt(const BMPImage& src, const Box2D& srcRect, const Box2D& dstRect
         continue;
       }
 
-      setPixel(dstRectClamped.minPoint.x + x, dstRectClamped.minPoint.y + y, color);
+      setPixel(static_cast<uint32>(dstRectClamped.minPoint.x) + x, 
+               static_cast<uint32>(dstRectClamped.minPoint.y) + y, color);
     }
   }
 }
@@ -301,17 +303,22 @@ BMPImage::bitBlt(const BMPImage& src, const Box2D& srcRect, const Box2D& dstRect
 /*
  */
 bool
-BMPImage::calculateSourceCoordinates(int32 x, int32 y, const Box2D& srcRect,
-                                     const Box2D& dstRect, BMP_TEXTURE_MODE mode, int32& srcX,
+BMPImage::calculateSourceCoordinates(int32 x, int32 y, 
+                                     const Box2D& srcRect,
+                                     const Box2D& dstRect, 
+                                     BMP_TEXTURE_MODE mode, 
+                                     int32& srcX,
                                      int32& srcY) {
   Vector2 dstWidthHeight = dstRect.getSize();
   Vector2 srcWidthHeight = srcRect.getSize();
   switch (mode) {
   case BMP_TEXTURE_MODE::NONE:
-    srcX = srcRect.minPoint.x + x;
-    srcY = srcRect.minPoint.y + y;
+    srcX = static_cast<int32>(srcRect.minPoint.x) + x;
+    srcY = static_cast<int32>(srcRect.minPoint.y) + y;
 
-    return srcX >= 0 && srcX < static_cast<int32>(srcWidthHeight.x) && srcY >= 0 &&
+    return srcX >= 0 && 
+           srcX < static_cast<int32>(srcWidthHeight.x) && 
+           srcY >= 0 &&
            srcY < static_cast<int32>(srcWidthHeight.y);
 
   case BMP_TEXTURE_MODE::REPEAT:
@@ -334,17 +341,18 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y, const Box2D& srcRect,
 /*
  */
 bool
-BMPImage::calculateRepeatCoordinates(int32 x, int32 y, const Box2D& srcRect, int32& srcX,
-                                     int32& srcY) {
+BMPImage::calculateRepeatCoordinates(int32 x, int32 y, 
+                                     const Box2D& srcRect, 
+                                     int32& srcX, int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
-  srcX = srcRect.minPoint.x + x % static_cast<int32>(widthHeight.x);
+  srcX = static_cast<int32>(srcRect.minPoint.x) + x % static_cast<int32>(widthHeight.x);
   if (srcX < 0) {
-    srcX += widthHeight.x;
+    srcX += static_cast<int32>(widthHeight.x);
   }
 
-  srcY = srcRect.minPoint.y + y % static_cast<int32>(widthHeight.y);
+  srcY = static_cast<int32>(srcRect.minPoint.y) + y % static_cast<int32>(widthHeight.y);
   if (srcY < 0) {
-    srcY += widthHeight.y;
+    srcY += static_cast<int32>(widthHeight.y);
   }
 
   return true;
@@ -356,10 +364,10 @@ bool
 BMPImage::calculateClampCoordinates(int32 x, int32 y, const Box2D& srcRect, int32& srcX,
                                     int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
-  srcX = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.x + x),
-                               static_cast<int32>(widthHeight.x - 1)));
-  srcY = Math::max(0, std::min(static_cast<int32>(srcRect.minPoint.y + y),
-                               static_cast<int32>(widthHeight.y - 1)));
+  srcX = Math::max(0, Math::min(static_cast<int32>(srcRect.minPoint.x) + x,
+                                static_cast<int32>(widthHeight.x) - 1));
+  srcY = Math::max(0, Math::min(static_cast<int32>(srcRect.minPoint.y) + y,
+                                static_cast<int32>(widthHeight.y) - 1));
 
   return true;
 }
@@ -410,8 +418,8 @@ BMPImage::calculateStretchCoordinates(int32 x, int32 y, const Box2D& srcRect,
   const float scaleX = static_cast<float>(widthHeight.x) / widthHeightDst.x;
   const float scaleY = static_cast<float>(widthHeight.y) / widthHeightDst.y;
 
-  srcX = static_cast<int32>(x * scaleX) + srcRect.minPoint.x;
-  srcY = static_cast<int32>(y * scaleY) + srcRect.minPoint.y;
+  srcX = x * static_cast<int32>(scaleX) + static_cast<int32>(srcRect.minPoint.x);
+  srcY = y * static_cast<int32>(scaleY) + static_cast<int32>(srcRect.minPoint.y);
 
   return (srcX >= 0 && srcX < widthHeight.x && srcY >= 0 && srcY < widthHeight.y);
 }
@@ -446,5 +454,4 @@ BMPImage::resize(uint32 width, uint32 height) {
   std::swap(m_bytesPerPixel, temp.m_bytesPerPixel);
   std::swap(m_pitch, temp.m_pitch);
 }
-
 } // namespace chEngineSDK

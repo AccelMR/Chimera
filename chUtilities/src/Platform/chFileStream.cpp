@@ -365,9 +365,8 @@ FileDataStream::init() {
   //Should check ensure open succeeded, in case fail for some reason.
   if (m_pInStream->fail()) {
     // trow an exception or log an error
-    std::runtime_error("Failed to open file: " + m_path.toString());
-    std::cerr << "Failed to open file: " << m_path.toString() << std::endl;
-    return;
+    const String msg = "Failed to open file: " + m_path.toString();
+    throw std::runtime_error(msg.c_str());
   }
 
   m_pInStream->seekg(0, std::ios_base::end);

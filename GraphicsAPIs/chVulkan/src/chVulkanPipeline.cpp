@@ -47,6 +47,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
   Vector<String> entryPointCopies(createInfo.shaders.size());
   for (const auto& [stage, shader] : createInfo.shaders) {
     auto vulkanShader = std::static_pointer_cast<VulkanShader>(shader);
+    CH_ASSERT(vulkanShader); // Make sure it exist, can be overload but it's only debug
 
     VkShaderStageFlagBits vkStage;
     switch (stage) {

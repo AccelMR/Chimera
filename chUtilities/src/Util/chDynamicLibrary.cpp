@@ -46,9 +46,10 @@ getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name) {
   return dlsym(handle, name);
 #elif USING(CH_PLATFORM_WIN32)
   return GetProcAddress(reinterpret_cast<HMODULE>(handle), name);
-#endif
+#else
   CH_EXCEPT(InternalErrorException, "Could not get symbol " + String(name));
   return nullptr;
+#endif // USING(CH_PLATFORM_WIN32)
 }
 
 void*
@@ -73,9 +74,10 @@ loadLibraryPlatformSpecific(const char* name) {
     std::cerr << "Error al cargar '" << name << "': " << GetLastError() << std::endl;
   }
   return handle;
-#endif
+#else
   CH_EXCEPT(InternalErrorException, "Plataforma no soportada para: " + String(name));
   return nullptr;
+#endif // USING(CH_PLATFORM_WIN32)
 }
 
 bool
@@ -84,8 +86,10 @@ unloadLibraryPlatformSpecific(DynamicLibraryHandle handle) {
   return dlclose(handle);
 #elif USING(CH_PLATFORM_WIN32)
   return FreeLibrary(reinterpret_cast<HMODULE>(handle));
-#endif
+#else
   CH_EXCEPT(InternalErrorException, "Could not unload library");
+  return true;
+#endif // USING(CH_PLATFORM_WIN32)
 }
 } // namespace DynamicLibraryHelper
 using namespace DynamicLibraryHelper;

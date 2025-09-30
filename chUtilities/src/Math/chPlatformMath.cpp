@@ -97,23 +97,6 @@ PlatformMath::isFinite(float value)
 }
 
 /*
-* TODO: make these template so we don't have to cast every time we use it with different types
-*/
-float
-PlatformMath::min(const float x, const float y)
-{
-  return std::min(x, y);
-}
-
-/*
-*/
-float
-PlatformMath::max( const float x, const float y )
-{
-  return std::max(x, y);
-}
-
-/*
 */
 float
 PlatformMath::fmod(float value1, float value2)
