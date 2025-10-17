@@ -42,9 +42,9 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
   VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 
   Vector<VkPipelineShaderStageCreateInfo> shaderStages(createInfo.shaders.size());
+  Vector<String> entryPointCopies(createInfo.shaders.size());
 
   SIZE_T index = 0;
-  Vector<String> entryPointCopies(createInfo.shaders.size());
   for (const auto& [stage, shader] : createInfo.shaders) {
     auto vulkanShader = std::static_pointer_cast<VulkanShader>(shader);
     CH_ASSERT(vulkanShader); // Make sure it exist, can be overload but it's only debug
@@ -58,15 +58,16 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const PipelineCreateInfo& create
       default: continue;
     }
     entryPointCopies[index] = vulkanShader->getEntryPoint();
-    shaderStages[index++] = {
+    shaderStages[index] = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
       .stage = vkStage,
       .module = vulkanShader->getHandle(),
-      .pName = entryPointCopies[index - 1].c_str(),
+      .pName = entryPointCopies[index].c_str(),
       .pSpecializationInfo = nullptr
     };
+    index++;
   }
 
   Vector<VkVertexInputBindingDescription> bindingDescriptions;

@@ -48,7 +48,7 @@ class ITextureView;
 
 class IAsset;
 class AssetRegister;
-class AssetMetadata;
+struct AssetMetadata;
 class IAssetManager;
 
 } // namespace chEngineSDK

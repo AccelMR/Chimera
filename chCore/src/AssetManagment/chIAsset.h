@@ -33,7 +33,7 @@ enum class AssetState : uint16 {
 struct MS_ALIGN(8) AssetMetadata {
   UUID uuid = UUID::null();      // 16 bytes
   UUID assetType = UUID::null(); // 16 bytes
-  uint64 creationTime = ~0;      // 8 bytes
+  uint64 creationTime = 1;
 
   ANSICHAR typeName[32] = "Unknown";    // 32 bytes
   ANSICHAR engineVersion[16] = "x.x.x"; // 16 bytes

@@ -37,7 +37,7 @@ class CH_CORE_EXPORT IAssetImporter {
   canImport(const String& extension) const = 0;
 
   virtual Vector<UUID>
-  getSupportedAssetTypes() const = 0;;
+  getSupportedAssetTypes() const = 0;
 
   template <typename AssetType = IAsset>
   FORCEINLINE SPtr<AssetType>
