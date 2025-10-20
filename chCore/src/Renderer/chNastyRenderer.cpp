@@ -70,11 +70,6 @@ Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 static Vector<String> NodeNames;
 static uint32 NodeIndex = 0;
 static bool bIsModelRotating = false;
-static Array<Path, 5> ModelPaths = {
-    Path("resources/models/rex_norm.obj"), Path("resources/models/cyberdemon.md5mesh"),
-    Path("resources/models/Porch.fbx"), Path("resources/models/test.fbx"),
-    Path("resources/models/Porce/scene.gltf")};
-static uint32 ModelIndex = 0;
 
 static constexpr uint64 MAX_WAIT_TIME = 100000000; // 1 second in nanoseconds
 
@@ -97,7 +92,6 @@ NastyRenderer::initialize(uint32 width, uint32 height) {
               width, height);
 
   CH_ASSERT(IGraphicsAPI::instancePtr() != nullptr);
-
   m_renderWidth = width;
   m_renderHeight = height;
 
@@ -648,12 +642,6 @@ NastyRenderer::bindInputEvents() {
       bIsModelRotating = !bIsModelRotating;
       CH_LOG_INFO(NastyRendererSystem, "Model rotation {0}",
                   bIsModelRotating ? "enabled" : "disabled");
-    }
-
-    if (keydata.key == Key::Num9) {
-      ModelIndex = (ModelIndex + 1) % ModelPaths.size();
-      CH_LOG_INFO(NastyRendererSystem, "Loading model: {0}", ModelPaths[ModelIndex]);
-      // loadModel();
     }
   });
 

@@ -151,6 +151,6 @@ class VulkanAPI : public IGraphicsAPI {
   Map<String, Function<Any(const Vector<Any>&)>> m_functionMap;
 };
 
-CH_CORE_EXPORT VulkanAPI& g_vulkanAPI();
+VulkanAPI& g_vulkanAPI();
 
 } // namespace chEngineSDK
