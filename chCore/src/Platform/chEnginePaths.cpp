@@ -42,15 +42,16 @@ Path
 EnginePaths::getEngineAssetDirectory() {
 
   static Path engineAssetDir = FileSystem::absolutePath(Path(
-    #if USING(CH_DEBUG_MODE)
-#if USING(CH_PLATFORM_WIN32)
-      "../../../../chEditor/Content"
+#if USING(CH_DEBUG_MODE)
+  #if USING(CH_PLATFORM_WIN32)
+    "../../../../chCore/Content"
+  #else
+    "chCore/Content"
+  #endif
 #else
-    "chEditor/Content"
+    "chCore/Content"
+    "chCore/Content"
 #endif
-    #else
-    "EngineAssets/Release"
-    #endif
   ));
   return engineAssetDir;
 }
@@ -60,16 +61,10 @@ EnginePaths::getEngineAssetDirectory() {
 */
 Path
 EnginePaths::getShaderDirectory() {
+  const Path contentDir = getEngineAssetDirectory();
   static Path shaderDir = FileSystem::absolutePath(Path(
-    #if USING(CH_DEBUG_MODE)
-      #if USING(CH_PLATFORM_WIN32)
-      "../../../../chCore/Content/shaders"
-      #else
-        "chCore/Content/shaders"
-      #endif
-    #else
-      "EngineAssets/Release"
-    #endif
+    contentDir, 
+    Path("Shaders")
   ));
   return shaderDir;
 }

@@ -46,6 +46,12 @@ class CH_UTILITY_EXPORT Path {
   explicit Path(const ANSICHAR* path)
     : m_path(path) {}
 
+  FORCEINLINE Path(const Vector<Path>& pathsToConcat) {
+    for (const auto& path : pathsToConcat) {
+      m_path /= path.m_path;
+    }
+  }
+
   /**
    * Constructor from a vector of paths.
    * @param paths

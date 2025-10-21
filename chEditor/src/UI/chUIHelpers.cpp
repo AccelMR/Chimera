@@ -8,6 +8,7 @@
 /************************************************************************/
 #include "chUIHelpers.h"
 
+#include "chEnginePaths.h"
 #include "chDisplayEventHandle.h"
 #include "chIGraphicsAPI.h"
 #include "chLinearColor.h"
@@ -326,23 +327,24 @@ UIHelpers::initFontConfig() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
-  io.ConfigFlags |=
-      ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
-  // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
-  // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
+  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
 
   io.Fonts->AddFontDefault();
-  float iconFontSize = UIHelpers::baseFontSize * 20.0f /
-                       3.0f; // FontAwesome fonts need to have their sizes reduced
 
-  // merge in icons from Font Awesome
+  float iconFontSize = UIHelpers::baseFontSize * 20.0f / 3.0f; // FontAwesome fonts need to have their sizes reduced
+
+  // Merge in icons from Font Awesome
   static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
   ImFontConfig icons_config;
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
   icons_config.GlyphMinAdvanceX = iconFontSize;
-  io.Fonts->AddFontFromFileTTF(FONT_ICON_FILE_NAME_FAS, iconFontSize, &icons_config,
-                               icons_ranges);
+
+  // Build an absolute path when possible (recommend defining CH_CONTENT_DIR via CMake)
+  const String fontIconFilePath =
+      EnginePaths::getEngineAssetDirectory().toString() + "/Fonts/fa-solid-900.ttf";
+
+  io.Fonts->AddFontFromFileTTF(fontIconFilePath.c_str(), iconFontSize, &icons_config, icons_ranges);
 }
 
 /*
