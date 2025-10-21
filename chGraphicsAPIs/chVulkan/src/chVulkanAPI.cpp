@@ -828,11 +828,11 @@ VulkanAPI::initializeFunctionMap() {
     // TODO: Not sure how this works, but when we try to load a new texture we'll need to fix
     // this
     // init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
-    init_info.RenderPass = vulkanRenderPass->getHandle();
-    init_info.Subpass = 0;
+    init_info.PipelineInfoMain.RenderPass = vulkanRenderPass->getHandle();
+    init_info.PipelineInfoMain.Subpass = 0;
+    init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     init_info.MinImageCount = 2;
     init_info.ImageCount = inSwapchain->getTextureCount();
-    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
     // TODO: hardcoded for now, need to be set by someone(?)
     init_info.DescriptorPoolSize = 8;

@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.19)
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/chImgui/Externals/imgui)
 message(STATUS "IMGUI_DIR = '${IMGUI_DIR}'")
 
-
 add_library(chImgui SHARED
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_demo.cpp
