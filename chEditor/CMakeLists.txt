@@ -7,19 +7,6 @@ file(GLOB
   ${CMAKE_CURRENT_SOURCE_DIR}/EditorAssets/*/*.h
 )
 
-# ImGui Source Files - Solo SDL3 backend
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/Externals/imgui)
-set(IMGUI_SOURCES
-  ${IMGUI_DIR}/imgui.cpp
-  ${IMGUI_DIR}/imgui_demo.cpp
-  ${IMGUI_DIR}/imgui_draw.cpp
-  ${IMGUI_DIR}/imgui_tables.cpp
-  ${IMGUI_DIR}/imgui_widgets.cpp
-
-  # Solo SDL3 backend (sin Vulkan)
-  ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
-)
-
 #set(NFD_PORTAL OFF d BOOL "Use xdg-desktop-portal instead of GTK" FORCE)
 add_subdirectory(externals/nativefiledialog-extended)
 
@@ -33,7 +20,7 @@ set_target_properties(nfd PROPERTIES
 set(CMAKE_DEBUG_POSTFIX "d")
 
 # Create executable with ImGui core files only
-add_executable(chEditor chEditorMain.cpp ${SOURCE_FILES} ${IMGUI_SOURCES})
+add_executable(chEditor chEditorMain.cpp ${SOURCE_FILES})
 
 # PIE configuration for Linux and Chimera plugin architecture
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -102,8 +89,13 @@ target_compile_definitions(chEditor PRIVATE
 target_link_libraries(chEditor
   chCore
   chUtilities
+  chImgui
   nfd
 )
+
+if (WIN32)
+    target_compile_definitions(chEditor PRIVATE IMGUI_API=__declspec(dllimport))
+endif()
 
 # C++20 compiler configuration
 target_compile_features(chEditor PRIVATE cxx_std_20)

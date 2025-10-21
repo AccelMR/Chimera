@@ -1,9 +1,6 @@
 [submodule "chCore/externals/SDL3"]
 	path = Externals/SDL3
 	url = https://github.com/libsdl-org/SDL.git
-[submodule "Externals/imgui"]
-	path = Externals/imgui
-	url = https://github.com/ocornut/imgui.git
 [submodule "chEditor/externals/nativefiledialog-extended"]
 	path = chEditor/externals/nativefiledialog-extended
 	url = https://github.com/btzy/nativefiledialog-extended.git
@@ -13,3 +10,4 @@
 [submodule "chImgui/Externals/imgui"]
 	path = chImgui/Externals/imgui
 	url = https://github.com/ocornut/imgui.git
+  branch = docking

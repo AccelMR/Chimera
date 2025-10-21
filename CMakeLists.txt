@@ -21,6 +21,9 @@ endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Toggle to include chImgui subdirectory
+option(CH_IMGUI_ENABLED "Enable chImgui" ON)
+
 # Configuración específica para Linux
 if(UNIX AND NOT APPLE)
   # Configuración global del compilador
@@ -86,6 +89,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(CH_CODECS_ENABLED ON CACHE BOOL "Enable codecs" FORCE)
   set(CH_VULKAN_IMGUI ON CACHE BOOL "Enable ImGui" FORCE)
 
+endif()
+
+if(CH_IMGUI_ENABLED)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/chImgui")
+    add_subdirectory(chImgui)
+  else()
+    message(WARNING "CH_IMGUI_ENABLED is ON but ${CMAKE_SOURCE_DIR}/chImgui not found")
+  endif()
 endif()
 
 add_subdirectory(chUtilities)
