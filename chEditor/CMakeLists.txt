@@ -97,10 +97,6 @@ target_link_libraries(chEditor
   nfd
 )
 
-if (WIN32)
-    target_compile_definitions(chEditor PRIVATE IMGUI_API=__declspec(dllimport))
-endif()
-
 # C++20 compiler configuration
 target_compile_features(chEditor PRIVATE cxx_std_20)
 

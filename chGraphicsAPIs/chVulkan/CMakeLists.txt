@@ -43,6 +43,7 @@ if(CH_VULKAN_IMGUI)
   if(CH_SDL3_ENABLED)
     target_sources(chVulkan PRIVATE
         ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+        ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
     )
   endif()
 
@@ -73,7 +74,7 @@ target_link_libraries(chVulkan PRIVATE Vulkan::Vulkan chImgui)
 # ---------- Plataforma: Windows ----------
 if(WIN32)
     # Define para surface Win32
-    target_compile_definitions(chVulkan PRIVATE VK_USE_PLATFORM_WIN32_KHR IMGUI_API=__declspec(dllimport))
+    target_compile_definitions(chVulkan PRIVATE VK_USE_PLATFORM_WIN32_KHR)
 
     # Si tu c�digo crea ventanas Win32 o usa funciones del SDK, enlaza estas (seguras/no-controversiales)
     target_link_libraries(chVulkan PRIVATE user32 gdi32 shell32)

@@ -18,12 +18,10 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
 endif()
 
+file(GLOB IMGUI_SRC_FILES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/*.h)
+
 add_library(chImgui SHARED
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_SRC_FILES}
 )
 
 set_target_properties(chImgui PROPERTIES
@@ -45,5 +43,5 @@ target_compile_definitions(chImgui PRIVATE
 )
 
 if (WIN32)
-    target_compile_definitions(chImgui PRIVATE IMGUI_API=__declspec(dllexport))
+  target_compile_definitions(chImgui PRIVATE IMGUI_BUILD_DLL)
 endif()
