@@ -10,3 +10,6 @@
 [submodule "chCodecs/chMeshCodec/externals/assimp"]
 	path = chCodecs/chMeshCodec/externals/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "chImgui/Externals/imgui"]
+	path = chImgui/Externals/imgui
+	url = https://github.com/ocornut/imgui.git
