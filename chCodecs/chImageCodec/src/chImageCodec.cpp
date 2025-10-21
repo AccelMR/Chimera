@@ -1,13 +1,13 @@
 /************************************************************************/
 /**
- * @file chImageImporter.cpp
+ * @file chImageCodec.cpp
  * @author AccelMR
  * @date 2025/07/20
  * @brief
  */
 /************************************************************************/
 
-#include "chImageImporter.h"
+#include "chImageCodec.h"
 
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -19,7 +19,7 @@
 
 namespace chEngineSDK{
 
-CH_LOG_DECLARE_STATIC(ImageImporterLog, All);
+CH_LOG_DECLARE_STATIC(ImageCodecLog, All);
 
 namespace ImageImpoterHelpers{
 Vector<uint8>
@@ -41,7 +41,7 @@ loadImage(const Path& path, int32* width, int32* height, int32* channels) {
 /*
 */
 Vector<String>
-ImageImporter::getSupportedExtensions() const {
+ImageCodec::getSupportedExtensions() const {
   // Add more supported image formats as needed
   return {"png", "jpg", "jpeg", "bmp", "tga", "hdr", "exr"};
 }
@@ -49,7 +49,7 @@ ImageImporter::getSupportedExtensions() const {
 /*
 */
 SPtr<IAsset>
-ImageImporter::importAsset(const Path& filePath, const String& assetName) {
+ImageCodec::importAsset(const Path& filePath, const String& assetName) {
   CH_ASSERT(FileSystem::isFile(filePath) && "File does not exist");
   CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
 
@@ -59,7 +59,7 @@ ImageImporter::importAsset(const Path& filePath, const String& assetName) {
   Vector<uint8> imageData = ImageImpoterHelpers::loadImage(filePath, &width, &height, &channels);
 
   if (imageData.empty()) {
-    CH_LOG_ERROR(ImageImporterLog, "Failed to load image from path: {0}", filePath.toString());
+    CH_LOG_ERROR(ImageCodecLog, "Failed to load image from path: {0}", filePath.toString());
     return nullptr;
   }
 
@@ -78,11 +78,11 @@ ImageImporter::importAsset(const Path& filePath, const String& assetName) {
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(metadata, imageData, width, height);
 
   if (!textureAsset->save()) {
-    CH_LOG_ERROR(ImageImporterLog, "Failed to save texture asset: " + assetName);
+    CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: " + assetName);
     return nullptr;
   }
 
-  CH_LOG_INFO(ImageImporterLog, "Imported image asset: {0} from {1}", assetName, filePath.toString());
+  CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", assetName, filePath.toString());
   registerNewAsset(textureAsset);
   return std::static_pointer_cast<IAsset>(textureAsset);
 }
@@ -90,7 +90,7 @@ ImageImporter::importAsset(const Path& filePath, const String& assetName) {
 /*
 */
 bool
-ImageImporter::canImport(const String&) const {
+ImageCodec::canImport(const String&) const {
   // Check if the extension is supported
   return true;
 }

@@ -60,7 +60,7 @@ endif()
 
 add_subdirectory(externals/assimp)
 
-add_library(chMeshImporter SHARED ${SOURCE_FILES})
+add_library(chMeshCodec SHARED ${SOURCE_FILES})
 
 # Configurar la salida de Assimp
 set_target_properties(assimp PROPERTIES
@@ -69,9 +69,9 @@ set_target_properties(assimp PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     POSITION_INDEPENDENT_CODE ON  # Add this line
 )
-set_target_properties(chMeshImporter PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Importers
-    OUTPUT_NAME "chMeshImporter"
+set_target_properties(chMeshCodec PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Codecs
+    OUTPUT_NAME "chMeshCodec"
     PREFIX ""
     #want to add a postfix if we are in debug mode
     DEBUG_POSTFIX "d"
@@ -91,19 +91,19 @@ INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 
-target_include_directories(chMeshImporter PRIVATE
+target_include_directories(chMeshCodec PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/externals/assimp/include
     )
-target_link_libraries(chMeshImporter PUBLIC chUtilities chCore assimp::assimp)
+target_link_libraries(chMeshCodec PUBLIC chUtilities chCore assimp::assimp)
 
-target_compile_definitions(chMeshImporter PRIVATE
+target_compile_definitions(chMeshCodec PRIVATE
     CH_EDITOR_ENABLED=${CH_EDITOR_ENABLED}
     CH_SDL3_ENABLED=${CH_SDL3_ENABLED}
-    CH_IMPORTERS_ENABLED=${CH_IMPORTERS_ENABLED}
+    CH_CODECS_ENABLED=${CH_CODECS_ENABLED}
     ASSIMP_BUILD_STATIC_LIB
     ASSIMP_BUILD_NO_EXPORT
 )
 
-target_compile_options(chMeshImporter PRIVATE
+target_compile_options(chMeshCodec PRIVATE
   $<$<PLATFORM_ID:Linux>:-fPIC>
 )

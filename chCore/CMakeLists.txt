@@ -3,7 +3,7 @@ project(chCore)
 
 option(CH_EDITOR_ENABLED "Enable chEditor" ON)
 option(CH_SDL3_ENABLED "Enable SDL3 support" ON)
-option(CH_IMPORTERS_ENABLED "Enable importers support" ON)
+option(CH_CODECS_ENABLED "Enable codecs support" ON)
 
 # Recopilar archivos fuente
 file(GLOB
@@ -30,7 +30,7 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
 endif()
 
-# Añadir SDL3 desde subdirectorio (siempre, sin importar el sistema)
+# Aï¿½adir SDL3 desde subdirectorio (siempre, sin importar el sistema)
 #add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
 
 # Crear la biblioteca principal
@@ -56,7 +56,7 @@ endmacro()
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 
-# Incluir directorios públicos y privados
+# Incluir directorios pï¿½blicos y privados
 target_include_directories(chCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/externals
 )
@@ -67,16 +67,16 @@ target_include_directories(chCore PRIVATE
     ##${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include
 )
 
-# Archivos fuente específicos de SDL
+# Archivos fuente especï¿½ficos de SDL
 file(GLOB_RECURSE SDL_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/SDL/*.cpp
 )
 target_sources(chCore PRIVATE ${SDL_FILES})
 
-# Enlazar librerías necesarias
+# Enlazar librerï¿½as necesarias
 target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3)
 
-# Definiciones de compilación
+# Definiciones de compilaciï¿½n
 set(COMPILE_DEFS "CH_CORE_EXPORTS")
 
 if(CH_EDITOR_ENABLED)
@@ -87,8 +87,8 @@ if(CH_SDL3_ENABLED)
     list(APPEND COMPILE_DEFS CH_SDL3_ENABLED)
 endif()
 
-if(CH_IMPORTERS_ENABLED)
-    list(APPEND COMPILE_DEFS CH_IMPORTERS_ENABLED)
+if(CH_CODECS_ENABLED)
+    list(APPEND COMPILE_DEFS CH_CODECS_ENABLED)
 endif()
 
 list(APPEND COMPILE_DEFS

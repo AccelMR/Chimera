@@ -18,11 +18,11 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
 endif()
 
-add_library(chImageImporter SHARED ${SOURCE_FILES})
+add_library(chImageCodec SHARED ${SOURCE_FILES})
 
-set_target_properties(chImageImporter PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Importers
-    OUTPUT_NAME "chImageImporter"
+set_target_properties(chImageCodec PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Codecs
+    OUTPUT_NAME "chImageCodec"
     PREFIX ""
     #want to add a postfix if we are in debug mode
     DEBUG_POSTFIX "d"
@@ -44,10 +44,10 @@ INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 
 
-target_link_libraries(chImageImporter PUBLIC chUtilities chCore)
+target_link_libraries(chImageCodec PUBLIC chUtilities chCore)
 
-target_compile_definitions(chImageImporter PRIVATE
+target_compile_definitions(chImageCodec PRIVATE
     CH_EDITOR_ENABLED=${CH_EDITOR_ENABLED}
     CH_SDL3_ENABLED=${CH_SDL3_ENABLED}
-    CH_IMPORTERS_ENABLED=${CH_IMPORTERS_ENABLED}
+    CH_CODECS_ENABLED=${CH_CODECS_ENABLED}
 )

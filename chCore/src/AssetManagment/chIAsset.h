@@ -127,7 +127,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
  protected:
   friend class AssetManager;
-  friend class IAssetImporter;
+  friend class IAssetCodec;
 
   IAsset() {}
   IAsset(const AssetMetadata& metadata)

@@ -1,6 +1,6 @@
 /************************************************************************/
 /**
- * @file chImageImporter.h
+ * @file chImageCodec.h
  * @author AccelMR
  * @date 2025/07/20
  * @brief
@@ -10,7 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chAssetImporter.h"
+#include "chAssetCodec.h"
 #include "chTypeTraits.h"
 
 #include "chTextureAsset.h"
@@ -19,19 +19,19 @@ namespace chEngineSDK{
 class TextureAsset;
 
 /*
-* @class ImageImporter
-* @brief Importer for image assets
+* @class ImageCodec
+* @brief Codec for image assets
 *
 * This class handles importing image files into the engine as texture assets.
 */
-class ImageImporter : public IAssetImporter {
+class ImageCodec : public IAssetCodec {
  public:
-  ImageImporter() = default;
-  ~ImageImporter() = default;
+  ImageCodec() = default;
+  ~ImageCodec() = default;
 
   UUID
-  getImporterType() const override {
-    static UUID importType = UUID::createFromName("ImageImporter");
+  getCodecType() const override {
+    static UUID importType = UUID::createFromName("ImageCodec");
     return importType;
   }
 
@@ -52,6 +52,6 @@ class ImageImporter : public IAssetImporter {
  private:
 
 };
-DECLARE_ASSET_TYPE(ImageImporter);
+DECLARE_ASSET_TYPE(ImageCodec);
 
 } // namespace chEngineSDK

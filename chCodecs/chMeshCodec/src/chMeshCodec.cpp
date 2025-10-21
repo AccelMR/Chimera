@@ -1,15 +1,15 @@
 /************************************************************************/
 /**
- * @file chMeshImporter.cpp
+ * @file chMeshCodec.cpp
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * Implementation of the MeshImporter class for loading and managing mesh resources.
+ * Implementation of the MeshCodec class for loading and managing mesh resources.
  */
 /************************************************************************/
 
-#include "chMeshImporter.h"
-#if USING(CH_IMPORTERS)
+#include "chMeshCodec.h"
+#if USING(CH_CODECS)
 
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -38,7 +38,7 @@ CH_LOG_DECLARE_STATIC(MeshSystem, All);
 /*
  */
 Vector<String>
-MeshImporter::getSupportedExtensions() const {
+MeshCodec::getSupportedExtensions() const {
   Assimp::Importer importer;
   String extensions;
   importer.GetExtensionList(extensions);
@@ -61,7 +61,7 @@ MeshImporter::getSupportedExtensions() const {
 /*
  */
 SPtr<IAsset>
-MeshImporter::importAsset(const Path& filePath, const String& assetName) {
+MeshCodec::importAsset(const Path& filePath, const String& assetName) {
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
@@ -100,7 +100,7 @@ MeshImporter::importAsset(const Path& filePath, const String& assetName) {
 /*
  */
 SPtr<Mesh>
-MeshImporter::loadMesh(const Path& meshPath, const String& meshName) {
+MeshCodec::loadMesh(const Path& meshPath, const String& meshName) {
   String name = meshName.empty() ? meshPath.getFileName() : meshName;
 
   auto it = m_meshes.find(name);
@@ -137,7 +137,7 @@ MeshImporter::loadMesh(const Path& meshPath, const String& meshName) {
 /*
  */
 SPtr<Model>
-MeshImporter::loadModel(const Path& filePath) {
+MeshCodec::loadModel(const Path& filePath) {
   CH_LOG_INFO(MeshSystem, "Loading model: {0}", filePath.toString());
 
   String modelName = filePath.getFileName();
@@ -181,14 +181,14 @@ MeshImporter::loadModel(const Path& filePath) {
 /*
  */
 void
-MeshImporter::unloadMesh(const WeakPtr<Mesh>& mesh) {
+MeshCodec::unloadMesh(const WeakPtr<Mesh>& mesh) {
   CH_PAMRAMETER_UNUSED(mesh);
 }
 
 /*
  */
 Vector<SPtr<Mesh>>
-MeshImporter::processNode(aiNode* node, const aiScene* scene) {
+MeshCodec::processNode(aiNode* node, const aiScene* scene) {
   Vector<SPtr<Mesh>> meshes;
 
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
@@ -211,7 +211,7 @@ MeshImporter::processNode(aiNode* node, const aiScene* scene) {
 /*
  */
 SPtr<Mesh>
-MeshImporter::processMesh(aiMesh* mesh, const aiScene* scene) {
+MeshCodec::processMesh(aiMesh* mesh, const aiScene* scene) {
   SPtr<Mesh> newMesh = chMakeShared<Mesh>();
 
   const bool hasPositions = mesh->HasPositions();
@@ -327,7 +327,7 @@ MeshImporter::processMesh(aiMesh* mesh, const aiScene* scene) {
 }
 
 void
-MeshImporter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
+MeshCodec::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
                                    ModelNode* parentNode) {
   Matrix4 nodeLocalTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
 
@@ -353,4 +353,4 @@ MeshImporter::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model
 }
 } // namespace chEngineSDK
 
-#endif // USING(CH_IMPORTERS)
+#endif // USING(CH_CODECS)

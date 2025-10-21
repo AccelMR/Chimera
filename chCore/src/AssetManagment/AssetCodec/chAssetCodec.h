@@ -1,9 +1,9 @@
 /************************************************************************/
 /**
- * @file chAssetImporter.h
+ * @file chAssetCodec.h
  * @author AccelMR
  * @date 2025/07/12
- * @brief  Asset importer interface for Chimera Core.
+ * @brief  Asset codec interface for Chimera Core.
  */
 /************************************************************************/
 #pragma once
@@ -19,13 +19,13 @@
 namespace chEngineSDK {
 
 class IAsset;
-class CH_CORE_EXPORT IAssetImporter {
+class CH_CORE_EXPORT IAssetCodec {
  public:
-  IAssetImporter() = default;
-  virtual ~IAssetImporter() = default;
+  IAssetCodec() = default;
+  virtual ~IAssetCodec() = default;
 
   virtual UUID
-  getImporterType() const = 0;
+  getCodecType() const = 0;
 
   virtual Vector<String>
   getSupportedExtensions() const = 0;

@@ -8,10 +8,10 @@
 /************************************************************************/
 #include "chContentAssetUI.h"
 
-#if USING(CH_IMPORTERS)
-#include "chAssetImporter.h"
-#include "chAssetImporterManager.h"
-#endif // USING(CH_IMPORTERS)
+#if USING(CH_CODECS)
+#include "chAssetCodec.h"
+#include "chAssetCodecManager.h"
+#endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
 #include "chLogger.h"
@@ -845,19 +845,19 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
     return;
   }
 
-  // Make a menu that hass submenu importers
+  // Make a menu that hass submenu codecs
   if (ImGui::BeginMenu("Import Asset")) {
     ImGui::Separator();
-#if USING(CH_IMPORTERS)
-    AssetImporterManager& importerManager = AssetImporterManager::instance();
+#if USING(CH_CODECS)
+    AssetCodecManager& codecManager = AssetCodecManager::instance();
     AssetManager& assetManager = AssetManager::instance();
-    for (const auto& importer : importerManager.getAllImporters()) {
-      for (const auto& assetType : importer->getSupportedAssetTypes()) {
-        const String& importerTypeName = assetManager.getAssetTypeName(assetType);
-        if (ImGui::MenuItem(importerTypeName.c_str())) {
+    for (const auto& codec : codecManager.getAllCodecs()) {
+      for (const auto& assetType : codec->getSupportedAssetTypes()) {
+        const String& codecTypeName = assetManager.getAssetTypeName(assetType);
+        if (ImGui::MenuItem(codecTypeName.c_str())) {
           const Path filePath =
               UIHelpers::openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
-                                          importer->getSupportedExtensions());
+                                          codec->getSupportedExtensions());
 
           if (filePath.empty()) {
             CH_LOG_ERROR(ContentAssetUILog, "No file selected for import");
@@ -866,7 +866,7 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
           return; // Exit after handling import
           }
 
-          auto importedAsset = importer->importAsset(filePath, filePath.getFileName(false));
+          auto importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
 
           if (!importedAsset) {
             CH_LOG_ERROR(ContentAssetUILog, "Failed to import asset: {0}",
@@ -884,7 +884,7 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
         }
       }
     }
-#endif // USING(CH_IMPORTERS)
+#endif // USING(CH_CODECS)
     ImGui::EndMenu();
   }
   ImGui::EndPopup();

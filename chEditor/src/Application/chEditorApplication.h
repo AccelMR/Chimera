@@ -98,7 +98,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   renderFullScreenRenderer(const RendererOutput& rendererOutput);
 
   void
-  loadImporters();
+  loadCodecs();
 
   void
   setupSceneData();

@@ -99,7 +99,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   }
 
  private:
-  friend class IAssetImporter;
+  friend class IAssetCodec;
 
   void
   registerNewAsset(const SPtr<IAsset>& asset) {

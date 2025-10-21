@@ -1,19 +1,19 @@
 /************************************************************************/
 /**
- * @file chMeshImporter.h
+ * @file chMeshCodec.h
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * MeshImporter class for loading and managing mesh resources.
+ * MeshCodec class for loading and managing mesh resources.
  */
 /************************************************************************/
 #pragma once
 
 #include "chPrerequisitesCore.h"
 
-#if USING(CH_IMPORTERS)
+#if USING(CH_CODECS)
 
-#include "chAssetImporter.h"
+#include "chAssetCodec.h"
 #include "chTypeTraits.h"
 #include "chIAsset.h"
 
@@ -28,14 +28,14 @@ class aiMesh;
 class aiScene;
 
 namespace chEngineSDK {
-class MeshImporter  : public IAssetImporter {
+class MeshCodec  : public IAssetCodec {
  public:
-  MeshImporter() = default;
-  ~MeshImporter() = default;
+  MeshCodec() = default;
+  ~MeshCodec() = default;
 
   UUID
-  getImporterType() const override{
-    static UUID importType = UUID::createFromName("MeshManagerImporter");
+  getCodecType() const override{
+    static UUID importType = UUID::createFromName("MeshManagerCodec");
     return importType;
   }
 
@@ -117,7 +117,7 @@ class MeshImporter  : public IAssetImporter {
   UnorderedMap<String, SPtr<Model>> m_models;
   Mutex m_mutex;
 };
-DECLARE_ASSET_TYPE(MeshImporter);
+DECLARE_ASSET_TYPE(MeshCodec);
 
 } // namespace chEngineSDK
-#endif // USING(CH_IMPORTERS)
+#endif // USING(CH_CODECS)

@@ -8,10 +8,10 @@
 /************************************************************************/
 #include "chMainMenuBarUI.h"
 
-#if USING(CH_IMPORTERS)
-#include "chAssetImporter.h"
-#include "chAssetImporterManager.h"
-#endif // USING(CH_IMPORTERS)
+#if USING(CH_CODECS)
+#include "chAssetCodec.h"
+#include "chAssetCodecManager.h"
+#endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
 #include "chEnginePaths.h"
@@ -70,15 +70,15 @@ MainMenuBarUI::renderMainMenuBar() {
  */
 void
 MainMenuBarUI::renderImportMenu() {
-#if USING(CH_IMPORTERS)
-  AssetImporterManager& importerManager = AssetImporterManager::instance();
+#if USING(CH_CODECS)
+  AssetCodecManager& codecManager = AssetCodecManager::instance();
   AssetManager& assetManager = AssetManager::instance();
-  for (const auto& importer : importerManager.getAllImporters()) {
-    for (const auto& assetType : importer->getSupportedAssetTypes()) {
-      const String& importerTypeName = "Import " + assetManager.getAssetTypeName(assetType);
-      if (ImGui::MenuItem(importerTypeName.c_str())) {
+  for (const auto& codec : codecManager.getAllCodecs()) {
+    for (const auto& assetType : codec->getSupportedAssetTypes()) {
+      const String& codecTypeName = "Import " + assetManager.getAssetTypeName(assetType);
+      if (ImGui::MenuItem(codecTypeName.c_str())) {
         const Path filePath = UIHelpers::openFileExplorer(
-            EnginePaths::getAbsoluteGameAssetDirectory(), importer->getSupportedExtensions());
+            EnginePaths::getAbsoluteGameAssetDirectory(), codec->getSupportedExtensions());
 
         if (filePath.empty()) {
           CH_LOG_ERROR(MainMenuBarUILog, "No file selected for import");
@@ -86,7 +86,7 @@ MainMenuBarUI::renderImportMenu() {
           return;
         }
 
-        auto importedAsset = importer->importAsset(filePath, filePath.getFileName(false));
+        auto importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
 
         if (!importedAsset) {
           CH_LOG_ERROR(MainMenuBarUILog, "Failed to import asset: {0}", filePath.toString());
@@ -100,7 +100,7 @@ MainMenuBarUI::renderImportMenu() {
     }
   }
 
-#endif // USING(CH_IMPORTERS)
+#endif // USING(CH_CODECS)
 }
 
 } // namespace chEngineSDK

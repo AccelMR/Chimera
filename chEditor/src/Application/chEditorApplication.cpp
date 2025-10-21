@@ -29,10 +29,10 @@
 #include "chMainMenuBarUI.h"
 #include "chOutputLogUI.h"
 
-#if USING(CH_IMPORTERS)
-#include "chAssetImporter.h"
-#include "chAssetImporterManager.h"
-#endif // USING(CH_IMPORTERS)
+#if USING(CH_CODECS)
+#include "chAssetCodec.h"
+#include "chAssetCodecManager.h"
+#endif // USING(CH_CODECS)
 
 #include "imgui.h"
 
@@ -124,11 +124,11 @@ EditorApplication::initializeEditorComponents() {
   SPtr<DisplaySurface> display = getDisplaySurface();
   CH_ASSERT(display && "Display surface must not be null.");
 
-#if USING(CH_IMPORTERS)
-  AssetImporterManager::startUp();
-  AssetImporterManager::instance().initialize();
-  loadImporters();
-#endif // USING(CH_IMPORTERS)
+#if USING(CH_CODECS)
+  AssetCodecManager::startUp();
+  AssetCodecManager::instance().initialize();
+  loadCodecs();
+#endif // USING(CH_CODECS)
 
   AssetManager::startUp();
   AssetManager::instance().initialize();
@@ -318,20 +318,20 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
 /*
 */
 void
-EditorApplication::loadImporters() {
-  CH_LOG_INFO(EditorApp, "Loading asset importers.");
-#if USING(CH_IMPORTERS)
-  //AssetImporterManager& importerManager = AssetImporterManager::instance();
-  const  Path importersPath(
+EditorApplication::loadCodecs() {
+  CH_LOG_INFO(EditorApp, "Loading asset codecs.");
+#if USING(CH_CODECS)
+  //AssetCodecManager& codecManager = AssetCodecManager::instance();
+  const  Path codecsPath(
 #if USING(CH_DEBUG_MODE)
-    "build/debug-x64/lib/Importers"
+    "build/debug-x64/lib/Codecs"
 #else // USING(CH_DEBUG_MODE)
-    "Importers"
+    "Codecs"
 #endif // USING(CH_DEBUG_MODE)
   );
   Vector<Path> files;
   Vector<Path> directories;
-  FileSystem::getChildren(importersPath, files, directories);
+  FileSystem::getChildren(codecsPath, files, directories);
   for (const Path& file : files) {
     if (file.getExtension() == ".so" ||
         file.getExtension() == ".dll") { //ugly but works for now
@@ -342,9 +342,9 @@ EditorApplication::loadImporters() {
         fileName.pop_back();
         WeakPtr <DynamicLibrary> library =
             DynamicLibraryManager::instance().loadDynLibrary(fileName,
-                                                             FileSystem::absolutePath(importersPath));
+                                                             FileSystem::absolutePath(codecsPath));
       if (library.expired()) {
-        CH_LOG_ERROR(EditorApp, "Failed to load importer library: {0}", file.toString());
+        CH_LOG_ERROR(EditorApp, "Failed to load codec library: {0}", file.toString());
         continue;
       }
       typedef void (*LoadPluginFunc)();
@@ -353,11 +353,11 @@ EditorApplication::loadImporters() {
         CH_LOG_ERROR(EditorApp, "Failed to find loadPlugin function in {0}", file.toString());
         continue;
       }
-      loadPlugin(); // This should register the importer
-      CH_LOG_INFO(EditorApp, "Loaded importer library: {0}", file.toString());
+      loadPlugin(); // This should register the codec
+      CH_LOG_INFO(EditorApp, "Loaded codec library: {0}", file.toString());
     }
   }
-  #endif // USING(CH_IMPORTERS)
+  #endif // USING(CH_CODECS)
 }
 
 /*

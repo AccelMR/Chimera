@@ -1,13 +1,13 @@
 /************************************************************************/
 /**
- * @file chAssetImporterRegistry.cpp
+ * @file chAssetCodecRegistry.cpp
  * @author AccelMR
  * @date 2025/07/12
- * @details  Asset importer registry for Chimera Core.
+ * @details  Asset codec registry for Chimera Core.
  */
 /***************************************************** *******************/
 
-#include "chAssetImporterRegistry.h"
+#include "chAssetCodecRegistry.h"
 
 namespace chEngineSDK {
 

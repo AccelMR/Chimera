@@ -7,6 +7,6 @@
 [submodule "chEditor/externals/nativefiledialog-extended"]
 	path = chEditor/externals/nativefiledialog-extended
 	url = https://github.com/btzy/nativefiledialog-extended.git
-[submodule "Importers/chMeshImporter/externals/assimp"]
-	path = Importers/chMeshImporter/externals/assimp
+[submodule "chCodecs/chMeshCodec/externals/assimp"]
+	path = Codecs/chMeshCodec/externals/assimp
 	url = https://github.com/assimp/assimp.git

@@ -83,7 +83,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
 
   set(CH_EDITOR_ENABLED ON CACHE BOOL "Enable chEditor" FORCE)
   set(CH_SDL3_ENABLED ON CACHE BOOL "Enable SDL3 support" FORCE)
-  set(CH_IMPORTERS_ENABLED ON CACHE BOOL "Enable importers" FORCE)
+  set(CH_CODECS_ENABLED ON CACHE BOOL "Enable codecs" FORCE)
   set(CH_VULKAN_IMGUI ON CACHE BOOL "Enable ImGui" FORCE)
 
 endif()
@@ -101,13 +101,13 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   add_subdirectory(chCore)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/GraphicsAPIs/chVulkan")
-  add_subdirectory(GraphicsAPIs/chVulkan)
+if(EXISTS "${CMAKE_SOURCE_DIR}/chGraphicsAPIs/chVulkan")
+  add_subdirectory(chGraphicsAPIs/chVulkan)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/Importers")
+if(EXISTS "${CMAKE_SOURCE_DIR}/chCodecs")
   message("Directory exists.")
-  add_subdirectory(Importers)
+  add_subdirectory(chCodecs)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
