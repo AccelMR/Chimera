@@ -40,11 +40,11 @@ target_include_subfolders(chVulkan ${CMAKE_CURRENT_SOURCE_DIR}/../../chCore/src/
 
 # ---------- ImGui (solo si est� habilitado) ----------
 if(CH_VULKAN_IMGUI)
-    set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/Externals/imgui)
-    message("ImGui directory: ${IMGUI_DIR}")
-    message(STATUS "chVulkan: ImGui support ENABLED")
-
-    target_sources(chVulkan PRIVATE )
+  if(CH_SDL3_ENABLED)
+    target_sources(chVulkan PRIVATE
+        ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    )
+  endif()
 
     target_compile_definitions(chVulkan PRIVATE
         CH_VULKAN_IMGUI=1

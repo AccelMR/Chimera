@@ -44,6 +44,10 @@ set_target_properties(chEditor PROPERTIES
   INSTALL_RPATH_USE_LINK_PATH TRUE
 )
 
+target_sources(chEditor PRIVATE
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+)
+
 # Macro for subdirectory inclusion (maintaining Chimera style)
 macro(INCLUDESUBFOLDERS curdir)
   file(GLOB children ${curdir}/*)
