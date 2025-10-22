@@ -50,7 +50,6 @@ EnginePaths::getEngineAssetDirectory() {
   #endif
 #else
     "chCore/Content"
-    "chCore/Content"
 #endif
   ));
   return engineAssetDir;
@@ -60,10 +59,10 @@ EnginePaths::getEngineAssetDirectory() {
 * m_path = L"C:\\Users\\accel\\OneDrive\\Documentos\\Chimera\\Chimera\\out\\chCore\\Content\\shaders\\cubeVertex.spv"
 */
 Path
-EnginePaths::getShaderDirectory() {
+EnginePaths::getEngineShaderDirectory() {
   const Path contentDir = getEngineAssetDirectory();
   static Path shaderDir = FileSystem::absolutePath(Path(
-    contentDir, 
+    contentDir,
     Path("Shaders")
   ));
   return shaderDir;
@@ -75,6 +74,24 @@ String
 EnginePaths::getEngineAssetExtension() {
   static const ANSICHAR* engineAssetExtension = ".chAss";
   return String(engineAssetExtension);
+}
+
+/*
+*/
+Path
+EnginePaths::getEditorContentDirectory(){
+  static Path editorContentDir = FileSystem::absolutePath(Path(
+#if USING(CH_DEBUG_MODE)
+  #if USING(CH_PLATFORM_WIN32)
+    "../../../../chEditor/Content"
+  #else
+    "chEditor/Content"
+  #endif
+#else
+    "chEditor/Content"
+#endif
+  ));
+  return editorContentDir;
 }
 
 } // namespace chEngineSDK

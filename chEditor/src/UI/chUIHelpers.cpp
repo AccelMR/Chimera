@@ -17,7 +17,7 @@
 #include "chPath.h"
 #include "chTextureAsset.h"
 
-#include "../../Content/fonts/IconsFontAwsome5.h"
+#include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
 #include <nfd.hpp>
 
@@ -342,7 +342,7 @@ UIHelpers::initFontConfig() {
 
   // Build an absolute path when possible (recommend defining CH_CONTENT_DIR via CMake)
   const String fontIconFilePath =
-      EnginePaths::getEngineAssetDirectory().toString() + "/Fonts/fa-solid-900.ttf";
+      EnginePaths::getEditorContentDirectory().toString() + "/Fonts/fa-solid-900.ttf";
 
   io.Fonts->AddFontFromFileTTF(fontIconFilePath.c_str(), iconFontSize, &icons_config, icons_ranges);
 }

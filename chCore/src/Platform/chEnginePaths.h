@@ -44,7 +44,7 @@ class CH_CORE_EXPORT EnginePaths {
    * @return Absolute path to the engine assets directory.
    */
   static Path
-  getShaderDirectory();
+  getEngineShaderDirectory();
 
   /**
    * Get the absolute path to the engine assets directory.
@@ -53,6 +53,14 @@ class CH_CORE_EXPORT EnginePaths {
    */
   static String
   getEngineAssetExtension();
+
+  /**
+   * Get the absolute path to the Editor content directory
+   *
+   * @return Absolute path to the Editor content directory
+   */
+  static Path
+  getEditorContentDirectory();
 };
 
 } // namespace chEngineSDK

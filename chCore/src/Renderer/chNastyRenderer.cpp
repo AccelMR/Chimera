@@ -386,7 +386,7 @@ NastyRenderer::initializeRenderResources() {
                                       .maxAnisotropy = 16.0f};
   m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
 
-  const Path shaderDir = EnginePaths::getShaderDirectory();
+  const Path shaderDir = EnginePaths::getEngineShaderDirectory();
   const Path cubeVertexShader(shaderDir, Path("cubeVertex.spv"));
   const Path cubeFragmentShader(shaderDir, Path("cubeFragment.spv"));
 
