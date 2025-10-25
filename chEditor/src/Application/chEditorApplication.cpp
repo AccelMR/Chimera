@@ -255,7 +255,7 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   UIHelpers::initFontConfig();
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  graphicAPI.execute("initImGui", {display, getRenderComponents().swapChain});
+  graphicAPI.execute("initImGui", {ImGui::GetCurrentContext(), display, getRenderComponents().swapChain});
 
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");

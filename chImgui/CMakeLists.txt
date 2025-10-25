@@ -20,7 +20,7 @@ endif()
 
 file(GLOB IMGUI_SRC_FILES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/*.h)
 
-add_library(chImgui SHARED
+add_library(chImgui STATIC
     ${IMGUI_SRC_FILES}
 )
 
@@ -42,6 +42,5 @@ target_compile_definitions(chImgui PRIVATE
   IMGUI_DISABLE_OBSOLETE_KEYIO
 )
 
-if (WIN32)
-  target_compile_definitions(chImgui PRIVATE IMGUI_BUILD_DLL)
-endif()
+target_compile_definitions(chImgui PRIVATE IMGUI_BUILD_DLL)
+

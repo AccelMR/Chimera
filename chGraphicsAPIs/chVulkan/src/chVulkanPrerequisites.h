@@ -156,7 +156,6 @@ chTextureViewTypeToVkTextureViewType(TextureViewType viewType) {
                 chString::format("Unsupported Vulkan image view type: {0}",
                                     static_cast<uint32>(viewType)));
   }
-  return VK_IMAGE_VIEW_TYPE_1D;
 }
 
 FORCEINLINE static VkImageLayout

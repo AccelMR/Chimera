@@ -32,7 +32,6 @@ findMemoryType(VkPhysicalDevice physicalDevice,
     }
 
     CH_EXCEPT(VulkanErrorException, "Failed to find suitable memory type");
-    return 0;
 }
 } // namespace chVulkanBufferUtils
 using namespace chVulkanBufferUtils;

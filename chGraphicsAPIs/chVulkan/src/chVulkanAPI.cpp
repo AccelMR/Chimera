@@ -262,7 +262,6 @@ VulkanAPI::getQueue(QueueType queueType) {
   default:
     // TODO: Add more queue types
     CH_EXCEPT(VulkanErrorException, "Invalid queue type");
-    return nullptr;
     break;
   }
 }
@@ -795,7 +794,7 @@ VulkanAPI::initializeFunctionMap() {
     CH_ASSERT(bSuccedLoadingFunctions && "Failed to load ImGui Vulkan functions");
 #if USING(CH_DISPLAY_SDL3)
     SPtr<DisplaySurface> displaySurface;
-    if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[0], displaySurface)) {
+    if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[1], displaySurface)) {
       CH_LOG_ERROR(Vulkan, "DisplaySurface is expired");
       return Any(false);
     }
@@ -806,7 +805,7 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplSDL3_InitForVulkan(sdlWindow);
 
     SPtr<ISwapChain> inSwapchain;
-    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[1], inSwapchain)) {
+    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[2], inSwapchain)) {
       CH_LOG_ERROR(Vulkan, "SwapChain is expired");
       return Any(false);
     }
@@ -840,6 +839,15 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplVulkan_Init(&init_info);
     return Any(true);
 #endif // USING(CH_DISPLAY_SDL3)
+
+    ImGuiContext* context;
+    if (!AnyUtils::tryGetValue<ImGuiContext*>(args[0], context)) {
+      CH_LOG_ERROR(Vulkan, "Invalid ImGui Context argument");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+    ImGui::SetCurrentContext(context);
+
     CH_PAMRAMETER_UNUSED(args);
     return Any(false);
   };
@@ -904,6 +912,7 @@ VulkanAPI::initializeFunctionMap() {
         chMakeShared<VulkanDescriptorSet>(m_vulkanData->device, descriptorSet);
     return Any(std::static_pointer_cast<IDescriptorSet>(descriptorSetWrapper));
   };
+
 #endif // USING (CH_VK_IMGUI)
 }
 
