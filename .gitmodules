@@ -1,4 +1,4 @@
-[submodule "chCore/Externals/SDL3"]
+[submodule "Externals/SDL3"]
 	path = Externals/SDL3
 	url = https://github.com/libsdl-org/SDL.git
 [submodule "chEditor/Externals/nativefiledialog-extended"]
