@@ -792,6 +792,15 @@ VulkanAPI::initializeFunctionMap() {
         },
         &m_vulkanData->instance);
     CH_ASSERT(bSuccedLoadingFunctions && "Failed to load ImGui Vulkan functions");
+
+    ImGuiContext* context;
+    if (!AnyUtils::tryGetValue<ImGuiContext*>(args[0], context)) {
+      CH_LOG_ERROR(Vulkan, "Invalid ImGui Context argument");
+      return Any(static_cast<void*>(nullptr));
+    }
+
+    ImGui::SetCurrentContext(context);
+
 #if USING(CH_DISPLAY_SDL3)
     SPtr<DisplaySurface> displaySurface;
     if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[1], displaySurface)) {
@@ -839,16 +848,6 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplVulkan_Init(&init_info);
     return Any(true);
 #endif // USING(CH_DISPLAY_SDL3)
-
-    ImGuiContext* context;
-    if (!AnyUtils::tryGetValue<ImGuiContext*>(args[0], context)) {
-      CH_LOG_ERROR(Vulkan, "Invalid ImGui Context argument");
-      return Any(static_cast<void*>(nullptr));
-    }
-
-    ImGui::SetCurrentContext(context);
-
-    CH_PAMRAMETER_UNUSED(args);
     return Any(false);
   };
 
