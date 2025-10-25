@@ -1,11 +1,11 @@
-[submodule "chCore/externals/SDL3"]
+[submodule "chCore/Externals/SDL3"]
 	path = Externals/SDL3
 	url = https://github.com/libsdl-org/SDL.git
-[submodule "chEditor/externals/nativefiledialog-extended"]
-	path = chEditor/externals/nativefiledialog-extended
+[submodule "chEditor/Externals/nativefiledialog-extended"]
+	path = chEditor/Externals/nativefiledialog-extended
 	url = https://github.com/btzy/nativefiledialog-extended.git
-[submodule "chCodecs/chMeshCodec/externals/assimp"]
-	path = chCodecs/chMeshCodec/externals/assimp
+[submodule "chCodecs/chMeshCodec/Externals/assimp"]
+	path = chCodecs/chMeshCodec/Externals/assimp
 	url = https://github.com/assimp/assimp.git
 [submodule "chImgui/Externals/imgui"]
 	path = chImgui/Externals/imgui

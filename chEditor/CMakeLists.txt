@@ -2,13 +2,13 @@ file(GLOB
   SOURCE_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/externals/*/*.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/externals/*/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/Externals/*/*.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/Externals/*/*.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/EditorAssets/*/*.h
 )
 
 #set(NFD_PORTAL OFF d BOOL "Use xdg-desktop-portal instead of GTK" FORCE)
-add_subdirectory(externals/nativefiledialog-extended)
+add_subdirectory(Externals/nativefiledialog-extended)
 
 set_target_properties(nfd PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
@@ -66,12 +66,11 @@ INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/AssetManagment)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src/Renderer)
-INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chEditor/externals/nativefiledialog-extended/src)
+INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chEditor/Externals/nativefiledialog-extended/src)
 
 # ImGui core configuration for Chimera Engine
 target_include_directories(chEditor PRIVATE
   ${IMGUI_DIR}
-  ${IMGUI_DIR}/backends
 )
 
 # Compilation options for ImGui

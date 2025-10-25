@@ -58,7 +58,7 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
-add_subdirectory(externals/assimp)
+add_subdirectory(Externals/assimp)
 
 add_library(chMeshCodec SHARED ${SOURCE_FILES})
 
@@ -92,7 +92,7 @@ INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chCore/src)
 
 target_include_directories(chMeshCodec PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/assimp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Externals/assimp/include
     )
 target_link_libraries(chMeshCodec PUBLIC chUtilities chCore assimp::assimp)
 

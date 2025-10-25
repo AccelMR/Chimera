@@ -12,8 +12,8 @@ file(GLOB
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals/*/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Externals/*/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Externals/*/*.cpp
 )
 
 set(CMAKE_DEBUG_POSTFIX "d")
@@ -31,7 +31,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # A�adir SDL3 desde subdirectorio (siempre, sin importar el sistema)
-#add_subdirectory(externals/SDL3 EXCLUDE_FROM_ALL)
+#add_subdirectory(Externals/SDL3 EXCLUDE_FROM_ALL)
 
 # Crear la biblioteca principal
 add_library(chCore SHARED ${SOURCE_FILES})
@@ -58,13 +58,13 @@ INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
 
 # Incluir directorios p�blicos y privados
 target_include_directories(chCore PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/externals
+    ${CMAKE_CURRENT_SOURCE_DIR}/Externals
 )
 
 target_include_directories(chCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../chCore/src/Platform/SDL
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/SDL
-    ##${CMAKE_CURRENT_SOURCE_DIR}/externals/SDL3/include
+    ##${CMAKE_CURRENT_SOURCE_DIR}/Externals/SDL3/include
 )
 
 # Archivos fuente espec�ficos de SDL

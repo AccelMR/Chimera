@@ -19,13 +19,13 @@ endmacro()
 add_compile_definitions(CH_UTILITY_EXPORTS)
 
 INCLUDESUBFOLDERS(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/externals)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/Externals)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Perform Linux-specific actions
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 
-  file(GLOB_RECURSE WIN32FILES 
+  file(GLOB_RECURSE WIN32FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Win32/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Win32/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform/Win32/*.cpp
