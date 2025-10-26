@@ -10,6 +10,7 @@
 
 #include "chEditorApplication.h"
 #include "chAssetManager.h"
+#include "chCommandParser.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
 #include "chICommandBuffer.h"
@@ -23,6 +24,7 @@
 #include "chModelAsset.h"
 #include "chPath.h"
 #include "chUIHelpers.h"
+#include "chSceneManager.h"
 #include "chStringUtils.h"
 
 #include "chContentAssetUI.h"
@@ -134,6 +136,12 @@ EditorApplication::initializeEditorComponents() {
   AssetManager::instance().initialize();
   AssetManager::instance().lazyLoadAssetsFromDirectory(
       EnginePaths::getAbsoluteGameAssetDirectory());
+
+  const String defaultSceneName = "DefaultScene";
+  const String sceneName = CommandParser::instance().getParam("scene", defaultSceneName);
+
+  SceneManager::startUp();
+  SceneManager& sceneManager = SceneManager::instance();
 
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());

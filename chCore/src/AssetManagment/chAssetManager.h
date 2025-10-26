@@ -111,9 +111,13 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   SPtr<IAsset>
   lazyDeserialize(const SPtr<DataStream>& stream);
 
+  void
+  cacheSceneAssets();
+
  private:
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
   Map<UUID, SPtr<IAsset>> m_loadedAssets; ///< Map of currently loaded assets by UUID
+  Map<UUID, SPtr<IAsset>> m_sceneAssets; ///< Map of scene assets by UUID
 
   Event<void(const Vector<SPtr<IAsset>>&)> m_onAssetsChanged; ///< Event triggered when assets are changed
 

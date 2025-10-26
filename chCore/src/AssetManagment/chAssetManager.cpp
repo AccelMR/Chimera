@@ -21,6 +21,7 @@
 // Base asset types
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
+#include "chSceneAsset.h"
 
 
 namespace chEngineSDK {
@@ -239,6 +240,8 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
     m_assets[asset->getUUID()] = asset;
     CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());
   });
+
+  cacheSceneAssets();
 }
 
 #if USING(CH_EDITOR)
@@ -302,5 +305,24 @@ AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
   }
 
   return asset;
+}
+
+/*
+*/
+void
+AssetManager::cacheSceneAssets() {
+  m_sceneAssets.clear();
+
+  for (const auto& [uuid, asset] : m_assets) {
+    if (asset->getAssetTypeId() == AssetTypeTraits<SceneAsset>::getTypeId()) {
+      m_sceneAssets[uuid] = asset;
+      CH_LOG_DEBUG(AssetSystem, "Cached scene asset: {0}", asset->getName());
+    }
+  }
+
+#if USING(CH_DEBUG_MODE)
+  CH_LOG_DEBUG(AssetSystem, "Total scene assets cached: {0}", m_sceneAssets.size());
+#endif
+#include "chTypeTraits.h"
 }
 } // namespace chEngineSDK

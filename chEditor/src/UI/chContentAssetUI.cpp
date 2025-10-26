@@ -534,7 +534,7 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset) {
   ImGui::Text("UUID: %s", asset->getUUID().toString().c_str());
   ImGui::Text("Name: %s", asset->getName());
   ImGui::Text("Type: %s", asset->getTypeName());
-  ImGui::Text("Type UUID: %s", asset->getAssetType().toString().c_str());
+  ImGui::Text("Type UUID: %s", asset->getAssetTypeId().toString().c_str());
   ImGui::Text("Created At: %s", createdAtStr);
   ImGui::Text("State: %s", getAssetStateString(asset).c_str());
   ImGui::Text("Imported Path: %s", asset->getImportedPath());

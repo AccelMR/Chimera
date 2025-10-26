@@ -51,4 +51,9 @@ class AssetRegister;
 struct AssetMetadata;
 class IAssetManager;
 
+class Scene;
+class SceneManager;
+class GameObject;
+class Transform;
+
 } // namespace chEngineSDK

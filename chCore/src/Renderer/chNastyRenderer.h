@@ -98,6 +98,8 @@ public:
   SPtr<Camera> m_camera;
   SPtr<Model> m_currentModel;
 
+  SPtr<Scene> m_activeScene;
+
   SPtr<IShader> m_vertexShader;
   SPtr<IShader> m_fragmentShader;
   SPtr<IPipeline> m_pipeline;

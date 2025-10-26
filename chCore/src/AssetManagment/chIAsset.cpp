@@ -160,11 +160,6 @@ IAsset::load() {
     m_state = AssetState::Failed;
     return false;
   }
-
-  CH_LOG(AssetSystem, Debug, "File size: {0}", stream->size());
-  CH_LOG(AssetSystem, Debug, "Current position: {0}", stream->tell());
-  CH_LOG(AssetSystem, Debug, "Is at end: {0}", stream->isAtEnd());
-
   AssetMetadata metadata;
   stream->read(static_cast<void*>(&metadata), sizeof(metadata));
 
@@ -175,26 +170,6 @@ IAsset::load() {
   }
   m_metadata = metadata;
 
-  // uint32 referencedAssetCount = INVALID_UNSIGNED_INDEX;
-  // stream >> referencedAssetCount;
-  // if (referencedAssetCount == INVALID_UNSIGNED_INDEX) {
-  //   CH_LOG(AssetSystem, Error, "Invalid asset reference count {0}", referencedAssetCount);
-  //   m_state = AssetState::Failed;
-  //   return false;
-  // }
-
-  // m_referencedAssets.resize(referencedAssetCount);
-  // for (uint32 i = 0; i < referencedAssetCount; ++i) {
-  //   UUID refUUID = UUID::null();
-  //   stream >> refUUID;
-  //   if (refUUID.isNull()) {
-  //     CH_LOG(AssetSystem, Error, "Invalid asset reference UUID {0}", refUUID.toString());
-  //     m_state = AssetState::Failed;
-  //     return false;
-  //   }
-  //   m_referencedAssets[i] = refUUID;
-  // }
-
   const bool success = deserialize(stream);
 
   if (!success) {
@@ -204,8 +179,6 @@ IAsset::load() {
   }
 
   m_state = AssetState::Loaded;
-  CH_LOG(AssetSystem, Debug, "Asset {0} loaded successfully", m_metadata.name);
-
   return true;
 }
 
@@ -223,8 +196,6 @@ IAsset::unload() {
   m_referencedAssets.clear();
 
   m_state = AssetState::Unloaded;
-  CH_LOG(AssetSystem, Debug, "Asset {0} unloaded successfully", m_metadata.name);
-
   return true;
 }
 
