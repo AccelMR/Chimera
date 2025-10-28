@@ -125,8 +125,8 @@ NastyRenderer::onRender(float deltaTime) {
                                      .depthStencilClearValue = {{1.0f, 0}}};
 
   m_commandBuffer->beginRenderPass(renderPassInfo);
-  m_commandBuffer->setViewport(0, 0, m_renderWidth, m_renderHeight);
-  m_commandBuffer->setScissor(0, 0, m_renderWidth, m_renderHeight);
+  m_commandBuffer->setViewport(0, 0, static_cast<float>(m_renderWidth), static_cast<float>(m_renderHeight));
+  m_commandBuffer->setScissor(0, 0, static_cast<float>(m_renderWidth), static_cast<float>(m_renderHeight));
   m_commandBuffer->bindPipeline(m_pipeline);
 
   // Update camera matrices
@@ -192,7 +192,7 @@ NastyRenderer::resize(uint32 width, uint32 height) {
 
   // Update camera viewport
   if (m_camera) {
-    m_camera->setViewportSize(width, height);
+    m_camera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
     m_camera->updateMatrices();
   }
 
@@ -489,7 +489,7 @@ NastyRenderer::createMeshBuffers() {
 
     // Create vertex buffer
     const Vector<uint8>& vertexData = mesh->getVertexData();
-    const uint32 vertexDataSize = mesh->getVertexDataSize();
+    const uint32 vertexDataSize = static_cast<uint32>(mesh->getVertexDataSize());
 
     BufferCreateInfo vertexBufferCreateInfo{
         .size = vertexDataSize,
@@ -507,7 +507,7 @@ NastyRenderer::createMeshBuffers() {
     // Create index buffer based on index type
     if (m_meshIndexTypes[i] == IndexType::UInt16) {
       Vector<uint16> indexData = mesh->getIndicesAsUInt16();
-      const uint32 indexDataSize = mesh->getIndexDataSize();
+      const uint32 indexDataSize = static_cast<uint32>( mesh->getIndexDataSize());
 
       BufferCreateInfo indexBufferCreateInfo{
           .size = indexDataSize,
@@ -520,7 +520,7 @@ NastyRenderer::createMeshBuffers() {
     }
     else {
       Vector<uint32> indexData = mesh->getIndicesAsUInt32();
-      const uint32 indexDataSize = mesh->getIndexDataSize();
+      const uint32 indexDataSize = static_cast<uint32>(mesh->getIndexDataSize());
 
       BufferCreateInfo indexBufferCreateInfo{
           .size = indexDataSize,

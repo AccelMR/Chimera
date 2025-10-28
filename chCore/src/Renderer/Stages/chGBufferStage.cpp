@@ -521,8 +521,8 @@ GBufferStage::renderGeometry(SPtr<Camera> camera, SPtr<Model> model, float ) {
   };
 
   m_commandBuffer->beginRenderPass(renderPassInfo);
-  m_commandBuffer->setViewport(0, 0, m_width, m_height);
-  m_commandBuffer->setScissor(0, 0, m_width, m_height);
+  m_commandBuffer->setViewport(0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
+  m_commandBuffer->setScissor(0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
 
   // If we have a model, render it. Otherwise just clear the G-Buffer
   if (model) {
