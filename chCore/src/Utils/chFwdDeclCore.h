@@ -52,6 +52,7 @@ struct AssetMetadata;
 class IAssetManager;
 
 class Scene;
+class SceneAsset;
 class SceneManager;
 class GameObject;
 class Transform;

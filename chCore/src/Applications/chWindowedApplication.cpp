@@ -180,6 +180,7 @@ void
 WindowedApplication::initializeGraphics() {
   CH_LOG_INFO(WindowedApp, "Initializing graphics subsystem.");
   // Initialize graphics subsystem here
+  // Chimera.exe -GraphicsAPI=chVulkan -scene=MyScene
   const String& graphicsAPIName =
       CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
 

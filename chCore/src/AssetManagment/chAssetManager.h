@@ -23,6 +23,8 @@
 #include "chModule.h"
 #include "chStringUtils.h"
 
+#include "chSceneAsset.h"
+
 namespace chEngineSDK {
 
 CH_LOG_DECLARE_EXTERN(AssetSystem);
@@ -63,6 +65,50 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
 
   void
   lazyLoadAssetsFromDirectory(const Path& directory);
+
+  /*
+   * Load a scene by its name.
+   * !important: This loads a scene that is already registered as an asset. There's no way to load a scene directly from a file path.
+   * and that's intentional.
+   * @param name Name of the scene to load.
+   * @return Weak pointer to the loaded scene, or nullptr if loading failed.
+   */
+  WeakPtr<SceneAsset>
+  loadSceneByName(const String& name);
+
+  WeakPtr<SceneAsset>
+  getSceneByName(const String& name) const{
+    for (const auto& [uuid, asset] : m_sceneAssets) {
+      if (chString::compare(asset->getName(), name)) {
+        return asset->as<SceneAsset>();
+      }
+    }
+    return WeakPtr<SceneAsset>();
+  }
+
+  WeakPtr<SceneAsset>
+  getSceneByUUID(const UUID& uuid) const{
+    auto it = m_sceneAssets.find(uuid);
+    if (it != m_sceneAssets.end()) {
+      return it->second->as<SceneAsset>();
+    }
+    return WeakPtr<SceneAsset>();
+  }
+
+  /*
+   * Check if a scene with the given name exists.
+   * @param name Name of the scene to check.
+   * @return True if the scene exists, false otherwise.
+   */
+  FORCEINLINE bool
+  doesSceneExist(const String& name) const{
+    for (const auto& [uuid, asset] : m_sceneAssets) {
+      if (chString::compare(asset->getName(), name)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
 #if USING(CH_EDITOR)
   bool

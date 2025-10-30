@@ -244,6 +244,31 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   cacheSceneAssets();
 }
 
+/*
+*/
+WeakPtr<SceneAsset>
+AssetManager::loadSceneByName(const String& name) {
+  for (const auto& [uuid, asset] : m_sceneAssets) {
+    if (chString::compare(asset->getName(), name)) {
+      if (!loadAsset(asset)) {
+        CH_LOG_ERROR(AssetSystem, "Failed to load scene asset: {0}", name);
+        return WeakPtr<SceneAsset>();
+      }
+
+      SPtr<SceneAsset> sceneAsset = asset->as<SceneAsset>();
+      if (!sceneAsset) {
+        CH_LOG_ERROR(AssetSystem, "Asset {0} is not a SceneAsset", name);
+        return WeakPtr<SceneAsset>();
+      }
+      return sceneAsset;
+    }
+  }
+
+  CH_LOG_ERROR(AssetSystem, "Scene asset with name {0} not found", name);
+  return WeakPtr<SceneAsset>();
+}
+
+
 #if USING(CH_EDITOR)
 /*
  */

@@ -9,9 +9,14 @@
 /************************************************************************/
 #pragma once
 
-#include "chModule.h"
 #include "chPrerequisitesCore.h"
+#include "chModule.h"
+
+#include "chLogger.h"
 #include "chScene.h"
+#include "chUUID.h"
+
+CH_LOG_DECLARE_EXTERN(SceneManagerLog);
 
 namespace chEngineSDK {
 
@@ -28,48 +33,35 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
    */
   ~SceneManager() = default;
 
+#if USING (CH_EDITOR)
   /**
    * Create a new empty scene
    *
    * @param name Name of the scene
    * @return Shared pointer to the created scene
    */
-  SPtr<Scene>
-  createScene(const String& name);
+  WeakPtr<Scene>
+  createAndLoadScene(const String& name);
+#endif // USING (CH_EDITOR)
 
   /**
    * Load a scene from file
    *
-   * @param path Path to the scene file
+   * @param uuid UUID of the scene asset to load
    * @return Shared pointer to the loaded scene, or nullptr if loading failed
    */
-  SPtr<Scene>
-  loadScene(const Path& path);
+  WeakPtr<Scene>
+  loadScene(WeakPtr<SceneAsset> asset);
 
-  /**
-   * Save a scene to file
-   *
-   * @param scene Scene to save
-   * @param path Path where to save the scene
-   * @return True if saving was successful
-   */
-  bool
-  saveScene(SPtr<Scene> scene, const Path& path);
-
-  /**
-   * Set the active scene
-   *
-   * @param scene Scene to set as active
-   */
-  void
-  setActiveScene(SPtr<Scene> scene);
+  NODISCARD bool
+  setActiveScene(WeakPtr<Scene> scene);
 
   /**
    * Get the currently active scene
    *
    * @return Shared pointer to the active scene
    */
-  NODISCARD SPtr<Scene>
+  NODISCARD WeakPtr<Scene>
   getActiveScene() const {
     return m_activeScene;
   }
@@ -77,11 +69,11 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
   /**
    * Get a scene by name
    *
-   * @param name Name of the scene to get
+   * @param UUID unique id of the scene you want
    * @return Shared pointer to the scene, or nullptr if not found
    */
-  NODISCARD SPtr<Scene>
-  getScene(const String& name) const;
+  NODISCARD WeakPtr<Scene>
+  getScene(const UUID& uuid) const;
 
   /**
    * Update all scenes
@@ -92,8 +84,8 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
   update(float deltaTime);
 
  private:
-  UnorderedMap<String, SPtr<Scene>> m_scenes;
-  SPtr<Scene> m_activeScene;
+  UnorderedMap<UUID, SPtr<Scene>> m_loadedScenes;
+  WeakPtr<Scene> m_activeScene;
 };
 
 } // namespace chEngineSDK

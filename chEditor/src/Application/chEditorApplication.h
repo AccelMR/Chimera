@@ -105,6 +105,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
 
  private:
   SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+  SPtr<Scene> m_activeScene;
 
   SPtr<MultiStageRenderer> m_multiStageRenderer;
   UUID m_gbufferStageId;

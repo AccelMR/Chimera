@@ -133,16 +133,33 @@ EditorApplication::initializeEditorComponents() {
 #endif // USING(CH_CODECS)
 
   AssetManager::startUp();
-  AssetManager::instance().initialize();
-  AssetManager::instance().lazyLoadAssetsFromDirectory(
-      EnginePaths::getAbsoluteGameAssetDirectory());
+  AssetManager& assetManager = AssetManager::instance();
+  assetManager.initialize();
+  assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getAbsoluteGameAssetDirectory());
 
+  // Chimera.exe -scene=MyScene
   const String defaultSceneName = "DefaultScene";
   const String sceneName = CommandParser::instance().getParam("scene", defaultSceneName);
 
   SceneManager::startUp();
   SceneManager& sceneManager = SceneManager::instance();
 
+  WeakPtr<SceneAsset> sceneAsset = assetManager.loadSceneByName(sceneName);
+  SPtr<Scene> scene = nullptr;
+  if (!sceneAsset.expired()) {
+    scene = sceneManager.loadScene(sceneAsset).lock();
+  }
+  if (scene == nullptr) {
+    CH_LOG_WARNING(EditorApp,
+                   "Failed to load scene '{0}'. Creating a new empty scene.",
+                   sceneName);
+    scene = sceneManager.createAndLoadScene(sceneName).lock();
+  }
+
+  SceneManager::instance().setActiveScene(scene);
+  CH_LOG_INFO(EditorApp, "Loaded scene '{0}' successfully.", sceneName);
+
+  m_activeScene = scene;
   m_nastyRenderer = std::make_shared<NastyRenderer>();
   m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
   m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
