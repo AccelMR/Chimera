@@ -28,6 +28,16 @@ class CH_CORE_EXPORT Object
   Object(const String& name) :
   m_name(name){}
 
+  /*
+   * Constructor with UUID
+   *
+   * @param name Name of the object
+   * @param id UUID of the object
+  */
+  Object(const String& name, UUID id) :
+    m_name(name),
+    m_uuid(id) {}
+
   /**
    * Destructor
    */

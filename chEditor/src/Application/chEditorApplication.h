@@ -54,6 +54,7 @@ namespace chEngineSDK {
 class ContentAssetUI;
 class MainMenuBarUI;
 class OutputLogUI;
+class SceneGraphUI;
 
 class MultiStageRenderer;
 
@@ -81,7 +82,8 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   onRender(float deltaTime);
 
   virtual void
-  onPresent(const RendererOutput& rendererOutput, const SPtr<ICommandBuffer>& commandBuffer,
+  onPresent(const RendererOutput& rendererOutput,
+            const SPtr<ICommandBuffer>& commandBuffer,
             uint32 swapChainWidth, uint32 swapChainHeight);
 
  private:
@@ -116,6 +118,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   UniquePtr<ContentAssetUI> m_contentAssetUI; ///< Content Asset UI instance
   UniquePtr<MainMenuBarUI> m_mainMenuBar; ///< Main menu bar instance
   UniquePtr<OutputLogUI> m_outputLogUI; ///< Output log UI instance
+  UniquePtr<SceneGraphUI> m_sceneGraphUI; ///< Scene graph UI instance
 
   uint32 width = 0; ///< Width of the editor window
   uint32 height = 0; ///< Height of the editor window

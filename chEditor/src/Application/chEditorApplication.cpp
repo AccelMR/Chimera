@@ -30,6 +30,7 @@
 #include "chContentAssetUI.h"
 #include "chMainMenuBarUI.h"
 #include "chOutputLogUI.h"
+#include "chSceneGraphUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -114,6 +115,7 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
   m_mainMenuBar->renderMainMenuBar();
   m_contentAssetUI->renderContentAssetUI();
   m_outputLogUI->renderOutputLogUI();
+  m_sceneGraphUI->renderSceneGraphUI();
 
   UIHelpers::render(graphicAPI, commandBuffer);
 }
@@ -193,6 +195,7 @@ EditorApplication::initializeEditorComponents() {
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
   m_outputLogUI = chMakeUnique<OutputLogUI>();
+  m_sceneGraphUI = chMakeUnique<SceneGraphUI>();
 
   m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
   m_contentAssetUI->setNastyRenderer(m_nastyRenderer);

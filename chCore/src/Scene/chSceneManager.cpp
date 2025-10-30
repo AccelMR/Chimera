@@ -38,8 +38,8 @@ SceneManager::createAndLoadScene(const String& name) {
     return WeakPtr<Scene>{};
   }
 
-  SPtr<Scene> newScene = chMakeShared<Scene>(name);
-  m_loadedScenes.emplace(newID, newScene);
+  SPtr<Scene> newScene = chMakeShared<Scene>(name, newID);
+  m_loadedScenes[newID] = newScene;
   CH_LOG(SceneManagerLog,
          Info,
          "Created new scene '{0}' with UUID {1}.",

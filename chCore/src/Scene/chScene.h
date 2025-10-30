@@ -22,7 +22,7 @@ class CH_CORE_EXPORT Scene : public Object {
    *
    * @param name Name of the scene
    */
-  Scene(const String& name);
+  Scene(const String& name, UUID id);
 
   /**
    * Destructor

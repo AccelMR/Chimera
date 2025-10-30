@@ -22,7 +22,7 @@ class CH_CORE_EXPORT Transform
   /**
    * Default constructor
    */
-  Transform();
+  Transform() = default;
 
   /**
    * Constructor with initial values
@@ -168,9 +168,9 @@ class CH_CORE_EXPORT Transform
   update();
 
  private:
-  Vector3 m_localPosition;
-  Quaternion m_localRotation;
-  Vector3 m_localScale;
+  Vector3 m_localPosition = Vector3::ZERO;
+  Quaternion m_localRotation = Quaternion::IDENTITY;
+  Vector3 m_localScale = Vector3::UNIT;
 
   Transform* m_parent = nullptr;
 
