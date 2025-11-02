@@ -18,11 +18,6 @@ uuids::uuid_name_generator UUID::UUID_NAME_GENERATOR(uuids::uuid::from_string(CH
 
 /*
 */
-// UUID::UUID(const String& str)
-//   : m_uuid(UUID_NAME_GENERATOR(str)) {}
-
-/*
-*/
 UUID
 UUID::createRandom() {
   static thread_local std::mt19937 mt_rand(std::random_device{}());

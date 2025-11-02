@@ -43,11 +43,11 @@ EnginePaths::getEngineAssetDirectory() {
 
   static Path engineAssetDir = FileSystem::absolutePath(Path(
 #if USING(CH_DEBUG_MODE)
-  #if USING(CH_PLATFORM_WIN32)
-    "../../../../chCore/Content"
-  #else
+#if USING(CH_PLATFORM_WIN32)
+      "../chCore/Content"
+#else
     "chCore/Content"
-  #endif
+#endif
 #else
     "chCore/Content"
 #endif
@@ -83,7 +83,7 @@ EnginePaths::getEditorContentDirectory(){
   static Path editorContentDir = FileSystem::absolutePath(Path(
 #if USING(CH_DEBUG_MODE)
   #if USING(CH_PLATFORM_WIN32)
-    "../../../../chEditor/Content"
+    "../chEditor/Content"
   #else
     "chEditor/Content"
   #endif

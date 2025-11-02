@@ -23,12 +23,8 @@
 #include "chModule.h"
 #include "chStringUtils.h"
 
-
-#ifdef CH_ENABLE_LOG_VERBOSE
-#define CH_LOG_VERBOSE USE_IF(USING(CH_DEBUG_MODE))
-#else
-#define CH_LOG_VERBOSE NOT_IN_USE
-#endif
+// Todo: change this to show may be verbose on some categories but not globally
+#define CH_LOG_VERBOSE IN_USE
 
 namespace chEngineSDK {
 class DataStream;
