@@ -352,7 +352,7 @@ EditorApplication::loadCodecs() {
   //AssetCodecManager& codecManager = AssetCodecManager::instance();
   const  Path codecsPath(
 #if USING(CH_DEBUG_MODE)
-    "build/debug-x64/lib/Codecs"
+    "Codecs"
 #else // USING(CH_DEBUG_MODE)
     "Codecs"
 #endif // USING(CH_DEBUG_MODE)

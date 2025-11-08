@@ -23,9 +23,9 @@
 #include "chUUID.h"
 
 //Forward declarations from Assimp
-class aiNode;
-class aiMesh;
-class aiScene;
+struct aiNode;
+struct aiMesh;
+struct aiScene;
 
 namespace chEngineSDK {
 class MeshCodec  : public IAssetCodec {
