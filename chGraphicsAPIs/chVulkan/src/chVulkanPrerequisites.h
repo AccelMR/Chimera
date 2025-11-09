@@ -78,7 +78,6 @@ chTextureTypeToVkImageType(TextureType type) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan image type: {0}", static_cast<uint32>(type)));
   }
-  return VK_IMAGE_TYPE_1D;
 }
 
 FORCEINLINE static Format
@@ -99,7 +98,6 @@ vkFormatToChFormat(VkFormat format) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", format));
   }
-  return Format::Unknown;
 }
 
 FORCEINLINE static VkFormat
@@ -120,7 +118,6 @@ chFormatToVkFormat(Format format) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan format: {0}", static_cast<uint32>(format)));
   }
-  return VK_FORMAT_UNDEFINED;
 }
 
 FORCEINLINE static TextureViewType
@@ -137,7 +134,6 @@ vkTextureViewTypeToChTextureViewType(VkImageViewType viewType) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported Vulkan image view type: {0}", viewType));
   }
-  return TextureViewType::View1D;
 }
 
 FORCEINLINE static VkImageViewType
@@ -329,7 +325,6 @@ convertVertexFormatToVkFormat(VertexFormat format) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported vertex format: {0}", static_cast<uint32>(format)));
   }
-  return VK_FORMAT_UNDEFINED;
 }
 
 FORCEINLINE static VkSampleCountFlagBits
@@ -352,7 +347,6 @@ chSampleCountToVkSampleCount(SampleCount sampleCount) {
     default:
       CH_EXCEPT(VulkanErrorException, chString::format("Unsupported sample count: {0}", static_cast<uint32>(sampleCount)));
   }
-  return VK_SAMPLE_COUNT_1_BIT;
 }
 
 FORCEINLINE static VkImageUsageFlags

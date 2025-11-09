@@ -847,8 +847,9 @@ VulkanAPI::initializeFunctionMap() {
 
     ImGui_ImplVulkan_Init(&init_info);
     return Any(true);
-#endif // USING(CH_DISPLAY_SDL3)
+#else // USING(CH_DISPLAY_SDL3)
     return Any(false);
+#endif // USING(CH_DISPLAY_SDL3)
   };
 
   m_functionMap["renderImGui"] = [this](const Vector<Any>& args) -> Any {
