@@ -47,8 +47,29 @@ template <typename T> struct AssetTypeTraits {
   getTypeId() {
     return TypeTraits<T>::getTypeId();
   }
+
+  static UUID
+  getNamespacedTypeId() {
+    static const UUID namespacedTypeId =
+        UUID::createFromName("chAssets");
+    return namespacedTypeId;
+  }
 };
 
-#define DECLARE_ASSET_TYPE(AssetClass) DECLARE_TYPE_TRAITS(AssetClass)
+#define DECLARE_TYPE_TRAITS_NAMESPACE_ID(TypeClass, NameSpaceIdExpr)                          \
+  template <> struct TypeTraits<TypeClass> {                                                  \
+    static constexpr const ANSICHAR*                                                          \
+    getTypeName() {                                                                           \
+      return #TypeClass;                                                                      \
+    }                                                                                         \
+    static const UUID&                                                                        \
+    getTypeId() {                                                                             \
+      static const UUID typeId = UUID::createFromName(#TypeClass, NameSpaceIdExpr);           \
+      return typeId;                                                                          \
+    }                                                                                         \
+  };
+
+#define DECLARE_ASSET_TYPE(AssetClass)                                                        \
+  DECLARE_TYPE_TRAITS_NAMESPACE_ID(AssetClass, AssetTypeTraits<AssetClass>::getNamespacedTypeId())
 
 } // namespace chEngineSDK

@@ -139,10 +139,7 @@ EditorApplication::initializeEditorComponents() {
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getAbsoluteGameAssetDirectory());
 
-  // Chimera.exe -scene=MyScene
-  const String defaultSceneName = "DefaultScene";
-  const String sceneName = CommandParser::instance().getParam("scene", defaultSceneName);
-
+  const String sceneName = CommandParser::instance().getParam("scene", "DefaultScene");
   SceneManager::startUp();
   SceneManager& sceneManager = SceneManager::instance();
 
@@ -158,7 +155,13 @@ EditorApplication::initializeEditorComponents() {
     scene = sceneManager.createAndLoadScene(sceneName).lock();
   }
 
-  SceneManager::instance().setActiveScene(scene);
+  const bool bSceneLoaded = sceneManager.setActiveScene(scene);
+  if (!bSceneLoaded) {
+    CH_LOG_FATAL(EditorApp,
+                 "Failed to set scene '{0}' as the active scene.",
+                 sceneName);
+    return;
+  }
   CH_LOG_INFO(EditorApp, "Loaded scene '{0}' successfully.", sceneName);
 
   m_activeScene = scene;

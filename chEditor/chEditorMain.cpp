@@ -14,7 +14,7 @@ main(int32 argc, char* argv[]) {
   Logger::startUp();
   Logger& logger = Logger::instance();
   logger.setConsoleOutput(true);
-  logger.setFileOutput(true, "resources/engine/logs/ChimeraEditor.log");
+  logger.setFileOutput(true, "Resources/Engine/Logs/ChimeraEditor.log");
   logger.setGlobalVerbosity(LogVerbosity::Debug);
   logger.setBufferingEnabled(true, 500);
 
