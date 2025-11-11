@@ -19,6 +19,7 @@
 #include "chPath.h"
 
 // Base asset types
+#include "chGameObjectAsset.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
 #include "chSceneAsset.h"
@@ -41,6 +42,7 @@ AssetManager::initialize() {
   // Register asset creators
   m_assetRegister->registerAssetCreator<ModelAsset>();
   m_assetRegister->registerAssetCreator<TextureAsset>();
+  m_assetRegister->registerAssetCreator<GameObjectAsset>();
 }
 
 /*

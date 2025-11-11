@@ -31,6 +31,7 @@
 #include "chMainMenuBarUI.h"
 #include "chOutputLogUI.h"
 #include "chSceneGraphUI.h"
+#include "chInspectorUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -53,6 +54,16 @@ Radian g_FOV(Degree(45.0f));
 float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
 Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
+
+#if USING(CH_CODECS)
+#if USING(CH_PLATFORM_LINUX)
+  #define CH_CODEC_PATH "build/debug-x64/lib/Codecs"
+#elif USING(CH_PLATFORM_WINDOWS)
+#define CH_CODEC_PATH "Codecs"
+#else
+  #error "Unsupported platform for codec loading"
+#endif // USING(CH_PLATFORM_LINUX)
+#endif // USING(CH_CODECS)
 
 /*
  */
@@ -116,6 +127,7 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
   m_contentAssetUI->renderContentAssetUI();
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
+  m_inspectorUI->renderInspectorUI();
 
   UIHelpers::render(graphicAPI, commandBuffer);
 }
@@ -199,6 +211,7 @@ EditorApplication::initializeEditorComponents() {
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
   m_outputLogUI = chMakeUnique<OutputLogUI>();
   m_sceneGraphUI = chMakeUnique<SceneGraphUI>();
+  m_inspectorUI = chMakeUnique<InspectorUI>();
 
   m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
   m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
@@ -353,13 +366,7 @@ EditorApplication::loadCodecs() {
   CH_LOG_INFO(EditorApp, "Loading asset codecs.");
 #if USING(CH_CODECS)
   //AssetCodecManager& codecManager = AssetCodecManager::instance();
-  const  Path codecsPath(
-#if USING(CH_DEBUG_MODE)
-    "Codecs"
-#else // USING(CH_DEBUG_MODE)
-    "Codecs"
-#endif // USING(CH_DEBUG_MODE)
-  );
+  const  Path codecsPath(CH_CODEC_PATH);
   Vector<Path> files;
   Vector<Path> directories;
   FileSystem::getChildren(codecsPath, files, directories);

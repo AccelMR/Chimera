@@ -21,6 +21,7 @@
 #include "chUIHelpers.h"
 #include "chNastyRenderer.h"
 
+#include "chGameObjectAsset.h"
 #include "chTextureAsset.h"
 
 #include "imgui.h"
@@ -55,7 +56,6 @@ ContentAssetUI::ContentAssetUI() {
   samplerInfo.addressModeV = SamplerAddressMode::ClampToEdge;
   samplerInfo.addressModeW = SamplerAddressMode::ClampToEdge;
   m_defaultSampler = graphicsAPI.createSampler(samplerInfo);
-
 
   auto onAssetsChangedCallback = [&](const Vector<SPtr<IAsset>>& assets) {
     CH_LOG_INFO(ContentAssetUILog, "Assets changed, updating UI.");
@@ -92,7 +92,6 @@ ContentAssetUI::ContentAssetUI() {
       }
     }
   };
-  AssetManager::instance().onAssetsChanged(onAssetsChangedCallback);
 
   m_assets = AssetManager::instance().getAllAssets();
   onAssetsChangedCallback(m_assets);
@@ -845,6 +844,13 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
     return;
   }
 
+  if (ImGui::MenuItem("Refresh")) {
+    m_assets = AssetManager::instance().getAllAssets();
+    CH_LOG_INFO(ContentAssetUILog, "Refreshed asset list.");
+  }
+
+  ImGui::Separator();
+
   // Make a menu that hass submenu codecs
   if (ImGui::BeginMenu("Import Asset")) {
     ImGui::Separator();
@@ -878,6 +884,8 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
 
           CH_LOG_INFO(ContentAssetUILog, "Successfully imported asset: {0} as {1}",
                       filePath.toString(), importedAsset->getUUID().toString());
+
+          m_assets = AssetManager::instance().getAllAssets();
           ImGui::EndMenu();
           ImGui::EndPopup();
           return; // Exit after handling import
@@ -887,6 +895,17 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
 #endif // USING(CH_CODECS)
     ImGui::EndMenu();
   }
+
+  ImGui::Separator();
+
+  if (ImGui::BeginMenu("Create")) {
+    if (ImGui::MenuItem("Game Object Asset")) {
+      WeakPtr<IAsset> newAsset = AssetManager::instance().createAsset<GameObjectAsset>(
+          "New", EnginePaths::getGameAssetDirectory());
+    }
+    ImGui::EndMenu();
+  }
+
   ImGui::EndPopup();
 }
 } // namespace chEngineSDK

@@ -235,7 +235,7 @@ FileSystem::isPathRelative(const Path& basePath, const Path& targetPath) {
  */
 void
 FileSystem::getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories) {
-  fs::path fsPath(path.toString());
+  fs::path fsPath(fs::absolute(path.toString()));
 
   if (!fs::is_directory(fsPath)) {
     return;

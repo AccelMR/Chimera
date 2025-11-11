@@ -139,11 +139,6 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
     return m_assetRegister->getAssetTypeName(assetUUID);
   }
 
-  FORCEINLINE HEvent
-  onAssetsChanged(const Function<void(const Vector<SPtr<IAsset>>& assets)>& callback) {
-    return m_onAssetsChanged.connect(callback);
-  }
-
  private:
   friend class IAssetCodec;
 
@@ -151,7 +146,6 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   registerNewAsset(const SPtr<IAsset>& asset) {
     CH_ASSERT(asset && "Asset cannot be null");
     m_assets[asset->getUUID()] = asset;
-    m_onAssetsChanged(std::move(getAllAssets()));
   }
 
   SPtr<IAsset>
@@ -164,8 +158,6 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
   Map<UUID, SPtr<IAsset>> m_loadedAssets; ///< Map of currently loaded assets by UUID
   Map<UUID, SPtr<IAsset>> m_sceneAssets; ///< Map of scene assets by UUID
-
-  Event<void(const Vector<SPtr<IAsset>>&)> m_onAssetsChanged; ///< Event triggered when assets are changed
 
   Event<bool(const SPtr<IAsset>&)> m_onAssetLoaded; ///< Event triggered when an asset is loaded
   Event<bool(const SPtr<IAsset>&)> m_onAssetUnloaded; ///< Event triggered
@@ -199,14 +191,14 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
     CH_LOG(AssetSystem, Error, "Failed to create asset due to validation errors");
     return WeakPtr<TAsset>();
   }
-
-  const String AssetTypeName = AssetTypeTraits<TAsset>::getTypeName();
-  const UUID assetUUID = UUID::createFromName(AssetTypeName);
+  const UUID assetUUID = AssetTypeTraits<TAsset>::getTypeId();
   AssetCreatorFunc assetCreator = m_assetRegister->getAssetCreator(assetUUID);
   if (assetCreator == nullptr) {
     CH_LOG(AssetSystem, Error, "No asset creator found for UUID: {0}", assetUUID.toString());
     return WeakPtr<TAsset>();
   }
+
+  const String AssetTypeName = AssetTypeTraits<TAsset>::getTypeName();
 
   const UUID refUUID = UUID::createRandom();
   AssetMetadata metadata;
@@ -233,7 +225,6 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   // DeleteMe
   m_loadedAssets[refUUID] = asset;
   m_assets[refUUID] = asset;
-
 
   return std::static_pointer_cast<TAsset>(asset);
 }

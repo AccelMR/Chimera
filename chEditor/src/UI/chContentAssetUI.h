@@ -115,6 +115,9 @@ class ContentAssetUI
   renderEmptyAreaContextMenu();
 
   void
+  onAssetsChanged(const Vector<UUID>& changedAssets);
+
+  void
   setupTableColumns();
   void
   renderListAssetItem(const SPtr<IAsset>& asset);

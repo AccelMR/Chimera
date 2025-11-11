@@ -36,6 +36,15 @@ class SceneGraphUI {
   void
   buildSceneGraphData(const Vector<SPtr<GameObject>>& rootGameObjects);
 
+  void
+  handleEmptyAreaContextMenu();
+
+  void
+  renderEmptyAreaContextMenu();
+
+  void
+  handleContextMenuForGameObject(const SPtr<GameObject>& gameObject);
+
  private:
   // UI state
   bool m_isVisible = true;
