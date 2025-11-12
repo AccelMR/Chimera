@@ -58,7 +58,7 @@ Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 #if USING(CH_CODECS)
 #if USING(CH_PLATFORM_LINUX)
   #define CH_CODEC_PATH "build/debug-x64/lib/Codecs"
-#elif USING(CH_PLATFORM_WINDOWS)
+#elif USING(CH_PLATFORM_WIN32)
 #define CH_CODEC_PATH "Codecs"
 #else
   #error "Unsupported platform for codec loading"
