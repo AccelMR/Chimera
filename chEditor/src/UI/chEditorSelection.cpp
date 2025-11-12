@@ -13,4 +13,6 @@ namespace chEngineSDK {
 
 SPtr<GameObject> EditorSelection::m_selectedGameObject = nullptr;
 
+SPtr<GameObject> EditorSelection::m_gameObjectAssetPreview = nullptr;
+
 } // namespace chEngineSDK

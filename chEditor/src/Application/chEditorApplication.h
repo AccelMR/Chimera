@@ -56,6 +56,7 @@ class MainMenuBarUI;
 class OutputLogUI;
 class SceneGraphUI;
 class InspectorUI;
+class GameObjectAssetUI;
 
 class MultiStageRenderer;
 
@@ -121,6 +122,7 @@ class CH_EDITOR_EXPORT EditorApplication : public WindowedApplication
   UniquePtr<OutputLogUI> m_outputLogUI; ///< Output log UI instance
   UniquePtr<SceneGraphUI> m_sceneGraphUI; ///< Scene graph UI instance
   UniquePtr<InspectorUI> m_inspectorUI; ///< Inspector UI instance
+  UniquePtr<GameObjectAssetUI> m_gameObjectAssetUI; ///< GameObject Asset UI instance
 
   uint32 width = 0; ///< Width of the editor window
   uint32 height = 0; ///< Height of the editor window

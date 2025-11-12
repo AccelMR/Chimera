@@ -102,7 +102,7 @@ IAsset::rename(const ANSICHAR* newName) {
   }
 
   // Update the metadata
-  chString::copyANSI(m_metadata.name, newName, sizeof(newName));
+  chString::copyANSI(m_metadata.name, newName);
 
   return updateMetadata(m_metadata);
 }

@@ -8,6 +8,8 @@
 /************************************************************************/
 #include "chGameObjectAsset.h"
 
+#include "chGameObject.h"
+
 namespace chEngineSDK {
 
 bool
@@ -17,6 +19,7 @@ GameObjectAsset::serialize(SPtr<DataStream> stream) {
 
 bool
 GameObjectAsset::deserialize(SPtr<DataStream> stream) {
+  m_gameObject = chMakeShared<GameObject>("Test");
   return true;
 }
 

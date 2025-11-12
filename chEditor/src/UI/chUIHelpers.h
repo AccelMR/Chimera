@@ -14,7 +14,7 @@
 
 namespace chEngineSDK {
 namespace chUIHelpers {
-enum class AssetType { Model, Texture, Material, Shader, Unknown };
+enum class AssetType { Model, Texture, Material, Shader, GameObject, Unknown };
 
 struct AssetIcon {
   AssetType type;

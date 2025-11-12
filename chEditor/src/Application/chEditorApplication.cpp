@@ -32,6 +32,7 @@
 #include "chOutputLogUI.h"
 #include "chSceneGraphUI.h"
 #include "chInspectorUI.h"
+#include "chGameObjAssetUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -128,6 +129,7 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
+  m_gameObjectAssetUI->renderGameObjectAssetUI();
 
   UIHelpers::render(graphicAPI, commandBuffer);
 }
@@ -212,6 +214,7 @@ EditorApplication::initializeEditorComponents() {
   m_outputLogUI = chMakeUnique<OutputLogUI>();
   m_sceneGraphUI = chMakeUnique<SceneGraphUI>();
   m_inspectorUI = chMakeUnique<InspectorUI>();
+  m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
   m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
   m_contentAssetUI->setNastyRenderer(m_nastyRenderer);

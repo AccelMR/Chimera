@@ -62,7 +62,7 @@ SceneManager::loadScene(WeakPtr<SceneAsset> asset){
   }
 
   SPtr<SceneAsset> sceneAsset = asset.lock();
-  if (!assetManager.loadAsset(sceneAsset)) {
+  if (!assetManager.syncLoadAsset(sceneAsset)) {
     CH_LOG_ERROR(SceneManagerLog,
                  "Failed to load scene asset with UUID {0}.",
                  sceneAsset->getUUID().toString());

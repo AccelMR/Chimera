@@ -77,7 +77,7 @@ ImageCodec::importAsset(const Path& filePath, const String& assetName) {
 
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(metadata, imageData, width, height);
 
-  if (!textureAsset->save()) {
+  if (!AssetManager::instance().saveAsset(textureAsset)) {
     CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: " + assetName);
     return nullptr;
   }

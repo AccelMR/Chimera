@@ -88,7 +88,7 @@ MeshCodec::importAsset(const Path& filePath, const String& assetName) {
 
   SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
 
-  if (!modelAsset->save()) {
+  if (!AssetManager::instance().saveAsset(modelAsset)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
     return nullptr;
   }

@@ -40,6 +40,9 @@ class ContentAssetUI
     m_nastyRenderer = std::move(renderer);
   }
 
+  void
+  saveUnsavedAssets();
+
  private:
   // Helper method to render asset deletion confirmation popup
   void
@@ -130,6 +133,8 @@ class ContentAssetUI
   SPtr<MultiStageRenderer> m_multiStageRenderer; ///< Multi-stage renderer instance
   SPtr<ISampler> m_defaultSampler; ///< Default sampler for textures
   UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;
+
+  Vector<WeakPtr<IAsset>> m_unsavedAssets;
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;

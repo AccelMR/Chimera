@@ -21,6 +21,11 @@ class GameObjectAsset : public IAsset {
 
    ~GameObjectAsset() = default;
 
+  NODISCARD FORCEINLINE SPtr<GameObject>
+  getGameObject() const {
+    return isUnloaded() ? nullptr : m_gameObject;
+  }
+
  protected:
   bool
   serialize(SPtr<DataStream>) override;

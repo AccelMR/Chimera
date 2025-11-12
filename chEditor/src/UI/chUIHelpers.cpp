@@ -16,6 +16,7 @@
 #include "chModelAsset.h"
 #include "chPath.h"
 #include "chTextureAsset.h"
+#include "chGameObjectAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -78,6 +79,12 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset) {
         AssetType::Texture,
         ICON_FA_IMAGE,
         {String(ICON_FA_IMAGE) + " " + asset->getName()}}; // Example icon for texture assets
+  }
+  if(asset->isTypeOf<GameObjectAsset>()) {
+    return {
+        AssetType::GameObject,
+        ICON_FA_CUBES,
+        {String(ICON_FA_CUBES) + " " + asset->getName()}}; // Example icon for game object assets
   }
   // Add more asset types and their corresponding icons as needed
   return {AssetType::Unknown, ICON_FA_FILE}; // Default icon for unknown asset types

@@ -46,13 +46,13 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   initialize();
 
   bool
-  loadAsset(const SPtr<IAsset>& asset);
+  syncLoadAsset(const SPtr<IAsset>& asset);
 
   bool
   unloadAsset(const SPtr<IAsset>& asset);
 
   bool
-  loadAsset(const UUID& assetUUID);
+  syncLoadAsset(const UUID& assetUUID);
 
   bool
   unloadAsset(const UUID& assetUUID);
@@ -65,6 +65,20 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
 
   void
   lazyLoadAssetsFromDirectory(const Path& directory);
+
+  NODISCARD bool
+  saveAsset(const SPtr<IAsset>& asset){
+    if (!asset) {
+      CH_LOG_ERROR(AssetSystem, "Cannot save null asset");
+      return false;
+    }
+    if (!asset->save()) {
+      CH_LOG_ERROR(AssetSystem, "Failed to save asset {0}", asset->getName());
+      return false;
+    }
+    CH_LOG_DEBUG(AssetSystem, "Saved asset {0}", asset->getName());
+    return true;
+  }
 
   /*
    * Load a scene by its name.

@@ -122,9 +122,6 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD FORCEINLINE uint64
   getCreatedAt() const { return m_metadata.creationTime; }
 
-  NODISCARD bool
-  save();
-
  protected:
   friend class AssetManager;
   friend class IAssetCodec;
@@ -134,6 +131,9 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
    : m_metadata(metadata), m_state(AssetState::Unloaded), m_refCount(0) {
     CH_ASSERT(validateMetadata(metadata));
   }
+
+  NODISCARD bool
+  save();
 
  protected:
 

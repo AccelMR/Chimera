@@ -48,7 +48,7 @@ AssetManager::initialize() {
 /*
  */
 bool
-AssetManager::loadAsset(const SPtr<IAsset>& asset) {
+AssetManager::syncLoadAsset(const SPtr<IAsset>& asset) {
   if (!asset) {
     CH_LOG_ERROR(AssetSystem, "Cannot load null asset");
     return false;
@@ -123,13 +123,13 @@ AssetManager::unloadAsset(const SPtr<IAsset>& asset) {
 /*
 */
 bool
-AssetManager::loadAsset(const UUID& assetUUID) {
+AssetManager::syncLoadAsset(const UUID& assetUUID) {
   auto it = m_assets.find(assetUUID);
   if (it == m_assets.end()) {
     CH_LOG_ERROR(AssetSystem, "Asset with UUID {0} not found", assetUUID.toString());
     return false;
   }
-  return loadAsset(it->second);
+  return syncLoadAsset(it->second);
 
 }
 
@@ -252,7 +252,7 @@ WeakPtr<SceneAsset>
 AssetManager::loadSceneByName(const String& name) {
   for (const auto& [uuid, asset] : m_sceneAssets) {
     if (chString::compare(asset->getName(), name)) {
-      if (!loadAsset(asset)) {
+      if (!syncLoadAsset(asset)) {
         CH_LOG_ERROR(AssetSystem, "Failed to load scene asset: {0}", name);
         return WeakPtr<SceneAsset>();
       }

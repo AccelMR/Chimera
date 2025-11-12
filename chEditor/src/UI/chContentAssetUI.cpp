@@ -16,6 +16,7 @@
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chIGraphicsAPI.h"
+#include "chEditorSelection.h"
 #include "chIDescriptorSet.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
@@ -64,7 +65,7 @@ ContentAssetUI::ContentAssetUI() {
     for (const auto& asset : m_assets) {
       if (asset->isTypeOf<TextureAsset>()) {
         SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
-        if (textureAsset->isUnloaded() && !AssetManager::instance().loadAsset(textureAsset)){
+        if (textureAsset->isUnloaded() && !AssetManager::instance().syncLoadAsset(textureAsset)){
           CH_LOG_ERROR(ContentAssetUILog, "Failed to load texture asset: {}", asset->getName());
           continue;
         }
@@ -113,6 +114,23 @@ ContentAssetUI::renderContentAssetUI() {
   renderAssetDisplayArea();
 
   ImGui::End();
+}
+
+/*
+*/
+void
+ContentAssetUI::saveUnsavedAssets() {
+  for (auto& weakAsset : m_unsavedAssets) {
+    if (auto asset = weakAsset.lock()) {
+      if (!AssetManager::instance().saveAsset(asset)) {
+        CH_LOG_ERROR(ContentAssetUILog, "Failed to save asset: {0}", asset->getName());
+      }
+      else {
+        CH_LOG_INFO(ContentAssetUILog, "Successfully saved asset: {0}", asset->getName());
+      }
+    }
+  }
+  m_unsavedAssets.clear();
 }
 
 // Search bar rendering
@@ -266,9 +284,9 @@ ContentAssetUI::shouldShowAsset(const SPtr<IAsset>& asset) {
 
   // Skip unknown asset types
   AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
-  if (assetIcon.type == AssetType::Unknown) {
-    return false;
-  }
+  // if (assetIcon.type == AssetType::Unknown) {
+  //   return false;
+  // }
 
   return true;
 }
@@ -601,7 +619,7 @@ void
 ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
   CH_LOG_DEBUG(ContentAssetUILog, "Selected asset: {0}", asset->getName());
 
-  if (AssetManager::instance().loadAsset(asset)) {
+  if (AssetManager::instance().syncLoadAsset(asset)) {
     CH_LOG_DEBUG(ContentAssetUILog, "Loading asset: {0}", asset->getName());
 
     // Handle different asset types
@@ -632,6 +650,32 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset) {
  */
 void
 ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset) {
+  if (!asset) {
+    return;
+  }
+
+  if (asset->isTypeOf<GameObjectAsset>()) {
+    if (ImGui::MenuItem("Instantiate in Scene")) {
+      // Handle instantiation logic here
+      CH_LOG_DEBUG(ContentAssetUILog, "Instantiating GameObject asset: {0}", asset->getName());
+      ImGui::CloseCurrentPopup();
+    }
+    if (ImGui::MenuItem("Edit")) {
+      SPtr<GameObjectAsset> gameObjectAsset = std::static_pointer_cast<GameObjectAsset>(asset);
+      if(asset->isUnloaded()) {
+        if (!AssetManager::instance().syncLoadAsset(asset)) {
+          CH_LOG_ERROR(ContentAssetUILog, "Failed to load GameObject asset: {0}", asset->getName());
+          ImGui::CloseCurrentPopup();
+          return;
+        }
+      }
+      CH_LOG_DEBUG(ContentAssetUILog, "Editing GameObject asset: {0}", asset->getName());
+      EditorSelection::setGameObjectAssetPreview(gameObjectAsset->getGameObject());
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::Separator();
+  }
+
   if (ImGui::MenuItem("Load")) {
     handleAssetSelection(asset);
   }
@@ -902,8 +946,17 @@ ContentAssetUI::renderEmptyAreaContextMenu() {
     if (ImGui::MenuItem("Game Object Asset")) {
       WeakPtr<IAsset> newAsset = AssetManager::instance().createAsset<GameObjectAsset>(
           "New", EnginePaths::getGameAssetDirectory());
+      if (newAsset.expired()) {
+        CH_LOG_ERROR(ContentAssetUILog, "Failed to create Game Object Asset.");
+        return;
+      }
+      m_unsavedAssets.push_back(newAsset);
     }
     ImGui::EndMenu();
+  }
+
+  if (ImGui::MenuItem("Save All Unsaved Assets")) {
+    saveUnsavedAssets();
   }
 
   ImGui::EndPopup();
