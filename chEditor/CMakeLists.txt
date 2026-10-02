@@ -99,8 +99,6 @@ target_link_libraries(chEditor
 # C++20 compiler configuration
 target_compile_features(chEditor PRIVATE cxx_std_20)
 
-target_compile_definitions(chEditor PRIVATE CH_EDITOR_EXPORTS)
-
 # Success configuration message
 message(STATUS "chEditor configured with ImGui (SDL3 backend only)")
 message(STATUS "ImGui directory: ${IMGUI_DIR}")
