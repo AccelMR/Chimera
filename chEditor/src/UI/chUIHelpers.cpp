@@ -8,6 +8,7 @@
 /************************************************************************/
 #include "chUIHelpers.h"
 
+#include "chAssetCodec.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chDisplayEventHandle.h"
@@ -410,6 +411,28 @@ UIHelpers::openFileExplorer(const Path& pathToOpen, const Vector<String>& filter
     CH_LOG_ERROR(UIImguiHelper, "Error opening file dialog: {0}", NFD::GetError());
   }
   return Path(); // Return an empty path if no file was selected or an error occurred
+}
+
+/*
+ */
+SPtr<IAsset>
+UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
+{
+  const Path filePath = openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
+                                         codec->getSupportedExtensions());
+  // openFileExplorer already logs a cancelled dialog or a dialog error.
+  if (filePath.empty()) {
+    return nullptr;
+  }
+
+  SPtr<IAsset> importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
+  if (!importedAsset) {
+    CH_LOG_ERROR(UIImguiHelper, "Failed to import asset: {0}", filePath);
+    return nullptr;
+  }
+
+  CH_LOG_INFO(UIImguiHelper, "Imported asset {0} as {1}", filePath, importedAsset->getUUID());
+  return importedAsset;
 }
 
 } // namespace chUIHelpers

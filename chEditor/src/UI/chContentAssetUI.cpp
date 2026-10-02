@@ -912,31 +912,9 @@ ContentAssetUI::renderEmptyAreaContextMenu()
       for (const auto& assetType : codec->getSupportedAssetTypes()) {
         const String& codecTypeName = assetManager.getAssetTypeName(assetType);
         if (ImGui::MenuItem(codecTypeName.c_str())) {
-          const Path filePath =
-              UIHelpers::openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
-                                          codec->getSupportedExtensions());
-
-          if (filePath.empty()) {
-            CH_LOG_ERROR(ContentAssetUILog, "No file selected for import");
-            ImGui::EndMenu();
-            ImGui::EndPopup();
-            return;
+          if (UIHelpers::importAssetWithDialog(codec)) {
+            refreshAssets();
           }
-
-          auto importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
-
-          if (!importedAsset) {
-            CH_LOG_ERROR(ContentAssetUILog, "Failed to import asset: {0}",
-                         filePath.toString());
-            ImGui::EndMenu();
-            ImGui::EndPopup();
-            return;
-          }
-
-          CH_LOG_INFO(ContentAssetUILog, "Successfully imported asset: {0} as {1}",
-                      filePath.toString(), importedAsset->getUUID().toString());
-
-          refreshAssets();
           ImGui::EndMenu();
           ImGui::EndPopup();
           return;

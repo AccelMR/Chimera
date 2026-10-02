@@ -14,9 +14,7 @@
 #endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
-#include "chEnginePaths.h"
 #include "chLogger.h"
-#include "chPath.h"
 #include "chModelAsset.h"
 #include "chNastyRenderer.h"
 #include "chUIHelpers.h"
@@ -69,37 +67,24 @@ MainMenuBarUI::renderMainMenuBar() {
 /*
  */
 void
-MainMenuBarUI::renderImportMenu() {
+MainMenuBarUI::renderImportMenu()
+{
 #if USING(CH_CODECS)
-  AssetCodecManager& codecManager = AssetCodecManager::instance();
+  if (!ImGui::BeginMenu("Import")) {
+    return;
+  }
+
   AssetManager& assetManager = AssetManager::instance();
-  for (const auto& codec : codecManager.getAllCodecs()) {
+  for (const auto& codec : AssetCodecManager::instance().getAllCodecs()) {
     for (const auto& assetType : codec->getSupportedAssetTypes()) {
-      const String& codecTypeName = "Import " + assetManager.getAssetTypeName(assetType);
-      if (ImGui::MenuItem(codecTypeName.c_str())) {
-        const Path filePath = UIHelpers::openFileExplorer(
-            EnginePaths::getAbsoluteGameAssetDirectory(), codec->getSupportedExtensions());
-
-        if (filePath.empty()) {
-          CH_LOG_ERROR(MainMenuBarUILog, "No file selected for import");
-          ImGui::EndMenu();
-          return;
-        }
-
-        auto importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
-
-        if (!importedAsset) {
-          CH_LOG_ERROR(MainMenuBarUILog, "Failed to import asset: {0}", filePath.toString());
-          ImGui::EndMenu();
-          return;
-        }
-        CH_LOG_INFO(MainMenuBarUILog, "Successfully imported asset: {0} as {1}",
-                    filePath.toString(), importedAsset->getUUID().toString());
-        ImGui::EndMenu();
+      const String& typeName = assetManager.getAssetTypeName(assetType);
+      if (ImGui::MenuItem(typeName.c_str())) {
+        UIHelpers::importAssetWithDialog(codec);
       }
     }
   }
 
+  ImGui::EndMenu();
 #endif // USING(CH_CODECS)
 }
 
