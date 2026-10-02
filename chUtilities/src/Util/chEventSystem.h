@@ -218,9 +218,30 @@ class TEvent
     clear();
   }
 
+  // A copy would share the subscriber list, and destroying it would clear the list of
+  // every other copy.
+  TEvent(const TEvent&) = delete;
+  TEvent&
+  operator=(const TEvent&) = delete;
+
+  TEvent(TEvent&& other) noexcept
+   : m_connectionController(std::move(other.m_connectionController))
+  {}
+
+  TEvent&
+  operator=(TEvent&& other) noexcept
+  {
+    if (this != &other) {
+      clear();
+      m_connectionController = std::move(other.m_connectionController);
+    }
+    return *this;
+  }
+
   NODISCARD HEvent
   connect(function<ReturnType(Args...)> func) const
   {
+    CH_ASSERT(m_connectionController && "Event used after being moved from.");
     auto* connData = new BasicConnectionNode();
     // Set before connecting, because once the node is in the list another thread may
     // fire the event and read it.
@@ -232,6 +253,7 @@ class TEvent
   void
   operator()(Args... args) const
   {
+    CH_ASSERT(m_connectionController && "Event used after being moved from.");
     // Keeps the controller alive in case a callback destroys this event.
     SPtr<ConnectionController> controller = m_connectionController;
 
@@ -252,7 +274,9 @@ class TEvent
   void
   clear()
   {
-    m_connectionController->clear();
+    if (m_connectionController) {
+      m_connectionController->clear();
+    }
   }
 
  private:

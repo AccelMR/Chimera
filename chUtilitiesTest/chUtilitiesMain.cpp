@@ -1596,6 +1596,25 @@ TEST_CASE("chUtilities - EventSystem") {
     onDepth(0);
     REQUIRE(calls == 4);
   }
+
+  SECTION("Moving keeps the listeners") {
+    int32 total = 0;
+    UnorderedMap<int32, Event<void(int32)>> events;
+    HEvent handle;
+    {
+      Event<void(int32)> onValue;
+      handle = onValue.connect([&total](int32 value) { total += value; });
+      events.emplace(0, std::move(onValue));
+    }
+    events[0](3);
+    REQUIRE(total == 3);
+
+    Event<void(int32)> other;
+    other = std::move(events[0]);
+    other(2);
+    REQUIRE(total == 5);
+    REQUIRE(handle.isValid());
+  }
 }
 
 TEST_CASE("chUtilities - Logger") {

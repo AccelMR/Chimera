@@ -36,9 +36,9 @@ EventDispatcherManager::EventDispatcherManager()
 {
   for (int i = 0; i < static_cast<int>(Key::KeysMax); ++i) {
     Key key = static_cast<Key>(i);
-    KeyDownCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
-    KeyPressedCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
-    KeyUpCallbacks.emplace(key, Event<void(const KeyBoardData&)>());
+    KeyDownCallbacks.try_emplace(key);
+    KeyPressedCallbacks.try_emplace(key);
+    KeyUpCallbacks.try_emplace(key);
   }
 
   // Initialize the keyboard state
@@ -46,9 +46,9 @@ EventDispatcherManager::EventDispatcherManager()
 
   for (uint32 i = 0; i < static_cast<uint32>(MouseButton::MouseButtonsMax); ++i) {
     MouseButton button = static_cast<MouseButton>(i);
-    MouseButtonDownCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
-    //MouseButtonPressedCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
-    MouseButtonUpCallbacks.emplace(button, Event<void(const MouseButtonData&)>());
+    MouseButtonDownCallbacks.try_emplace(button);
+    //MouseButtonPressedCallbacks.try_emplace(button);
+    MouseButtonUpCallbacks.try_emplace(button);
   }
 
   // Initialize the mouse state
