@@ -228,11 +228,23 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
 
   /**
    * @brief Event triggered when a log entry is written
-   * @param callback Function to call when a log entry is written
-   * @return Event handle
+   * @param callback Function to call when a log entry is written. It can be called from
+   *        any thread that logs.
+   * @param replayBuffered If true, the callback first receives every buffered entry, so
+   *        no entry is missed or received twice
+   * @return Event handle. Release it with disconnectLogListener.
    */
   NODISCARD HEvent
-  onLogWritten(Function<void(const LogBufferEntry&)> callback);
+  onLogWritten(Function<void(const LogBufferEntry&)> callback, bool replayBuffered = false);
+
+  /**
+   * @brief Disconnects a handle returned by onLogWritten
+   *
+   * When this returns the callback is not running on any thread and will not be called
+   * again, so the object it uses can be destroyed.
+   */
+  void
+  disconnectLogListener(HEvent& handle);
 
  protected:
   /**

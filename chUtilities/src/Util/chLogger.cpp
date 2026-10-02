@@ -301,9 +301,28 @@ Logger::setFileOutput(bool enabled, const String& filename)
 /*
  */
 HEvent
-Logger::onLogWritten(Function<void(const LogBufferEntry&)> callback)
+Logger::onLogWritten(Function<void(const LogBufferEntry&)> callback, bool replayBuffered)
 {
+  RecursiveLock lock(m_impl->mutex);
+
+  if (replayBuffered) {
+    for (const LogBufferEntry& entry : m_impl->logBuffer) {
+      callback(entry);
+    }
+  }
+
   return m_impl->logWrittenEvent.connect(std::move(callback));
+}
+
+/*
+ */
+void
+Logger::disconnectLogListener(HEvent& handle)
+{
+  // writeLogMessage calls the listeners with this lock held, so once it is taken no
+  // listener is still running.
+  RecursiveLock lock(m_impl->mutex);
+  handle.disconnect();
 }
 
 /*

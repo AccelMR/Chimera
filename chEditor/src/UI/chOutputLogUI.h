@@ -10,6 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 #include "chLogger.h"
+#include "chSTDThreading.h"
 
 #include "chMultiStageRenderer.h"
 
@@ -52,7 +53,7 @@ class OutputLogUI
   renderOutputLogUI();
 
   /**
-   * @brief Add a new log entry to the display
+   * @brief Queue a log entry to be shown on the next render. Safe to call from any thread.
    */
   void
   addLogEntry(const LogBufferEntry& entry);
@@ -92,22 +93,18 @@ class OutputLogUI
   }
 
   /**
-   * @brief Append multiple log entries at once
-   */
-  void
-  appendLogEntries(const Vector<LogBufferEntry>& entries) {
-    m_logEntries.insert(m_logEntries.end(), entries.begin(), entries.end());
-    m_needsFilterUpdate = true;
-    applySizeLimits();
-  }
-
-  /**
    * @brief Update the list of available categories from log entries
    */
   void
   updateAvailableCategories();
 
  private:
+  /**
+   * @brief Move the queued entries into the displayed log. Main thread only.
+   */
+  void
+  flushPendingEntries();
+
   /**
    * @brief Render the filter controls (verbosity, categories, search)
    */
@@ -162,6 +159,11 @@ class OutputLogUI
   // UI state
   bool m_needsScrollToBottom = false;
   bool m_needsFilterUpdate = true;
+
+  // Logs can come from any thread, so they wait here until the main thread renders.
+  Mutex m_pendingMutex;
+  Vector<LogBufferEntry> m_pendingEntries;
+  Vector<LogBufferEntry> m_flushEntries;
 
   HEvent m_logWrittenEvent;
 };

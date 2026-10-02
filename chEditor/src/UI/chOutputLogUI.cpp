@@ -10,9 +10,7 @@
 
 #include <cctype>
 #include <algorithm>
-#include <chrono>
 
-#include "chSTDThreading.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -24,27 +22,29 @@ CH_LOG_DECLARE_STATIC(OutputLogUILog, All);
 /*
  */
 OutputLogUI::OutputLogUI()
- : m_logWrittenEvent(Logger::instance().onLogWritten(std::bind(&OutputLogUI::addLogEntry,
-                                                               this,
-                                                               std::placeholders::_1))) {
+ : m_logWrittenEvent(Logger::instance().onLogWritten(
+       [this](const LogBufferEntry& entry) { addLogEntry(entry); },
+       true))
+{
   CH_LOG_DEBUG(OutputLogUILog, "Creating OutputLogUI instance.");
-  // Initialize with all categories enabled by default
-  m_filter.enabledCategories.clear();
-
-  appendLogEntries(Logger::instance().getBufferedLogs());
 }
+
 /*
  */
-OutputLogUI::~OutputLogUI() {
-  m_logWrittenEvent.disconnect();
-  // Optional: Brief wait to ensure no in-flight calls
-  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+OutputLogUI::~OutputLogUI()
+{
+  if (Logger::isStarted()) {
+    Logger::instance().disconnectLogListener(m_logWrittenEvent);
+  }
 }
 
 /*
  */
 void
 OutputLogUI::renderOutputLogUI() {
+  // Flushed even while hidden so the queue does not keep growing.
+  flushPendingEntries();
+
   if (!m_isVisible) {
     return;
   }
@@ -292,15 +292,35 @@ OutputLogUI::renderLogEntryRow(const LogBufferEntry& entry, int32) {
 /*
  */
 void
-OutputLogUI::addLogEntry(const LogBufferEntry& entry) {
-  m_logEntries.push_back(entry);
+OutputLogUI::addLogEntry(const LogBufferEntry& entry)
+{
+  LockGuard<Mutex> lock(m_pendingMutex);
+  m_pendingEntries.push_back(entry);
+}
 
-  // Update available categories
-  if (m_availableCategories.find(entry.category) == m_availableCategories.end()) {
-    m_availableCategories.insert(entry.category);
-    // Auto-enable new categories
-    m_filter.enabledCategories.insert(entry.category);
+/*
+ */
+void
+OutputLogUI::flushPendingEntries()
+{
+  // Swapping keeps the lock short and lets both vectors reuse their memory.
+  {
+    LockGuard<Mutex> lock(m_pendingMutex);
+    m_pendingEntries.swap(m_flushEntries);
   }
+
+  if (m_flushEntries.empty()) {
+    return;
+  }
+
+  for (LogBufferEntry& entry : m_flushEntries) {
+    // New categories start enabled.
+    if (m_availableCategories.insert(entry.category).second) {
+      m_filter.enabledCategories.insert(entry.category);
+    }
+    m_logEntries.push_back(std::move(entry));
+  }
+  m_flushEntries.clear();
 
   applySizeLimits();
   m_needsFilterUpdate = true;
