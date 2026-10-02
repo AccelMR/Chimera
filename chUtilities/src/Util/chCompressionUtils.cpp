@@ -71,7 +71,7 @@ CompressionUtils::decompress(const Vector<uint8>& compressedData) {
   }
 
   // Extract payload data (skip header)
-  const size_t headerSize = sizeof(CompressionHeader);
+  const SIZE_T headerSize = sizeof(CompressionHeader);
   if (compressedData.size() < headerSize + header.compressedSize) {
     return Vector<uint8>();
   }
@@ -142,7 +142,7 @@ CompressionUtils::compressRLE(const Vector<uint8>& data) {
   Vector<uint8> compressed;
   compressed.reserve(data.size()); // Worst case scenario
 
-  for (size_t i = 0; i < data.size();) {
+  for (SIZE_T i = 0; i < data.size();) {
     uint8 currentByte = data[i];
     uint8 count = 1;
 
@@ -169,18 +169,18 @@ CompressionUtils::compressLZ77(const Vector<uint8>& data) {
   Vector<uint8> compressed;
   compressed.reserve(data.size()); // Initial estimation
 
-  const size_t windowSize = 256; // Sliding window size
-  const size_t maxMatchLength = 255; // Maximum match length
+  const SIZE_T windowSize = 256; // Sliding window size
+  const SIZE_T maxMatchLength = 255; // Maximum match length
 
-  for (size_t i = 0; i < data.size();) {
-    size_t bestMatchLength = 0;
-    size_t bestMatchDistance = 0;
+  for (SIZE_T i = 0; i < data.size();) {
+    SIZE_T bestMatchLength = 0;
+    SIZE_T bestMatchDistance = 0;
 
     // Search for the best match in the sliding window
-    size_t windowStart = (i >= windowSize) ? i - windowSize : 0;
+    SIZE_T windowStart = (i >= windowSize) ? i - windowSize : 0;
 
-    for (size_t j = windowStart; j < i; j++) {
-      size_t matchLength = 0;
+    for (SIZE_T j = windowStart; j < i; j++) {
+      SIZE_T matchLength = 0;
 
       // Find match length
       while (i + matchLength < data.size() &&
@@ -229,7 +229,7 @@ CompressionUtils::decompressRLE(const Vector<uint8>& data, uint32 originalSize) 
   Vector<uint8> decompressed;
   decompressed.reserve(originalSize);
 
-  for (size_t i = 0; i < data.size(); i += 2) {
+  for (SIZE_T i = 0; i < data.size(); i += 2) {
     if (i + 1 >= data.size()) {
       break; // Incomplete data
     }
@@ -262,7 +262,7 @@ CompressionUtils::decompressLZ77(const Vector<uint8>& data, uint32 originalSize)
   Vector<uint8> decompressed;
   decompressed.reserve(originalSize);
 
-  for (size_t i = 0; i < data.size();) {
+  for (SIZE_T i = 0; i < data.size();) {
     uint8 currentByte = data[i];
 
     if (currentByte == 0xFF) {
@@ -284,7 +284,7 @@ CompressionUtils::decompressLZ77(const Vector<uint8>& data, uint32 originalSize)
           uint8 length = data[i + 2];
 
           // Copy from sliding window
-          size_t startPos = decompressed.size() - distance;
+          SIZE_T startPos = decompressed.size() - distance;
           for (uint8 j = 0; j < length; j++) {
             if (startPos + j < decompressed.size()) {
               decompressed.push_back(decompressed[startPos + j]);

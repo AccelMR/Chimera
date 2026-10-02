@@ -484,7 +484,7 @@ NastyRenderer::createMeshBuffers() {
   m_meshIndexTypes.resize(uniqueMeshes.size());
 
   // Create vertex and index buffers for each unique mesh
-  for (size_t i = 0; i < uniqueMeshes.size(); ++i) {
+  for (SIZE_T i = 0; i < uniqueMeshes.size(); ++i) {
     const auto& mesh = uniqueMeshes[i];
 
     // Create vertex buffer

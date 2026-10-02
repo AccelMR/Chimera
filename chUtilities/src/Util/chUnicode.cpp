@@ -25,7 +25,7 @@ namespace chEngineSDK{
  */
 template<typename T>
 T
-UTF8To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
+UTF8To32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
   //Nothing to parse
   if (begin >= end) {
     return begin;
@@ -88,7 +88,7 @@ UTF8To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
  */
 template<typename T>
 T
-UTF32To8(char32_t input, T output, uint32 maxElems, char invalidChar = 0) {
+UTF32To8(WCHAR32 input, T output, uint32 maxElems, ANSICHAR invalidChar = 0) {
   //No place to write the character
   if (0 == maxElems) {
     return output;
@@ -126,17 +126,17 @@ UTF32To8(char32_t input, T output, uint32 maxElems, char invalidChar = 0) {
   //Encode the character
   constexpr uint8 headers[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
 
-  char bytes[4];
+  ANSICHAR bytes[4];
   switch (numBytes)
   {
     case 4:
-      bytes[3] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
+      bytes[3] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 3:
-      bytes[2] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
+      bytes[2] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 2:
-      bytes[1] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
+      bytes[1] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 1:
-      bytes[0] = static_cast<char>(input | headers[numBytes]); CH_FALLTHROUGH;
+      bytes[0] = static_cast<ANSICHAR>(input | headers[numBytes]); CH_FALLTHROUGH;
     default:
       break;
   }
@@ -150,13 +150,13 @@ UTF32To8(char32_t input, T output, uint32 maxElems, char invalidChar = 0) {
  */
 template<typename T>
 T
-UTF16To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
+UTF16To32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
   //Nothing to parse
   if (begin >= end) {
     return begin;
   }
 
-  char16_t firstElem = static_cast<char16_t>(*begin);
+  WCHAR16 firstElem = static_cast<WCHAR16>(*begin);
   ++begin;
 
   //Check if it's a surrogate pair
@@ -167,11 +167,11 @@ UTF16To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
       return end;
     }
 
-    char32_t secondElem = static_cast<char32_t>(*begin);
+    WCHAR32 secondElem = static_cast<WCHAR32>(*begin);
     ++begin;
 
     if ((0xDC00 <= secondElem) && (0xDFFF >= secondElem)) {
-      output = static_cast<char32_t>(((firstElem - 0xD800) << 10) +
+      output = static_cast<WCHAR32>(((firstElem - 0xD800) << 10) +
                                       (secondElem - 0xDC00) + 0x0010000);
     }
     else {// Invalid character
@@ -179,7 +179,7 @@ UTF16To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
     }
   }
   else {
-    output = static_cast<char32_t>(firstElem);
+    output = static_cast<WCHAR32>(firstElem);
     return begin;
   }
 
@@ -191,7 +191,7 @@ UTF16To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
  */
 template<typename T>
 T
-UTF32To16(char32_t input, T output, uint32 maxElems, char16_t invalidChar = 0) {
+UTF32To16(WCHAR32 input, T output, uint32 maxElems, WCHAR16 invalidChar = 0) {
   //No place to write the character
   if (0 == maxElems) {
     return output;
@@ -213,7 +213,7 @@ UTF32To16(char32_t input, T output, uint32 maxElems, char16_t invalidChar = 0) {
       return output;
     }
 
-    *output = static_cast<char16_t>(input);
+    *output = static_cast<WCHAR16>(input);
     ++output;
   }
   else {  //Must be encoded as two elements
@@ -226,10 +226,10 @@ UTF32To16(char32_t input, T output, uint32 maxElems, char16_t invalidChar = 0) {
 
     input -= 0x0010000;
 
-    *output = static_cast<char16_t>((input >> 10) + 0xD800);
+    *output = static_cast<WCHAR16>((input >> 10) + 0xD800);
     ++output;
 
-    *output = static_cast<char16_t>((input & 0x3FFUL) + 0xDC00);
+    *output = static_cast<WCHAR16>((input & 0x3FFUL) + 0xDC00);
     ++output;
   }
 
@@ -238,11 +238,11 @@ UTF32To16(char32_t input, T output, uint32 maxElems, char16_t invalidChar = 0) {
 
 template<typename T>
 T
-wideToUTF32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
+wideToUTF32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
   //Assuming UTF-32 (i.e. Unix)
   SIZE_T sizeofWChar = sizeof(wchar_t);
   if (4 == sizeofWChar) {
-    output = (char32_t)*begin;
+    output = (WCHAR32)*begin;
     ++begin;
 
     return begin;
@@ -252,8 +252,8 @@ wideToUTF32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
   return UTF16To32(begin, end, output, invalidChar);
 }
 
-char32_t
-ANSIToUTF32(char input, const std::locale& locale = std::locale("")) {
+WCHAR32
+ANSIToUTF32(ANSICHAR input, const std::locale& locale = std::locale("")) {
   const std::ctype<wchar_t>& facet = std::use_facet<std::ctype<wchar_t>>(locale);
 
   /**
@@ -262,7 +262,7 @@ ANSIToUTF32(char input, const std::locale& locale = std::locale("")) {
    */
   wchar_t wideChar = facet.widen(input);
 
-  char32_t output;
+  WCHAR32 output;
   wideToUTF32(&wideChar, &wideChar + 1, output);
 
   return output;
@@ -270,7 +270,7 @@ ANSIToUTF32(char input, const std::locale& locale = std::locale("")) {
 
 template<typename T>
 T
-UTF32ToWide(char32_t input, T output, uint32 maxElems, wchar_t invalidChar = 0) {
+UTF32ToWide(WCHAR32 input, T output, uint32 maxElems, wchar_t invalidChar = 0) {
   //Assuming UTF-32 (i.e. Unix)
   SIZE_T sizeofWChar = sizeof(wchar_t);
   if (4 == sizeofWChar) {
@@ -283,9 +283,9 @@ UTF32ToWide(char32_t input, T output, uint32 maxElems, wchar_t invalidChar = 0) 
   return UTF32To16(input, output, maxElems, invalidChar);
 }
 
-char
-UTF32ToANSI(char32_t input,
-            char invalidChar = 0,
+ANSICHAR
+UTF32ToANSI(WCHAR32 input,
+            ANSICHAR invalidChar = 0,
             const std::locale& locale = std::locale("")) {
   const std::ctype<wchar_t>& facet = std::use_facet<std::ctype<wchar_t>>(locale);
 
@@ -304,7 +304,7 @@ UTF8::fromWide(const WString& wideString) {
 
   auto iter = wideString.begin();
   while (iter != wideString.end()) {
-    char32_t u32char = 0;
+    WCHAR32 u32char = 0;
     iter = wideToUTF32(iter, wideString.end(), u32char);
     UTF32To8(u32char, backInserter, 4);
   }
@@ -321,7 +321,7 @@ UTF8::toWide(const String& str) {
 
   auto iter = str.begin();
   while (iter != str.end()) {
-    char32_t u32char = 0;
+    WCHAR32 u32char = 0;
     iter = UTF8To32(iter, str.end(), u32char);
     UTF32ToWide(u32char, backInserter, 2);
   }
@@ -340,7 +340,7 @@ UTF8::fromUTF16(const U16String& input) {
 
   auto iter = input.begin();
   while (iter != input.end()) {
-    char32_t u32char = 0;
+    WCHAR32 u32char = 0;
     iter = UTF16To32(iter, input.end(), u32char);
     UTF32To8(u32char, backInserter, 4);
   }
@@ -357,7 +357,7 @@ UTF8::toUTF16(const String& input) {
 
   auto iter = input.begin();
   while (iter != input.end()) {
-    char32_t u32char = 0;
+    WCHAR32 u32char = 0;
     iter = UTF8To32(iter, input.end(), u32char);
     UTF32To16(u32char, backInserter, 2);
   }
@@ -389,7 +389,7 @@ UTF8::toUTF32(const String& input) {
 
   auto iter = input.begin();
   while ( iter != input.end() ) {
-    char32_t u32char;
+    WCHAR32 u32char;
     iter = UTF8To32( iter, input.end(), u32char );
     output.push_back( u32char );
   }

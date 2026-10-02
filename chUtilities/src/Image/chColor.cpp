@@ -150,7 +150,7 @@ Color::fromHexString(const String& hexString) {
  */
 String
 Color::toHexString(bool includeAlpha) const {
-  char buffer[10]; // #RRGGBBAA + null terminator
+  ANSICHAR buffer[10]; // #RRGGBBAA + null terminator
 
   if (includeAlpha) {
     std::snprintf(buffer, sizeof(buffer), "#%02X%02X%02X%02X", r, g, b, a);

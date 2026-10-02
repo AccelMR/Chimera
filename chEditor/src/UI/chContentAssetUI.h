@@ -177,6 +177,6 @@ class ContentAssetUI
   bool showOther = true;
   bool gridView = true;
   float gridSize = 120.0f;
-  char searchBuffer[256] = "";
+  ANSICHAR searchBuffer[256] = "";
 };
 } // namespace chEngineSDK

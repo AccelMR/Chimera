@@ -354,7 +354,7 @@ Camera::extractFrustumPlanes() {
                              viewProj[3][3] - viewProj[3][2]);
 
   // Normalize all planes
-  for (int i = 0; i < 6; ++i) {
+  for (uint32 i = 0; i < 6; ++i) {
     float length = Math::sqrt(m_frustumPlanes[i].x * m_frustumPlanes[i].x +
                               m_frustumPlanes[i].y * m_frustumPlanes[i].y +
                               m_frustumPlanes[i].z * m_frustumPlanes[i].z);
@@ -371,7 +371,7 @@ Camera::extractFrustumPlanes() {
 bool
 Camera::isPointInFrustum(const Vector3& point) const {
   // Test against all 6 frustum planes
-  for (int i = 0; i < 6; ++i) {
+  for (uint32 i = 0; i < 6; ++i) {
     if (m_frustumPlanes[i].planeDot(point) < 0) {
       return false;
     }
@@ -385,7 +385,7 @@ Camera::isPointInFrustum(const Vector3& point) const {
 bool
 Camera::isSphereInFrustum(const Vector3& center, float radius) const {
   // Test against all 6 frustum planes
-  for (int i = 0; i < 6; ++i) {
+  for (uint32 i = 0; i < 6; ++i) {
     float distance = m_frustumPlanes[i].planeDot(center);
     if (distance < -radius) {
       return false;
@@ -400,7 +400,7 @@ Camera::isSphereInFrustum(const Vector3& center, float radius) const {
 bool
 Camera::isBoxInFrustum(const AABox& box) const {
   // For each plane
-  for (int i = 0; i < 6; ++i) {
+  for (uint32 i = 0; i < 6; ++i) {
     // Calculate the box's positive vertex (the vertex furthest in the direction of the normal)
     Vector3 positiveVertex = box.minPoint;
 

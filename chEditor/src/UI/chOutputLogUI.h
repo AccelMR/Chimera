@@ -142,7 +142,7 @@ class OutputLogUI
 
   Set<String> m_availableCategories;
   LogFilter m_filter;
-  char m_searchBuffer[256] = {0};
+  ANSICHAR m_searchBuffer[256] = {0};
 
   bool m_needsScrollToBottom = false;
   bool m_needsFilterUpdate = true;

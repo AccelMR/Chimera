@@ -107,7 +107,7 @@ VulkanRenderPass::VulkanRenderPass(VkDevice device,
   Vector<Vector<VkAttachmentReference>> colorAttachmentRefs;
   Vector<Vector<VkAttachmentReference>> resolveAttachmentRefs;
   Vector<Optional<VkAttachmentReference>> depthStencilAttachmentRefs;
-  Vector<Vector<uint32_t>> preserveAttachmentIndices;
+  Vector<Vector<uint32>> preserveAttachmentIndices;
 
   inputAttachmentRefs.resize(createInfo.subpasses.size());
   colorAttachmentRefs.resize(createInfo.subpasses.size());
@@ -115,7 +115,7 @@ VulkanRenderPass::VulkanRenderPass(VkDevice device,
   depthStencilAttachmentRefs.resize(createInfo.subpasses.size());
   preserveAttachmentIndices.resize(createInfo.subpasses.size());
 
-  for (size_t i = 0; i < createInfo.subpasses.size(); ++i)
+  for (SIZE_T i = 0; i < createInfo.subpasses.size(); ++i)
   {
     const auto &subpass = createInfo.subpasses[i];
 

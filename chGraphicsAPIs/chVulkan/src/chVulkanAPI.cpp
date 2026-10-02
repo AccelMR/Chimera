@@ -34,10 +34,10 @@
 #include "chVulkanTextureView.h"
 
 namespace chVulkanAPIHelpers {
-constexpr chEngineSDK::Array<const char*, 1> VALIDATION_LAYERS = {
+constexpr chEngineSDK::Array<const chEngineSDK::ANSICHAR*, 1> VALIDATION_LAYERS = {
     "VK_LAYER_KHRONOS_validation"};
 
-constexpr chEngineSDK::Array<const char*, 1> DEVICE_EXTENSIONS = {
+constexpr chEngineSDK::Array<const chEngineSDK::ANSICHAR*, 1> DEVICE_EXTENSIONS = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -305,7 +305,7 @@ VulkanAPI::updateDescriptorSets(const Vector<WriteDescriptorSet>& descriptorWrit
   bufferInfos.resize(descriptorWrites.size());
   imageInfos.resize(descriptorWrites.size());
 
-  for (size_t i = 0; i < descriptorWrites.size(); ++i) {
+  for (SIZE_T i = 0; i < descriptorWrites.size(); ++i) {
     const auto& write = descriptorWrites[i];
 
     VkWriteDescriptorSet vkWrite{};
@@ -390,7 +390,7 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
                             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
                             .apiVersion = VK_API_VERSION_1_2};
 
-  Vector<const char*> extensions = {
+  Vector<const ANSICHAR*> extensions = {
       VK_KHR_SURFACE_EXTENSION_NAME,
 #if USING(CH_PLATFORM_WIN32)
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
@@ -704,7 +704,7 @@ VulkanAPI::checkValidationLayerSupport() const {
   Vector<VkLayerProperties> availableLayers(layerCount);
   vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-  for (const char* layerName : VALIDATION_LAYERS) {
+  for (const ANSICHAR* layerName : VALIDATION_LAYERS) {
     bool layerFound = false;
 
     for (const auto& layerProperties : availableLayers) {
@@ -791,7 +791,7 @@ VulkanAPI::initializeFunctionMap() {
   m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
     bool bSuccedLoadingFunctions = ImGui_ImplVulkan_LoadFunctions(
         VK_API_VERSION_1_2,
-        [](const char* function_name, void* user_data) -> PFN_vkVoidFunction {
+        [](const ANSICHAR* function_name, void* user_data) -> PFN_vkVoidFunction {
           VkInstance* instance = static_cast<VkInstance*>(user_data);
           return vkGetInstanceProcAddr(*instance, function_name);
         },

@@ -50,7 +50,7 @@ MeshCodec::getSupportedExtensions() const {
   Vector<String> supportedExtensions;
   for (const String& ext : chString::splitString(extensions, ';')) {
     // Remove any leading '*' or '.' characters
-    size_t start = 0;
+    SIZE_T start = 0;
     while (start < ext.size() && (ext[start] == '*' || ext[start] == '.')) {
       ++start;
     }

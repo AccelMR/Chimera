@@ -51,7 +51,7 @@ bool isNear(float a, float b, float epsilon = 0.0001f) {
  */
 /************************************************************************/
 TEST_CASE("chUtilities - BasicTypeSize") {
-  REQUIRE(sizeof(unsigned char) == 1);
+  REQUIRE(sizeof(unchar) == 1);
   REQUIRE(sizeof(uint8) == 1);
   REQUIRE(sizeof(uint16) == 2);
   REQUIRE(sizeof(uint32) == 4);
@@ -62,7 +62,7 @@ TEST_CASE("chUtilities - BasicTypeSize") {
   REQUIRE(sizeof(int32) == 4);
   REQUIRE(sizeof(int64) == 8);
 
-  REQUIRE(sizeof(char) == 1);
+  REQUIRE(sizeof(ANSICHAR) == 1);
   REQUIRE(sizeof(float) == 4);
   REQUIRE(sizeof(double) == 8);
 
@@ -1430,7 +1430,7 @@ TEST_CASE("chUtilities - Utilities") {
   class Submodule : public Module<Submodule>
   {
    public:
-    int TestNumber = 11552;
+    int32 TestNumber = 11552;
   };
   REQUIRE_THROWS_AS(Submodule::instance(), InternalErrorException);
   REQUIRE_THROWS_AS(Submodule::instancePtr(), InternalErrorException);
@@ -1458,20 +1458,20 @@ TEST_CASE("chUtilities - Utilities") {
   // REQUIRE(func);
   // func();
 
-  Event<int(int, float)> Onsomething;
-  HEvent listener1 = Onsomething.connect([](int a, float b) -> int {
+  Event<int32(int32, float)> Onsomething;
+  HEvent listener1 = Onsomething.connect([](int32 a, float b) -> int32 {
     REQUIRE(a == 10);
     REQUIRE(b == 125.55f);
     return 1;
   });
 
   struct Test {
-    Test(int a, float b) : A(a), B(b) {}
-    int A;
+    Test(int32 a, float b) : A(a), B(b) {}
+    int32 A;
     float B;
 
-    int
-    foo(int a, float b) {
+    int32
+    foo(int32 a, float b) {
       REQUIRE(a == 10);
       REQUIRE(b == 125.55f);
       return 0;
@@ -1480,7 +1480,7 @@ TEST_CASE("chUtilities - Utilities") {
 
   auto* TestClass = new Test(123, 35445.64565f);
 
-  HEvent listener2 = Onsomething.connect([&TestClass](int a, float b) -> int {
+  HEvent listener2 = Onsomething.connect([&TestClass](int32 a, float b) -> int32 {
     REQUIRE(TestClass->A == 123);
     REQUIRE(TestClass->B == 35445.64565f);
     TestClass->foo(a, b);
@@ -2072,12 +2072,12 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
   SECTION("TestParse") {
     // Setup
-    const char* argv[] = {"program_name", "-option1=value1", "-option2=value2", "-flag"};
+    const ANSICHAR* argv[] = {"program_name", "-option1=value1", "-option2=value2", "-flag"};
     int32 argc = 4;
 
     CommandParser::startUp();
     CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (char**)argv);
+    parser.parse(argc, (ANSICHAR**)argv);
 
     // Test parsed parameters
     REQUIRE(parser.getParam("option1") == "value1");
@@ -2089,11 +2089,11 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
   SECTION("TestDefaultParam") {
     // Setup
-    const char* argv[] = {"program_name"};
+    const ANSICHAR* argv[] = {"program_name"};
     int32 argc = 1;
 
     CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (char**)argv);
+    parser.parse(argc, (ANSICHAR**)argv);
 
     // Test default parameter
     REQUIRE(parser.getParam("option_not_present", "default_value") == "default_value");
@@ -2101,11 +2101,11 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
   SECTION("TestMissingFlag") {
     // Setup
-    const char* argv[] = {"program_name"};
+    const ANSICHAR* argv[] = {"program_name"};
     int32 argc = 1;
 
     CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (char**)argv);
+    parser.parse(argc, (ANSICHAR**)argv);
 
     // Test missing flag
     REQUIRE(parser.isFlagSet("flag_not_present") == false);
@@ -2113,11 +2113,11 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
   SECTION("TestCaseInsensitive") {
     // Setup
-    const char* argv[] = {"program_name", "-OPTION=value"};
+    const ANSICHAR* argv[] = {"program_name", "-OPTION=value"};
     int32 argc = 2;
 
     CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (char**)argv);
+    parser.parse(argc, (ANSICHAR**)argv);
 
     // Test case insensitivity
     REQUIRE(parser.getParam("option") == "value");
@@ -2126,7 +2126,7 @@ TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
 // #endif //CH_PLATFORM_WINDOWS
 
-// int main(int argc, char** argv) {
+// int main(int argc, ANSICHAR** argv) {
 //   (void)argc;
 //   (void)argv;
 //   return 0;

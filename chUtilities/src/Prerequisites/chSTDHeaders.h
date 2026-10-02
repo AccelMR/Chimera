@@ -138,8 +138,8 @@ using BasicString = std::basic_string<T, std::char_traits<T>, Alloc<T>>;
 
 using String = std::string;
 using WString = std::wstring;
-using U16String = BasicString<char16_t>;
-using U32String = BasicString<char32_t>;
+using U16String = BasicString<WCHAR16>;
+using U32String = BasicString<WCHAR32>;
 
 using StringView = std::string_view;
 

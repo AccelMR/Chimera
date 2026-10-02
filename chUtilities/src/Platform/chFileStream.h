@@ -152,16 +152,16 @@ class CH_UTILITY_EXPORT DataStream {
    *   Specific for string behavior.
    **/
   friend SPtr<DataStream>& 
-  operator<<(SPtr<DataStream>& ds, const char* val) {
+  operator<<(SPtr<DataStream>& ds, const ANSICHAR* val) {
     ds->writeString(String(val));
     return ds;
   }
 
   /**
-   * @brief Overload for const char* to handle string literals directly.
+   * @brief Overload for const ANSICHAR* to handle string literals directly.
    */
   FORCEINLINE DataStream&
-  operator<<(const char* val) {
+  operator<<(const ANSICHAR* val) {
       writeString(String(val));
       return *this;
   }

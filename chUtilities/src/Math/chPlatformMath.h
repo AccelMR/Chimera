@@ -682,10 +682,10 @@ PlatformMath::sin_cos( float *ScalarSin, float *ScalarCos, float Value )
   //Map Value to y in [-pi, pi], x = 2*pi*quotient + remainder.
   float quotient = (INV_PI * 0.5f) * Value;
   if ( 0.0f <= Value ) {
-    quotient = static_cast<float>(static_cast<int>(quotient + 0.5f));
+    quotient = static_cast<float>(static_cast<int32>(quotient + 0.5f));
   }
   else {
-    quotient = static_cast<float>(static_cast<int>(quotient - 0.5f));
+    quotient = static_cast<float>(static_cast<int32>(quotient - 0.5f));
   }
 
   float y = Value - TWO_PI * quotient;

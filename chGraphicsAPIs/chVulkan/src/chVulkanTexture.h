@@ -68,7 +68,7 @@ class VulkanTexture : public ITexture {
   createView(const TextureViewCreateInfo& createInfo = {}) override;
 
   void
-  uploadData(const void* data, size_t size) override;
+  uploadData(const void* data, SIZE_T size) override;
 
   NODISCARD VkImage
   getHandle() const { return m_image; }

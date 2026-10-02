@@ -30,7 +30,7 @@ namespace chEngineSDK{
  *        little endian order.
  */
 bool
-isUTF32LE( const char *buffer ) {
+isUTF32LE( const ANSICHAR *buffer ) {
   return (0xFF == static_cast<uint8>(buffer[0]) &&
     0xFE == static_cast<uint8>(buffer[1]) &&
     0x00 == static_cast<uint8>(buffer[2]) &&
@@ -42,7 +42,7 @@ isUTF32LE( const char *buffer ) {
  *        big endian order.
  */
 bool
-isUTF32BE(const char* buffer) {
+isUTF32BE(const ANSICHAR* buffer) {
   return (0x00 == static_cast<uint8>(buffer[0]) &&
           0x00 == static_cast<uint8>(buffer[1]) &&
           0xFE == static_cast<uint8>(buffer[2]) &&
@@ -54,7 +54,7 @@ isUTF32BE(const char* buffer) {
  *        little endian order.
  */
 bool
-isUTF16LE(const char* buffer) {
+isUTF16LE(const ANSICHAR* buffer) {
   return (0xFF == static_cast<uint8>(buffer[0]) &&
           0xFE == static_cast<uint8>(buffer[1]));
 }
@@ -64,7 +64,7 @@ isUTF16LE(const char* buffer) {
  *        big endian order.
  */
 bool
-isUTF16BE(const char* buffer) {
+isUTF16BE(const ANSICHAR* buffer) {
   return (0xFE == static_cast<uint8>(buffer[0]) &&
           0xFF == static_cast<uint8>(buffer[1]));
 }
@@ -73,7 +73,7 @@ isUTF16BE(const char* buffer) {
  * @brief Checks does the provided buffer has an UTF8 byte order mark.
  */
 bool
-isUTF8(const char* buffer) {
+isUTF8(const ANSICHAR* buffer) {
   return (0xEF == static_cast<uint8>(buffer[0]) &&
           0xBB == static_cast<uint8>(buffer[1]) &&
           0xBF == static_cast<uint8>(buffer[2]));
@@ -260,7 +260,7 @@ FileDataStream::~FileDataStream() {
 
 SIZE_T
 FileDataStream::read(void* buf, SIZE_T count) {
-  m_pInStream->read(static_cast<char *>(buf), static_cast<std::streamsize>(count));
+  m_pInStream->read(static_cast<ANSICHAR *>(buf), static_cast<std::streamsize>(count));
   return static_cast<SIZE_T>(m_pInStream->gcount());
 }
 
@@ -268,7 +268,7 @@ SIZE_T
 FileDataStream::write(const void* buf, SIZE_T count) {
   SIZE_T written = 0;
   if (isWriteable() && m_pFStream && m_pFStream->is_open()) {
-    m_pFStream->write(static_cast<const char*>(buf), static_cast<std::streamsize>(count));
+    m_pFStream->write(static_cast<const ANSICHAR*>(buf), static_cast<std::streamsize>(count));
     written = count;
   }
   return written;
@@ -401,26 +401,26 @@ DataStream::getAsString() {
 
   SIZE_T dataOffset = 0;
   if (4 <= numHeaderBytes) {
-    if (isUTF32LE(reinterpret_cast<char*>(headerBytes))) {
+    if (isUTF32LE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
       dataOffset = 4;
     }
-    else if (isUTF32BE(reinterpret_cast<char*>(headerBytes))) {
+    else if (isUTF32BE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
       std::u8string s;
       return String(s.begin(), s.end());
     }
   }
 
   if (0 == dataOffset && 3 <= numHeaderBytes) {
-    if (isUTF8(reinterpret_cast<char*>(headerBytes))) {
+    if (isUTF8(reinterpret_cast<ANSICHAR*>(headerBytes))) {
       dataOffset = 3;
     }
   }
 
   if (0 == dataOffset && 2 <= numHeaderBytes) {
-    if (isUTF16LE(reinterpret_cast<char*>(headerBytes))) {
+    if (isUTF16LE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
       dataOffset = 2;
     }
-    else if (isUTF16BE(reinterpret_cast<char*>(headerBytes))) {
+    else if (isUTF16BE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
       std::u8string s;
       return String(s.begin(), s.end());
     }
@@ -453,15 +453,15 @@ DataStream::getAsString() {
     case 2: //UTF-16
       {
         SIZE_T numElems = string.length() / 2;
-        return UTF8::fromUTF16(U16String(reinterpret_cast<char16_t*>(
-                                          const_cast<char*>(string.data())),
+        return UTF8::fromUTF16(U16String(reinterpret_cast<WCHAR16*>(
+                                          const_cast<ANSICHAR*>(string.data())),
                                          numElems));
       }
     case 4: //UTF-32
       {
         SIZE_T numElems = string.length() / 4;
-        return UTF8::fromUTF32(U32String(reinterpret_cast<char32_t*>(
-                                          const_cast<char*>(string.data())),
+        return UTF8::fromUTF32(U32String(reinterpret_cast<WCHAR32*>(
+                                          const_cast<ANSICHAR*>(string.data())),
                                          numElems));
       }
   }
@@ -477,7 +477,7 @@ DataStream::writeString(const String& str, STRING_ENCODER encoder /*= STRING_ENC
     write(bom, sizeof(bom));
 
     U16String u16string = UTF8::toUTF16(str);
-    write(u16string.data(), u16string.length() * sizeof(char16_t));
+    write(u16string.data(), u16string.length() * sizeof(WCHAR16));
   }
   else {
     // Write BOM
@@ -498,7 +498,7 @@ DataStream::writeString(const WString& wStr, STRING_ENCODER encoder /*= STRING_E
 
     String u8string = UTF8::fromWide(wStr);
     U16String u16string = UTF8::toUTF16(u8string);
-    write(u16string.data(), u16string.length() * sizeof(char16_t));
+    write(u16string.data(), u16string.length() * sizeof(WCHAR16));
   }
   else {
     // Write BOM

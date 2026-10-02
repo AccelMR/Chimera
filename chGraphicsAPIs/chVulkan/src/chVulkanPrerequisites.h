@@ -53,13 +53,13 @@ class VulkanErrorException : public Exception
 public:
 VulkanErrorException(const String& inDescription,
                          const String& inSource,
-                         const char* inFile,
-                         long inLine)
+                         const ANSICHAR* inFile,
+                         uint32 inLine)
     : Exception("VulkanErrorException", inDescription, inSource, inFile, inLine) {}
 };
 
 FORCEINLINE static void
-throwVkResult(VkResult result, const char* file, int line) {
+throwVkResult(VkResult result, const ANSICHAR* file, uint32 line) {
   if (result != VK_SUCCESS) {
     CH_EXCEPT(VulkanErrorException, chString::format("Vulkan error: {0} at {1}:{2}", result, file, line));
   }

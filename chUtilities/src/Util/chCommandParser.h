@@ -27,7 +27,7 @@ class CH_UTILITY_EXPORT CommandParser : public Module<CommandParser> {
    * @param argv The arguments.
    */
   void
-  parse(int32 argc, char** argv);
+  parse(int32 argc, ANSICHAR** argv);
 
   /**
    * @brief Get the value of a parameter.
@@ -58,7 +58,7 @@ class CH_UTILITY_EXPORT CommandParser : public Module<CommandParser> {
    * @brief Get the arguments.
    * @return The arguments.
    */
-  char**
+  ANSICHAR**
   getArgv() const {
     return m_argv;
   }
@@ -79,6 +79,6 @@ class CH_UTILITY_EXPORT CommandParser : public Module<CommandParser> {
   UnorderedSet<String> flags;
 
   int32  m_argc;
-  char** m_argv;
+  ANSICHAR** m_argv;
 };
 }

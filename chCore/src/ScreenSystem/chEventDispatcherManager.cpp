@@ -34,7 +34,7 @@ CH_LOG_DEFINE_CATEGORY_SHARED(InputSystem, CH_EVENT_DISPATCHER_MANAGER_LOG_LEVEL
 
 EventDispatcherManager::EventDispatcherManager()
 {
-  for (int i = 0; i < static_cast<int>(Key::KeysMax); ++i) {
+  for (uint32 i = 0; i < static_cast<uint32>(Key::KeysMax); ++i) {
     Key key = static_cast<Key>(i);
     KeyDownCallbacks.try_emplace(key);
     KeyPressedCallbacks.try_emplace(key);
@@ -143,18 +143,18 @@ EventDispatcherManager::dispatchKeyboardEvent(const KeyBoardData& keyData) {
 
   switch (keyData.state) {
     case KeyBoardState::PRESSED:
-      m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
+      m_currentKeyboardState.set(static_cast<uint32>(keyData.key));
       KeyPressedCallbacks.at(keyData.key)(keyData);
       OnKeyPressed(keyData);
       break;
     case KeyBoardState::DOWN:
-      m_currentKeyboardState.set(static_cast<uint32_t>(keyData.key));
+      m_currentKeyboardState.set(static_cast<uint32>(keyData.key));
       KeyDownCallbacks.at(keyData.key)(keyData);
       OnKeyDown(keyData);
       break;
 
     case KeyBoardState::UP:
-      m_currentKeyboardState.reset(static_cast<uint32_t>(keyData.key));
+      m_currentKeyboardState.reset(static_cast<uint32>(keyData.key));
       KeyUpCallbacks.at(keyData.key)(keyData);
       OnKeyUp(keyData);
       break;
@@ -173,17 +173,17 @@ EventDispatcherManager::dispatchMouseButtonEvent(const MouseButtonData& buttonDa
 
   switch (buttonData.state) {
     // case MouseState::Pressed:
-    //   m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
+    //   m_currentMouseState.set(static_cast<uint32>(buttonData.button));
     //   MouseButtonPressedCallbacks.at(buttonData.button)(buttonData);
     //   OnMouseButtonPressed(buttonData);
     //   break;
     case MouseState::Down:
-      m_currentMouseState.set(static_cast<uint32_t>(buttonData.button));
+      m_currentMouseState.set(static_cast<uint32>(buttonData.button));
       MouseButtonDownCallbacks.at(buttonData.button)(buttonData);
       OnMouseButtonDown(buttonData);
       break;
     case MouseState::Up:
-      m_currentMouseState.reset(static_cast<uint32_t>(buttonData.button));
+      m_currentMouseState.reset(static_cast<uint32>(buttonData.button));
       MouseButtonUpCallbacks.at(buttonData.button)(buttonData);
       OnMouseButtonUp(buttonData);
       break;

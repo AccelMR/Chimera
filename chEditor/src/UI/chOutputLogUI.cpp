@@ -190,20 +190,20 @@ OutputLogUI::renderFilterControls()
     static const ANSICHAR* labels[] = {"Debug", "Info", "Warning", "Error", "Fatal"};
     bool* levels[] = {&m_filter.showDebug, &m_filter.showInfo, &m_filter.showWarning,
                       &m_filter.showError, &m_filter.showFatal};
-    static constexpr size_t numLevels = sizeof(labels) / sizeof(labels[0]);
+    static constexpr SIZE_T numLevels = sizeof(labels) / sizeof(labels[0]);
 
     if (action == ComboAction::All) {
-      for (size_t i = 0; i < numLevels; ++i) {
+      for (SIZE_T i = 0; i < numLevels; ++i) {
         *levels[i] = true;
       }
     }
     else if (action == ComboAction::None) {
-      for (size_t i = 0; i < numLevels; ++i) {
+      for (SIZE_T i = 0; i < numLevels; ++i) {
         *levels[i] = false;
       }
     }
     else {
-      for (size_t i = 0; i < numLevels; ++i) {
+      for (SIZE_T i = 0; i < numLevels; ++i) {
         if (ImGui::Checkbox(labels[i], levels[i])) {
           filterChanged = true;
         }
@@ -316,7 +316,7 @@ OutputLogUI::renderLogEntryRow(uint64 sequence)
 
   ImGui::TableSetColumnIndex(3);
   const StringView message = entry.message;
-  const size_t lineEnd = message.find('\n');
+  const SIZE_T lineEnd = message.find('\n');
   const StringView firstLine = message.substr(0, lineEnd);
   const bool isCut = StringView::npos != lineEnd ||
                      ImGui::CalcTextSize(firstLine.data(),
@@ -448,7 +448,7 @@ const LogBufferEntry&
 OutputLogUI::getEntry(uint64 sequence) const
 {
   CH_ASSERT(sequence >= m_oldestSequence && sequence < m_nextSequence);
-  size_t index = m_oldestIndex + static_cast<size_t>(sequence - m_oldestSequence);
+  SIZE_T index = m_oldestIndex + static_cast<SIZE_T>(sequence - m_oldestSequence);
   if (index >= m_entries.size()) {
     index -= m_entries.size();
   }
@@ -516,7 +516,7 @@ OutputLogUI::setMaxLogEntries(uint32 maxEntries)
   m_oldestIndex = 0;
 
   if (m_entries.size() > maxEntries) {
-    const size_t toRemove = m_entries.size() - maxEntries;
+    const SIZE_T toRemove = m_entries.size() - maxEntries;
     m_entries.erase(m_entries.begin(), m_entries.begin() + toRemove);
     m_oldestSequence += toRemove;
   }

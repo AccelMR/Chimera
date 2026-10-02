@@ -90,8 +90,8 @@ class CH_UTILITY_EXPORT DynamicLibrary
  friend class DynamicLibraryManager;
 
 public:
-  static const char *EXTENSION;
-  static const char *PREFIX;
+  static const ANSICHAR *EXTENSION;
+  static const ANSICHAR *PREFIX;
 
 protected:
   String m_name;

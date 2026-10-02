@@ -32,19 +32,19 @@ using std::move;
 #if USING(CH_PLATFORM_WIN32)
 #include "Win32/chWindows.h"
 
-const char* DynamicLibrary::EXTENSION = "dll";
-const char* DynamicLibrary::PREFIX = nullptr;
+const ANSICHAR* DynamicLibrary::EXTENSION = "dll";
+const ANSICHAR* DynamicLibrary::PREFIX = nullptr;
 
 #elif USING(CH_PLATFORM_LINUX)
 #include <dlfcn.h>
 
-const char* DynamicLibrary::EXTENSION = "so";
-const char* DynamicLibrary::PREFIX = nullptr;
+const ANSICHAR* DynamicLibrary::EXTENSION = "so";
+const ANSICHAR* DynamicLibrary::PREFIX = nullptr;
 #endif // USING(CH_PLATFORM_WIN32)
 
 namespace DynamicLibraryHelper {
 void*
-getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name) {
+getSymbolPlatformSpecific(DynamicLibraryHandle handle, const ANSICHAR* name) {
 #if USING(CH_PLATFORM_LINUX)
   return dlsym(handle, name);
 #elif USING(CH_PLATFORM_WIN32)
@@ -56,7 +56,7 @@ getSymbolPlatformSpecific(DynamicLibraryHandle handle, const char* name) {
 }
 
 void*
-loadLibraryPlatformSpecific(const char* name) {
+loadLibraryPlatformSpecific(const ANSICHAR* name) {
 #if USING(CH_PLATFORM_LINUX)
   void* handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
   if (!handle) {

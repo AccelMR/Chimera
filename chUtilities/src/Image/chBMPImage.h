@@ -27,7 +27,7 @@ namespace chEngineSDK {
 */
 struct BMPHeader
 {
-  char signature[2];
+  ANSICHAR signature[2];
   int32 fileSize;
   int32 reserved;
   int32 dataOffset;

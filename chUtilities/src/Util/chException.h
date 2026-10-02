@@ -31,7 +31,7 @@ class Exception : public std::exception
   */
   Exception() = delete;
 
-  Exception(const char* _type, const String& _descpription, const String& _source)
+  Exception(const ANSICHAR* _type, const String& _descpription, const String& _source)
     : m_typeName(_type),
       m_description(_descpription),
       m_source(_source),
@@ -39,10 +39,10 @@ class Exception : public std::exception
       m_line(0)
   {}
 
-  Exception(const char* _type,
+  Exception(const ANSICHAR* _type,
             const String& _description,
             const String& _source,
-            const char* _file,
+            const ANSICHAR* _file,
             uint32 _line)
     : m_typeName(_type),
       m_description(_description),
@@ -92,7 +92,7 @@ class Exception : public std::exception
   /**
    * @brief Overriden std::exception::what. Returns the same value as "getFullDescription".
    */
-  const char*
+  const ANSICHAR*
   what() const noexcept override {
     return getFullDescription().c_str();
   }
@@ -116,8 +116,8 @@ class InternalErrorException : public Exception
 public:
   InternalErrorException(const String& inDescription,
                          const String& inSource,
-                         const char* inFile,
-                         long inLine)
+                         const ANSICHAR* inFile,
+                         uint32 inLine)
     : Exception("InternalErrorException", inDescription, inSource, inFile, inLine) {}
 };
 
@@ -129,8 +129,8 @@ class NotImplementedException : public Exception
 public:
   NotImplementedException(const String& inDescription,
                          const String& inSource,
-                         const char* inFile,
-                         long inLine)
+                         const ANSICHAR* inFile,
+                         uint32 inLine)
     : Exception("NotImplementedException", inDescription, inSource, inFile, inLine) {}
 };
 
@@ -143,8 +143,8 @@ class RunTimeException : public Exception
 public:
   RunTimeException(const String& inDescription,
                    const String& inSource,
-                   const char* inFile,
-                   long inLine)
+                   const ANSICHAR* inFile,
+                   uint32 inLine)
     : Exception("RunTimeException", inDescription, inSource, inFile, inLine) {}
 };
 
@@ -157,8 +157,8 @@ class InvalidArgumentException : public Exception
 public:
   InvalidArgumentException(const String& inDescription,
                            const String& inSource,
-                           const char* inFile,
-                           long inLine)
+                           const ANSICHAR* inFile,
+                           uint32 inLine)
     : Exception("InvalidArgumentException", inDescription, inSource, inFile, inLine) {}
 };
 

@@ -49,7 +49,7 @@ writeTimestamp(ANSICHAR (&buffer)[24]) noexcept
   localtime_r(&time, &localTime);
 #endif
 
-  const size_t length = std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
+  const SIZE_T length = std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
   if (length + 5 > sizeof(buffer)) {
     return;
   }
@@ -176,9 +176,9 @@ struct Logger::Impl
   void
   forEachBuffered(Callback&& callback) const
   {
-    const size_t count = logBuffer.size();
-    for (size_t i = 0; i < count; ++i) {
-      size_t index = logBufferStart + i;
+    const SIZE_T count = logBuffer.size();
+    for (SIZE_T i = 0; i < count; ++i) {
+      SIZE_T index = logBufferStart + i;
       if (index >= count) {
         index -= count;
       }
@@ -442,7 +442,7 @@ Logger::writeLogMessage(const LogCategory& category,
     }
   }
   text.append(":\n\t").append(entry->message);
-  const size_t plainLength = text.size() - colorCode.size();
+  const SIZE_T plainLength = text.size() - colorCode.size();
   text.append(kColorResetAndNewLine);
 
   // Only important messages are flushed right away, because flushing on every log is

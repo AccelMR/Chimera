@@ -27,15 +27,15 @@ using std::tolower;
 /*
 */
 void 
-CommandParser::parse(int32 argc, char** argv) {
+CommandParser::parse(int32 argc, ANSICHAR** argv) {
   m_argc = argc;
   m_argv = argv;
 
-  for (int i = 1; i < argc; ++i) {
+  for (int32 i = 1; i < argc; ++i) {
     String arg = argv[i];
     String lowerArg = arg;
     transform(lowerArg.begin(), lowerArg.end(), lowerArg.begin(),
-      [](unsigned char c) { return static_cast<unsigned char>(tolower(c)); });
+      [](unchar c) { return static_cast<unchar>(tolower(c)); });
 
     SIZE_T pos = lowerArg.find('=');
     if (pos == String::npos) {
@@ -53,7 +53,7 @@ String
 CommandParser::getParam(const String& param, const String defaultValue /*= ""*/) {
   String lowerParam = param;
   transform(lowerParam.begin(), lowerParam.end(), lowerParam.begin(),
-    [](unsigned char c) { return static_cast<unsigned char>(tolower(c)); });
+    [](unchar c) { return static_cast<unchar>(tolower(c)); });
 
   auto it = params.find(lowerParam);
   return (it != params.end()) ? it->second : defaultValue;
@@ -65,7 +65,7 @@ bool
 CommandParser::isFlagSet(const String& flag) {
   String lowerFlag = flag;
   transform(lowerFlag.begin(), lowerFlag.end(), lowerFlag.begin(),
-    [](unsigned char c) { return static_cast<unsigned char>(tolower(c)); });
+    [](unchar c) { return static_cast<unchar>(tolower(c)); });
 
   return flags.find(lowerFlag) != flags.end();
 }

@@ -12,7 +12,7 @@ using namespace chEngineSDK;
 CH_LOG_DECLARE_STATIC(EditorMain, All);
 
 int32
-main(int32 argc, char* argv[]) {
+main(int32 argc, ANSICHAR* argv[]) {
   Logger::startUp();
   Logger& logger = Logger::instance();
   logger.setConsoleOutput(true);

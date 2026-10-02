@@ -105,14 +105,14 @@ class CH_CORE_EXPORT GBufferStage : public IRenderStage
 
   String
   getDisplayModeName() const {
-    static const char* names[] = {"Combined",
+    static const ANSICHAR* names[] = {"Combined",
                                   "Albedo Only",
                                   "Normal Only",
                                   "Metallic Only",
                                   "Roughness Only",
                                   "Depth Only",
                                   "Motion Only"};
-    return String(names[static_cast<int>(m_debugDisplayMode)]);
+    return String(names[static_cast<uint32>(m_debugDisplayMode)]);
   }
 
   bool

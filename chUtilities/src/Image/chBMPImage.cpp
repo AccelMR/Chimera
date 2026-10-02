@@ -236,14 +236,14 @@ BMPImage::encode(const Path& filename) const {
   header.reserved = 0;
   header.dataOffset = wholeHeaderSize;
 
-  file->write(reinterpret_cast<const char*>(&header), sizeof(BMPHeader));
+  file->write(reinterpret_cast<const ANSICHAR*>(&header), sizeof(BMPHeader));
 
   BMPInfoHeader infoHeader;
   infoHeader.core.headerSize = sizeof(BMPInfoHeader);
   infoHeader.core.width = m_width;
   infoHeader.core.height = m_height;
   infoHeader.core.planes = 1;
-  infoHeader.core.bpp = static_cast<int>(m_bpp);
+  infoHeader.core.bpp = static_cast<int16>(m_bpp);
 
   infoHeader.compression = 0;
   infoHeader.imageSize = 0;
@@ -252,13 +252,13 @@ BMPImage::encode(const Path& filename) const {
   infoHeader.colorsUsed = 0;
   infoHeader.importantColors = 0;
 
-  file->write(reinterpret_cast<const char*>(&infoHeader), sizeof(BMPInfoHeader));
+  file->write(reinterpret_cast<const ANSICHAR*>(&infoHeader), sizeof(BMPInfoHeader));
 
   uint8* imageData = m_data->getStartPtr();
 
-  const char paddBuffer[3] = {0, 0, 0};
-  for (int y = m_height - 1; y >= 0; --y) {
-    file->write(reinterpret_cast<const char*>(imageData + y * m_pitch), m_pitch);
+  const ANSICHAR paddBuffer[3] = {0, 0, 0};
+  for (int32 y = static_cast<int32>(m_height) - 1; y >= 0; --y) {
+    file->write(reinterpret_cast<const ANSICHAR*>(imageData + y * m_pitch), m_pitch);
 
     if (padding != 0) {
       file->write(paddBuffer, padding);

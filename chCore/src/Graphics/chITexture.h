@@ -45,6 +45,6 @@ class ITexture {
   createView(const TextureViewCreateInfo& createInfo = {}) = 0;
 
   virtual void 
-  uploadData(const void* data, size_t size) = 0;
+  uploadData(const void* data, SIZE_T size) = 0;
 };
 } // namespace chEngineSDK
