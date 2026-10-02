@@ -82,13 +82,13 @@ MeshCodec::importAsset(const Path& filePath, const String& assetName) {
   metadata.uuid = UUID::createRandom();
   metadata.assetType = AssetTypeTraits<ModelAsset>::getTypeId();
   metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  chString::copyANSI(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
-  chString::copyANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  chString::copyToANSI(metadata.name, assetName);
+  chString::copyToBuffer(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
+  chString::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  chString::copyToBuffer(metadata.name, assetName);
 
   const Path importedPath = FileSystem::absolutePath(Path(filePath));
-  chString::copyToANSI(metadata.importedPath, importedPath.toString());
-  chString::copyToANSI(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
+  chString::copyToBuffer(metadata.importedPath, importedPath.toString());
+  chString::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
 
   SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
 

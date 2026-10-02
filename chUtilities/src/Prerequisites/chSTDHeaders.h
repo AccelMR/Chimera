@@ -29,6 +29,7 @@
 #include <queue>
 #include <set>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -139,6 +140,8 @@ using String = std::string;
 using WString = std::wstring;
 using U16String = BasicString<char16_t>;
 using U32String = BasicString<char32_t>;
+
+using StringView = std::string_view;
 
 /************************************************************************/
 /*

@@ -29,8 +29,7 @@ IAsset::setAssetPath(const ANSICHAR* assetPath) {
     CH_LOG(AssetSystem, Error, "Invalid asset path for asset {0}", m_metadata.name);
     return;
   }
-  SIZE_T pathLength = chString::length(assetPath);
-  chString::copyANSI(m_metadata.assetPath, assetPath, pathLength + 1);
+  chString::copyToBuffer(m_metadata.assetPath, assetPath);
   CH_LOG(AssetSystem, Debug, "Set asset path for asset {0} to {1}", m_metadata.name,
          m_metadata.assetPath);
   //updateMetadata(m_metadata);
@@ -89,6 +88,13 @@ IAsset::rename(const ANSICHAR* newName) {
     return true;
   }
 
+  // Checked before touching the file, so the file name and the stored name stay equal.
+  if (StringView(newName).size() >= sizeof(m_metadata.name)) {
+    CH_LOG(AssetSystem, Error, "New name for asset {0} is longer than {1} characters",
+           m_metadata.name, sizeof(m_metadata.name) - 1);
+    return false;
+  }
+
   String assetFullStr = String(m_metadata.assetPath) + "/" + String(m_metadata.name) + EnginePaths::getEngineAssetExtension();
   const Path assetAbsPath(FileSystem::absolutePath(Path(assetFullStr)));
 
@@ -103,7 +109,7 @@ IAsset::rename(const ANSICHAR* newName) {
   }
 
   // Update the metadata
-  chString::copyANSI(m_metadata.name, newName);
+  chString::copyToBuffer(m_metadata.name, newName);
 
   return updateMetadata(m_metadata);
 }

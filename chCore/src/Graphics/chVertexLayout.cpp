@@ -94,7 +94,7 @@ VertexLayout::addCustomAttribute(const String& semanticName,
     .binding = binding,
     .semanticName = ""
   };
-  chString::copyToANSI(desc.semanticName, semanticName, sizeof(desc.semanticName) - 1);
+  chString::copyToBuffer(desc.semanticName, semanticName);
 
   m_attributes.push_back(desc);
 

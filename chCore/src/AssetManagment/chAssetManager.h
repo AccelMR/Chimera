@@ -95,7 +95,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   WeakPtr<SceneAsset>
   getSceneByName(const String& name) const{
     for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (chString::compare(asset->getName(), name)) {
+      if (chString::equals(asset->getName(), name)) {
         return asset->as<SceneAsset>();
       }
     }
@@ -119,7 +119,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   FORCEINLINE bool
   doesSceneExist(const String& name) const{
     for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (chString::compare(asset->getName(), name)) {
+      if (chString::equals(asset->getName(), name)) {
         return true;
       }
     }
@@ -221,11 +221,10 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   metadata.uuid = refUUID;
   metadata.assetType = assetUUID;
   metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  chString::copyToANSI(metadata.typeName, AssetTypeName, AssetTypeName.size() + 1);
-  chString::copyToANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING, sizeof(CH_ENGINE_VERSION_STRING));
-  chString::copyToANSI(metadata.name, name, name.size() + 1);
-  chString::copyToANSI(metadata.assetPath, assetPath.toString(),
-                        assetPath.toString().size() + 1);
+  chString::copyToBuffer(metadata.typeName, AssetTypeName);
+  chString::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  chString::copyToBuffer(metadata.name, name);
+  chString::copyToBuffer(metadata.assetPath, assetPath.toString());
 
   SPtr<IAsset> asset = assetCreator(metadata);
 

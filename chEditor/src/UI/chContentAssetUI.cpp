@@ -550,7 +550,7 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset) {
   }
   else {
     const String unknown = "Unknown";
-    chString::copyToANSI(createdAtStr, unknown, unknown.size());
+    chString::copyToBuffer(createdAtStr, unknown);
   }
 
   ImGui::BeginTooltip();
@@ -764,7 +764,7 @@ ContentAssetUI::startInlineRename(const SPtr<IAsset>& asset) {
   m_renameFocusRequested = true;
 
   // Copy current name to buffer
-  chString::copyANSI(m_renameBuffer, asset->getName());
+  chString::copyToBuffer(m_renameBuffer, asset->getName());
 
   CH_LOG_DEBUG(ContentAssetUILog, "Started inline rename for asset: {0}", asset->getName());
 }

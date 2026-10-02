@@ -3,7 +3,7 @@
  * @file chStringUtils.h
  * @author AccelMR
  * @date 2022/06/23
- * @brief String utilities file.
+ * @brief String helpers and the format function used by the logger.
  */
 /************************************************************************/
 #pragma once
@@ -16,284 +16,268 @@
 #include "chPrerequisitesUtilities.h"
 
 #include <concepts>
-#include <cstring>
-
-#include "chSTDStreams.h"
 
 namespace chEngineSDK {
-/*
- * Description:
- *     Static class that will contain helper functions to use on Strings.
+
+/**
+ * Format string for chString::format, checked at compile time against the number of
+ * arguments so a wrong placeholder stops the build instead of failing at runtime.
  *
- * Sample usage:
- * String replaced = StringUtils::replaceAllChars("A test string", " ", "");
- *
- * // Where replaced = "Ateststring";
- *"%{wks.location}/
+ * Placeholders: "{}" takes the arguments in order, "{0}" picks one by index (it can be
+ * repeated or reordered). Both kinds cannot be mixed. "{{" and "}}" write a brace.
+ */
+template<typename... Args>
+class FormatString
+{
+ public:
+  template<typename T>
+    requires std::convertible_to<const T&, StringView>
+  consteval FormatString(const T& text)
+   : m_text(text)
+  {
+    check();
+  }
+
+  NODISCARD constexpr StringView
+  get() const
+  {
+    return m_text;
+  }
+
+ private:
+  consteval void
+  check() const;
+
+  // Not constexpr on purpose: reaching one of them during the compile time check stops
+  // the build, and its name tells what is wrong.
+  static void
+  errorIndexOutOfRange()
+  {}
+
+  static void
+  errorUnclosedBrace()
+  {}
+
+  static void
+  errorUnmatchedClosingBrace()
+  {}
+
+  static void
+  errorInvalidPlaceholder()
+  {}
+
+  static void
+  errorMixedAutomaticAndManualIndex()
+  {}
+
+  StringView m_text;
+};
+
+/**
+ * Helpers for String that the standard library does not have.
  */
 class CH_UTILITY_EXPORT chString
 {
  public:
-  static bool
-  compare(const ANSICHAR* str1, const ANSICHAR* str2) {
-    return std::strcmp(str1, str2) == 0;
-  }
-
-  static bool
-  compare(const String& str1, const ANSICHAR* str2) {
+  NODISCARD static bool
+  equals(StringView str1, StringView str2)
+  {
     return str1 == str2;
   }
 
-  static bool
-  compare(const String& str1, const String& str2) {
-    return str1 == str2;
-  }
-
-  static bool
-  compare(const ANSICHAR* str1, const String& str2) {
-    return str2 == str1;
-  }
-
-  static String
-  fromInt32(int32 value) {
-    return std::to_string(value);
-  }
-
-
-  static SIZE_T
-  length(const ANSICHAR* str) {
-    if (!str) { return 0; }
-
-    return std::strlen(str);
-  }
-
   /**
-   *   Creates a new string by replacing every character that matches 'from' with 'to'.
+   * Copies src into a fixed size char array, cutting it if it does not fit. The result
+   * always ends with '\0'.
    *
-   * @param toReplace
-   *   The string from where the new string will be created.
-   *
-   * @param from
-   *   Character to be evaluated to change.
-   *
-   * @param to
-   *   Character that is going to be placed instead of 'from'.
-   *
-   * @return String
-   *   New string created by this replace.
-   **/
-  static String
-  replaceAllChars(const String& toReplace, const char& from, const char& to);
+   * @return false if src was cut.
+   */
+  template<SIZE_T N>
+  static bool
+  copyToBuffer(ANSICHAR (&dest)[N], StringView src)
+  {
+    static_assert(N > 0, "The destination buffer needs room for the '\\0'.");
+    const SIZE_T count = src.size() < N ? src.size() : N - 1;
+    src.copy(dest, count);
+    dest[count] = '\0';
+    return count == src.size();
+  }
 
-  /**
-   *   Creates a new string by replacing every substring found into another given substring.
-   *
-   * @param toReplace
-   *   The string from where the new string will be created.
-   *
-   * @param from
-   *    Substring that is going to be looked to be changed.
-   *
-   * @param to
-   *   Substring that will replace the 'from' substring.
-   *
-   * @return String
-   *  New string created from this replacing.
-   **/
-  static String
+  NODISCARD static String
+  replaceAllChars(const String& toReplace, ANSICHAR from, ANSICHAR to);
+
+  NODISCARD static String
   replaceAllSubStr(const String& toReplace, const String& from, const String& to);
 
   /**
-   *   Creates a vector by splitting a given string into multiples string if separator
-   *  is found in string.
-   *
-   * @param separator.
-   *   The character to be compared.
-   *
-   * @return Vector<String>
-   **/
-  static Vector<String>
-  splitString(const String& toSplit, const char& separator);
+   * Splits the string at every separator. Empty pieces are skipped.
+   */
+  NODISCARD static Vector<String>
+  splitString(const String& toSplit, ANSICHAR separator);
 
   /**
-   *   Creates a vector by splitting a given string into multiples string if separator
-   *  is found in string.
-   *
-   * @param separator
-   *   The string to be compared.
-   *
-   * @return Vector<String>
-   **/
-  static Vector<String>
+   * Splits the string at every separator. Empty pieces are skipped.
+   */
+  NODISCARD static Vector<String>
   splitString(const String& toSplit, const String& separator);
 
-  /**
-   *   Constructs a single string by a vector of Strings by adding a character between each
-   *string.
-   *
-   * @param toJoin
-   *    The vector to be merged.
-   *
-   * @param separator
-   *    The String that goes between each string.
-   *
-   * @return
-   *   New constructed string from a list.
-   **/
-  static String
+  NODISCARD static String
   join(const Vector<String>& toJoin, const String& separator);
 
   /**
-   *   Formats a string given with its respective arguments.
-   *
-   * @param format
-   *    String to be modified.
-   *
-   * @return
-   *  New string created from a formatted string.
-   **/
-  template <typename... Args>
-  static String
-  format(const String& _format, Args&&... args);
-
-  template <typename Arg>
-  static String
-  format(const String& _format, Arg&& arg);
-
-  FORCEINLINE static String
-  format(const String& _format) {
-    return _format;
+   * Text without arguments is returned as it is, without looking for placeholders, so it
+   * can come from anywhere (e.g. messages from a library).
+   */
+  NODISCARD static String
+  format(StringView text)
+  {
+    return String(text);
   }
 
-  template <typename T>
-  static String
+  /**
+   * Replaces the placeholders of the format with the arguments. See FormatString.
+   * Arguments can be strings, numbers, enums, anything convertible to String, or any
+   * type with a toString() method.
+   */
+  template<typename... Args>
+    requires(sizeof...(Args) > 0)
+  NODISCARD static String
+  format(FormatString<std::type_identity_t<Args>...> format, Args&&... args);
+
+  template<typename T>
+  NODISCARD static String
   toString(T&& value);
 
   /**
-   *   Creates a new all characters in a string to lower case.
-   *
-   * @param str
-   *    The string to take reference.
-   *
-   * @return String
-   *    The new created string
-   **/
-  static String
+   * ASCII only, other bytes are left as they are.
+   */
+  NODISCARD static String
   toLower(const String& str);
 
   /**
-   *   Copies a string to a buffer of ANSICHAR.
-   * @param dest
-   *    The destination buffer to copy the string.
-   * @param src
-   *    The source string to copy.
-   * @param size
-   *    The size of the destination buffer. If 0, it will copy the entire string.
-   **/
-  FORCEINLINE
-  static void
-  copyToANSI(ANSICHAR* dest, const String& src, SIZE_T size = 0) {
-    if (size == 0) {
-      size = src.size();
-    }
-    std::memcpy(dest, src.c_str(), size * sizeof(ANSICHAR));
-    dest[size] = '\0'; // Ensure null-termination
-  }
-
-  FORCEINLINE static bool
-  copyANSI(ANSICHAR* dest, const ANSICHAR* src, SIZE_T size = 0) {
-    if (size == 0) {
-      size = std::strlen(src);
-    }
-    if (size > 0) {
-      std::memcpy(dest, src, size * sizeof(ANSICHAR));
-      // Write null-terminator within bounds
-      dest[size] = '\0';
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   *   Creates a new all characters in a string to upper case.
-   *
-   * @param str
-   *    The string to take reference.
-   *
-   * @return String
-   *    The new created string
-   **/
-  static String
+   * ASCII only, other bytes are left as they are.
+   */
+  NODISCARD static String
   toUpper(const String& str);
 
-  /**
-   *   Left trims a string of any whitespace.
-   *
-   * @param str
-   *    The string to take reference.
-   **/
-  static String
+  NODISCARD static String
   lTrim(const String& str);
 
-  /**
-   *   Right trims a string of any whitespace.
-   *
-   * @param str
-   *    The string to take reference.
-   **/
-  static String
+  NODISCARD static String
   rTrim(const String& str);
 
-  /**
-   *   Trims a string of any whitespace for both right and left part.
-   *
-   * @param str
-   *    The string to take reference.
-   **/
-  static String
+  NODISCARD static String
   trim(const String& str);
 
-  NODISCARD static bool
-  equals(const String& str1, const ANSICHAR* str2) {
-    return str1 == str2;
-  }
+ private:
+  /**
+   * An argument of format seen as text. Text arguments are only viewed, the rest are
+   * converted and kept in 'owned' until the format ends.
+   */
+  struct FormatArg
+  {
+    String owned;
+    StringView view;
+    bool isOwned = false;
+  };
 
-  NODISCARD static bool
-  equals(const String& str1, const String& str2) {
-    return str1 == str2;
-  }
+  template<typename T>
+  static FormatArg
+  makeFormatArg(T&& value);
 
-  NODISCARD static bool
-  equals(const ANSICHAR* str1, const ANSICHAR* str2) {
-    return std::strcmp(str1, str2) == 0;
-  }
-
- public:
-  static const String WHITESPACE;
-  static const String EMPTY;
+  static String
+  formatArgs(StringView format, const StringView* args, SIZE_T count);
 };
+
+/************************************************************************/
+/*
+ * Implementation
+ */
+/************************************************************************/
 
 /*
  */
-template <typename T>
-String
-chString::toString(T&& value) {
-  // Para strings, permitir movimiento directo
-  if constexpr (std::is_same_v<std::decay_t<T>, String> ||
-                std::is_same_v<std::decay_t<T>, std::string>) {
-    if constexpr (std::is_lvalue_reference_v<T> &&
-                  std::is_const_v<std::remove_reference_t<T>>) {
-      return value;
+template<typename... Args>
+consteval void
+FormatString<Args...>::check() const
+{
+  constexpr SIZE_T argCount = sizeof...(Args);
+  bool usesAutomatic = false;
+  bool usesManual = false;
+  SIZE_T automaticCount = 0;
+
+  SIZE_T i = 0;
+  while (i < m_text.size()) {
+    const ANSICHAR c = m_text[i];
+
+    if (c == '}') {
+      if (i + 1 >= m_text.size() || m_text[i + 1] != '}') {
+        errorUnmatchedClosingBrace();
+      }
+      i += 2;
+      continue;
     }
-    else if constexpr (std::is_lvalue_reference_v<T>) {
-      return value;
+
+    if (c != '{') {
+      ++i;
+      continue;
+    }
+
+    if (i + 1 < m_text.size() && m_text[i + 1] == '{') {
+      i += 2;
+      continue;
+    }
+
+    const SIZE_T close = m_text.find('}', i + 1);
+    if (close == StringView::npos) {
+      errorUnclosedBrace();
+    }
+
+    if (close == i + 1) {
+      usesAutomatic = true;
+      if (automaticCount >= argCount) {
+        errorIndexOutOfRange();
+      }
+      ++automaticCount;
     }
     else {
-      return std::move(value);
+      usesManual = true;
+      SIZE_T index = 0;
+      for (SIZE_T d = i + 1; d < close; ++d) {
+        if (m_text[d] < '0' || m_text[d] > '9') {
+          errorInvalidPlaceholder();
+        }
+        index = index * 10 + static_cast<SIZE_T>(m_text[d] - '0');
+      }
+      if (index >= argCount) {
+        errorIndexOutOfRange();
+      }
     }
+
+    if (usesAutomatic && usesManual) {
+      errorMixedAutomaticAndManualIndex();
+    }
+
+    i = close + 1;
   }
-  else if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-    return std::to_string(static_cast<std::decay_t<T>>(value));
+}
+
+/*
+ */
+template<typename T>
+String
+chString::toString(T&& value)
+{
+  using Type = std::decay_t<T>;
+
+  if constexpr (std::is_same_v<Type, String>) {
+    return std::forward<T>(value);
+  }
+  else if constexpr (std::is_arithmetic_v<Type>) {
+    return std::to_string(static_cast<Type>(value));
+  }
+  else if constexpr (std::is_enum_v<Type>) {
+    // Enums print their number, which also covers C enums such as VkResult.
+    return std::to_string(static_cast<std::underlying_type_t<Type>>(value));
   }
   else if constexpr (std::is_convertible_v<T, String>) {
     return String(std::forward<T>(value));
@@ -302,98 +286,55 @@ chString::toString(T&& value) {
     return value.toString();
   }
   else {
-    std::ostringstream oss;
-    oss << value;
-    return oss.str();
+    // sizeof(Type*) == 0 is never true but depends on T, so it only fails when this
+    // branch is used.
+    static_assert(sizeof(Type*) == 0,
+                  "chString::toString: the type is not a string, number or enum, is not "
+                  "convertible to String and has no toString() method.");
   }
 }
 
-template <typename... Args>
+/*
+ */
+template<typename T>
+chString::FormatArg
+chString::makeFormatArg(T&& value)
+{
+  using Type = std::decay_t<T>;
+  FormatArg arg;
+
+  if constexpr (std::is_pointer_v<Type> && std::is_convertible_v<Type, StringView>) {
+    arg.view = value ? StringView(value) : StringView("(null)");
+  }
+  else if constexpr (std::is_convertible_v<const T&, StringView>) {
+    arg.view = value;
+  }
+  else {
+    arg.owned = toString(std::forward<T>(value));
+    arg.isOwned = true;
+  }
+
+  return arg;
+}
+
+/*
+ */
+template<typename... Args>
+  requires(sizeof...(Args) > 0)
 String
-chString::format(const String& _format, Args&&... args) {
-  if (_format.find('{') == String::npos) {
-    return _format;
+chString::format(FormatString<std::type_identity_t<Args>...> format, Args&&... args)
+{
+  Array<FormatArg, sizeof...(Args)> converted{makeFormatArg(std::forward<Args>(args))...};
+
+  // Views are taken only now, because moving a short String into the array moves its
+  // characters too.
+  Array<StringView, sizeof...(Args)> views;
+  for (SIZE_T i = 0; i < converted.size(); ++i) {
+    views[i] = converted[i].isOwned ? StringView(converted[i].owned)
+                                    : converted[i].view;
   }
 
-  Array<String, sizeof...(Args)> arguments{toString(std::forward<Args>(args))...};
-
-  SIZE_T estimatedSize = _format.size();
-  for (const auto& arg : arguments) {
-    estimatedSize += arg.size();
-  }
-
-  if (estimatedSize > _format.size() * 3) {
-    estimatedSize = _format.size() * 3;
-  }
-
-  String result;
-  result.reserve(estimatedSize);
-
-  SIZE_T lastPos = 0;
-  SIZE_T pos = 0;
-
-  while ((pos = _format.find('{', lastPos)) != String::npos) {
-    result.append(_format, lastPos, pos - lastPos);
-
-    SIZE_T closePos = _format.find('}', pos);
-    if (closePos == String::npos) {
-      result.append(_format, pos, String::npos);
-      break;
-    }
-
-    if (closePos == pos + 1) {
-      CH_EXCEPT(InvalidArgumentException, "Empty placeholder in format string");
-    }
-
-    SIZE_T index = 0;
-    bool validIndex = true;
-    for (SIZE_T i = pos + 1; i < closePos; ++i) {
-      char c = _format[i];
-      if (c >= '0' && c <= '9') {
-        index = index * 10 + (c - '0');
-      }
-      else {
-        validIndex = false;
-        break;
-      }
-    }
-
-    if (!validIndex) {
-      result.append(_format, pos, closePos - pos + 1);
-    }
-    else if (index >= arguments.size()) {
-      throw std::out_of_range("Placeholder index out of range");
-    }
-    else {
-      result.append(arguments[index]);
-    }
-
-    lastPos = closePos + 1;
-  }
-
-  if (lastPos < _format.size()) {
-    result.append(_format, lastPos, String::npos);
-  }
-
-  return result;
+  return formatArgs(format.get(), views.data(), views.size());
 }
 
-template <typename Arg>
-String
-chString::format(const String& _format, Arg&& arg) {
-  SIZE_T pos = _format.find("{0}");
-  if (pos == String::npos) {
-    return _format;
-  }
-
-  String argStr = toString(std::forward<Arg>(arg));
-  String result;
-  result.reserve(_format.size() + argStr.size());
-
-  result.append(_format, 0, pos);
-  result.append(argStr);
-  result.append(_format, pos + 3, String::npos);
-
-  return result;
-}
 } // namespace chEngineSDK

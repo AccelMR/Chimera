@@ -70,13 +70,13 @@ ImageCodec::importAsset(const Path& filePath, const String& assetName) {
   metadata.uuid = UUID::createRandom();
   metadata.assetType = AssetTypeTraits<TextureAsset>::getTypeId();
   metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  chString::copyANSI(metadata.typeName, AssetTypeTraits<TextureAsset>::getTypeName());
-  chString::copyANSI(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  chString::copyToANSI(metadata.name, assetName);
+  chString::copyToBuffer(metadata.typeName, AssetTypeTraits<TextureAsset>::getTypeName());
+  chString::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  chString::copyToBuffer(metadata.name, assetName);
 
   const Path importedPath = FileSystem::absolutePath(Path(filePath));
-  chString::copyToANSI(metadata.importedPath, importedPath.toString());
-  chString::copyToANSI(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
+  chString::copyToBuffer(metadata.importedPath, importedPath.toString());
+  chString::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
 
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(metadata, imageData, width, height);
 

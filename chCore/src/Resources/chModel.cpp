@@ -30,7 +30,7 @@ ModelNode::ModelNode(const String& nodeName, Model* ownerModel, ModelNode* paren
    m_model(ownerModel),
    m_dirty(true) {
     // Copy the node name safely
-    chString::copyToANSI(m_name, nodeName, nodeName.size() + 1);
+    chString::copyToBuffer(m_name, nodeName);
    }
 
 /*
