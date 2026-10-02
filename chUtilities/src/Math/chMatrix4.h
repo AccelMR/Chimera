@@ -15,7 +15,6 @@
 #include "chPrerequisitesUtilities.h"
 
 namespace chEngineSDK {
-using std::ostream;
 /*
  * Description:
  *     Class that holds a 4x4 matrix, represented as Row-Major.
@@ -301,17 +300,6 @@ class CH_UTILITY_EXPORT Matrix4
   NODISCARD FORCEINLINE const float*
   operator[](int32 row) const;
 
- private:
-  /**
-   * Logical string representations of this Matrix.
-   *
-   * @param output The output stream where to write
-   * @param matrix4 The reference to this Matrix to be out
-   * @return Ostream of this class to string
-   */
-  friend ostream&
-  operator<<(ostream& output, const Matrix4& matrix4);
-
  public:
   /**
    * All zero matrix
@@ -591,17 +579,5 @@ Matrix4::operator==(const Matrix4& other) const {
     }
   }
   return true;
-}
-
-// Implementation of friend output operator
-inline ostream&
-operator<<(ostream& output, const Matrix4& matrix4) {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      output << matrix4.m_data[i][j] << ", ";
-    }
-    output << std::endl;
-  }
-  return output;
 }
 } // namespace chEngineSDK

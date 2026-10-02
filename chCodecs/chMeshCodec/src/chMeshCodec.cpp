@@ -9,6 +9,10 @@
 /************************************************************************/
 
 #include "chMeshCodec.h"
+
+#include <chrono>
+#include <limits>
+
 #if USING(CH_CODECS)
 
 #include "chAssetManager.h"

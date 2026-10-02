@@ -15,6 +15,10 @@
 /************************************************************************/
 #include "chUnicode.h"
 
+#include <algorithm>
+#include <locale>
+
+
 namespace chEngineSDK{
 /**
  * @brief Converts an UTF-8 encoded character (possibly multi byte) into an UTF-32 character.

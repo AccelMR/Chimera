@@ -13,6 +13,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <chrono>
+
 #include "chAssetRegister.h"
 #include "chEnginePaths.h"
 #include "chEventSystem.h"

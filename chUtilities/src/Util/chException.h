@@ -77,15 +77,12 @@ class Exception : public std::exception
   virtual const String&
   getFullDescription() const {
     if (m_fullDescription.empty()) {
-      StringStream desc;
-      desc << "Chimera EXCEPTION(" << m_typeName << "): "
-        << m_description << " in " << m_source;
+      m_fullDescription = "Chimera EXCEPTION(" + m_typeName + "): " + m_description + " in " +
+                          m_source;
 
       if (m_line > 0) {
-        desc << " at " << m_fileName << " (line " << m_line << ")";
+        m_fullDescription += " at " + m_fileName + " (line " + std::to_string(m_line) + ")";
       }
-
-      m_fullDescription = desc.str();
     }
 
     return m_fullDescription;

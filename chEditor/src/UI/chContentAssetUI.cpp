@@ -8,6 +8,12 @@
 /************************************************************************/
 #include "chContentAssetUI.h"
 
+#include <cctype>
+#include <cstring>
+#include <ctime>
+#include <algorithm>
+#include <chrono>
+
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
 #include "chAssetCodecManager.h"

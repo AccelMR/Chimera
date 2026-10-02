@@ -12,6 +12,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chSTDThreading.h"
 #include "chTypeTraits.h"
 #include "chUUID.h"
 

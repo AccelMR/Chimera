@@ -15,6 +15,9 @@
 /************************************************************************/
 #include "chBMPImage.h"
 
+#include <cstring>
+#include <iostream>
+
 #include "chBox2D.h"
 #include "chColor.h"
 #include "chFileSystem.h"

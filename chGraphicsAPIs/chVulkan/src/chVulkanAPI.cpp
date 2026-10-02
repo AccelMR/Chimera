@@ -9,7 +9,12 @@
 /************************************************************************/
 #include "chVulkanAPI.h"
 
+#include <cstring>
+#include <algorithm>
+#include <iostream>
+
 #include "chDisplaySurface.h"
+#include "chSTDStreams.h"
 #include "chVulkanBuffer.h"
 #include "chVulkanCommandBuffer.h"
 #include "chVulkanCommandPool.h"

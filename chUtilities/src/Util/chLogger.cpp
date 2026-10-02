@@ -14,8 +14,14 @@
 /************************************************************************/
 #include "chLogger.h"
 
+#include <ctime>
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+
 #include "chFileSystem.h"
 #include "chPath.h"
+#include "chSTDStreams.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {

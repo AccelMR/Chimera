@@ -11,6 +11,8 @@
 
 #include "chResizeDebouncer.h"
 
+#include <algorithm>
+
 namespace chEngineSDK {
 /*
 */

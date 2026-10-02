@@ -13,6 +13,8 @@
  */
 #include "chBaseApplication.h"
 
+#include <chrono>
+
 #include "chLogger.h"
 #include "chStringUtils.h"
 

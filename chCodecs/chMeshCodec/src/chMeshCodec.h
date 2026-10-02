@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <algorithm>
+
 #if USING(CH_CODECS)
 
 #include "chAssetCodec.h"
@@ -20,6 +22,7 @@
 #include "chMesh.h"
 #include "chModel.h"
 #include "chModelAsset.h"
+#include "chSTDThreading.h"
 #include "chUUID.h"
 
 //Forward declarations from Assimp

@@ -8,6 +8,11 @@
 /************************************************************************/
 #include "chOutputLogUI.h"
 
+#include <cctype>
+#include <algorithm>
+#include <chrono>
+
+#include "chSTDThreading.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"

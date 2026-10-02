@@ -12,6 +12,8 @@
 /************************************************************************/
 #include "chVulkanSwapChain.h"
 
+#include <algorithm>
+
 #include "chMath.h"
 #include "chVulkanAPI.h"
 #include "chVulkanSynchronization.h"

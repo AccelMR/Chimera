@@ -9,6 +9,8 @@
 
 #include "chQuaternion.h"
 
+#include <cmath>
+
 #include "chMatrix4.h"
 #include "chRadian.h"
 #include "chRotator.h"

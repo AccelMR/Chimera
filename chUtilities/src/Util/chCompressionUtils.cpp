@@ -9,6 +9,9 @@
 
 #include "chCompressionUtils.h"
 
+#include <cstring>
+
+
 namespace chEngineSDK {
 /*
  */

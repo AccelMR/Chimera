@@ -9,6 +9,9 @@
 
 #include "chImageCodec.h"
 
+#include <cstring>
+#include <chrono>
+
 #include "chAssetManager.h"
 #include "chFileSystem.h"
 #include "chIGraphicsAPI.h"

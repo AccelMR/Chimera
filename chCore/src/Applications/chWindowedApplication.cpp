@@ -8,6 +8,8 @@
 /************************************************************************/
 #include "chWindowedApplication.h"
 
+#include <chrono>
+
 #include "chCommandParser.h"
 #include "chDisplayEventHandle.h"
 #include "chDisplayManager.h"

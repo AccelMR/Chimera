@@ -15,6 +15,10 @@
  /************************************************************************/
 #include "chCommandParser.h"
 
+#include <cctype>
+#include <algorithm>
+
+
 
 namespace chEngineSDK {
 using std::transform;

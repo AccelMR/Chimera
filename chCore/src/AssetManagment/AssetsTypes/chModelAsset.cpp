@@ -9,6 +9,8 @@
 /************************************************************************/
 #include "chModelAsset.h"
 
+#include <cstring>
+
 #include "chFileStream.h"
 #include "chLogger.h"
 #include "chMesh.h"

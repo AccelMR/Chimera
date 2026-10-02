@@ -22,7 +22,6 @@
 #include "chMath.h"
 
 namespace chEngineSDK {
-using std::ostream;
 
 /**
  * Vector for 2D spaces.
@@ -274,25 +273,6 @@ public:
    **/
   FORCEINLINE Array<float, 2>
   xy() const { return {x, y};}
-
-private:
-  /**
-   * Logical string representations of this vector.
-   *
-   * @param _output
-   *   The output stream where to write.
-   *
-   * @param
-   *   Vector2 The reference to this vector to be out.
-   *
-   * @return
-   *   Ostream of this class to string.
-   */
-  friend ostream& operator<<(ostream& output, const Vector2& vector2)
-  {
-    output << "(" << vector2.x << ", " << vector2.y << ")";
-    return output;
-  }
 
 public:
   /************************************************************************/

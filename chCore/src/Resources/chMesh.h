@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <cstring>
+
 #include "chGraphicsTypes.h"
 #include "chVertexLayout.h"
 

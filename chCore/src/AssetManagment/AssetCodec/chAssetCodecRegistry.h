@@ -10,6 +10,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <ranges>
+
 #include "chAssetCodec.h"
 #include "chTypeTraits.h"
 

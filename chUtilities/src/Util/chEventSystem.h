@@ -15,6 +15,8 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include "chSTDThreading.h"
+
 namespace chEngineSDK {
 using std::forward;
 using std::function;

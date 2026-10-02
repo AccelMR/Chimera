@@ -12,6 +12,10 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <chrono>
+
+#include "chSTDThreading.h"
+
 namespace chEngineSDK {
 class ResizeDebouncer {
  public:

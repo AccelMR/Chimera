@@ -8,6 +8,9 @@
  */
 /************************************************************************/
 #include "chModel.h"
+
+#include <algorithm>
+
 #include "chSphereBoxBounds.h"
 #include "chVector3.h"
 #include "chVector4.h"

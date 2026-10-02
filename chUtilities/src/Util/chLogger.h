@@ -21,6 +21,7 @@
 #include "chEventSystem.h"
 #include "chLogDeclaration.h"
 #include "chModule.h"
+#include "chSTDThreading.h"
 #include "chStringUtils.h"
 
 // Todo: change this to show may be verbose on some categories but not globally

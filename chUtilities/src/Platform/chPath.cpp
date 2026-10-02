@@ -16,6 +16,9 @@
  */
  /************************************************************************/
 #include "chPath.h"
+
+#include <algorithm>
+
 #include "chUnicode.h"
 
 namespace chEngineSDK {

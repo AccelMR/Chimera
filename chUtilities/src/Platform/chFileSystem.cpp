@@ -15,6 +15,8 @@
 /************************************************************************/
 #include "chFileSystem.h"
 
+#include <iostream>
+
 #include "chPath.h"
 #include "chStringUtils.h"
 

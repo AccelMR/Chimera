@@ -15,6 +15,10 @@
 /************************************************************************/
 #include "chStringUtils.h"
 
+#include <algorithm>
+#include <locale>
+
+
 namespace chEngineSDK{
 using std::transform;
 using std::tolower;

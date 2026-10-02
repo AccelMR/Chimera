@@ -480,8 +480,6 @@ TEST_CASE("chUtilities - Vector2") {
     REQUIRE(VectorDefault != VectorZero);
   #endif
 
-  std::cout << "Print Vector Test: " << VectorZero;
-
   REQUIRE(VectorZero.x == Approx(0.0f));
   REQUIRE(VectorZero.y == Approx(0.0f));
 
@@ -583,8 +581,6 @@ TEST_CASE("chUtilities - Vector3") {
   #else
     REQUIRE(VectorDefault != VectorZero);
   #endif
-
-  std::cout << "Print Vector Test: " << VectorZero;
 
   REQUIRE(VectorZero.x == Approx(0.0f));
   REQUIRE(VectorZero.y == Approx(0.0f));
@@ -695,8 +691,6 @@ TEST_CASE("chUtilities - Vector4") {
   #else
     REQUIRE(VectorDefault != VectorZero);
   #endif
-
-  std::cout << "Print Vector Test: " << VectorZero;
 
   REQUIRE(VectorZero.x == Approx(0.0f));
   REQUIRE(VectorZero.y == Approx(0.0f));
@@ -835,8 +829,6 @@ TEST_CASE("chUtilities - Matrix4") {
 
   const Matrix4 Identity(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                          0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
-  std::cout << Identity;
 
   REQUIRE(Identity == Matrix4::IDENTITY);
 

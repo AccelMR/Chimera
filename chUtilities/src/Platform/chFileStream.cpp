@@ -15,7 +15,11 @@
 /************************************************************************/
 #include "chFileStream.h"
 
+#include <cstring>
+#include <fstream>
+
 #include "chLogger.h"
+#include "chSTDStreams.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
 

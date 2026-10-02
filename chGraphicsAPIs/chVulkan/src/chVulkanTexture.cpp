@@ -11,6 +11,8 @@
 /************************************************************************/
 #include "chVulkanTexture.h"
 
+#include <cstring>
+
 #include "chVulkanTextureView.h"
 
 namespace chEngineSDK {

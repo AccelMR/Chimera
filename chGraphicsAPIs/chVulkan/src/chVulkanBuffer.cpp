@@ -12,6 +12,8 @@
 
 #include "chVulkanBuffer.h"
 
+#include <cstring>
+
 #include "chICommandQueue.h"
 #include "chVulkanAPI.h"
 

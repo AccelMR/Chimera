@@ -15,6 +15,8 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <iosfwd>
+
 #include "chPath.h"
 #include "chFlags.h"
 

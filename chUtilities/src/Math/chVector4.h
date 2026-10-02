@@ -26,7 +26,6 @@
 #include "chMath.h"
 
 namespace chEngineSDK {
-using std::ostream;
 
 /*
  * Description:
@@ -314,25 +313,6 @@ public:
    **/
   FORCEINLINE Array<float, 4>
   xyzw() const { return {x, y, z, w};}
-
-private:
-  /**
-   * Logical string representations of this vector.
-   *
-   * @param _output
-   *   The output stream where to write.
-   *
-   * @param
-   *   Vector2 The reference to this vector to be out.
-   *
-   * @return
-   *   Ostream of this class to string.
-   */
-  friend ostream& operator<<(ostream& output, const Vector4& vector4)
-  {
-    output << "(" << vector4.x << ", " << vector4.y << ", " << vector4.z << ", " << vector4.w << ")";
-    return output;
-  }
 
  public:
 

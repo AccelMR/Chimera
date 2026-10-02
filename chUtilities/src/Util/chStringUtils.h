@@ -15,8 +15,9 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
-#include <format>
-#include <regex>
+#include <cstring>
+
+#include "chSTDStreams.h"
 
 namespace chEngineSDK {
 /*
@@ -314,7 +315,9 @@ chString::format(const String& _format, Args&&... args) {
     estimatedSize += arg.size();
   }
 
-  estimatedSize = std::min(estimatedSize, _format.size() * 3);
+  if (estimatedSize > _format.size() * 3) {
+    estimatedSize = _format.size() * 3;
+  }
 
   String result;
   result.reserve(estimatedSize);

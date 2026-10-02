@@ -72,6 +72,12 @@ if(MSVC)
   add_compile_options(/wd4201 /wd4251 /wd4996)
 endif()
 
+if(WIN32)
+  # Windows.h defines min and max as macros, which break std::min, std::max and
+  # numeric_limits<T>::max(). Defining it here covers every include order.
+  add_compile_definitions(NOMINMAX)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(SDL_SHARED ON  CACHE BOOL "" FORCE)
   set(SDL_STATIC OFF CACHE BOOL "" FORCE)

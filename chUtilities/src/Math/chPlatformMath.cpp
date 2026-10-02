@@ -17,6 +17,8 @@
  /************************************************************************/
 #include "chPlatformMath.h"
 
+#include <cmath>
+
 #include "chRadian.h"
 #include "chDegree.h"
 #include "chVector3.h"

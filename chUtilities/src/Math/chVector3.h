@@ -23,7 +23,6 @@
 #include "chMath.h"
 
 namespace chEngineSDK {
-using std::ostream;
 /**
  * A vector for 3D spaces composed by (X, Y, Z) with floating points.
  *
@@ -349,24 +348,6 @@ public:
   FORCEINLINE Array<float, 3>
   xyz() const { return {x, y, z};}
 
-private:
-  /**
-   * Logical string representations of this vector.
-   *
-   * @param _output
-   *   The output stream where to write.
-   *
-   * @param
-   *   Vector2 The reference to this vector to be out.
-   *
-   * @return
-   *   Ostream of this class to string.
-   */
-  friend ostream& operator<<(ostream& output, const Vector3& vector3)
-  {
-    output << "(" << vector3.x << ", " << vector3.y << ", " << vector3.z << ")";
-    return output;
-  }
  public:
 
   /************************************************************************/

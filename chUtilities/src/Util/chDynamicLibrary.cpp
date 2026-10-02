@@ -15,6 +15,8 @@
 /************************************************************************/
 #include "chDynamicLibrary.h"
 
+#include <iostream>
+
 #include "chFileSystem.h"
 #include "chPath.h"
 
