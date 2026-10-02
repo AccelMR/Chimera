@@ -12,22 +12,18 @@
 #include "chLogger.h"
 #include "chSTDThreading.h"
 
-#include "chMultiStageRenderer.h"
-
-struct ImVec4;
 namespace chEngineSDK {
-// Forward declarations
+
 /**
- * @brief UI component for displaying and filtering engine log output
+ * Editor window that shows the engine log, filtered by verbosity, category and text.
+ * The last entries are kept in a ring buffer and only the visible rows are drawn, so
+ * the cost per frame does not grow with the size of the log.
  */
 class OutputLogUI
 {
  public:
-
-  /**
-   * @brief Filter settings for log display
-   */
-  struct LogFilter {
+  struct LogFilter
+  {
     bool showDebug = true;
     bool showInfo = true;
     bool showWarning = true;
@@ -36,127 +32,119 @@ class OutputLogUI
     bool showTrace = true;
 
     Set<String> enabledCategories;
-    String searchText;
 
-    // Check if an entry passes current filters
-    bool
+    // Kept in lower case, so each entry is compared without building new strings.
+    String searchTextLower;
+
+    NODISCARD bool
     passesFilter(const LogBufferEntry& entry) const;
   };
 
  public:
   OutputLogUI();
   ~OutputLogUI();
-  /**
-   * @brief Main rendering function for the output log window
-   */
+
   void
   renderOutputLogUI();
 
   /**
-   * @brief Queue a log entry to be shown on the next render. Safe to call from any thread.
+   * Queues an entry to be shown on the next render. Safe to call from any thread.
    */
   void
   addLogEntry(const LogBufferEntry& entry);
 
-  /**
-   * @brief Clear all log entries
-   */
   void
   clearLog();
 
-  /**
-   * @brief Set maximum number of log entries to keep in memory
-   */
   void
-  setMaxLogEntries(uint32 maxEntries) {
-    m_maxLogEntries = maxEntries;
-  }
+  setMaxLogEntries(uint32 maxEntries);
 
-  /**
-   * @brief Enable/disable auto-scroll to bottom
-   */
-  void
-  setAutoScroll(bool autoScroll) {
+  FORCEINLINE void
+  setAutoScroll(bool autoScroll) noexcept
+  {
     m_autoScroll = autoScroll;
   }
 
-  /**
-   * @brief Show/hide the output log window
-   */
-  void
-  setVisible(bool visible) {
+  FORCEINLINE void
+  setVisible(bool visible) noexcept
+  {
     m_isVisible = visible;
   }
-  bool
-  isVisible() const {
+
+  NODISCARD FORCEINLINE bool
+  isVisible() const noexcept
+  {
     return m_isVisible;
   }
 
   /**
-   * @brief Update the list of available categories from log entries
+   * Rebuilds the category list from the kept entries and enables all of them.
    */
   void
   updateAvailableCategories();
 
  private:
   /**
-   * @brief Move the queued entries into the displayed log. Main thread only.
+   * Moves the queued entries into the log. Main thread only.
    */
   void
   flushPendingEntries();
 
   /**
-   * @brief Render the filter controls (verbosity, categories, search)
+   * Adds an entry to the ring buffer, replacing the oldest one when it is full.
    */
+  void
+  pushEntry(LogBufferEntry&& entry);
+
+  /**
+   * Entry with the given sequence number. It must still be in the ring buffer.
+   */
+  NODISCARD const LogBufferEntry&
+  getEntry(uint64 sequence) const;
+
+  void
+  rebuildFilteredEntries();
+
+  /**
+   * Drops the filtered entries and the selection that left the ring buffer.
+   */
+  void
+  dropRemovedEntries();
+
   void
   renderFilterControls();
 
-  /**
-   * @brief Render the log entries table
-   */
   void
   renderLogEntries();
 
-  /**
-   * @brief Render a single log entry row
-   */
   void
-  renderLogEntryRow(const LogBufferEntry& entry, int32 index);
+  renderLogEntryRow(uint64 sequence);
 
-  /**
-   * @brief Get color for log verbosity level
-   */
-  ImVec4
-  getVerbosityColor(LogVerbosity verbosity) const;
-
-  /**
-   * @brief Get icon for log verbosity level
-   */
-  const char*
-  getVerbosityIcon(LogVerbosity verbosity) const;
-
-  /**
-   * @brief Apply size limits to log entries buffer
-   */
   void
-  applySizeLimits();
+  renderSelectedEntry();
 
  private:
-  // UI state
+  static constexpr uint64 NO_SELECTION = ~0ull;
+
   bool m_isVisible = true;
   bool m_autoScroll = true;
   uint32 m_maxLogEntries = 1000;
 
-  // Log data
-  Vector<LogBufferEntry> m_logEntries;
-  Vector<LogBufferEntry> m_filteredEntries;
-  Set<String> m_availableCategories;
+  // Ring buffer. Every entry gets a sequence number that never changes, so the
+  // filtered list stays valid when the oldest entries are replaced.
+  Vector<LogBufferEntry> m_entries;
+  uint32 m_oldestIndex = 0;
+  uint64 m_oldestSequence = 0;
+  uint64 m_nextSequence = 0;
 
-  // Filtering
+  // Sequence numbers of the entries that pass the filter, oldest first.
+  Vector<uint64> m_filteredSequences;
+  uint64 m_selectedSequence = NO_SELECTION;
+
+  Set<String> m_availableCategories;
   LogFilter m_filter;
   char m_searchBuffer[256] = {0};
 
-  // UI state
   bool m_needsScrollToBottom = false;
   bool m_needsFilterUpdate = true;
 
