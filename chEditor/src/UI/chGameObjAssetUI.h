@@ -18,5 +18,10 @@ class GameObjectAssetUI {
 
   void
   renderGameObjectAssetUI();
+
+ private:
+  // Rebuilt only when the edited object's name changes.
+  String m_windowTitle;
+  String m_titleName;
 };
 } // namespace chEngineSDK

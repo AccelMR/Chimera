@@ -69,26 +69,18 @@ UIHelpers::render(IGraphicsAPI& graphicAPI, const SPtr<ICommandBuffer>& commandB
 }
 
 AssetIcon
-UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset) {
+UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
+{
   if (asset->isTypeOf<ModelAsset>()) {
-    return {AssetType::Model,
-            ICON_FA_CUBE,
-            {String(ICON_FA_CUBE) + " " + asset->getName()}}; // Example icon for model assets
+    return {AssetType::Model, ICON_FA_CUBE};
   }
   if (asset->isTypeOf<TextureAsset>()) {
-    return {
-        AssetType::Texture,
-        ICON_FA_IMAGE,
-        {String(ICON_FA_IMAGE) + " " + asset->getName()}}; // Example icon for texture assets
+    return {AssetType::Texture, ICON_FA_IMAGE};
   }
-  if(asset->isTypeOf<GameObjectAsset>()) {
-    return {
-        AssetType::GameObject,
-        ICON_FA_CUBES,
-        {String(ICON_FA_CUBES) + " " + asset->getName()}}; // Example icon for game object assets
+  if (asset->isTypeOf<GameObjectAsset>()) {
+    return {AssetType::GameObject, ICON_FA_CUBES};
   }
-  // Add more asset types and their corresponding icons as needed
-  return {AssetType::Unknown, ICON_FA_FILE}; // Default icon for unknown asset types
+  return {AssetType::Unknown, ICON_FA_FILE};
 }
 
 /*
@@ -366,24 +358,17 @@ UIHelpers::bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler) {
     return HEvent(); // Return an invalid event handle
   }
 
-  return eventHandler->addUpdateInjection([](const Vector<Any>& args) -> bool {
+  return eventHandler->addUpdateInjection([](const Any& platformEvent) -> bool {
 #if USING(CH_DISPLAY_SDL3)
-    CH_ASSERT(args.size() == 1 && "Expected exactly one argument of type SDL_Event.");
-    if (args.empty()) {
-      CH_LOG_ERROR(UIImguiHelper, "No arguments passed to display event handler.");
-      return false;
-    }
-
-    SDL_Event event;
-    if (!AnyUtils::tryGetValue<SDL_Event>(args[0], event)) {
+    const SDL_Event* event = nullptr;
+    if (!AnyUtils::tryGetValue<const SDL_Event*>(platformEvent, event) || !event) {
       CH_LOG_ERROR(UIImguiHelper, "Invalid argument type passed to display event handler.");
       return false;
     }
 
-    // Process SDL3 events with ImGui
-    return ImGui_ImplSDL3_ProcessEvent(&event);
+    return ImGui_ImplSDL3_ProcessEvent(event);
 #else
-    CH_PARAMETER_UNUSED(args);
+    CH_PARAMETER_UNUSED(platformEvent);
     CH_LOG_ERROR(UIImguiHelper, "SDL3 is not enabled. Cannot process SDL_Event.");
     return false;
 #endif // USING(CH_DISPLAY_SDL3)

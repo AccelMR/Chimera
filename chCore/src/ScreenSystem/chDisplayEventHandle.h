@@ -111,7 +111,7 @@ class CH_CORE_EXPORT DisplayEventHandle
 
 
   NODISCARD FORCEINLINE HEvent
-  addUpdateInjection(Function<bool(const Vector<Any>&)> updateFunc) {
+  addUpdateInjection(Function<bool(const Any&)> updateFunc) {
     return m_updateInjection.connect(std::move(updateFunc));
   }
 
@@ -139,7 +139,9 @@ class CH_CORE_EXPORT DisplayEventHandle
 
   PlatformPtr m_platformPtr;
 
-  const Event<bool(const Vector<Any>&)> m_updateInjection;
+  // Receives every platform event before the engine handles it. With SDL3 the Any holds
+  // a const SDL_Event*, so no event is copied.
+  const Event<bool(const Any&)> m_updateInjection;
 
 };
 

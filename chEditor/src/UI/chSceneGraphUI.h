@@ -50,5 +50,9 @@ class SceneGraphUI {
   bool m_isVisible = true;
   SPtr<Scene> m_currentScene;
   Vector<SceneNodeUIData> m_sceneGraphData;
+
+  // Rebuilt only when the scene name changes.
+  String m_windowTitle;
+  String m_titleSceneName;
 };
 } // namespace chEngineSDK

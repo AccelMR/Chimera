@@ -35,12 +35,19 @@ SceneGraphUI::~SceneGraphUI() {
 
 void
 SceneGraphUI::renderSceneGraphUI() {
-  const String windowTitle = m_currentScene
-                                 ? "Scene Graph - " + m_currentScene->getName()
-                                 : "Scene Graph - No Active Scene";
-  // Rendering code for the scene graph UI
-  ImGui::Begin(windowTitle.c_str(), &m_isVisible);
+  const ANSICHAR* sceneName =
+      m_currentScene ? m_currentScene->getName().c_str() : "No Active Scene";
+  if (m_windowTitle.empty() || m_titleSceneName != sceneName) {
+    m_titleSceneName = sceneName;
+    // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
+    // scene changes.
+    m_windowTitle = chString::format("Scene Graph - {0}###SceneGraph", m_titleSceneName);
+  }
+
+  ImGui::Begin(m_windowTitle.c_str(), &m_isVisible);
   for (const auto& nodeData : m_sceneGraphData) {
+    // Objects can share a name, so the pointer keeps their tree nodes apart.
+    ImGui::PushID(nodeData.gameObject.get());
     if (ImGui::TreeNode(nodeData.gameObject->getName().c_str())) {
       ImGui::TreePop();
     }
@@ -48,12 +55,10 @@ SceneGraphUI::renderSceneGraphUI() {
       EditorSelection::setSelectedGameObject(nodeData.gameObject);
     }
 
-    if(nodeData.gameObject->getName() == "Root") {
-      continue; // Skip context menu for root node
+    if (nodeData.gameObject->getName() != "Root") {
+      handleContextMenuForGameObject(nodeData.gameObject);
     }
-
-    //Right click management
-    handleContextMenuForGameObject(nodeData.gameObject);
+    ImGui::PopID();
   }
 
   handleEmptyAreaContextMenu();
@@ -101,13 +106,13 @@ SceneGraphUI::renderEmptyAreaContextMenu() {
 */
 void
 SceneGraphUI::handleContextMenuForGameObject(const SPtr<GameObject>& gameObject) {
-  bool itemRightClicked =
-      ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right);
-  String popupId = chString::format("GameObjectContext_{0}", gameObject->getUUID().toString());
-  if (itemRightClicked) {
-    ImGui::OpenPopup(popupId.c_str());
+  CH_PARAMETER_UNUSED(gameObject);
+
+  // Called inside the PushID of this object, so a fixed popup name is unique.
+  if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    ImGui::OpenPopup("GameObjectContext");
   }
-  if (ImGui::BeginPopup(popupId.c_str())) {
+  if (ImGui::BeginPopup("GameObjectContext")) {
     // Context menu items for the GameObject
     if (ImGui::MenuItem("Delete")) {
       // Handle delete action

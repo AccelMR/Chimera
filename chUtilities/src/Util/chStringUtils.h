@@ -159,6 +159,13 @@ class CH_UTILITY_EXPORT chString
   NODISCARD static String
   toUpper(const String& str);
 
+  /**
+   * True if search appears in text, ignoring ASCII case. Does not allocate. An empty
+   * search is always found.
+   */
+  NODISCARD static bool
+  containsIgnoreCase(StringView text, StringView search) noexcept;
+
   NODISCARD static String
   lTrim(const String& str);
 

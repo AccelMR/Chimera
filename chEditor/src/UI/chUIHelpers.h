@@ -16,10 +16,10 @@ namespace chEngineSDK {
 namespace chUIHelpers {
 enum class AssetType { Model, Texture, Material, Shader, GameObject, Unknown };
 
-struct AssetIcon {
+struct AssetIcon
+{
   AssetType type;
-  const char* icon; // FontAwesome icon name
-  const String IconName = "";
+  const ANSICHAR* icon; // FontAwesome icon
 };
 
 class UIHelpers {
@@ -31,7 +31,7 @@ class UIHelpers {
   static void
   render(IGraphicsAPI& graphicAPI, const SPtr<ICommandBuffer>& commandBuffer);
 
-  static AssetIcon
+  NODISCARD static AssetIcon
   getIconFromAssetType(const SPtr<IAsset>& asset);
 
   static void

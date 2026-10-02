@@ -306,7 +306,7 @@ void
 DisplayEventHandle::update() {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
-    m_updateInjection(std::move(Vector<Any>{event}));
+    m_updateInjection(Any(static_cast<const SDL_Event*>(&event)));
     switch (event.type) {
     case SDL_EVENT_QUIT:
       addEvent(PlatformEventType::Close);

@@ -24,8 +24,14 @@ GameObjectAssetUI::renderGameObjectAssetUI() {
   }
 
   windowOpen = true;
-  const String winTitle = chString::format("GameObject Asset Editor - {0}", gameObject->getName());
-  ImGui::Begin(winTitle.c_str(), &windowOpen);
+  if (m_windowTitle.empty() || m_titleName != gameObject->getName()) {
+    m_titleName = gameObject->getName();
+    // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
+    // edited object changes.
+    m_windowTitle =
+        chString::format("GameObject Asset Editor - {0}###GameObjectAssetEditor", m_titleName);
+  }
+  ImGui::Begin(m_windowTitle.c_str(), &windowOpen);
 
   // If the user closed the window (clicked the X), clear the preview selection so the editor won't reopen.
   if (!windowOpen) {

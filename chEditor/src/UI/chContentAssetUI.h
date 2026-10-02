@@ -12,31 +12,39 @@
 #include "chUUID.h"
 #include "chMultiStageRenderer.h"
 
-struct ImVec4;
-struct ImVec2;
-
 namespace chEngineSDK {
 class NastyRenderer;
+
+/**
+ * Editor window that lists the project assets in a grid or a table, with search and
+ * type filters. The filtered list is only rebuilt when the assets or the filters
+ * change, and only the visible rows are drawn.
+ */
 class ContentAssetUI
 {
  public:
   ContentAssetUI();
   ~ContentAssetUI() = default;
 
-  // Method to render the content asset UI
   void
   renderContentAssetUI();
+
+  /**
+   * Reloads the asset list from the AssetManager.
+   */
   void
   refreshAssets();
 
   // DELETEME
   void
-  setMultiStageRenderer(SPtr<MultiStageRenderer> renderer) {
+  setMultiStageRenderer(SPtr<MultiStageRenderer> renderer)
+  {
     m_multiStageRenderer = std::move(renderer);
   }
 
   void
-  setNastyRenderer(SPtr<NastyRenderer> renderer) {
+  setNastyRenderer(SPtr<NastyRenderer> renderer)
+  {
     m_nastyRenderer = std::move(renderer);
   }
 
@@ -44,72 +52,87 @@ class ContentAssetUI
   saveUnsavedAssets();
 
  private:
-  // Helper method to render asset deletion confirmation popup
   void
   renderDeleteConfirmationPopup();
 
-  // Helper method to handle asset selection
   void
   handleAssetSelection(const SPtr<IAsset>& asset);
 
-  // Helper method to render context menu for assets
   void
   renderAssetContextMenu(const SPtr<IAsset>& asset);
 
-  // Helper method to get asset state color
-  ImVec4
-  getAssetStateColor(const SPtr<IAsset>& asset);
-
-  // Helper method to get asset state string
-  String
-  getAssetStateString(const SPtr<IAsset>& asset);
-
-  // Inline rename functionality
   void
   startInlineRename(const SPtr<IAsset>& asset);
+
   void
   finishInlineRename();
+
   void
   cancelInlineRename();
+
+  /**
+   * Draws the rename field if this asset is being renamed. Returns false otherwise, so
+   * the caller draws the name as usual.
+   */
   bool
-  renderInlineRename(const SPtr<IAsset>& asset, const String& displayName);
+  renderInlineRename(const SPtr<IAsset>& asset);
 
   void
   renderSearchBar();
+
   void
   renderAssetTypeFilters();
+
   void
   renderViewModeControls();
+
   void
   renderAssetDisplayArea();
+
+  void
+  rebuildVisibleAssets();
+
+  NODISCARD bool
+  shouldShowAsset(const SPtr<IAsset>& asset) const;
+
+  NODISCARD bool
+  passesSearchFilter(const SPtr<IAsset>& asset) const;
+
+  NODISCARD bool
+  passesTypeFilter(const SPtr<IAsset>& asset) const;
+
   void
   renderGridView();
-  bool
-  passesSearchFilter(const SPtr<IAsset>& asset);
-  bool
-  passesTypeFilter(const SPtr<IAsset>& asset);
+
   void
-  renderAssetIconButton(const SPtr<IAsset>& asset, float size = 64.0f);
+  renderGridAssetItem(const SPtr<IAsset>& asset, int32 column);
+
   void
-  renderAssetNameGrid(const SPtr<IAsset>& asset, float size = 64.0f);
+  renderAssetIconButton(const SPtr<IAsset>& asset);
+
+  void
+  renderAssetNameInGrid(const SPtr<IAsset>& asset);
+
   void
   renderAssetStateIndicator(const SPtr<IAsset>& asset);
+
   void
   renderListView();
+
   void
-  renderAssetNameInGrid(const SPtr<IAsset>& asset, float size = 64.0f);
+  setupTableColumns();
+
   void
-  renderAssetTooltip(const SPtr<IAsset>& asset);
-  void
-  handleAssetContextMenu(const SPtr<IAsset>& asset);
+  renderListAssetItem(const SPtr<IAsset>& asset);
+
   void
   renderSelectableAssetName(const SPtr<IAsset>& asset);
-  bool
-  shouldShowAsset(const SPtr<IAsset>& asset);
+
   void
-  renderGridAssetItem(const SPtr<IAsset>& asset,
-                      int32 currentColumn,
-                      float gridSize);
+  renderAssetTooltip(const SPtr<IAsset>& asset);
+
+  void
+  handleAssetContextMenu(const SPtr<IAsset>& asset);
 
   void
   handleEmptyAreaContextMenu();
@@ -117,28 +140,34 @@ class ContentAssetUI
   void
   renderEmptyAreaContextMenu();
 
-  void
-  onAssetsChanged(const Vector<UUID>& changedAssets);
-
-  void
-  setupTableColumns();
-  void
-  renderListAssetItem(const SPtr<IAsset>& asset);
+  /**
+   * Thumbnail of a texture asset, created the first time it is needed. Returns null if
+   * it could not be created; that is only tried once.
+   */
+  NODISCARD IDescriptorSet*
+  getThumbnail(const SPtr<IAsset>& asset);
 
  private:
   Vector<SPtr<IAsset>> m_assets;
-  SPtr<IAsset> m_assetToDelete;          ///< Asset to delete, set when delete is requested
-  bool m_showDeleteConfirmation = false; ///< Flag to show delete confirmation popup
-  SPtr<NastyRenderer> m_nastyRenderer;   ///< Nasty renderer instance for rendering assets
-  SPtr<MultiStageRenderer> m_multiStageRenderer; ///< Multi-stage renderer instance
-  SPtr<ISampler> m_defaultSampler; ///< Default sampler for textures
+
+  // Indices in m_assets of the assets that pass the filters.
+  Vector<uint32> m_visibleAssets;
+  bool m_needsFilterUpdate = true;
+
+  SPtr<IAsset> m_assetToDelete;
+  bool m_showDeleteConfirmation = false;
+  SPtr<NastyRenderer> m_nastyRenderer;
+  SPtr<MultiStageRenderer> m_multiStageRenderer;
+  SPtr<ISampler> m_defaultSampler;
+
+  // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
   UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;
 
   Vector<WeakPtr<IAsset>> m_unsavedAssets;
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;
-  ANSICHAR m_renameBuffer[256] = {0}; // Buffer for the new name
+  ANSICHAR m_renameBuffer[256] = {0};
   bool m_renameFocusRequested = false;
 
   bool showAllTypes = true;
@@ -149,7 +178,5 @@ class ContentAssetUI
   bool gridView = true;
   float gridSize = 120.0f;
   char searchBuffer[256] = "";
-  float indicatorRadius = 3.0f;
-
-}; // class ContentAssetUI
+};
 } // namespace chEngineSDK

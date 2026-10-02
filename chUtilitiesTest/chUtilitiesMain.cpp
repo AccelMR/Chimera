@@ -1649,6 +1649,19 @@ TEST_CASE("chUtilities - Logger") {
   Logger::shutDown();
 }
 
+TEST_CASE("chUtilities - ContainsIgnoreCase") {
+  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "wood"));
+  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "TEXTURE"));
+  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "e_w"));
+  REQUIRE(chString::containsIgnoreCase("abc", "abc"));
+  REQUIRE(chString::containsIgnoreCase("abc", ""));
+  REQUIRE(chString::containsIgnoreCase("", ""));
+  REQUIRE_FALSE(chString::containsIgnoreCase("abc", "abcd"));
+  REQUIRE_FALSE(chString::containsIgnoreCase("", "a"));
+  REQUIRE_FALSE(chString::containsIgnoreCase("Texture_Wood", "stone"));
+  REQUIRE_FALSE(chString::containsIgnoreCase("aab", "abb"));
+}
+
 // TEST_CASE("chUtilities - StringAndUTF8") {
 //     const U16String TestWString(UTF8::toUTF16("Created as wide string"));
 //     const String WellPerformedConvertion("Created as wide string");

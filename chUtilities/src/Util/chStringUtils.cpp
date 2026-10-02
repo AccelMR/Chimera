@@ -140,6 +140,32 @@ chString::join(const Vector<String>& toJoin, const String& separator)
 
 /*
  */
+bool
+chString::containsIgnoreCase(StringView text, StringView search) noexcept
+{
+  auto toLowerASCII = [](ANSICHAR c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<ANSICHAR>(c - 'A' + 'a') : c;
+  };
+
+  if (search.size() > text.size()) {
+    return false;
+  }
+
+  const SIZE_T lastStart = text.size() - search.size();
+  for (SIZE_T start = 0; start <= lastStart; ++start) {
+    SIZE_T i = 0;
+    while (i < search.size() && toLowerASCII(text[start + i]) == toLowerASCII(search[i])) {
+      ++i;
+    }
+    if (i == search.size()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ */
 String
 chString::toLower(const String& str)
 {

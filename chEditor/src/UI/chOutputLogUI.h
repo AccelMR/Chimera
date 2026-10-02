@@ -33,8 +33,7 @@ class OutputLogUI
 
     Set<String> enabledCategories;
 
-    // Kept in lower case, so each entry is compared without building new strings.
-    String searchTextLower;
+    String searchText;
 
     NODISCARD bool
     passesFilter(const LogBufferEntry& entry) const;

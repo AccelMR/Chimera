@@ -59,21 +59,6 @@ getVerbosityIcon(LogVerbosity verbosity) noexcept
   }
 }
 
-// Same ASCII rule as chString::toLower, which builds the search text.
-NODISCARD FORCEINLINE ANSICHAR
-toLowerASCII(ANSICHAR c) noexcept
-{
-  return (c >= 'A' && c <= 'Z') ? static_cast<ANSICHAR>(c - 'A' + 'a') : c;
-}
-
-NODISCARD bool
-containsLowerCase(StringView text, StringView lowerText) noexcept
-{
-  const auto found = std::search(text.begin(), text.end(), lowerText.begin(), lowerText.end(),
-                                 [](ANSICHAR a, ANSICHAR b) { return toLowerASCII(a) == b; });
-  return found != text.end();
-}
-
 } // namespace
 
 /*
@@ -228,7 +213,7 @@ OutputLogUI::renderFilterControls()
 
   if (ImGui::InputTextWithHint("##search", "Search logs...", m_searchBuffer,
                                sizeof(m_searchBuffer))) {
-    m_filter.searchTextLower = chString::toLower(m_searchBuffer);
+    m_filter.searchText = m_searchBuffer;
     filterChanged = true;
   }
 
@@ -587,8 +572,8 @@ OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const
     return false;
   }
 
-  return searchTextLower.empty() || containsLowerCase(entry.message, searchTextLower) ||
-         containsLowerCase(entry.category, searchTextLower);
+  return chString::containsIgnoreCase(entry.message, searchText) ||
+         chString::containsIgnoreCase(entry.category, searchText);
 }
 
 } // namespace chEngineSDK
