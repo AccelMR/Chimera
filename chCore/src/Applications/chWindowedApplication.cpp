@@ -348,7 +348,8 @@ WindowedApplication::destroyRenderer() {
 /*
  */
 void
-WindowedApplication::render(const float deltaTime) {
+WindowedApplication::render(const float deltaTime)
+{
   auto& currentFrame = m_renderComponents.currentFrame;
   auto& currentFence = m_renderComponents.inFlightFences[currentFrame];
 
@@ -357,17 +358,25 @@ WindowedApplication::render(const float deltaTime) {
     CH_LOG_WARNING(WindowedApp, "Frame {0} timed out.", currentFrame);
     return;
   }
-  currentFence->reset();
 
   // === STEP 1: Let derived class render scene ===
   RendererOutput sceneOutput = onRender(deltaTime);
 
   // === STEP 2: Handle swap chain presentation ===
   auto imageAvailableSem = m_renderComponents.imageAvailableSemaphores[currentFrame];
-  if (!m_renderComponents.swapChain->acquireNextImage(imageAvailableSem)) {
+  const SwapChainStatus acquireStatus =
+      m_renderComponents.swapChain->acquireNextImage(imageAvailableSem);
+  if (acquireStatus == SwapChainStatus::OutOfDate) {
     resize(m_display->getWidth(), m_display->getHeight());
     return;
   }
+  if (acquireStatus == SwapChainStatus::Failed) {
+    return;
+  }
+
+  // Reset only once an image is acquired; a frame that returns earlier submits nothing,
+  // so the fence would never be signaled and the next wait on it would time out.
+  currentFence->reset();
 
   uint32 imageIndex = m_renderComponents.swapChain->getCurrentImageIndex();
   auto& commandBuffer = m_renderComponents.commandBuffers[imageIndex];
@@ -405,9 +414,18 @@ WindowedApplication::render(const float deltaTime) {
   };
 
   m_renderComponents.graphicsQueue->submit({submitInfo}, currentFence);
-  m_renderComponents.swapChain->present({renderFinishedSem});
+  const SwapChainStatus presentStatus =
+      m_renderComponents.swapChain->present({renderFinishedSem});
 
   currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+  // A suboptimal image is still drawn and presented, so the swap chain is only recreated
+  // after the frame is done.
+  if (acquireStatus == SwapChainStatus::Suboptimal ||
+      presentStatus == SwapChainStatus::Suboptimal ||
+      presentStatus == SwapChainStatus::OutOfDate) {
+    resize(m_display->getWidth(), m_display->getHeight());
+  }
 }
 
 /*

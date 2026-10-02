@@ -28,11 +28,11 @@ class VulkanSwapChain : public ISwapChain {
 
   ~VulkanSwapChain() override;
 
-  virtual bool
+  NODISCARD SwapChainStatus
   acquireNextImage(SPtr<ISemaphore> waitSemaphore,
                    SPtr<IFence> fence = nullptr) override;
 
-  virtual void
+  NODISCARD SwapChainStatus
   present(const Vector<SPtr<ISemaphore>>& waitSemaphores) override;
 
   virtual void

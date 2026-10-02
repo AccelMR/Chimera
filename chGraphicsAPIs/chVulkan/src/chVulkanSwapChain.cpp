@@ -23,6 +23,21 @@
 #include "chVulkanRenderPass.h"
 
 namespace chEngineSDK {
+namespace {
+NODISCARD SwapChainStatus
+toSwapChainStatus(VkResult result, StringView action)
+{
+  switch (result) {
+    case VK_SUCCESS: return SwapChainStatus::Ready;
+    case VK_SUBOPTIMAL_KHR: return SwapChainStatus::Suboptimal;
+    case VK_ERROR_OUT_OF_DATE_KHR: return SwapChainStatus::OutOfDate;
+    default:
+      CH_LOG_ERROR(Vulkan, "Failed to {0} swap chain image: {1}", action, result);
+      return SwapChainStatus::Failed;
+  }
+}
+} // namespace
+
 /*
 */
 VulkanSwapChain::VulkanSwapChain(VkDevice device,
@@ -62,8 +77,9 @@ VulkanSwapChain::~VulkanSwapChain() {
 
 /*
 */
-bool
-VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence) {
+SwapChainStatus
+VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence)
+{
   auto vulkanSemaphore = std::static_pointer_cast<VulkanSemaphore>(signalSemaphore);
 
   VkFence vkFence = VK_NULL_HANDLE;
@@ -78,14 +94,7 @@ VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence>
                                           vulkanSemaphore->getHandle(),
                                           vkFence,
                                           &m_currentImageIndex);
-
-  if (result != VK_SUCCESS) {
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-      return false;
-    }
-    CH_LOG_WARNING(Vulkan, "Failed to acquire next image from swap chain");
-  }
-  return true;
+  return toSwapChainStatus(result, "acquire");
 }
 
 /*
@@ -201,8 +210,9 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
 /*
 */
-void
-VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
+SwapChainStatus
+VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores)
+{
   Vector<VkSemaphore> vkSemaphores;
   for (const auto& sem : waitSemaphores) {
     auto vulkanSem = std::static_pointer_cast<VulkanSemaphore>(sem);
@@ -226,12 +236,9 @@ VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores) {
   VkQueue presentQueue = vulkanCommandQueue->getHandle();
   VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    resize(m_width, m_height);
-  }
-  else if (result != VK_SUCCESS) {
-    CH_LOG_ERROR(Vulkan, "Failed to present swap chain image");
-  }
+  // The swap chain is not recreated here: the caller also owns resources sized to it
+  // (semaphores, command buffers, depth buffer) and must rebuild them together.
+  return toSwapChainStatus(result, "present");
 }
 
 /*

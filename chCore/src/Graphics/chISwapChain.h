@@ -16,15 +16,27 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
+/**
+ * Result of acquiring or presenting a swap chain image, so the caller knows whether it can
+ * draw and whether the swap chain has to be recreated.
+ */
+enum class SwapChainStatus
+{
+  Ready,
+  Suboptimal, // The image was acquired or presented, but the swap chain should be recreated.
+  OutOfDate,  // No image was acquired; recreate the swap chain before drawing again.
+  Failed      // No image was acquired; skip the frame.
+};
+
 class ISwapChain {
  public:
   virtual ~ISwapChain() = default;
 
-  virtual bool
+  NODISCARD virtual SwapChainStatus
   acquireNextImage(SPtr<ISemaphore> waitSemaphore,
                    SPtr<IFence> fence = nullptr) = 0;
 
-  virtual void
+  NODISCARD virtual SwapChainStatus
   present(const Vector<SPtr<ISemaphore>>& waitSemaphores) = 0;
 
   virtual void
