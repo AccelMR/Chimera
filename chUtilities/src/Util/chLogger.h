@@ -304,11 +304,6 @@ getVerbosityName(LogVerbosity verbosity);
                                          chEngineSDK::LogVerbosity::DefaultVerbosity})
 
 /**
- * @brief Declare an extern log category to use in a .cpp file
- */
-// #define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
-
-/**
  * @brief Declare a static log category for use in a single .cpp file
  */
 #define CH_LOG_DECLARE_STATIC(CategoryName, DefaultVerbosity)                                 \

@@ -36,7 +36,7 @@ using OnMouseMoveCallback = Function<void(const MouseMoveData&)>;
 using KeyboardBitSet = BitSet<static_cast<int32>(Key::KeysMax)>;
 using MouseBitSet = BitSet<static_cast<int32>(MouseButton::MouseButtonsMax)>;
 
-CH_LOG_DECLARE_EXTERN(InputSystem);
+CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, InputSystem);
 
 class CH_CORE_EXPORT EventDispatcherManager: public Module<EventDispatcherManager>
 {

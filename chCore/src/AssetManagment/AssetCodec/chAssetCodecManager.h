@@ -2,7 +2,7 @@
 
 #include "chLogDeclaration.h"
 #include "chPrerequisitesCore.h"
-CH_LOG_DECLARE_EXTERN(AssetCodecSystem);
+CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, AssetCodecSystem);
 
 #if USING(CH_CODECS)
 

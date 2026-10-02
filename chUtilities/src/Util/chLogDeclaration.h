@@ -27,6 +27,10 @@ namespace chEngineSDK {
 }
  
 /**
- * @brief Declare an extern log category to use in a .cpp file
+ * Declares a category defined with CH_LOG_DEFINE_CATEGORY_SHARED in another file.
+ * ModuleExport is the export macro of the module that defines it (e.g. CH_CORE_EXPORT),
+ * so inline code in a public header can log with it from other modules. Leave it empty
+ * for a category only used inside its own module.
  */
-#define CH_LOG_DECLARE_EXTERN(CategoryName) extern chEngineSDK::LogCategory CategoryName
+#define CH_LOG_DECLARE_EXTERN(ModuleExport, CategoryName)                                   \
+  extern ModuleExport chEngineSDK::LogCategory CategoryName

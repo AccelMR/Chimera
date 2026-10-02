@@ -29,7 +29,7 @@
 
 namespace chEngineSDK {
 
-CH_LOG_DECLARE_EXTERN(AssetSystem);
+CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, AssetSystem);
 
 class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
 {

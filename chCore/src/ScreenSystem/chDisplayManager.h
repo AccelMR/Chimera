@@ -22,7 +22,7 @@
 
 
 namespace chEngineSDK{
-CH_LOG_DECLARE_EXTERN(DisplaySystem);
+CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, DisplaySystem);
 
 class CH_CORE_EXPORT DisplayManager: public Module<DisplayManager>
 {

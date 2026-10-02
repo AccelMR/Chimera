@@ -47,7 +47,7 @@
 
 
 namespace chEngineSDK {
-CH_LOG_DECLARE_EXTERN(Vulkan);
+CH_LOG_DECLARE_EXTERN(, Vulkan);
 class VulkanErrorException : public Exception
 {
 public:

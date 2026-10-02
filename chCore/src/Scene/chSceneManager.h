@@ -16,7 +16,7 @@
 #include "chScene.h"
 #include "chUUID.h"
 
-CH_LOG_DECLARE_EXTERN(SceneManagerLog);
+CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, SceneManagerLog);
 
 namespace chEngineSDK {
 
