@@ -65,6 +65,13 @@ elseif(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
 endif()
 
+if(MSVC)
+  # C4201: nameless structs and unions are accepted by every supported compiler.
+  # C4251: STL members of exported classes are private, so clients never touch them across the DLL.
+  # C4996: the CRT "secure" functions are MSVC only, so the standard ones are used instead.
+  add_compile_options(/wd4201 /wd4251 /wd4996)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(SDL_SHARED ON  CACHE BOOL "" FORCE)
   set(SDL_STATIC OFF CACHE BOOL "" FORCE)

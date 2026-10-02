@@ -207,21 +207,3 @@
 #endif
 
 #define CH_ENABLE_BACKTRACE CH_DEBUG_MODE
-
-/************************************************************************/
-/**
- * Compiler warnings
- */
-/************************************************************************/
-#if USING(CH_COMPILER_MSVC)
-// TODO These pragmas leak into every file that includes this header; move them to CMake.
-
-// Nameless structs and unions are accepted by every supported compiler.
-# pragma warning(disable : 4201)
-
-// STL members of exported classes are private, so clients never touch them across the DLL.
-# pragma warning(disable : 4251)
-
-// The CRT "secure" functions are MSVC only, so the standard ones are used instead.
-# pragma warning(disable : 4996)
-#endif
