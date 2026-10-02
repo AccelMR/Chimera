@@ -21,14 +21,12 @@
 #include "chEventSystem.h"
 #include "chLogDeclaration.h"
 #include "chModule.h"
-#include "chSTDThreading.h"
 #include "chStringUtils.h"
 
 // Todo: change this to show may be verbose on some categories but not globally
 #define CH_LOG_VERBOSE IN_USE
 
 namespace chEngineSDK {
-class DataStream;
 
 /**
  * @brief Log entry structure for display
@@ -130,23 +128,8 @@ class CH_UTILITY_EXPORT LogCategory
    * @param function Function name
    */
   void
-  log(LogVerbosity verbosity, const
-      String& message,
-      const ANSICHAR* file = nullptr,
-      int32 line = 0,
-      const ANSICHAR* function = nullptr) const;
-
-  /**
-   * @brief Log a message with this category
-   * @param verbosity Verbosity level
-   * @param message Message to log
-   * @param file Source file
-   * @param line Line number
-   * @param function Function name
-   */
-  void
   log(LogVerbosity verbosity,
-      const String&& message,
+      const String& message,
       const ANSICHAR* file = nullptr,
       int32 line = 0,
       const ANSICHAR* function = nullptr) const;
@@ -159,7 +142,8 @@ class CH_UTILITY_EXPORT LogCategory
 /**
  * @brief Main logger class for Chimera Engine
  *
- * Singleton class that manages log categories and output destinations
+ * Singleton class that manages log categories and output destinations. Its state lives
+ * in chLogger.cpp so this header does not need <mutex>.
  */
 class CH_UTILITY_EXPORT Logger : public Module<Logger>
 {
@@ -183,12 +167,10 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
 
   /**
    * @brief Get all registered categories
-   * @return Vector of registered categories
+   * @return Copy of the registered categories
    */
-  NODISCARD FORCEINLINE const Vector<LogCategory*>&
-  getCategories() const {
-    return m_categories;
-  }
+  NODISCARD Vector<LogCategory*>
+  getCategories() const;
 
   /**
    * @brief Set global verbosity level for all categories
@@ -201,10 +183,8 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @brief Enable/disable console output
    * @param enabled True to enable, false to disable
    */
-  FORCEINLINE void
-  setConsoleOutput(bool enabled) {
-    m_consoleOutput = enabled;
-  }
+  void
+  setConsoleOutput(bool enabled);
 
   /**
    * @brief Set Buffering for log messages
@@ -216,9 +196,9 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
 
   /**
    * @brief Get the current log buffer
-   * @return Vector of buffered log entries
+   * @return Copy of the buffered log entries
    */
-  NODISCARD const Vector<LogBufferEntry>&
+  NODISCARD Vector<LogBufferEntry>
   getBufferedLogs() const;
 
   /**
@@ -239,32 +219,20 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @param function Function name
    */
   void
-  writeLogMessage(const LogCategory& category, LogVerbosity verbosity, const String& message,
-                  const ANSICHAR* file = nullptr, int32 line = 0, const ANSICHAR* function = nullptr);
-
-  /**
-   * @brief Write a message to all enabled outputs
-   * @param category Log category
-   * @param verbosity Verbosity level
-   * @param message Message to log
-   * @param file Source file
-   * @param line Line number
-   * @param function Function name
-   */
-  void
-  writeLogMessage(const LogCategory& category, LogVerbosity verbosity, String&& message,
-                  const ANSICHAR* file = nullptr, int32 line = 0, const ANSICHAR* function = nullptr);
-
+  writeLogMessage(const LogCategory& category,
+                  LogVerbosity verbosity,
+                  const String& message,
+                  const ANSICHAR* file = nullptr,
+                  int32 line = 0,
+                  const ANSICHAR* function = nullptr);
 
   /**
    * @brief Event triggered when a log entry is written
    * @param callback Function to call when a log entry is written
    * @return Event handle
-  */
-  HEvent
-  onLogWritten(Function<void(const LogBufferEntry&)> callback) {
-    return m_logWrittenEvent.connect(callback);
-  }
+   */
+  NODISCARD HEvent
+  onLogWritten(Function<void(const LogBufferEntry&)> callback);
 
  protected:
   /**
@@ -290,18 +258,9 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   onShutDown() override;
 
  private:
-  Vector<LogCategory*> m_categories;
-  bool m_consoleOutput = true;
-  bool m_fileOutput = false;
-  String m_logFilename;
-  SPtr<DataStream> m_logFile;
-  RecursiveMutex m_mutex;
-  Event<void(const LogBufferEntry&)> m_logWrittenEvent;
+  struct Impl;
 
-
-  Vector<LogBufferEntry> m_logBuffer;
-  uint32 m_maxBufferSize = 500;  // Keep last 500 logs
-  bool m_bufferingEnabled = false;
+  UniquePtr<Impl> m_impl;
 };
 
 /**
@@ -351,7 +310,7 @@ getVerbosityName(LogVerbosity verbosity);
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)),         \
+                     chEngineSDK::chString::format(Format, ##__VA_ARGS__),                    \
                      __FILE__, __LINE__, __PRETTY_FUNCTION__);                                \
     }                                                                                         \
   } while (0)
@@ -360,7 +319,7 @@ getVerbosityName(LogVerbosity verbosity);
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     std::move(chEngineSDK::chString::format(Format, ##__VA_ARGS__)),         \
+                     chEngineSDK::chString::format(Format, ##__VA_ARGS__),                    \
                      nullptr, 0, nullptr);                                                    \
     }                                                                                         \
   } while (0)

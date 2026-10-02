@@ -22,6 +22,7 @@
 #include "chFileSystem.h"
 #include "chPath.h"
 #include "chSTDStreams.h"
+#include "chSTDThreading.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
@@ -31,7 +32,8 @@ namespace chEngineSDK {
  * @return Formatted timestamp
  */
 NODISCARD static String
-getCurrentTimeString() {
+getCurrentTimeString()
+{
   auto now = std::chrono::system_clock::now();
   auto time = std::chrono::system_clock::to_time_t(now);
   auto ms =
@@ -50,7 +52,8 @@ getCurrentTimeString() {
  * @return String representation
  */
 NODISCARD String
-getVerbosityName(LogVerbosity verbosity) {
+getVerbosityName(LogVerbosity verbosity)
+{
   switch (verbosity) {
   case LogVerbosity::Fatal:
     return "FATAL";
@@ -74,7 +77,8 @@ getVerbosityName(LogVerbosity verbosity) {
  * @return ANSI color code
  */
 NODISCARD static String
-getVerbosityColor(LogVerbosity verbosity) {
+getVerbosityColor(LogVerbosity verbosity)
+{
   switch (verbosity) {
   case LogVerbosity::Fatal:
     return "\033[1;31m"; // Bold Red
@@ -102,13 +106,19 @@ static const String COLOR_RESET = "\033[0m";
 //--------------------------------------------------------------------------
 
 LogCategory::LogCategory(const String& name, const LogCategoryConfig& config)
- : m_name(name), m_config(config) {}
+ : m_name(name),
+   m_config(config)
+{}
 
 /*
-*/
+ */
 void
-LogCategory::log(LogVerbosity verbosity, const String& message, const ANSICHAR* file, int32 line,
-                 const ANSICHAR* function) const {
+LogCategory::log(LogVerbosity verbosity,
+                 const String& message,
+                 const ANSICHAR* file,
+                 int32 line,
+                 const ANSICHAR* function) const
+{
   if (!isEnabled(verbosity)) {
     return;
   }
@@ -116,77 +126,87 @@ LogCategory::log(LogVerbosity verbosity, const String& message, const ANSICHAR* 
   Logger::instance().writeLogMessage(*this, verbosity, message, file, line, function);
 }
 
-/*
- */
-void
-LogCategory::log(LogVerbosity verbosity, const String&& message, const ANSICHAR* file, int32 line,
-                 const ANSICHAR* function) const {
-  if (!isEnabled(verbosity)) {
-    return;
-  }
-
-  Logger::instance().writeLogMessage(*this, verbosity, std::move(message), file, line,
-                                     function);
-}
 //--------------------------------------------------------------------------
 // Logger Implementation
 //--------------------------------------------------------------------------
 
-/*
-*/
-Logger::Logger() : m_consoleOutput(true), m_fileOutput(false) {}
+// Recursive because a callback of logWrittenEvent runs with the lock held and may log.
+struct Logger::Impl
+{
+  Vector<LogCategory*> categories;
+  bool consoleOutput = true;
+  bool fileOutput = false;
+  String logFilename;
+  SPtr<DataStream> logFile;
+  RecursiveMutex mutex;
+  Event<void(const LogBufferEntry&)> logWrittenEvent;
+
+  Vector<LogBufferEntry> logBuffer;
+  uint32 maxBufferSize = 500;
+  bool bufferingEnabled = false;
+};
 
 /*
-*/
-Logger::~Logger() {
-  if (m_fileOutput && m_logFile) {
-    m_logFile->close();
-    m_logFile.reset();
+ */
+Logger::Logger()
+ : m_impl(chMakeUnique<Impl>())
+{}
+
+/*
+ */
+Logger::~Logger()
+{
+  if (m_impl->fileOutput && m_impl->logFile) {
+    m_impl->logFile->close();
+    m_impl->logFile.reset();
   }
 }
 
 /*
-*/
+ */
 void
-Logger::onStartUp() {
-  // Initialize the logger
-}
+Logger::onStartUp()
+{}
 
 /*
-*/
+ */
 void
-Logger::onShutDown() {
-  if (m_fileOutput && m_logFile) {
-    m_logFile->close();
-    m_logFile.reset();
+Logger::onShutDown()
+{
+  RecursiveLock lock(m_impl->mutex);
+
+  if (m_impl->fileOutput && m_impl->logFile) {
+    m_impl->logFile->close();
+    m_impl->logFile.reset();
   }
 
-  m_categories.clear();
+  m_impl->categories.clear();
 }
 
 /*
-*/
+ */
 void
-Logger::registerCategory(LogCategory& category) {
-  RecursiveLock lock(m_mutex);
+Logger::registerCategory(LogCategory& category)
+{
+  RecursiveLock lock(m_impl->mutex);
 
-  // Check if category is already registered
-  for (auto* existingCategory : m_categories) {
+  for (auto* existingCategory : m_impl->categories) {
     if (existingCategory == &category) {
       return;
     }
   }
 
-  m_categories.push_back(&category);
+  m_impl->categories.push_back(&category);
 }
 
 /*
-*/
+ */
 LogCategory*
-Logger::findCategory(const String& name) {
-  RecursiveLock lock(m_mutex);
+Logger::findCategory(const String& name)
+{
+  RecursiveLock lock(m_impl->mutex);
 
-  for (auto* category : m_categories) {
+  for (auto* category : m_impl->categories) {
     if (category->getName() == name) {
       return category;
     }
@@ -196,117 +216,135 @@ Logger::findCategory(const String& name) {
 }
 
 /*
-*/
-void
-Logger::setGlobalVerbosity(LogVerbosity verbosity) {
-  RecursiveLock lock(m_mutex);
+ */
+Vector<LogCategory*>
+Logger::getCategories() const
+{
+  RecursiveLock lock(m_impl->mutex);
+  return m_impl->categories;
+}
 
-  for (auto* category : m_categories) {
+/*
+ */
+void
+Logger::setGlobalVerbosity(LogVerbosity verbosity)
+{
+  RecursiveLock lock(m_impl->mutex);
+
+  for (auto* category : m_impl->categories) {
     category->setVerbosity(verbosity);
   }
 }
 
 /*
-*/
+ */
 void
-Logger::setBufferingEnabled(bool enabled, uint32 maxSize) {
-  RecursiveLock lock(m_mutex);
-  m_bufferingEnabled = enabled;
-  m_maxBufferSize = maxSize;
+Logger::setConsoleOutput(bool enabled)
+{
+  RecursiveLock lock(m_impl->mutex);
+  m_impl->consoleOutput = enabled;
+}
+
+/*
+ */
+void
+Logger::setBufferingEnabled(bool enabled, uint32 maxSize)
+{
+  RecursiveLock lock(m_impl->mutex);
+  m_impl->bufferingEnabled = enabled;
+  m_impl->maxBufferSize = maxSize;
 
   if (!enabled) {
-    m_logBuffer.clear();
+    m_impl->logBuffer.clear();
   }
 
-  m_logBuffer.reserve(m_maxBufferSize);
+  m_impl->logBuffer.reserve(m_impl->maxBufferSize);
 }
 
 /*
-*/
-NODISCARD const Vector<LogBufferEntry>&
-Logger::getBufferedLogs() const  {
-  return m_logBuffer;
+ */
+Vector<LogBufferEntry>
+Logger::getBufferedLogs() const
+{
+  RecursiveLock lock(m_impl->mutex);
+  return m_impl->logBuffer;
 }
 
 /*
-*/
+ */
 void
-Logger::setFileOutput(bool enabled, const String& filename) {
-  RecursiveLock lock(m_mutex);
+Logger::setFileOutput(bool enabled, const String& filename)
+{
+  RecursiveLock lock(m_impl->mutex);
 
-  if (m_fileOutput && m_logFile) {
-    m_logFile->close();
-    m_logFile.reset();
+  if (m_impl->fileOutput && m_impl->logFile) {
+    m_impl->logFile->close();
+    m_impl->logFile.reset();
   }
 
-  m_fileOutput = enabled;
+  m_impl->fileOutput = enabled;
+  if (!enabled) {
+    return;
+  }
 
-  if (enabled) {
-    m_logFilename = filename;
+  m_impl->logFilename = filename;
+  m_impl->logFile = FileSystem::createAndOpenFile(Path(m_impl->logFilename));
 
-    try {
-      Path path(m_logFilename);
-      m_logFile = FileSystem::createAndOpenFile(path);
-
-      if (!m_logFile) {
-        m_fileOutput = false;
-        if (m_consoleOutput) {
-          std::cerr << "Failed to open log file: " << m_logFilename << std::endl;
-        }
-      }
-    }
-    catch (const Exception& e) {
-      m_fileOutput = false;
-      if (m_consoleOutput) {
-        std::cerr << "Failed to open log file: " << e.what() << std::endl;
-      }
+  if (!m_impl->logFile) {
+    m_impl->fileOutput = false;
+    if (m_impl->consoleOutput) {
+      std::cerr << "Failed to open log file: " << m_impl->logFilename << std::endl;
     }
   }
 }
 
+/*
+ */
+HEvent
+Logger::onLogWritten(Function<void(const LogBufferEntry&)> callback)
+{
+  return m_impl->logWrittenEvent.connect(std::move(callback));
+}
+
+/*
+ */
 void
 Logger::writeLogMessage(const LogCategory& category,
                         LogVerbosity verbosity,
                         const String& message,
                         const ANSICHAR* file,
                         int32 line,
-                        const ANSICHAR* function) {
-  RecursiveLock lock(m_mutex);
+                        const ANSICHAR* function)
+{
+  RecursiveLock lock(m_impl->mutex);
 
   const String timestamp = getCurrentTimeString();
-  const String verbosityStr = getVerbosityName(verbosity);
 
-  // Build sourceLocation only if we have useful data.
   String sourceLocation;
   if (file != nullptr && line > 0) {
-    // Avoid a full copy of 'file' when trimming: scan backward and take a view.
-    const ANSICHAR* fileBegin = file;
-    const ANSICHAR* p         = file;
-    const ANSICHAR* lastSlash = nullptr;
-
-    // Find last slash or backslash once.
-    for (; *p != '\0'; ++p) {
-      if (*p == '/' || *p == '\\') lastSlash = p;
+    const ANSICHAR* shortFile = file;
+    for (const ANSICHAR* p = file; *p != '\0'; ++p) {
+      if (*p == '/' || *p == '\\') {
+        shortFile = p + 1;
+      }
     }
-    const ANSICHAR* shortFileBegin = (lastSlash ? lastSlash + 1 : fileBegin);
-    const size_t shortFileLen      = static_cast<size_t>(p - shortFileBegin);
 
-    // Construct short file String once.
-    String shortFile(shortFileBegin, shortFileLen);
-    sourceLocation = chString::format(" [{0}:{1}]", shortFile, line);
+    sourceLocation = chString::format(" [{0}:{1}]", String(shortFile), line);
 
     if (function != nullptr) {
       sourceLocation += chString::format(" {0}", function);
     }
   }
 
-  // Pre-format the message once; do not mutate later.
   const String formattedMessage =
       chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}",
-                       timestamp, verbosityStr, category.getName(), sourceLocation, message);
+                       timestamp,
+                       getVerbosityName(verbosity),
+                       category.getName(),
+                       sourceLocation,
+                       message);
 
-  // Console output (and stderr for fatal) only if enabled.
-  if (m_consoleOutput) {
+  if (m_impl->consoleOutput) {
     const String colorCode = getVerbosityColor(verbosity);
     std::cout << colorCode << formattedMessage << COLOR_RESET << std::endl;
 
@@ -315,85 +353,27 @@ Logger::writeLogMessage(const LogCategory& category,
     }
   }
 
-  // File output without mutating 'formattedMessage'.
-  if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
-    m_logFile->write(formattedMessage.data(), formattedMessage.size());
+  if (m_impl->fileOutput && m_impl->logFile && m_impl->logFile->isWriteable()) {
+    m_impl->logFile->write(formattedMessage.data(), formattedMessage.size());
     static constexpr char newline = '\n';
-    m_logFile->write(&newline, 1);
+    m_impl->logFile->write(&newline, 1);
   }
 
-  // Prepare a reusable entry for buffer (keeps exact payload as antes).
-  const ANSICHAR* filePtr = file ? file : "";
-  const ANSICHAR* funcPtr = function ? function : "";
+  LogBufferEntry entry(timestamp,
+                       verbosity,
+                       category.getName(),
+                       message,
+                       file ? file : "",
+                       line,
+                       function ? function : "");
 
-  // Buffering (and event inside) keep same behavior and order.
-  if (m_bufferingEnabled) {
-    // Event from buffering branch (originalmente se lanzaba aquí con un temporal movido).
-    m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
-                                     filePtr, line, funcPtr));
+  m_impl->logWrittenEvent(entry);
 
-    // Push into the circular-ish buffer (pop front si excede).
-    m_logBuffer.emplace_back(timestamp, verbosity, category.getName(), message,
-                             filePtr, line, funcPtr);
-    if (m_logBuffer.size() > m_maxBufferSize) {
-      // Vector erase(begin) es O(n) y preserva comportamiento actual.
-      m_logBuffer.erase(m_logBuffer.begin());
+  if (m_impl->bufferingEnabled) {
+    m_impl->logBuffer.push_back(std::move(entry));
+    if (m_impl->logBuffer.size() > m_impl->maxBufferSize) {
+      m_impl->logBuffer.erase(m_impl->logBuffer.begin());
     }
-  }
-
-  // Segundo disparo del evento fuera del bloque (se conserva tal cual).
-  m_logWrittenEvent(LogBufferEntry(timestamp, verbosity, category.getName(), message,
-                                   filePtr, line, funcPtr));
-}
-
-/*
- */
-void
-Logger::writeLogMessage(const LogCategory& category, \
-                        LogVerbosity verbosity,
-                        String&& message,
-                        const ANSICHAR* file,
-                        int32 line,
-                        const ANSICHAR* function) {
-  RecursiveLock lock(m_mutex);
-
-  String timestamp = getCurrentTimeString();
-  String verbosityStr = getVerbosityName(verbosity);
-  String sourceLocation;
-
-  if (file != nullptr && line > 0) {
-    String shortFile = file;
-    size_t lastSlash = shortFile.find_last_of("/\\");
-    if (lastSlash != String::npos) {
-      shortFile = shortFile.substr(lastSlash + 1);
-    }
-
-    sourceLocation = chString::format(" [{0}:{1}]", shortFile, line);
-
-    if (function != nullptr) {
-      sourceLocation += chString::format(" {0}", function);
-    }
-  }
-
-  String formattedMessage =
-      chString::format("[{0}] [{1}] [{2}]{3}:\n\t{4}", timestamp, verbosityStr,
-                       category.getName(), sourceLocation, std::move(message));
-
-  // Write to console if enabled
-  if (m_consoleOutput) {
-    String colorCode = getVerbosityColor(verbosity);
-    std::cout << colorCode << formattedMessage << COLOR_RESET << std::endl;
-
-    // For fatal errors, also write to stderr
-    if (verbosity == LogVerbosity::Fatal) {
-      std::cerr << colorCode << formattedMessage << COLOR_RESET << std::endl;
-    }
-  }
-
-  // Write to file if enabled
-  if (m_fileOutput && m_logFile && m_logFile->isWriteable()) {
-    formattedMessage += "\n";
-    m_logFile->write(formattedMessage.data(), formattedMessage.size());
   }
 }
 
