@@ -240,7 +240,7 @@ template<typename T>
 T
 wideToUTF32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
   //Assuming UTF-32 (i.e. Unix)
-  SIZE_T sizeofWChar = sizeof(wchar_t);
+  SIZE_T sizeofWChar = sizeof(WIDECHAR);
   if (4 == sizeofWChar) {
     output = (WCHAR32)*begin;
     ++begin;
@@ -254,13 +254,13 @@ wideToUTF32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
 
 WCHAR32
 ANSIToUTF32(ANSICHAR input, const std::locale& locale = std::locale("")) {
-  const std::ctype<wchar_t>& facet = std::use_facet<std::ctype<wchar_t>>(locale);
+  const std::ctype<WIDECHAR>& facet = std::use_facet<std::ctype<WIDECHAR>>(locale);
 
   /**
    * Note: Not exactly valid on Windows, since the input character could
    * require a surrogate pair. Consider improving this if it ever becomes an issue.
    */
-  wchar_t wideChar = facet.widen(input);
+  WIDECHAR wideChar = facet.widen(input);
 
   WCHAR32 output;
   wideToUTF32(&wideChar, &wideChar + 1, output);
@@ -270,11 +270,11 @@ ANSIToUTF32(ANSICHAR input, const std::locale& locale = std::locale("")) {
 
 template<typename T>
 T
-UTF32ToWide(WCHAR32 input, T output, uint32 maxElems, wchar_t invalidChar = 0) {
+UTF32ToWide(WCHAR32 input, T output, uint32 maxElems, WIDECHAR invalidChar = 0) {
   //Assuming UTF-32 (i.e. Unix)
-  SIZE_T sizeofWChar = sizeof(wchar_t);
+  SIZE_T sizeofWChar = sizeof(WIDECHAR);
   if (4 == sizeofWChar) {
-    *output = (wchar_t)input;
+    *output = (WIDECHAR)input;
     ++output;
     return output;
   }
@@ -287,10 +287,10 @@ ANSICHAR
 UTF32ToANSI(WCHAR32 input,
             ANSICHAR invalidChar = 0,
             const std::locale& locale = std::locale("")) {
-  const std::ctype<wchar_t>& facet = std::use_facet<std::ctype<wchar_t>>(locale);
+  const std::ctype<WIDECHAR>& facet = std::use_facet<std::ctype<WIDECHAR>>(locale);
 
   //Note: Same as above, not exactly correct as narrow() doesn't accept a surrogate pair
-  return facet.narrow((wchar_t)input, invalidChar);
+  return facet.narrow((WIDECHAR)input, invalidChar);
 }
 
 /*
