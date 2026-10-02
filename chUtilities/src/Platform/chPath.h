@@ -20,8 +20,9 @@ namespace chEngineSDK {
 
 /**
  * Path stored as a string that always uses '/' as separator. It is kept as a
- * string so this header does not need <filesystem>, which is heavy; every
- * operation that needs std::filesystem lives in chPath.cpp.
+ * string so this header does not need <filesystem>, which is heavy. Every
+ * operation works on the text and gives the same result as std::filesystem
+ * on the current platform.
  */
 class CH_UTILITY_EXPORT Path
 {
@@ -38,7 +39,7 @@ class CH_UTILITY_EXPORT Path
    * @param path
    *    As string.
    */
-  explicit Path(const String& path);
+  explicit Path(String path);
 
   /**
    * Constructor from a C-string.
@@ -65,7 +66,8 @@ class CH_UTILITY_EXPORT Path
            typename = std::enable_if_t<(std::is_same_v<Paths, Path> && ...)>>
   explicit Path(const Paths&... paths)
   {
-    ((*this = join(paths)), ...);
+    m_path.reserve((paths.m_path.size() + ...) + sizeof...(Paths));
+    ((*this /= paths), ...);
   }
 
   /**
@@ -79,22 +81,26 @@ class CH_UTILITY_EXPORT Path
    *
    * @return True if path is relative, false for absolute path.
    */
-  bool
-  isRelative() const;
+  NODISCARD bool
+  isRelative() const noexcept;
 
   /**
-   * Constructs a string from this path.
+   * Returns this path as a string.
    *
    * @return Path as a string.
    */
-  String
-  toString() const;
+  NODISCARD FORCEINLINE const String&
+  toString() const noexcept
+  {
+    return m_path;
+  }
 
   /**
    * Constructs a wide string from this path, platform-specific.
    *
    * @return Path as a wide string (Windows) or regular string (other platforms).
    */
+  NODISCARD
 #if USING(CH_PLATFORM_WIN32)
   WString
 #else
@@ -109,7 +115,7 @@ class CH_UTILITY_EXPORT Path
    *    The new string to be a path.
    */
   void
-  setPath(const String& path);
+  setPath(String path);
 
   /**
    * Returns the file name of this path.
@@ -118,7 +124,7 @@ class CH_UTILITY_EXPORT Path
    *    Include extension if true.
    * @return File name as a string.
    */
-  String
+  NODISCARD String
   getFileName(bool extension = true) const;
 
   /**
@@ -126,7 +132,7 @@ class CH_UTILITY_EXPORT Path
    *
    * @return Extension as a string.
    */
-  String
+  NODISCARD String
   getExtension() const;
 
   /**
@@ -134,7 +140,7 @@ class CH_UTILITY_EXPORT Path
    *
    * @return Directory as a string.
    */
-  Path
+  NODISCARD Path
   getDirectory() const;
 
   /**
@@ -144,8 +150,18 @@ class CH_UTILITY_EXPORT Path
    *    The path to join with.
    * @return The joined path.
    */
-  Path
+  NODISCARD Path
   join(const Path& rhs) const;
+
+  /**
+   * Joins another path to this one in place.
+   *
+   * @param rhs
+   *    The path to join with.
+   * @return This path.
+   */
+  Path&
+  operator/=(const Path& rhs);
 
   /**
    * Operator for less than, required for sorting, maps, etc.
@@ -154,16 +170,19 @@ class CH_UTILITY_EXPORT Path
    *    The path to compare to.
    * @return True if this path is less than the other path.
    */
-  bool
-  operator<(const Path& other) const;
+  NODISCARD FORCEINLINE bool
+  operator<(const Path& other) const noexcept
+  {
+    return m_path < other.m_path;
+  }
 
   /**
    * Same as join(Path(other)).
    */
-  Path
+  NODISCARD Path
   operator/(const String& other) const;
 
-  Path
+  NODISCARD Path
   operator/(const Path& other) const;
 
   /**
@@ -173,14 +192,14 @@ class CH_UTILITY_EXPORT Path
    *    The path to compare to.
    * @return True if paths are equal, false otherwise.
    */
-  FORCEINLINE bool
-  operator==(const Path& other) const
+  NODISCARD FORCEINLINE bool
+  operator==(const Path& other) const noexcept
   {
     return m_path == other.m_path;
   }
 
-  NODISCARD bool
-  empty() const
+  NODISCARD FORCEINLINE bool
+  empty() const noexcept
   {
     return m_path.empty();
   }
@@ -188,6 +207,9 @@ class CH_UTILITY_EXPORT Path
   static Path EMPTY;
 
  protected:
+  void
+  append(StringView other);
+
   friend class FileSystem;
   friend class FileDataStream;
 

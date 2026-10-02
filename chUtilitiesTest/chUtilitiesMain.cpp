@@ -33,6 +33,8 @@
 #include "chVector3.h"
 #include "chVector4.h"
 
+#include <filesystem>
+
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -1660,6 +1662,52 @@ TEST_CASE("chUtilities - ContainsIgnoreCase") {
   REQUIRE_FALSE(chString::containsIgnoreCase("", "a"));
   REQUIRE_FALSE(chString::containsIgnoreCase("Texture_Wood", "stone"));
   REQUIRE_FALSE(chString::containsIgnoreCase("aab", "abb"));
+}
+
+TEST_CASE("chUtilities - Path matches std::filesystem") {
+  namespace fs = std::filesystem;
+  const Vector<String> cases = {
+    "", "/", "//", "///a", "//a", "C:", "C:/", "C://a", "C:/a", "C:a", "c:/a/b.txt", "x:",
+    "1:/a", "//server", "//server/", "//server/share/x.y", "//?/C:/x", "//./pipe",
+    "a", "a/", "a/b", "a//b", "a/b/", "a/b//", "/a", "/a/", "/a/b.c", ".", "..", "a/..",
+    "a/.", "./a", ".bashrc", "dir/.bashrc", ".a.b", "a.b.c", "a.", "/a.b/c", "../x.tar.gz",
+    "Assets/Textures/wood.png",
+  };
+
+  for (const String& text : cases) {
+    INFO("path: \"" << text << "\"");
+    const Path path(text);
+    const fs::path expected(text);
+    CHECK(path.getFileName() == expected.filename().generic_string());
+    CHECK(path.getFileName(false) == expected.stem().generic_string());
+    CHECK(path.getExtension() == expected.extension().generic_string());
+    CHECK(path.getDirectory().toString() == expected.parent_path().generic_string());
+    CHECK(path.isRelative() == expected.is_relative());
+
+    for (const String& other : cases) {
+      INFO("joined with: \"" << other << "\"");
+      const String joined = (expected / other).generic_string();
+      CHECK(path.join(Path(other)).toString() == joined);
+      CHECK((path / other).toString() == joined);
+
+      Path inPlace = path;
+      inPlace /= Path(other);
+      CHECK(inPlace.toString() == joined);
+    }
+  }
+
+  SECTION("backslashes become separators") {
+    REQUIRE(Path("a\\b\\c.txt").toString() == "a/b/c.txt");
+    REQUIRE((Path("a") / String("b\\c")).toString() == "a/b/c");
+  }
+
+  SECTION("several paths join in order") {
+    REQUIRE(Path(Path("a"), Path("b/"), Path("c")).toString() == "a/b/c");
+    REQUIRE(Path(Vector<Path>{Path("a"), Path("/b"), Path("c")}).toString() == "/b/c");
+    Path self("a");
+    self /= self;
+    REQUIRE(self.toString() == "a/a");
+  }
 }
 
 // TEST_CASE("chUtilities - StringAndUTF8") {
