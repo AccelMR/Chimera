@@ -10,6 +10,7 @@
 
 #include <algorithm>
 
+#include "chMath.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -79,7 +80,7 @@ containsLowerCase(StringView text, StringView lowerText) noexcept
  */
 OutputLogUI::OutputLogUI()
  : m_logWrittenEvent(Logger::instance().onLogWritten(
-       [this](const LogBufferEntry& entry) { addLogEntry(entry); },
+       [this](const SPtr<const LogBufferEntry>& entry) { addLogEntry(entry); },
        true))
 {
   m_entries.reserve(m_maxLogEntries);
@@ -322,8 +323,7 @@ OutputLogUI::renderLogEntryRow(uint64 sequence)
   ImGui::PopID();
 
   ImGui::TableSetColumnIndex(1);
-  ImGui::TextUnformatted(entry.timestamp.data(),
-                         entry.timestamp.data() + entry.timestamp.size());
+  ImGui::TextUnformatted(entry.timestamp);
 
   ImGui::TableSetColumnIndex(2);
   ImGui::TextUnformatted(entry.category.data(),
@@ -362,8 +362,7 @@ OutputLogUI::renderSelectedEntry()
   ImGui::TextColored(getVerbosityColor(entry.verbosity), "%s",
                      getVerbosityIcon(entry.verbosity));
   ImGui::SameLine();
-  ImGui::TextUnformatted(entry.timestamp.data(),
-                         entry.timestamp.data() + entry.timestamp.size());
+  ImGui::TextUnformatted(entry.timestamp);
   ImGui::SameLine();
   ImGui::TextUnformatted(entry.category.data(),
                          entry.category.data() + entry.category.size());
@@ -395,7 +394,7 @@ OutputLogUI::renderSelectedEntry()
 /*
  */
 void
-OutputLogUI::addLogEntry(const LogBufferEntry& entry)
+OutputLogUI::addLogEntry(const SPtr<const LogBufferEntry>& entry)
 {
   LockGuard<Mutex> lock(m_pendingMutex);
   m_pendingEntries.push_back(entry);
@@ -416,10 +415,10 @@ OutputLogUI::flushPendingEntries()
     return;
   }
 
-  for (LogBufferEntry& entry : m_flushEntries) {
+  for (SPtr<const LogBufferEntry>& entry : m_flushEntries) {
     // New categories start enabled.
-    if (m_availableCategories.insert(entry.category).second) {
-      m_filter.enabledCategories.insert(entry.category);
+    if (m_availableCategories.insert(entry->category).second) {
+      m_filter.enabledCategories.insert(entry->category);
     }
 
     const uint64 sequence = m_nextSequence;
@@ -442,7 +441,7 @@ OutputLogUI::flushPendingEntries()
 /*
  */
 void
-OutputLogUI::pushEntry(LogBufferEntry&& entry)
+OutputLogUI::pushEntry(SPtr<const LogBufferEntry> entry)
 {
   if (m_entries.size() < m_maxLogEntries) {
     m_entries.push_back(std::move(entry));
@@ -468,7 +467,7 @@ OutputLogUI::getEntry(uint64 sequence) const
   if (index >= m_entries.size()) {
     index -= m_entries.size();
   }
-  return m_entries[index];
+  return *m_entries[index];
 }
 
 /*
@@ -525,7 +524,7 @@ OutputLogUI::clearLog()
 void
 OutputLogUI::setMaxLogEntries(uint32 maxEntries)
 {
-  maxEntries = std::max(maxEntries, 1u);
+  maxEntries = Math::max<uint32>(maxEntries, 1);
 
   // Puts the entries back in order, so the ring starts at index 0 again.
   std::rotate(m_entries.begin(), m_entries.begin() + m_oldestIndex, m_entries.end());
@@ -549,8 +548,8 @@ void
 OutputLogUI::updateAvailableCategories()
 {
   m_availableCategories.clear();
-  for (const LogBufferEntry& entry : m_entries) {
-    m_availableCategories.insert(entry.category);
+  for (const SPtr<const LogBufferEntry>& entry : m_entries) {
+    m_availableCategories.insert(entry->category);
   }
 
   m_filter.enabledCategories = m_availableCategories;

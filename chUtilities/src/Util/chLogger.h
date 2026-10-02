@@ -29,32 +29,20 @@
 namespace chEngineSDK {
 
 /**
- * @brief Log entry structure for display
+ * One written log. The Logger creates it once and shares it as SPtr<const LogBufferEntry>
+ * with its buffer and every listener, so no listener has to copy it.
  */
-struct LogBufferEntry {
-  String timestamp;
-  LogVerbosity verbosity;
+struct LogBufferEntry
+{
+  // "YYYY-MM-DD HH:MM:SS.mmm", kept inline so the entry does not allocate for it.
+  ANSICHAR timestamp[24] = {};
+  LogVerbosity verbosity = LogVerbosity::Info;
   String category;
   String message;
+  // File name only, without its folder.
   String sourceFile;
-  int32 sourceLine;
+  int32 sourceLine = 0;
   String sourceFunctionName;
-
-  LogBufferEntry() = default;
-  LogBufferEntry(const String& inTimestamp,
-           LogVerbosity inVerbosity,
-           const String& inCategoryName,
-           const String& inLogMessage,
-           const String& inSourceFileName = "",
-           int32 inSourceLineNumber = 0,
-           const String& inSourceFunctionName = "")
-   : timestamp(inTimestamp),
-     verbosity(inVerbosity),
-     category(inCategoryName),
-     message(inLogMessage),
-     sourceFile(inSourceFileName),
-     sourceLine(inSourceLineNumber),
-     sourceFunctionName(inSourceFunctionName) {}
 };
 
 /**
@@ -129,7 +117,7 @@ class CH_UTILITY_EXPORT LogCategory
    */
   void
   log(LogVerbosity verbosity,
-      const String& message,
+      String message,
       const ANSICHAR* file = nullptr,
       int32 line = 0,
       const ANSICHAR* function = nullptr) const;
@@ -196,9 +184,9 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
 
   /**
    * @brief Get the current log buffer
-   * @return Copy of the buffered log entries
+   * @return The buffered log entries, oldest first
    */
-  NODISCARD Vector<LogBufferEntry>
+  NODISCARD Vector<SPtr<const LogBufferEntry>>
   getBufferedLogs() const;
 
   /**
@@ -221,7 +209,7 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   void
   writeLogMessage(const LogCategory& category,
                   LogVerbosity verbosity,
-                  const String& message,
+                  String message,
                   const ANSICHAR* file = nullptr,
                   int32 line = 0,
                   const ANSICHAR* function = nullptr);
@@ -235,7 +223,8 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @return Event handle. Release it with disconnectLogListener.
    */
   NODISCARD HEvent
-  onLogWritten(Function<void(const LogBufferEntry&)> callback, bool replayBuffered = false);
+  onLogWritten(Function<void(const SPtr<const LogBufferEntry>&)> callback,
+               bool replayBuffered = false);
 
   /**
    * @brief Disconnects a handle returned by onLogWritten
@@ -280,8 +269,8 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
  * @param verbosity Verbosity level
  * @return String representation
  */
-CH_UTILITY_EXPORT String
-getVerbosityName(LogVerbosity verbosity);
+NODISCARD CH_UTILITY_EXPORT const ANSICHAR*
+getVerbosityName(LogVerbosity verbosity) noexcept;
 
 } // namespace chEngineSDK
 

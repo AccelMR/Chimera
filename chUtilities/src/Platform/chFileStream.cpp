@@ -315,6 +315,16 @@ FileDataStream::clone() const {
 /*
 */
 void
+FileDataStream::flush()
+{
+  if (m_pFStream && m_pFStream->is_open()) {
+    m_pFStream->flush();
+  }
+}
+
+/*
+*/
+void
 FileDataStream::close() {
   if (m_pInStream) {
     if (m_pFStreamRO) {

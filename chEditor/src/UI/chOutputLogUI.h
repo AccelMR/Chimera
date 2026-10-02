@@ -51,7 +51,7 @@ class OutputLogUI
    * Queues an entry to be shown on the next render. Safe to call from any thread.
    */
   void
-  addLogEntry(const LogBufferEntry& entry);
+  addLogEntry(const SPtr<const LogBufferEntry>& entry);
 
   void
   clearLog();
@@ -94,7 +94,7 @@ class OutputLogUI
    * Adds an entry to the ring buffer, replacing the oldest one when it is full.
    */
   void
-  pushEntry(LogBufferEntry&& entry);
+  pushEntry(SPtr<const LogBufferEntry> entry);
 
   /**
    * Entry with the given sequence number. It must still be in the ring buffer.
@@ -132,7 +132,7 @@ class OutputLogUI
 
   // Ring buffer. Every entry gets a sequence number that never changes, so the
   // filtered list stays valid when the oldest entries are replaced.
-  Vector<LogBufferEntry> m_entries;
+  Vector<SPtr<const LogBufferEntry>> m_entries;
   uint32 m_oldestIndex = 0;
   uint64 m_oldestSequence = 0;
   uint64 m_nextSequence = 0;
@@ -150,8 +150,8 @@ class OutputLogUI
 
   // Logs can come from any thread, so they wait here until the main thread renders.
   Mutex m_pendingMutex;
-  Vector<LogBufferEntry> m_pendingEntries;
-  Vector<LogBufferEntry> m_flushEntries;
+  Vector<SPtr<const LogBufferEntry>> m_pendingEntries;
+  Vector<SPtr<const LogBufferEntry>> m_flushEntries;
 
   HEvent m_logWrittenEvent;
 };

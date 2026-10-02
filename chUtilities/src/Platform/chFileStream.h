@@ -258,6 +258,13 @@ class CH_UTILITY_EXPORT DataStream {
   close() = 0;
 
   /**
+   * Writes any buffered data to its destination. Streams without a buffer do nothing.
+   */
+  virtual void
+  flush()
+  {}
+
+  /**
    *    Creates a copy of this stream.
    */
   virtual SPtr<DataStream>
@@ -495,8 +502,11 @@ class CH_UTILITY_EXPORT FileDataStream: public DataStream
   /**
    * @brief @copydoc DataStream::close
    */
-  void 
+  void
   close() override;
+
+  void
+  flush() override;
 
   /** 
    *   True if this file is open.

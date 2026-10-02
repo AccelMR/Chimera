@@ -1595,6 +1595,60 @@ TEST_CASE("chUtilities - EventSystem") {
   }
 }
 
+TEST_CASE("chUtilities - Logger") {
+  CH_LOG_DECLARE_STATIC(LoggerTestLog, All);
+
+  Logger::startUp();
+  Logger& logger = Logger::instance();
+  logger.setConsoleOutput(false);
+  logger.setBufferingEnabled(true, 3);
+
+  for (int32 i = 0; i < 5; ++i) {
+    CH_LOG_INFO(LoggerTestLog, "Message {0}", i);
+  }
+
+  // The ring buffer keeps the last 3 entries, oldest first.
+  Vector<SPtr<const LogBufferEntry>> buffered = logger.getBufferedLogs();
+  REQUIRE(buffered.size() == 3);
+  REQUIRE(buffered[0]->message == "Message 2");
+  REQUIRE(buffered[1]->message == "Message 3");
+  REQUIRE(buffered[2]->message == "Message 4");
+
+  const LogBufferEntry& entry = *buffered[2];
+  REQUIRE(entry.verbosity == LogVerbosity::Info);
+  REQUIRE(entry.category == "LoggerTestLog");
+  REQUIRE(entry.sourceFile == "chUtilitiesMain.cpp");
+  REQUIRE(entry.sourceLine > 0);
+  REQUIRE(StringView(entry.timestamp).size() == 23);
+  REQUIRE(entry.timestamp[4] == '-');
+  REQUIRE(entry.timestamp[10] == ' ');
+  REQUIRE(entry.timestamp[19] == '.');
+
+  // Replays the buffer in order, then receives the same shared entry as the buffer.
+  Vector<SPtr<const LogBufferEntry>> received;
+  HEvent listener = logger.onLogWritten(
+      [&received](const SPtr<const LogBufferEntry>& logEntry) {
+        received.push_back(logEntry);
+      },
+      true);
+  REQUIRE(received.size() == 3);
+  REQUIRE(received[0]->message == "Message 2");
+
+  CH_LOG_WARNING(LoggerTestLog, "Shared");
+  REQUIRE(received.size() == 4);
+  REQUIRE(received.back() == logger.getBufferedLogs().back());
+  logger.disconnectLogListener(listener);
+
+  // Shrinking the buffer keeps the newest entries.
+  logger.setBufferingEnabled(true, 2);
+  buffered = logger.getBufferedLogs();
+  REQUIRE(buffered.size() == 2);
+  REQUIRE(buffered[0]->message == "Message 4");
+  REQUIRE(buffered[1]->message == "Shared");
+
+  Logger::shutDown();
+}
+
 // TEST_CASE("chUtilities - StringAndUTF8") {
 //     const U16String TestWString(UTF8::toUTF16("Created as wide string"));
 //     const String WellPerformedConvertion("Created as wide string");
