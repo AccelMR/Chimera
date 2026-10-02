@@ -220,7 +220,7 @@ BMPImage::decode(const Path& bmpPath) {
  */
 void
 BMPImage::encode(const Path& filename) const {
-  SPtr<DataStream> file = FileSystem::createAndOpenFile(filename + ".bmp");
+  SPtr<DataStream> file = FileSystem::createAndOpenFile(Path(filename.toString() + ".bmp"));
   if (!file) {
     return;
   }

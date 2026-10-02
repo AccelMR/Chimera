@@ -119,15 +119,9 @@ Path::operator<(const Path& other) const
 }
 
 Path
-Path::operator+(const String& other) const
-{
-  return Path(m_path + "/" + other);
-}
-
-Path
 Path::operator/(const String& other) const
 {
-  return Path(m_path + "/" + other);
+  return join(Path(other));
 }
 
 Path

@@ -158,15 +158,8 @@ class CH_UTILITY_EXPORT Path
   operator<(const Path& other) const;
 
   /**
-   * Operator for adding a string to this path.
-   *
-   * @param other
-   *   The string to add.
-   * @return The new path.
+   * Same as join(Path(other)).
    */
-  Path
-  operator+(const String& other) const;
-
   Path
   operator/(const String& other) const;
 

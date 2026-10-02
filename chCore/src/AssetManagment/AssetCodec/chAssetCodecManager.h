@@ -20,17 +20,20 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
   initialize();
 
   /**
-   * @brief Imports an asset from the specified import path to the asset path.
-   * @param importPath The path to the asset to be imported.
-   * @param assetPath The destination path for the imported asset.
-   * @return True if the import was successful, false otherwise.
+   * @brief Imports an external file with the codec registered for its extension.
+   *        The codec creates and saves the asset.
+   * @param importPath The external file to import.
+   * @param assetName The name of the new asset.
+   * @return The new asset, or nullptr if the file does not exist, no codec handles
+   *         its extension, or the codec fails.
    */
   SPtr<IAsset>
-  importAsset(const Path& importPath, const Path& assetPath);
+  importAsset(const Path& importPath, const String& assetName);
 
-  template <typename AssetType = IAsset>
+  template <typename AssetType>
   FORCEINLINE SPtr<AssetType>
-  importAsset(const Path& importPath, const String& assetName) {
+  importAsset(const Path& importPath, const String& assetName)
+  {
     return std::static_pointer_cast<AssetType>(importAsset(importPath, assetName));
   }
 

@@ -8,11 +8,8 @@ CH_LOG_DEFINE_CATEGORY_SHARED(AssetCodecSystem, All);
 
 #include "chAssetCodec.h"
 #include "chAssetCodecRegistry.h"
-#include "chAssetManager.h"
-#include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chPath.h"
-#include "chLogger.h"
 
 namespace chEngineSDK {
 /*
@@ -27,52 +24,25 @@ AssetCodecManager::initialize() {
 /*
 */
 SPtr<IAsset>
-AssetCodecManager::importAsset(const Path& absoluteImportFilePath,
-                                  const Path& assetRelativePath) {
-  CH_LOG_DEBUG(AssetCodecSystem, "Importing asset from {0} to {1}", absoluteImportFilePath.toString(),
-               assetRelativePath.toString());
+AssetCodecManager::importAsset(const Path& importPath, const String& assetName)
+{
+  CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
 
-  if (!FileSystem::exists(absoluteImportFilePath)) {
-    CH_LOG_ERROR(AssetCodecSystem, "Import file path {0} does not exist", absoluteImportFilePath.toString());
+  if (!FileSystem::isFile(importPath)) {
+    CH_LOG_ERROR(AssetCodecSystem, "Import file {0} does not exist", importPath);
     return nullptr;
   }
 
-  const Path assetDir = EnginePaths::getGameAssetDirectory();
-  if (!FileSystem::isSubPath(assetDir, assetRelativePath)) {
-    CH_LOG_ERROR(AssetCodecSystem, "Asset path {0} is not relative to the asset directory {1}", assetRelativePath.toString(), assetDir.toString());
-    return nullptr;
-  }
-
-  String baseName = absoluteImportFilePath.getFileName(false);
-  Path absoluteAssetFilePath;
-  int32 sameName = 0;
-  do {
-    String fileName = baseName + (sameName ? "_" + chString::fromInt32(sameName) : "") + ".chAsset";
-    absoluteAssetFilePath = absoluteAssetFilePath / fileName;
-    ++sameName;
-  } while (FileSystem::exists(absoluteAssetFilePath));
-
-  CH_LOG_DEBUG(AssetCodecSystem, "Saving imported asset to {0}", absoluteAssetFilePath.toString());
-
-  // Create a chimera resource file
-  SPtr<DataStream> fileStream = FileSystem::createAndOpenFile(absoluteAssetFilePath);
-  if (!fileStream) {
-    CH_LOG_ERROR(AssetCodecSystem, "Failed to create or open file {0}", absoluteAssetFilePath.toString());
-    return nullptr;
-  }
-
-  // Determine asset type based on file extension or content
-  String extension = absoluteImportFilePath.getExtension();
+  const String extension = importPath.getExtension();
   SPtr<IAssetCodec> codec = m_codecRegistry->getCodecForExtension(extension);
   if (!codec) {
     CH_LOG_ERROR(AssetCodecSystem, "No codec found for file extension {0}", extension);
     return nullptr;
   }
 
-  CH_LOG_DEBUG(AssetCodecSystem, "Using codec {0} for file {1}",
-                                    codec->getCodecType().toString(),
-                                    absoluteImportFilePath.toString());
-  return codec->importAsset(absoluteImportFilePath, baseName);
+  CH_LOG_DEBUG(AssetCodecSystem, "Importing {0} as {1} with codec {2}", importPath, assetName,
+               codec->getCodecType());
+  return codec->importAsset(importPath, assetName);
 }
 
 /*

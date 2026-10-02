@@ -228,7 +228,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
                        "Asset path mismatch for {0}: expected {1}, found {2}.\n"
                        "Will update asset path to match file location.",
                        asset->getName(),
-                       assetPath.toString(),
+                       assetPath,
                        file.toString());
 
       asset->setAssetPath(relativePath.c_str());
