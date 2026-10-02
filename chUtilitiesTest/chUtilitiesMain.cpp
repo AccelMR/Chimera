@@ -1665,6 +1665,41 @@ TEST_CASE("chUtilities - ContainsIgnoreCase") {
   REQUIRE_FALSE(chString::containsIgnoreCase("aab", "abb"));
 }
 
+TEST_CASE("chUtilities - Format") {
+  enum class TestEnum : int32 { A = 3, B = -2 };
+
+  SECTION("default output") {
+    REQUIRE(chString::format("{} {} {}", 42, -7, 18446744073709551615ull) ==
+            "42 -7 18446744073709551615");
+    REQUIRE(chString::format("{} {} {} {}", 1.0, 0.1, 1e20, -2.5f) == "1 0.1 1e+20 -2.5");
+    REQUIRE(chString::format("{}|{}|{}", 'a', true, false) == "a|true|false");
+    REQUIRE(chString::format("{}", static_cast<uint8>(65)) == "65");
+    REQUIRE(chString::format("{} {}", TestEnum::A, TestEnum::B) == "3 -2");
+    REQUIRE(chString::format("{1}-{0}-{1}", "x", String("y")) == "y-x-y");
+    REQUIRE(chString::format("{} {}", Path("a\\b"), static_cast<const ANSICHAR*>(nullptr)) ==
+            "a/b (null)");
+    REQUIRE(chString::format("{{{}}}", 5) == "{5}");
+    REQUIRE(chString::toString(0.5) == "0.5");
+  }
+
+  SECTION("specs") {
+    REQUIRE(chString::format("{:.2f}", 3.14159) == "3.14");
+    REQUIRE(chString::format("{:f}", 1.0) == "1.000000");
+    REQUIRE(chString::format("{:.3e}", 12345.678) == "1.235e+04");
+    REQUIRE(chString::format("{:.3}", 3.14159) == "3.14");
+    REQUIRE(chString::format("{:.1f}", 1e300).size() == 303);
+    REQUIRE(chString::format("{:x} {:X} {:b} {:o}", 255, 255u, 5, 8) == "ff FF 101 10");
+    REQUIRE(chString::format("{:08x}", 0xbeefu) == "0000beef");
+    REQUIRE(chString::format("{:05}", -42) == "-0042");
+    REQUIRE(chString::format("{:6.2f}", -1.5) == " -1.50");
+    REQUIRE(chString::format("[{:>5}][{:<5}][{:^5}]", 1, 2, 3) == "[    1][2    ][  3  ]");
+    REQUIRE(chString::format("[{:6}][{:>6}][{:*^7}]", "ab", "ab", "ab") ==
+            "[ab    ][    ab][**ab***]");
+    REQUIRE(chString::format("[{0:>3}][{0}]", 'c') == "[  c][c]");
+    REQUIRE(chString::format("{:2}", "longer") == "longer");
+  }
+}
+
 TEST_CASE("chUtilities - Path matches std::filesystem") {
   namespace fs = std::filesystem;
   const Vector<String> cases = {

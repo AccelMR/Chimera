@@ -20,11 +20,85 @@
 namespace chEngineSDK {
 
 /**
- * Format string for chString::format, checked at compile time against the number of
- * arguments so a wrong placeholder stops the build instead of failing at runtime.
+ * How chString::format writes an argument. Decided at compile time from the argument
+ * type, so FormatString can check that a spec fits its argument.
+ */
+enum class FormatArgType : uint8
+{
+  Text,
+  Char,
+  Bool,
+  Signed,
+  Unsigned,
+  Float
+};
+
+template<typename T>
+consteval FormatArgType
+formatArgTypeOf()
+{
+  using Type = std::decay_t<T>;
+  if constexpr (std::is_same_v<Type, bool>) {
+    return FormatArgType::Bool;
+  }
+  else if constexpr (std::is_same_v<Type, ANSICHAR>) {
+    return FormatArgType::Char;
+  }
+  else if constexpr (std::is_convertible_v<const Type&, StringView>) {
+    return FormatArgType::Text;
+  }
+  else if constexpr (std::is_integral_v<Type>) {
+    return std::is_signed_v<Type> ? FormatArgType::Signed : FormatArgType::Unsigned;
+  }
+  else if constexpr (std::is_floating_point_v<Type>) {
+    return FormatArgType::Float;
+  }
+  else if constexpr (std::is_enum_v<Type>) {
+    return std::is_signed_v<std::underlying_type_t<Type>> ? FormatArgType::Signed
+                                                          : FormatArgType::Unsigned;
+  }
+  else {
+    return FormatArgType::Text;
+  }
+}
+
+/**
+ * The part of a placeholder after ':', a subset of std::format:
+ * [[fill]align][0][width][.precision][type]
+ *   align      '<' left, '>' right, '^' center. Numbers go right by default, the rest left.
+ *   0          pads numbers with zeros after the sign.
+ *   precision  digits after the point (f, e) or significant digits (g, none). Floats only.
+ *   type       d x X b o for integers, f e g for floats.
+ */
+struct FormatSpec
+{
+  static constexpr uint32 MAX_WIDTH = 999;
+  static constexpr int32 MAX_PRECISION = 99;
+
+  ANSICHAR fill = ' ';
+  ANSICHAR align = '\0';
+  bool zeroPad = false;
+  uint32 width = 0;
+  int32 precision = -1;
+  ANSICHAR type = '\0';
+
+  /**
+   * @return false if the text is not a valid spec.
+   */
+  NODISCARD static constexpr bool
+  parse(StringView text, FormatSpec& spec) noexcept;
+
+  NODISCARD constexpr bool
+  fits(FormatArgType argType) const noexcept;
+};
+
+/**
+ * Format string for chString::format, checked at compile time against the arguments so a
+ * wrong placeholder stops the build instead of failing at runtime.
  *
  * Placeholders: "{}" takes the arguments in order, "{0}" picks one by index (it can be
- * repeated or reordered). Both kinds cannot be mixed. "{{" and "}}" write a brace.
+ * repeated or reordered). Both kinds cannot be mixed. "{{" and "}}" write a brace. A spec
+ * can follow a ':' ("{:.2f}", "{0:>8}", "{:08x}"), see FormatSpec.
  */
 template<typename... Args>
 class FormatString
@@ -68,6 +142,14 @@ class FormatString
 
   static void
   errorMixedAutomaticAndManualIndex()
+  {}
+
+  static void
+  errorInvalidFormatSpec()
+  {}
+
+  static void
+  errorFormatSpecDoesNotFitArgumentType()
   {}
 
   StringView m_text;
@@ -177,22 +259,34 @@ class CH_UTILITY_EXPORT chString
 
  private:
   /**
-   * An argument of format seen as text. Text arguments are only viewed, the rest are
-   * converted and kept in 'owned' until the format ends.
+   * An argument of format without converting it: numbers, chars and bools keep their
+   * value and are written by formatArgs, text is only viewed.
    */
   struct FormatArg
   {
-    String owned;
-    StringView view;
-    bool isOwned = false;
+    FormatArgType type = FormatArgType::Text;
+    union
+    {
+      int64 signedValue = 0;
+      uint64 unsignedValue;
+      double floatValue;
+      ANSICHAR charValue;
+      bool boolValue;
+    };
+    StringView text;
   };
 
   template<typename T>
+  static constexpr bool NEEDS_STRING = formatArgTypeOf<T>() == FormatArgType::Text &&
+                                       !std::is_convertible_v<const std::decay_t<T>&,
+                                                              StringView>;
+
+  template<typename T>
   static FormatArg
-  makeFormatArg(T&& value);
+  makeFormatArg(T&& value, String*& nextString);
 
   static String
-  formatArgs(StringView format, const StringView* args, SIZE_T count);
+  formatArgs(StringView format, const FormatArg* args, SIZE_T count);
 };
 
 /************************************************************************/
@@ -203,11 +297,103 @@ class CH_UTILITY_EXPORT chString
 
 /*
  */
+constexpr bool
+FormatSpec::parse(StringView text, FormatSpec& spec) noexcept
+{
+  const auto isAlign = [](ANSICHAR c) { return c == '<' || c == '>' || c == '^'; };
+  const auto isDigit = [](ANSICHAR c) { return c >= '0' && c <= '9'; };
+
+  SIZE_T i = 0;
+  if (text.size() >= 2 && isAlign(text[1])) {
+    if (text[0] == '{' || text[0] == '}') {
+      return false;
+    }
+    spec.fill = text[0];
+    spec.align = text[1];
+    i = 2;
+  }
+  else if (!text.empty() && isAlign(text[0])) {
+    spec.align = text[0];
+    i = 1;
+  }
+
+  if (i < text.size() && text[i] == '0') {
+    spec.zeroPad = true;
+    ++i;
+  }
+
+  while (i < text.size() && isDigit(text[i])) {
+    spec.width = spec.width * 10 + static_cast<uint32>(text[i] - '0');
+    if (spec.width > MAX_WIDTH) {
+      return false;
+    }
+    ++i;
+  }
+
+  if (i < text.size() && text[i] == '.') {
+    ++i;
+    if (i >= text.size() || !isDigit(text[i])) {
+      return false;
+    }
+    spec.precision = 0;
+    while (i < text.size() && isDigit(text[i])) {
+      spec.precision = spec.precision * 10 + static_cast<int32>(text[i] - '0');
+      if (spec.precision > MAX_PRECISION) {
+        return false;
+      }
+      ++i;
+    }
+  }
+
+  if (i < text.size()) {
+    spec.type = text[i++];
+    if (StringView("dxXbofeg").find(spec.type) == StringView::npos) {
+      return false;
+    }
+  }
+
+  return i == text.size();
+}
+
+/*
+ */
+constexpr bool
+FormatSpec::fits(FormatArgType argType) const noexcept
+{
+  const bool isInteger = argType == FormatArgType::Signed ||
+                         argType == FormatArgType::Unsigned;
+  const bool isFloat = argType == FormatArgType::Float;
+
+  if (precision >= 0 && !isFloat) {
+    return false;
+  }
+  if (zeroPad && !isInteger && !isFloat) {
+    return false;
+  }
+
+  switch (type) {
+  case '\0':
+    return true;
+  case 'd':
+  case 'x':
+  case 'X':
+  case 'b':
+  case 'o':
+    return isInteger;
+  default:
+    return isFloat;
+  }
+}
+
+/*
+ */
 template<typename... Args>
 consteval void
 FormatString<Args...>::check() const
 {
   constexpr SIZE_T argCount = sizeof...(Args);
+  // The extra entry keeps the array valid when there are no arguments.
+  constexpr FormatArgType argTypes[] = {formatArgTypeOf<Args>()..., FormatArgType::Text};
   bool usesAutomatic = false;
   bool usesManual = false;
   SIZE_T automaticCount = 0;
@@ -239,29 +425,41 @@ FormatString<Args...>::check() const
       errorUnclosedBrace();
     }
 
-    if (close == i + 1) {
+    const StringView content = m_text.substr(i + 1, close - i - 1);
+    const SIZE_T colon = content.find(':');
+    const StringView indexText = content.substr(0, colon);
+
+    SIZE_T index = 0;
+    if (indexText.empty()) {
       usesAutomatic = true;
-      if (automaticCount >= argCount) {
-        errorIndexOutOfRange();
-      }
-      ++automaticCount;
+      index = automaticCount++;
     }
     else {
       usesManual = true;
-      SIZE_T index = 0;
-      for (SIZE_T d = i + 1; d < close; ++d) {
-        if (m_text[d] < '0' || m_text[d] > '9') {
+      for (const ANSICHAR digit : indexText) {
+        if (digit < '0' || digit > '9') {
           errorInvalidPlaceholder();
         }
-        index = index * 10 + static_cast<SIZE_T>(m_text[d] - '0');
+        index = index * 10 + static_cast<SIZE_T>(digit - '0');
       }
-      if (index >= argCount) {
-        errorIndexOutOfRange();
-      }
+    }
+
+    if (index >= argCount) {
+      errorIndexOutOfRange();
     }
 
     if (usesAutomatic && usesManual) {
       errorMixedAutomaticAndManualIndex();
+    }
+
+    if (colon != StringView::npos) {
+      FormatSpec spec;
+      if (!FormatSpec::parse(content.substr(colon + 1), spec)) {
+        errorInvalidFormatSpec();
+      }
+      if (!spec.fits(argTypes[index])) {
+        errorFormatSpecDoesNotFitArgumentType();
+      }
     }
 
     i = close + 1;
@@ -279,12 +477,10 @@ chString::toString(T&& value)
   if constexpr (std::is_same_v<Type, String>) {
     return std::forward<T>(value);
   }
-  else if constexpr (std::is_arithmetic_v<Type>) {
-    return std::to_string(static_cast<Type>(value));
-  }
-  else if constexpr (std::is_enum_v<Type>) {
-    // Enums print their number, which also covers C enums such as VkResult.
-    return std::to_string(static_cast<std::underlying_type_t<Type>>(value));
+  else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>) {
+    // Written by format so numbers look the same everywhere. Enums print their number,
+    // which also covers C enums such as VkResult.
+    return format("{}", value);
   }
   else if constexpr (std::is_convertible_v<T, String>) {
     return String(std::forward<T>(value));
@@ -305,20 +501,38 @@ chString::toString(T&& value)
  */
 template<typename T>
 chString::FormatArg
-chString::makeFormatArg(T&& value)
+chString::makeFormatArg(T&& value, String*& nextString)
 {
   using Type = std::decay_t<T>;
+  constexpr FormatArgType type = formatArgTypeOf<T>();
   FormatArg arg;
+  arg.type = type;
 
-  if constexpr (std::is_pointer_v<Type> && std::is_convertible_v<Type, StringView>) {
-    arg.view = value ? StringView(value) : StringView("(null)");
+  if constexpr (type == FormatArgType::Bool) {
+    arg.boolValue = value;
   }
-  else if constexpr (std::is_convertible_v<const T&, StringView>) {
-    arg.view = value;
+  else if constexpr (type == FormatArgType::Char) {
+    arg.charValue = value;
+  }
+  else if constexpr (type == FormatArgType::Signed) {
+    arg.signedValue = static_cast<int64>(value);
+  }
+  else if constexpr (type == FormatArgType::Unsigned) {
+    arg.unsignedValue = static_cast<uint64>(value);
+  }
+  else if constexpr (type == FormatArgType::Float) {
+    arg.floatValue = static_cast<double>(value);
+  }
+  else if constexpr (std::is_pointer_v<Type> && std::is_convertible_v<Type, StringView>) {
+    arg.text = value ? StringView(value) : StringView("(null)");
+  }
+  else if constexpr (std::is_convertible_v<const Type&, StringView>) {
+    arg.text = value;
   }
   else {
-    arg.owned = toString(std::forward<T>(value));
-    arg.isOwned = true;
+    *nextString = toString(std::forward<T>(value));
+    arg.text = *nextString;
+    ++nextString;
   }
 
   return arg;
@@ -331,17 +545,16 @@ template<typename... Args>
 String
 chString::format(FormatString<std::type_identity_t<Args>...> format, Args&&... args)
 {
-  Array<FormatArg, sizeof...(Args)> converted{makeFormatArg(std::forward<Args>(args))...};
+  // Only types written through toString() need a String. They are filled in place and
+  // never moved, so the views to them stay valid.
+  Array<String, (static_cast<SIZE_T>(NEEDS_STRING<Args>) + ...)> strings;
+  String* nextString = strings.data();
 
-  // Views are taken only now, because moving a short String into the array moves its
-  // characters too.
-  Array<StringView, sizeof...(Args)> views;
-  for (SIZE_T i = 0; i < converted.size(); ++i) {
-    views[i] = converted[i].isOwned ? StringView(converted[i].owned)
-                                    : converted[i].view;
-  }
+  // A braced list runs its elements in order, so nextString is used in order too.
+  const Array<FormatArg, sizeof...(Args)> converted{
+    makeFormatArg(std::forward<Args>(args), nextString)...};
 
-  return formatArgs(format.get(), views.data(), views.size());
+  return formatArgs(format.get(), converted.data(), converted.size());
 }
 
 } // namespace chEngineSDK
