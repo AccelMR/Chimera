@@ -1490,6 +1490,111 @@ TEST_CASE("chUtilities - Utilities") {
   Onsomething(10, 125.55f);
 }
 
+TEST_CASE("chUtilities - EventSystem") {
+  SECTION("More listeners than the inline capacity") {
+    Event<void(int32)> onValue;
+    int32 total = 0;
+    Vector<HEvent> handles;
+    for (int32 i = 0; i < 40; ++i) {
+      handles.push_back(onValue.connect([&total](int32 value) { total += value; }));
+    }
+    onValue(2);
+    REQUIRE(total == 80);
+  }
+
+  SECTION("Custom inline capacity") {
+    Event<void(int32), 4> onValue;
+    int32 total = 0;
+    Vector<HEvent> handles;
+    for (int32 i = 0; i < 4; ++i) {
+      handles.push_back(onValue.connect([&total](int32 value) { total += value; }));
+    }
+    onValue(1);
+    REQUIRE(total == 4);
+
+    for (int32 i = 0; i < 6; ++i) {
+      handles.push_back(onValue.connect([&total](int32 value) { total += value; }));
+    }
+    onValue(1);
+    REQUIRE(total == 14);
+  }
+
+  SECTION("Arguments by value reach every listener") {
+    Event<void(String)> onText;
+    int32 matches = 0;
+    HEvent first = onText.connect([&matches](String text) { matches += text == "hello"; });
+    HEvent second = onText.connect([&matches](String text) { matches += text == "hello"; });
+    onText(String("hello"));
+    REQUIRE(matches == 2);
+  }
+
+  SECTION("Disconnect during a fire") {
+    Event<void()> onFire;
+    int32 firstCalls = 0;
+    int32 secondCalls = 0;
+    HEvent second;
+    HEvent first = onFire.connect([&]() {
+      ++firstCalls;
+      first.disconnect();
+      second.disconnect();
+    });
+    second = onFire.connect([&]() { ++secondCalls; });
+
+    // The second listener was already pinned, so it still runs during this fire.
+    onFire();
+    REQUIRE(firstCalls == 1);
+    REQUIRE(secondCalls == 1);
+
+    onFire();
+    REQUIRE(firstCalls == 1);
+    REQUIRE(secondCalls == 1);
+  }
+
+  SECTION("Connect during a fire") {
+    Event<void()> onFire;
+    int32 lateCalls = 0;
+    HEvent late;
+    HEvent first = onFire.connect([&]() {
+      if (!late.isValid()) {
+        late = onFire.connect([&]() { ++lateCalls; });
+      }
+    });
+
+    onFire();
+    REQUIRE(lateCalls == 0);
+    onFire();
+    REQUIRE(lateCalls == 1);
+  }
+
+  SECTION("Clear during a fire") {
+    Event<void()> onFire;
+    int32 calls = 0;
+    HEvent first = onFire.connect([&]() {
+      ++calls;
+      onFire.clear();
+    });
+    HEvent second = onFire.connect([&]() { ++calls; });
+
+    onFire();
+    REQUIRE(calls == 2);
+    onFire();
+    REQUIRE(calls == 2);
+  }
+
+  SECTION("Fire from inside a callback") {
+    Event<void(int32)> onDepth;
+    int32 calls = 0;
+    HEvent handle = onDepth.connect([&](int32 depth) {
+      ++calls;
+      if (depth < 3) {
+        onDepth(depth + 1);
+      }
+    });
+    onDepth(0);
+    REQUIRE(calls == 4);
+  }
+}
+
 // TEST_CASE("chUtilities - StringAndUTF8") {
 //     const U16String TestWString(UTF8::toUTF16("Created as wide string"));
 //     const String WellPerformedConvertion("Created as wide string");

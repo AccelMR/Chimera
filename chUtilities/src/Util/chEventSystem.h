@@ -18,7 +18,6 @@
 #include "chPrerequisitesUtilities.h"
 
 namespace chEngineSDK {
-using std::forward;
 using std::function;
 
 /**
@@ -56,28 +55,40 @@ class CH_UTILITY_EXPORT ConnectionController
 {
  public:
   /**
-   * Locks the controller for as long as it lives.
+   * The active connections of one fire. Each one is pinned so it is not deleted while
+   * its callback runs, even if a callback disconnects it, and released when this object
+   * is destroyed. The caller gives a buffer, usually on the stack, and the heap is only
+   * used when there are more active connections than fit in it.
    */
-  class ScopedLock
+  class CH_UTILITY_EXPORT PinnedConnections
   {
    public:
-    explicit ScopedLock(ConnectionController& controller)
-     : m_controller(controller)
+    PinnedConnections(ConnectionController& controller,
+                      BaseConnectionNode** inlineNodes,
+                      uint32 inlineCapacity);
+    ~PinnedConnections();
+
+    PinnedConnections(const PinnedConnections&) = delete;
+    PinnedConnections&
+    operator=(const PinnedConnections&) = delete;
+
+    NODISCARD FORCEINLINE BaseConnectionNode* const*
+    begin() const noexcept
     {
-      m_controller.lock();
+      return m_nodes;
     }
 
-    ~ScopedLock()
+    NODISCARD FORCEINLINE BaseConnectionNode* const*
+    end() const noexcept
     {
-      m_controller.unlock();
+      return m_nodes + m_count;
     }
-
-    ScopedLock(const ScopedLock&) = delete;
-    ScopedLock&
-    operator=(const ScopedLock&) = delete;
 
    private:
     ConnectionController& m_controller;
+    BaseConnectionNode** m_inlineNodes;
+    BaseConnectionNode** m_nodes;
+    uint32 m_count = 0;
   };
 
   ConnectionController();
@@ -95,7 +106,7 @@ class CH_UTILITY_EXPORT ConnectionController
 
   /**
    * Called when a handle lets go of its connection. Removes it from the list and
-   * deletes it once no handle uses it.
+   * deletes it once neither a handle nor a running fire uses it.
    */
   void
   disconnect(BaseConnectionNode* connection);
@@ -106,21 +117,6 @@ class CH_UTILITY_EXPORT ConnectionController
    */
   void
   clear();
-
-  void
-  lock();
-
-  void
-  unlock();
-
-  /**
-   * First connection of the list. Only walk the list while the controller is locked.
-   */
-  NODISCARD FORCEINLINE BaseConnectionNode*
-  getFirstConnection() const
-  {
-    return m_connections;
-  }
 
  private:
   void
@@ -200,9 +196,11 @@ class HEvent
  * Event with a list of subscribers that are all called when the event is fired.
  * Use it through Event<ReturnType(Args...)>.
  */
-template<class ReturnType, class... Args>
+template<uint32 InlineCapacity, class ReturnType, class... Args>
 class TEvent
 {
+  static_assert(InlineCapacity > 0, "An event needs room for at least one listener.");
+
  private:
   struct BasicConnectionNode : BaseConnectionNode
   {
@@ -234,24 +232,20 @@ class TEvent
   void
   operator()(Args... args) const
   {
+    // Keeps the controller alive in case a callback destroys this event.
     SPtr<ConnectionController> controller = m_connectionController;
-    Vector<function<ReturnType(Args...)>> activeCallbacks;
 
-    // Callbacks are copied and called after unlocking, so a callback can connect or
-    // disconnect from this same event.
-    {
-      ConnectionController::ScopedLock lock(*controller);
-      auto* connection = static_cast<BasicConnectionNode*>(controller->getFirstConnection());
-      while (nullptr != connection) {
-        if (connection->m_isActive && connection->m_function) {
-          activeCallbacks.push_back(connection->m_function);
-        }
-        connection = static_cast<BasicConnectionNode*>(connection->m_next);
+    // Callbacks run after the list is unlocked, so a callback can connect or disconnect
+    // from this same event.
+    BaseConnectionNode* inlineNodes[InlineCapacity];
+    ConnectionController::PinnedConnections connections(*controller, inlineNodes,
+                                                        InlineCapacity);
+    for (BaseConnectionNode* connection : connections) {
+      auto& callback = static_cast<BasicConnectionNode*>(connection)->m_function;
+      if (callback) {
+        // Not forwarded, because a moved argument would reach the next callbacks empty.
+        callback(args...);
       }
-    }
-
-    for (auto& callback : activeCallbacks) {
-      callback(forward<Args>(args)...);
     }
   }
 
@@ -265,14 +259,17 @@ class TEvent
   SPtr<ConnectionController> m_connectionController;
 };
 
-template<typename Signature>
+template<typename Signature, uint32 InlineCapacity = 16>
 class Event;
 
 /**
  * Lets an event be declared with function syntax, e.g. Event<void(int32)>.
+ * InlineCapacity is how many listeners a fire handles without a heap allocation; raise
+ * it for events that are expected to have many listeners, e.g. Event<void(int32), 64>.
  */
-template<class ReturnType, class... Args>
-class Event<ReturnType(Args...)> : public TEvent<ReturnType, Args...>
+template<class ReturnType, class... Args, uint32 InlineCapacity>
+class Event<ReturnType(Args...), InlineCapacity>
+ : public TEvent<InlineCapacity, ReturnType, Args...>
 {};
 
 } // namespace chEngineSDK

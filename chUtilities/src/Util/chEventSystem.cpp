@@ -112,18 +112,56 @@ ConnectionController::clear()
 
 /*
  */
-void
-ConnectionController::lock()
+ConnectionController::PinnedConnections::PinnedConnections(ConnectionController& controller,
+                                                           BaseConnectionNode** inlineNodes,
+                                                           uint32 inlineCapacity)
+ : m_controller(controller),
+   m_inlineNodes(inlineNodes),
+   m_nodes(inlineNodes)
 {
-  m_impl->mutex.lock();
+  RecursiveLock lock(controller.m_impl->mutex);
+
+  uint32 activeCount = 0;
+  for (BaseConnectionNode* node = controller.m_connections; nullptr != node;
+       node = node->m_next) {
+    if (node->m_isActive) {
+      ++activeCount;
+    }
+  }
+
+  if (activeCount > inlineCapacity) {
+    m_nodes = new BaseConnectionNode*[activeCount];
+  }
+
+  for (BaseConnectionNode* node = controller.m_connections; nullptr != node;
+       node = node->m_next) {
+    if (node->m_isActive) {
+      ++node->m_size;
+      m_nodes[m_count++] = node;
+    }
+  }
 }
 
 /*
  */
-void
-ConnectionController::unlock()
+ConnectionController::PinnedConnections::~PinnedConnections()
 {
-  m_impl->mutex.unlock();
+  // Events with no listeners are common (one event per key), so skip the lock.
+  if (0 < m_count) {
+    RecursiveLock lock(m_controller.m_impl->mutex);
+    for (uint32 i = 0; i < m_count; ++i) {
+      BaseConnectionNode* node = m_nodes[i];
+      CH_ASSERT(node->m_size > 0);
+      --node->m_size;
+      if (0 == node->m_size) {
+        delete node;
+      }
+    }
+  }
+
+  if (m_nodes != m_inlineNodes) {
+    delete[] m_nodes;
+  }
 }
 
 /*
