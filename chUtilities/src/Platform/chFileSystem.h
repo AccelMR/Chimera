@@ -18,15 +18,31 @@
 #include "chFileStream.h"
 
 namespace chEngineSDK{
-class CH_UTILITY_EXPORT FileSystem {
- public:
 
+/**
+ * Single entry point to the disk for the whole engine, so no other file needs
+ * <filesystem>. No function throws: failures return false (or an empty result)
+ * and are logged.
+ */
+class CH_UTILITY_EXPORT FileSystem
+{
+ public:
+  /**
+   *   Renames a regular file. Fails if oldPath is not a regular file.
+   **/
   NODISCARD static bool
   renameFile(const Path& oldPath, const Path& newPath);
 
+  /**
+   *   Removes a regular file. Fails if path is not a regular file.
+   **/
   NODISCARD static bool
   removeFile(const Path& path);
 
+  /**
+   *   Returns the absolute version of path, resolved against the current working
+   *   directory, with "." and ".." removed.
+   **/
   NODISCARD static Path
   absolutePath(const Path& path);
 
@@ -36,31 +52,27 @@ class CH_UTILITY_EXPORT FileSystem {
   NODISCARD static bool
   isDirectory(const Path& path);
 
+  /**
+   *   Returns true if path is basePath itself or is inside it. Both paths are made
+   *   absolute first, so one can be relative and the other absolute.
+   **/
   NODISCARD static bool
-  arePathsRelative(const Path& baseTarget, const Path& target);
+  isSubPath(const Path& basePath, const Path& path);
 
- /**
-  *   Creates a directory with a given path.
-  *  NOTE: Path must end at '/' to be a directory.
-  *
-  * @param path
-  *   The path to create thee directory. Has to end with '/'
-  *
-  * @return bool
-  *   True if directory could be created.
-  **/
+  /**
+   *   Creates a directory. Its parent must already exist.
+   *
+   * @return bool
+   *   True if the directory exists after the call.
+   **/
   static bool
   createDirectory(const Path& path);
 
   /**
-   *   Creates directories and its parents if they don't exist.
-  *  NOTE: Path must end at '/' to be a directory.
-  *
-  * @param path
-  *   The path to create thee directory. Has to end with '/'
-  *
-  * @return bool
-  *   True if directories could be created.
+   *   Creates a directory and every missing parent.
+   *
+   * @return bool
+   *   True if the directory exists after the call.
    **/
   static bool
   createDirectories(const Path& path);
@@ -112,12 +124,7 @@ class CH_UTILITY_EXPORT FileSystem {
   dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path);
 
   /**
-   *   Removes a file or empty directory.
-   *
-   * NOTE: Will throw an exception if the directory is not empty.
-   *
-   * @param path
-   *    What to delete.
+   *   Removes a file or an empty directory. Fails on a directory that is not empty.
    *
    * @return bool
    *    True if it could be deleted.
@@ -126,63 +133,35 @@ class CH_UTILITY_EXPORT FileSystem {
   remove(const Path& path);
 
   /**
-   *
-   * Removes all data in path, ignoring if it has data in it or not.
-   *
-   * @param path
-   *    What to delete.
+   *   Removes a file or a directory with everything inside it.
    *
    * @return bool
-   *    True if it could be deleted.
+   *    True if something was deleted.
    **/
   static bool
   removeAll(const Path& path);
 
   /**
-   *   Reads a file and returns it as a byte Vector.
+   *   Reads a whole file into a byte vector.
    *
-   * @param path
-   *  The path where the file is.
-   *
-   * @return Vector<uint8*>
-   *  Byte array of the file.
+   * @return Vector<uint8>
+   *  The file bytes, empty if the file could not be read.
    **/
   static Vector<uint8>
   fastRead(const Path& path);
 
-  /*
-  */
-  static bool
-  isPathRelative(const Path& baseTarget, const Path& target);
-
+  /**
+   *   Fills files and directories with the direct children of path, as absolute
+   *   paths.
+   **/
   static void
   getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories);
 
-  FORCEINLINE static void
-  forEachFileChild(const Path& path, const std::function<void(const Path&)>& func) {
-    Vector<Path> files, directories;
-    getChildren(path, files, directories);
-    for (const auto& file : files) {
-      func(file);
-    }
-    for (const auto& dir : directories) {
-      func(dir);
-    }
-  }
-
-  FORCEINLINE static void
-  forEachFileChildRecursive(const Path& path, const std::function<void(const Path&)>& func) {
-    Vector<Path> files, directories;
-    getChildren(path, files, directories);
-
-    for (const auto& file : files) {
-      func(file);
-    }
-
-    for (const auto& dir : directories) {
-      func(dir);
-      forEachFileChildRecursive(dir, func); // Llamada recursiva
-    }
-  }
+  /**
+   *   Calls func for every file and directory under path, at any depth. Symbolic
+   *   links to directories are not followed, so link cycles cannot loop forever.
+   **/
+  static void
+  forEachFileChildRecursive(const Path& path, const Function<void(const Path&)>& func);
 };
 }

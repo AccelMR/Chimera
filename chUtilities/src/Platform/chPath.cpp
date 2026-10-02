@@ -18,101 +18,122 @@
 #include "chPath.h"
 
 #include <algorithm>
-
-#include "chUnicode.h"
+#include <filesystem>
 
 namespace chEngineSDK {
 namespace fs = std::filesystem;
 
+namespace {
+String
+normalize(String path)
+{
+  std::replace(path.begin(), path.end(), '\\', '/');
+  return path;
+}
+
+Path
+fromFsPath(const fs::path& path)
+{
+  return Path(path.generic_string());
+}
+} // namespace
+
 Path Path::EMPTY = Path("");
 
-Path::Path(const String& path) {
-    String normalizedPath = path;
-    std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
-    m_path = fs::path(normalizedPath);
+Path::Path(const String& path)
+  : m_path(normalize(path))
+{}
+
+Path::Path(const ANSICHAR* path)
+  : m_path(normalize(path))
+{}
+
+Path::Path(const Vector<Path>& pathsToConcat)
+{
+  for (const auto& path : pathsToConcat) {
+    *this = join(path);
+  }
 }
 
-bool 
-Path::isRelative() const {
-  return m_path.is_relative();
-}
-
-bool 
-Path::isDirectory() const {
-  return fs::is_directory(m_path);
-}
-
-bool 
-Path::isFile() const {
-  return fs::is_regular_file(m_path);
-}
-
-bool 
-Path::exists() const {
-  return fs::exists(m_path);
+bool
+Path::isRelative() const
+{
+  return fs::path(m_path).is_relative();
 }
 
 #if USING(CH_PLATFORM_WIN32)
 WString
 #else
 String
-#endif 
-Path::getPlatformString() const {
+#endif
+Path::getPlatformString() const
+{
 #if USING(CH_PLATFORM_WIN32)
-  return m_path.generic_wstring();
+  return fs::path(m_path).generic_wstring();
 #else
-  return m_path.generic_string();
-#endif 
+  return m_path;
+#endif
 }
 
-String 
-Path::toString() const {
-  return m_path.generic_string();
+String
+Path::toString() const
+{
+  return m_path;
 }
 
-String 
-Path::getFileName(bool withExtension) const {
-  return withExtension ? m_path.filename().string() : m_path.stem().string();
+String
+Path::getFileName(bool withExtension) const
+{
+  const fs::path path(m_path);
+  return withExtension ? path.filename().string() : path.stem().string();
 }
 
-String 
-Path::getExtension() const {
-  return m_path.extension().string();
+String
+Path::getExtension() const
+{
+  return fs::path(m_path).extension().string();
 }
 
-Path 
-Path::getDirectory() const {
-  return Path(m_path.parent_path());
+Path
+Path::getDirectory() const
+{
+  return fromFsPath(fs::path(m_path).parent_path());
 }
 
-void 
-Path::setPath(const String& newPath) {
-  m_path = fs::path(newPath);
+void
+Path::setPath(const String& newPath)
+{
+  m_path = normalize(newPath);
 }
 
-Path 
-Path::join(const Path& other) const {
-  return Path((m_path / other.m_path));
+Path
+Path::join(const Path& other) const
+{
+  return fromFsPath(fs::path(m_path) / other.m_path);
 }
 
-bool 
-Path::operator<(const Path& other) const {
+bool
+Path::operator<(const Path& other) const
+{
   return m_path < other.m_path;
 }
 
 Path
-Path::operator+(const String& other) const {
-  return Path((m_path.generic_string() + "/" + other));
+Path::operator+(const String& other) const
+{
+  return Path(m_path + "/" + other);
 }
 
 Path
-Path::operator/(const String& other) const {
-  return Path((m_path.generic_string() + "/" + other));
+Path::operator/(const String& other) const
+{
+  return Path(m_path + "/" + other);
 }
 
 Path
-Path::operator/(const Path& other) const {
-  return Path((m_path / other.m_path));
+Path::operator/(const Path& other) const
+{
+  return join(other);
 }
 
 }  // namespace chEngineSDK

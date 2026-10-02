@@ -200,7 +200,7 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   validateInfo(!assetPath.empty(), "Asset path cannot be empty");
   validateInfo(FileSystem::exists(assetPath),
                 "Asset path does not exist: " + assetPath.toString());
-  validateInfo(FileSystem::arePathsRelative(EnginePaths::getGameAssetDirectory(), assetPath),
+  validateInfo(FileSystem::isSubPath(EnginePaths::getGameAssetDirectory(), assetPath),
                 chString::format("Asset path must be relative to the asset directory: {0}",
                                  EnginePaths::getGameAssetDirectory().toString()));
   if (!validationPassed) {

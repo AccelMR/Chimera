@@ -1630,6 +1630,62 @@ TEST_CASE("chUtilities - RandomNumbers") {
   REQUIRE(randomNumber == 735);
 }
 
+TEST_CASE("chUtilities - FileSystem") {
+  SECTION("absolutePath removes dot segments") {
+    REQUIRE(FileSystem::absolutePath(Path("a/../b")) == FileSystem::absolutePath(Path("b")));
+    REQUIRE(FileSystem::absolutePath(Path("./a/")) == FileSystem::absolutePath(Path("a")));
+    REQUIRE_FALSE(FileSystem::absolutePath(Path("a")).isRelative());
+  }
+
+  SECTION("isSubPath compares whole folder names") {
+    REQUIRE(FileSystem::isSubPath(Path("Assets"), Path("Assets/Textures/a.chAss")));
+    REQUIRE(FileSystem::isSubPath(Path("Assets"), Path("Assets")));
+    REQUIRE(FileSystem::isSubPath(Path("Assets"), FileSystem::absolutePath(Path("Assets/x"))));
+    REQUIRE(FileSystem::isSubPath(Path("Other/../Assets"), Path("Assets/x")));
+    REQUIRE_FALSE(FileSystem::isSubPath(Path("Assets"), Path("Assets2/x")));
+    REQUIRE_FALSE(FileSystem::isSubPath(Path("Assets"), Path("Assets/../x")));
+    REQUIRE_FALSE(FileSystem::isSubPath(Path("Assets/x"), Path("Assets")));
+  }
+
+  SECTION("disk operations report failures instead of throwing") {
+    const Path root("chFileSystemTestDir");
+    FileSystem::removeAll(root);
+
+    REQUIRE_FALSE(FileSystem::exists(root));
+    REQUIRE(FileSystem::fastRead(Path("chFileSystemTestDir/missing.bin")).empty());
+    REQUIRE(FileSystem::openFile(Path("chFileSystemTestDir/missing.bin")) == nullptr);
+    REQUIRE_FALSE(FileSystem::removeFile(Path("chFileSystemTestDir/missing.bin")));
+
+    SPtr<DataStream> file = FileSystem::createAndOpenFile(Path("chFileSystemTestDir/a/b/f.bin"));
+    REQUIRE(file != nullptr);
+    const uint8 bytes[3] = {1, 2, 3};
+    file->write(bytes, sizeof(bytes));
+    file->close();
+
+    const Vector<uint8> readBack = FileSystem::fastRead(Path("chFileSystemTestDir/a/b/f.bin"));
+    REQUIRE(readBack.size() == 3);
+    REQUIRE(readBack[2] == 3);
+
+    REQUIRE_FALSE(FileSystem::remove(Path("chFileSystemTestDir/a")));
+
+    Vector<Path> files, directories;
+    FileSystem::getChildren(Path("chFileSystemTestDir/a"), files, directories);
+    REQUIRE(files.empty());
+    REQUIRE(directories.size() == 1);
+
+    int32 visited = 0;
+    FileSystem::forEachFileChildRecursive(root, [&](const Path&) { ++visited; });
+    REQUIRE(visited == 3);
+
+    REQUIRE(FileSystem::renameFile(Path("chFileSystemTestDir/a/b/f.bin"),
+                                   Path("chFileSystemTestDir/a/b/g.bin")));
+    REQUIRE(FileSystem::isFile(Path("chFileSystemTestDir/a/b/g.bin")));
+
+    REQUIRE(FileSystem::removeAll(root));
+    REQUIRE_FALSE(FileSystem::exists(root));
+  }
+}
+
 TEST_CASE("CommandParser Tests", "[CommandParser]") {
 
   SECTION("TestParse") {

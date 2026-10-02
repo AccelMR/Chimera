@@ -15,19 +15,22 @@
  */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
-#include <filesystem>  // for std::filesystem
 
 namespace chEngineSDK {
-namespace fs = std::filesystem;
 
-class CH_UTILITY_EXPORT Path {
+/**
+ * Path stored as a string that always uses '/' as separator. It is kept as a
+ * string so this header does not need <filesystem>, which is heavy; every
+ * operation that needs std::filesystem lives in chPath.cpp.
+ */
+class CH_UTILITY_EXPORT Path
+{
  public:
   /**
    * Default constructor.
    */
   FORCEINLINE
-  Path()
-    : m_path() {}
+  Path() = default;
 
   /**
    * Constructor from a simple string.
@@ -43,53 +46,27 @@ class CH_UTILITY_EXPORT Path {
    * @param path
    *    As C-string.
   */
-  explicit Path(const ANSICHAR* path)
-    : m_path(path) {}
-
-  FORCEINLINE Path(const Vector<Path>& pathsToConcat) {
-    for (const auto& path : pathsToConcat) {
-      m_path /= path.m_path;
-    }
-  }
+  explicit Path(const ANSICHAR* path);
 
   /**
-   * Constructor from a vector of paths.
+   * Constructor that joins every path in the list, in order.
+   *
+   * @param pathsToConcat
+   *    Paths to join.
+   */
+  Path(const Vector<Path>& pathsToConcat);
+
+  /**
+   * Constructor that joins every given path, in order.
    * @param paths
-   *    Vector of paths to join.
+   *    Paths to join.
    */
   template<typename... Paths,
            typename = std::enable_if_t<(std::is_same_v<Paths, Path> && ...)>>
-  explicit Path(const Paths&... paths) : m_path() {
-    (m_path /= ... /= paths.m_path); // Fold expression to join all paths
+  explicit Path(const Paths&... paths)
+  {
+    ((*this = join(paths)), ...);
   }
-
-  /**
-   * Constructor from a filesystem path.
-   *
-   * @param path
-   *    As filesystem path.
-   */
-  FORCEINLINE explicit
-  Path(const fs::path& path)
-    : m_path(path) {}
-
-  /**
-   * Conversion operator to fs::path.
-   */
-  FORCEINLINE
-  operator fs::path() const {
-    return m_path;
-  }
-
-#if USING(CH_PLATFORM_WIN32)
-  /**
-   * Constructor from a wide string. Windows Only constructor.
-   *
-   * @param path
-   *    As Wide string.
-   */
-  Path(const WString& path);
-#endif
 
   /**
    * Default destructor.
@@ -113,12 +90,6 @@ class CH_UTILITY_EXPORT Path {
   String
   toString() const;
 
-  /*
-  * Check if path exists
-  */
-  bool
-  exists() const;
-
   /**
    * Constructs a wide string from this path, platform-specific.
    *
@@ -132,36 +103,12 @@ class CH_UTILITY_EXPORT Path {
   getPlatformString() const;
 
   /**
-   * Checks if this Path exists in the system.
-   *
-   * @return True if exists, false otherwise.
-   */
-  bool
-  exist() const;
-
-  /**
-   * Checks if path is a directory.
-   *
-   * @return True if directory, false otherwise.
-   */
-  FORCEINLINE bool
-  isDirectory() const;
-
-  /**
-   * Checks if path is a file.
-   *
-   * @return True if file, false otherwise.
-   */
-  FORCEINLINE bool
-  isFile() const;
-
-  /**
    * Sets and sanitizes the internal path.
    *
    * @param path
    *    The new string to be a path.
    */
-  FORCEINLINE void
+  void
   setPath(const String& path);
 
   /**
@@ -234,21 +181,15 @@ class CH_UTILITY_EXPORT Path {
    * @return True if paths are equal, false otherwise.
    */
   FORCEINLINE bool
-  operator==(const Path& other) const{
+  operator==(const Path& other) const
+  {
     return m_path == other.m_path;
   }
 
   NODISCARD bool
-  empty() const { return m_path.empty(); }
-
-  /**
-   * Returns the underlying filesystem path.
-   *
-   * @return The underlying filesystem path.
-   */
-  friend std::ostream& operator<<(std::ostream& os, const Path& path) {
-    os << path.toString();
-    return os;
+  empty() const
+  {
+    return m_path.empty();
   }
 
   static Path EMPTY;
@@ -257,6 +198,6 @@ class CH_UTILITY_EXPORT Path {
   friend class FileSystem;
   friend class FileDataStream;
 
-  fs::path m_path;  // Using C++17 std::filesystem::path
+  String m_path;
 };
 }  // namespace chEngineSDK

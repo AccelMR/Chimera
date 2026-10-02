@@ -15,248 +15,290 @@
 /************************************************************************/
 #include "chFileSystem.h"
 
+#include <filesystem>
 #include <iostream>
+#include <system_error>
 
+#include "chLogger.h"
 #include "chPath.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
 namespace fs = std::filesystem;
 
-/*
-*/
-/**
- * @brief Renames a file from oldPath to newPath.
- */
-bool
-FileSystem::renameFile(const Path& oldPath, const Path& newPath) {
-  fs::path oldFsPath(oldPath.toString());
-  fs::path newFsPath(newPath.toString());
-  if (fs::exists(oldFsPath) && fs::is_regular_file(oldFsPath)) {
-    fs::rename(oldFsPath, newFsPath);
-    return true;
+CH_LOG_DECLARE_STATIC(FileSystemLog, All);
+
+namespace {
+// The Logger opens its own file through FileSystem, and FileSystem can run before
+// the Logger starts, so errors fall back to std::cerr when there is no Logger.
+void
+logError(const String& message)
+{
+  if (Logger::isStarted()) {
+    CH_LOG_ERROR(FileSystemLog, "{0}", message);
   }
-  return false; // Old file does not exist or is not a regular file
+  else {
+    std::cerr << message << std::endl;
+  }
 }
 
-/*
-*/
-/**
- * @brief Removes a file at the specified path.
- */
-bool
-FileSystem::removeFile(const Path& path) {
-  fs::path fsPath(path.toString());
-  if (fs::exists(fsPath) && fs::is_regular_file(fsPath)) {
-    return fs::remove(fsPath);
-  }
-  return false; // File does not exist or is not a regular file
+void
+logError(const String& action, const Path& path, const std::error_code& error)
+{
+  logError("FileSystem: failed to " + action + " '" + path.toString() + "': " +
+           error.message());
 }
 
-/*
-*/
-/**
- * @brief Converts a path to an absolute path.
- */
+fs::path
+toAbsoluteFsPath(const Path& path)
+{
+  std::error_code error;
+  fs::path result = fs::absolute(fs::path(path.toString()), error);
+  if (error) {
+    logError("make absolute", path, error);
+    result = fs::path(path.toString());
+  }
+
+  result = result.lexically_normal();
+
+  // lexically_normal keeps a trailing separator ("C:/a/"), which would make the same
+  // directory compare different from "C:/a".
+  if (!result.has_filename() && result.has_relative_path()) {
+    result = result.parent_path();
+  }
+  return result;
+}
+} // namespace
+
+bool
+FileSystem::renameFile(const Path& oldPath, const Path& newPath)
+{
+  if (!isFile(oldPath)) {
+    return false;
+  }
+
+  std::error_code error;
+  fs::rename(oldPath.toString(), newPath.toString(), error);
+  if (error) {
+    logError("rename", oldPath, error);
+    return false;
+  }
+  return true;
+}
+
+bool
+FileSystem::removeFile(const Path& path)
+{
+  if (!isFile(path)) {
+    return false;
+  }
+  return remove(path);
+}
+
 Path
-FileSystem::absolutePath(const Path& path) {
-  return Path(fs::absolute(path.m_path));
+FileSystem::absolutePath(const Path& path)
+{
+  return Path(toAbsoluteFsPath(path).generic_string());
 }
 
-/*
-*/
-/**
- * @brief Checks if a path is a file.
- */
 bool
-FileSystem::isFile(const Path& path) {
-  fs::path fsPath(path.toString());
-  return fs::is_regular_file(fsPath);
-}
-/*
-*/
-/**
- * @brief Checks if a path is a directory.
- * @param path
- *   The path to check.
- * @return True if the path is a directory, false otherwise.
- */
-bool
-FileSystem::isDirectory(const Path& path) {
-    fs::path fsPath(path.toString());
-    return fs::is_directory(fsPath);
+FileSystem::isFile(const Path& path)
+{
+  std::error_code error;
+  return fs::is_regular_file(path.toString(), error);
 }
 
-/*
-*/
-/**
- * @brief Checks if two paths are relative to each other.
- */
 bool
-FileSystem::arePathsRelative(const Path& baseTarget, const Path& target) {
-  // Check if both paths are absolute or relative
-  if (baseTarget.isRelative() == target.isRelative()) {
-    const auto& basePathStr = baseTarget.toString();
-    const auto& targetPathStr = target.toString();
-    // Check if basePathStr is a prefix of targetPathStr
-    return targetPathStr.find(basePathStr) == 0;
+FileSystem::isDirectory(const Path& path)
+{
+  std::error_code error;
+  return fs::is_directory(path.toString(), error);
+}
+
+bool
+FileSystem::isSubPath(const Path& basePath, const Path& path)
+{
+  const fs::path relative = toAbsoluteFsPath(path).lexically_relative(
+                              toAbsoluteFsPath(basePath));
+  return !relative.empty() && *relative.begin() != "..";
+}
+
+bool
+FileSystem::createDirectory(const Path& path)
+{
+  std::error_code error;
+  fs::create_directory(path.toString(), error);
+  if (error) {
+    logError("create directory", path, error);
+    return false;
   }
-  // If one is absolute and the other is relative, they cannot be relative to each other
-  return false;
+  return true;
 }
 
-/**
- * @brief Creates a directory at a given path.
- */
 bool
-FileSystem::createDirectory(const Path& path) {
-  fs::path fsPath(path.toString());
-  return fs::create_directory(fsPath);
+FileSystem::createDirectories(const Path& path)
+{
+  std::error_code error;
+  fs::create_directories(path.toString(), error);
+  if (error) {
+    logError("create directories", path, error);
+    return false;
+  }
+  return true;
 }
 
-/**
- * @brief Creates directories recursively.
- */
 bool
-FileSystem::createDirectories(const Path& path) {
-  fs::path fsPath(path.toString());
-  return fs::create_directories(fsPath);
+FileSystem::exists(const Path& path)
+{
+  std::error_code error;
+  return fs::exists(path.toString(), error);
 }
 
-/**
- * @brief Checks if a path exists.
- */
-bool
-FileSystem::exists(const Path& path) {
-  fs::path fsPath(path.toString());
-  return fs::exists(fsPath);
-}
-
-/**
- * @brief Opens a file and returns a stream.
- */
 SPtr<DataStream>
-FileSystem::openFile(const Path& path, bool readOnly /*= true*/) {
-  const Path fullPath = path.isRelative() ?
-    Path(fs::absolute(path.toString()).generic_string()) :
-    path;
-
+FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
+{
   AccesModeFlag accessMode(ACCESS_MODE::kREAD);
   if (!readOnly) {
     accessMode.set(ACCESS_MODE::kWRITE);
   }
 
-  return chMakeShared<FileDataStream>(fullPath, accessMode, true);
+  try {
+    return chMakeShared<FileDataStream>(absolutePath(path), accessMode, true);
+  }
+  catch (const std::exception& e) {
+    logError("FileSystem: " + String(e.what()));
+    return nullptr;
+  }
 }
 
-/**
- * @brief Creates and opens a new file.
- */
 SPtr<DataStream>
-FileSystem::createAndOpenFile(const Path& path) {
-  Path fullPath = path.isRelative() ?
-                  absolutePath(path) :
-                  path;
+FileSystem::createAndOpenFile(const Path& path)
+{
+  const Path fullPath = absolutePath(path);
 
-  // Get the parent directory of the file path
-  Path parentDir = fullPath.getDirectory();
-
-  // Check if the directory exists, if not, create it
-  if (!FileSystem::exists(parentDir)) {
-    if (!FileSystem::createDirectories(parentDir)){
-      std::cerr << "Failed to create directory: " << parentDir.toString() << std::endl;
-      return nullptr;
-    }
+  const Path parentDir = fullPath.getDirectory();
+  if (!exists(parentDir) && !createDirectories(parentDir)) {
+    return nullptr;
   }
 
-  return chMakeShared<FileDataStream>(fullPath, ACCESS_MODE::kWRITE, true);
+  try {
+    return chMakeShared<FileDataStream>(fullPath, ACCESS_MODE::kWRITE, true);
+  }
+  catch (const std::exception& e) {
+    logError("FileSystem: " + String(e.what()));
+    return nullptr;
+  }
 }
 
-/**
- * @brief Dumps the content of a memory data stream into a file.
- */
 void
-FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path) {
-  auto fileStream = chMakeShared<FileDataStream>(path, memStream);
+FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path)
+{
+  try {
+    // The constructor writes the whole memory stream and the destructor closes the file.
+    FileDataStream fileStream(path, memStream);
+  }
+  catch (const std::exception& e) {
+    logError("FileSystem: " + String(e.what()));
+  }
 }
 
-/**
- * @brief Deletes a file or directory.
- */
 bool
-FileSystem::remove(const Path &path) {
-  return fs::remove(path.toString());
+FileSystem::remove(const Path& path)
+{
+  std::error_code error;
+  const bool removed = fs::remove(path.toString(), error);
+  if (error) {
+    logError("remove", path, error);
+    return false;
+  }
+  return removed;
 }
 
-/**
- * @brief Deletes all contents within a directory recursively.
- */
 bool
-FileSystem::removeAll(const Path& path) {
-  return fs::remove_all(path.toString());
+FileSystem::removeAll(const Path& path)
+{
+  std::error_code error;
+  const std::uintmax_t removedCount = fs::remove_all(path.toString(), error);
+  if (error) {
+    logError("remove all", path, error);
+    return false;
+  }
+  return removedCount > 0;
 }
 
-/**
- * @brief Reads a file into a byte array.
- */
 Vector<uint8>
-FileSystem::fastRead(const Path& path) {
-  Vector<uint8> ret;
+FileSystem::fastRead(const Path& path)
+{
+  Vector<uint8> result;
 
-  auto fileData = FileSystem::openFile(path);
-  auto size = fileData->size();
+  SPtr<DataStream> fileData = openFile(path);
+  if (!fileData) {
+    return result;
+  }
 
-  ret.resize(size);
-
-  fileData->read(&ret[0], size);
-
+  result.resize(fileData->size());
+  if (!result.empty()) {
+    fileData->read(result.data(), result.size());
+  }
   fileData->close();
 
-  return ret;
+  return result;
 }
 
-/**
- * @brief Checks if a path is relative to another path.
- */
-bool
-FileSystem::isPathRelative(const Path& basePath, const Path& targetPath) {
-  // Check if both paths are absolute or relative
-  if (basePath.isRelative() == targetPath.isRelative()) {
-    const auto& basePathStr = basePath.toString();
-    const auto& targetPathStr = targetPath.toString();
-
-    // Check if basePathStr is a prefix of targetPathStr
-    return targetPathStr.find(basePathStr) == 0;
-  }
-
-  return false;
-}
-
-/**
- * @brief Gets the files and directories under a certain path.
- */
 void
-FileSystem::getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories) {
-  fs::path fsPath(fs::absolute(path.toString()));
+FileSystem::getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories)
+{
+  const fs::path fsPath = toAbsoluteFsPath(path);
 
-  if (!fs::is_directory(fsPath)) {
+  std::error_code error;
+  fs::directory_iterator it(fsPath, fs::directory_options::skip_permission_denied, error);
+  if (error) {
+    logError("list", path, error);
     return;
   }
 
-  for (const auto& entry : fs::directory_iterator(fsPath)) {
-    const auto& entryPath = entry.path();
-
-    if (fs::is_directory(entry)) {
-      directories.push_back(Path(entryPath.generic_string()));
+  for (const fs::directory_iterator end{}; it != end; it.increment(error)) {
+    if (error) {
+      logError("list", path, error);
+      return;
     }
-    else {
-      // Use status to properly identify file types
-      auto status = entry.status();
-      if (fs::is_regular_file(status) ||
-          fs::is_other(status)) { // This might catch .so/.dll files
-        files.push_back(Path(entryPath.generic_string()));
-      }
+
+    std::error_code statusError;
+    if (it->is_directory(statusError)) {
+      directories.push_back(Path(it->path().generic_string()));
+    }
+    else if (it->is_regular_file(statusError) || it->is_other(statusError)) {
+      files.push_back(Path(it->path().generic_string()));
     }
   }
 }
+
+void
+FileSystem::forEachFileChildRecursive(const Path& path,
+                                      const Function<void(const Path&)>& func)
+{
+  const fs::path fsPath = toAbsoluteFsPath(path);
+
+  std::error_code error;
+  fs::recursive_directory_iterator it(fsPath,
+                                      fs::directory_options::skip_permission_denied,
+                                      error);
+  if (error) {
+    logError("list", path, error);
+    return;
+  }
+
+  for (const fs::recursive_directory_iterator end{}; it != end; it.increment(error)) {
+    if (error) {
+      logError("list", path, error);
+      return;
+    }
+
+    std::error_code statusError;
+    if (it->is_directory(statusError) || it->is_regular_file(statusError) ||
+        it->is_other(statusError)) {
+      func(Path(it->path().generic_string()));
+    }
+  }
 }
+} // namespace chEngineSDK

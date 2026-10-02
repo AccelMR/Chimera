@@ -62,7 +62,7 @@ loadLibraryPlatformSpecific(const char* name) {
     std::cerr << "Error al cargar '" << name << "': " << dlerror() << std::endl;
 
     // Intenta con ruta absoluta como fallback
-    fs::path absolutePath = fs::absolute(name);
+    const String absolutePath = FileSystem::absolutePath(Path(name)).toString();
     handle = dlopen(absolutePath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     if (!handle) {
       std::cerr << "Error con ruta absoluta '" << absolutePath << "': " << dlerror()

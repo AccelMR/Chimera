@@ -15,6 +15,7 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <concepts>
 #include <cstring>
 
 #include "chSTDStreams.h"
@@ -293,6 +294,12 @@ chString::toString(T&& value) {
   }
   else if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
     return std::to_string(static_cast<std::decay_t<T>>(value));
+  }
+  else if constexpr (std::is_convertible_v<T, String>) {
+    return String(std::forward<T>(value));
+  }
+  else if constexpr (requires { { value.toString() } -> std::convertible_to<String>; }) {
+    return value.toString();
   }
   else {
     std::ostringstream oss;
