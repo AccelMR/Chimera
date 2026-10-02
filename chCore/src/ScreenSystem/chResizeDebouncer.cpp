@@ -11,7 +11,7 @@
 
 #include "chResizeDebouncer.h"
 
-#include <algorithm>
+#include "chMath.h"
 
 namespace chEngineSDK {
 /*
@@ -108,7 +108,7 @@ ResizeDebouncer::startDebounce() {
       }
       else {
         std::this_thread::sleep_for(milliseconds(
-          std::min<uint64>(50, m_timeoutMs - duration)
+          Math::min<uint64>(50, m_timeoutMs - duration)
         ));
       }
     }

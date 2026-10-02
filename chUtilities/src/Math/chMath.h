@@ -21,14 +21,7 @@
 #include "chPlatformMath.h"
 
 namespace chEngineSDK {
-#if USING(CH_PLATFORM_WIN32) || \
-    USING(CH_PLATFORM_LINUX) || \
-    USING(CH_PLATFORM_OSX)
-
+// Code uses Math::, so a platform can swap in its own math class here.
 using Math = PlatformMath;
-
-#else 
-using Math = PlatformMath;
-#endif
 }
 
