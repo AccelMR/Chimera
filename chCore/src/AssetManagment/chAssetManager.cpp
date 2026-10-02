@@ -209,29 +209,19 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
     }
     stream->close();
 
-    // Check if asset metadata asset path and this path are the same
-    const Path assetPath = FileSystem::absolutePath(Path(asset->getAssetPath()));
+    // The stored folder must match where the file really is. This also fixes files
+    // moved by hand and assets saved before virtual paths, which stored "Assets/...".
+    const String assetDirectory = FileSystem::toVirtualPath(file).getDirectory().toString();
 
-    String relativePath = file.toString();
-    auto pos = relativePath.find("Assets/");
-    if (pos != String::npos) {
-      relativePath = relativePath.substr(pos);
-    }
-    //Remove Filename and extension
-    pos = relativePath.find_last_of('/');
-    if (pos != String::npos) {
-      relativePath = relativePath.substr(0, pos);
-    }
-
-    if (!chString::compare(asset->getAssetPath(), relativePath)) {
+    if (!chString::compare(asset->getAssetPath(), assetDirectory)) {
       CH_LOG_WARNING(AssetSystem,
-                       "Asset path mismatch for {0}: expected {1}, found {2}.\n"
+                       "Asset path mismatch for {0}: stored {1}, found {2}.\n"
                        "Will update asset path to match file location.",
                        asset->getName(),
-                       assetPath,
-                       file.toString());
+                       asset->getAssetPath(),
+                       assetDirectory);
 
-      asset->setAssetPath(relativePath.c_str());
+      asset->setAssetPath(assetDirectory.c_str());
       //TODO: this is nasty fix it.
       // we can probably set a dirtyu flag and then save it later?
       // Main issue ius that we are soft loading here so model data does not exist yet.

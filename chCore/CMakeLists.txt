@@ -37,7 +37,7 @@ endif()
 add_library(chCore SHARED ${SOURCE_FILES})
 
 set_target_properties(chCore PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
     OUTPUT_NAME "chCore"
     PREFIX ""
     INSTALL_RPATH "$ORIGIN"

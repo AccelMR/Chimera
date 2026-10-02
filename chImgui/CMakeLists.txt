@@ -25,7 +25,7 @@ add_library(chImgui STATIC
 )
 
 set_target_properties(chImgui PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
     OUTPUT_NAME "chImgui"
     PREFIX ""
     DEBUG_POSTFIX "d"

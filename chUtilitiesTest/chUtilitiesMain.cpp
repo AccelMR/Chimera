@@ -1647,6 +1647,77 @@ TEST_CASE("chUtilities - FileSystem") {
     REQUIRE_FALSE(FileSystem::isSubPath(Path("Assets/x"), Path("Assets")));
   }
 
+  SECTION("relative paths resolve against the base directory") {
+    const Path workingDirectory = FileSystem::getBaseDirectory();
+    const Path executableDirectory = FileSystem::getExecutableDirectory();
+    REQUIRE_FALSE(executableDirectory.isRelative());
+    REQUIRE(FileSystem::isDirectory(executableDirectory));
+
+    FileSystem::setBaseDirectory(executableDirectory);
+    REQUIRE(FileSystem::getBaseDirectory() == executableDirectory);
+    REQUIRE(FileSystem::absolutePath(Path("Assets/a")) ==
+            executableDirectory.join(Path("Assets/a")));
+    REQUIRE(FileSystem::toRelativePath(executableDirectory.join(Path("Assets/a"))) ==
+            Path("Assets/a"));
+    REQUIRE(FileSystem::toRelativePath(executableDirectory.getDirectory()) == Path(".."));
+
+    FileSystem::setBaseDirectory(workingDirectory);
+    REQUIRE(FileSystem::getBaseDirectory() == workingDirectory);
+  }
+
+  SECTION("mounted directories are layered by priority") {
+    const Path root("chMountTestDir");
+    FileSystem::removeAll(root);
+
+    auto writeFile = [](const Path& path, uint8 value) {
+      SPtr<DataStream> file = FileSystem::createAndOpenFile(path);
+      REQUIRE(file != nullptr);
+      file->write(&value, 1);
+      file->close();
+    };
+    writeFile(Path("chMountTestDir/Base/shared.bin"), 1);
+    writeFile(Path("chMountTestDir/Base/baseOnly.bin"), 2);
+    writeFile(Path("chMountTestDir/Mod/shared.bin"), 3);
+    writeFile(Path("chMountTestDir/Engine/engine.bin"), 4);
+
+    REQUIRE(FileSystem::mount("TestGame", Path("chMountTestDir/Base"), 0, true));
+    REQUIRE(FileSystem::mount("TestGame", Path("chMountTestDir/Mod"), 10));
+    REQUIRE(FileSystem::mount("TestEngine", Path("chMountTestDir/Engine")));
+
+    REQUIRE(FileSystem::isVirtual(Path("/TestGame/shared.bin")));
+    REQUIRE_FALSE(FileSystem::isVirtual(Path("/NotMounted/shared.bin")));
+    REQUIRE_FALSE(FileSystem::isVirtual(Path("/TestGame/../shared.bin")));
+
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/shared.bin"))[0] == 3);
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/baseOnly.bin"))[0] == 2);
+    REQUIRE(FileSystem::isFile(Path("/TestEngine/engine.bin")));
+
+    writeFile(Path("/TestGame/new.bin"), 5);
+    REQUIRE(FileSystem::isFile(Path("chMountTestDir/Base/new.bin")));
+    REQUIRE(FileSystem::createAndOpenFile(Path("/TestEngine/x.bin")) == nullptr);
+
+    Vector<Path> files, directories;
+    FileSystem::getChildren(Path("/TestGame"), files, directories);
+    REQUIRE(files.size() == 3);
+    for (const Path& file : files) {
+      REQUIRE(FileSystem::isSubPath(Path("/TestGame"), file));
+    }
+
+    REQUIRE(FileSystem::toVirtualPath(Path("chMountTestDir/Base/baseOnly.bin")) ==
+            Path("/TestGame/baseOnly.bin"));
+    REQUIRE(FileSystem::toVirtualPath(Path("chMountTestDir/Other.bin")).empty());
+    REQUIRE(FileSystem::isSubPath(Path("/TestGame"), Path("chMountTestDir/Base/x")));
+    REQUIRE_FALSE(FileSystem::isSubPath(Path("/TestGame"), Path("/TestEngine/engine.bin")));
+
+    REQUIRE(FileSystem::unmount("TestGame", Path("chMountTestDir/Mod")));
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/shared.bin"))[0] == 1);
+
+    REQUIRE(FileSystem::unmount("TestGame", Path("chMountTestDir/Base")));
+    REQUIRE(FileSystem::unmount("TestEngine", Path("chMountTestDir/Engine")));
+    REQUIRE_FALSE(FileSystem::isVirtual(Path("/TestGame/shared.bin")));
+    REQUIRE(FileSystem::removeAll(root));
+  }
+
   SECTION("disk operations report failures instead of throwing") {
     const Path root("chFileSystemTestDir");
     FileSystem::removeAll(root);

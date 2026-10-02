@@ -9,6 +9,7 @@
 #include "chUIHelpers.h"
 
 #include "chEnginePaths.h"
+#include "chFileSystem.h"
 #include "chDisplayEventHandle.h"
 #include "chIGraphicsAPI.h"
 #include "chLinearColor.h"
@@ -347,9 +348,11 @@ UIHelpers::initFontConfig() {
   icons_config.PixelSnapH = true;
   icons_config.GlyphMinAdvanceX = iconFontSize;
 
-  // Build an absolute path when possible (recommend defining CH_CONTENT_DIR via CMake)
+  // ImGui opens the font itself, so it needs the real path, not the virtual one.
   const String fontIconFilePath =
-      EnginePaths::getEditorContentDirectory().toString() + "/Fonts/fa-solid-900.ttf";
+      FileSystem::absolutePath(
+          EnginePaths::getEditorContentDirectory().join(Path("Fonts/fa-solid-900.ttf")))
+          .toString();
 
   io.Fonts->AddFontFromFileTTF(fontIconFilePath.c_str(), iconFontSize, &icons_config, icons_ranges);
 }

@@ -1,8 +1,10 @@
 #include "chEditorApplication.h"
 
 #include "chCommandParser.h"
+#include "chEnginePaths.h"
 #include "chException.h"
 #include "chLogger.h"
+#include "chPath.h"
 #include "chStringUtils.h"
 
 using namespace chEngineSDK;
@@ -14,17 +16,22 @@ main(int32 argc, char* argv[]) {
   Logger::startUp();
   Logger& logger = Logger::instance();
   logger.setConsoleOutput(true);
-  logger.setFileOutput(true, "Resources/Engine/Logs/ChimeraEditor.log");
   logger.setGlobalVerbosity(LogVerbosity::Debug);
   logger.setBufferingEnabled(true, 500);
-
-  CH_LOG_INFO(EditorMain, "Chimera Editor started.");
 
   CommandParser::startUp();
   CommandParser& commandParser = CommandParser::instance();
   commandParser.parse(argc, argv);
 
   try {
+    // The log file lives in the project's Saved folder, so the project (-project) must
+    // be known before the file is opened.
+    EnginePaths::initialize();
+    const Path logFile = EnginePaths::getLogDirectory().join(Path("ChimeraEditor.log"));
+    logger.setFileOutput(true, logFile.toString());
+
+    CH_LOG_INFO(EditorMain, "Chimera Editor started.");
+
     BaseApplication::startUp<EditorApplication>();
     // BaseApplication::startUp();
     BaseApplication& app = BaseApplication::instance();

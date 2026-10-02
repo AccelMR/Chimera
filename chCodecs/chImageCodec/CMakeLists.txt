@@ -21,7 +21,8 @@ endif()
 add_library(chImageCodec SHARED ${SOURCE_FILES})
 
 set_target_properties(chImageCodec PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/Codecs
+    LIBRARY_OUTPUT_DIRECTORY ${CH_CODEC_OUTPUT_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CH_CODEC_OUTPUT_DIR}
     OUTPUT_NAME "chImageCodec"
     PREFIX ""
     #want to add a postfix if we are in debug mode

@@ -23,10 +23,68 @@ namespace chEngineSDK{
  * Single entry point to the disk for the whole engine, so no other file needs
  * <filesystem>. No function throws: failures return false (or an empty result)
  * and are logged.
+ *
+ * Paths can be virtual or real:
+ * - A virtual path starts with a mount name, like "/Game/Textures/wood.chAss".
+ *   Several directories can be mounted on the same name (for example a game and
+ *   its mods). Reading uses the highest priority directory that has the file;
+ *   writing uses the highest priority writable directory. Listing merges them.
+ * - Any other path is a real path. Relative real paths are resolved against the
+ *   base directory, not the working directory, so the engine finds the same files
+ *   no matter where it is launched from. Until setBaseDirectory is called the base
+ *   is the working directory.
+ *
+ * Mounts and the base directory are meant to be set at startup, before other
+ * threads use FileSystem; changing them is not thread safe.
  */
 class CH_UTILITY_EXPORT FileSystem
 {
  public:
+  /**
+   *   Mounts a real directory under "/name". With the same priority, the directory
+   *   mounted last wins.
+   *
+   * @param name
+   *   Mount name, without '/'.
+   * @param writable
+   *   True if new files written under "/name" may go to this directory.
+   **/
+  static bool
+  mount(const String& name, const Path& directory, int32 priority = 0, bool writable = false);
+
+  static bool
+  unmount(const String& name, const Path& directory);
+
+  NODISCARD static bool
+  isVirtual(const Path& path);
+
+  /**
+   *   Returns the virtual path for path, or an empty path if it is a real path
+   *   outside every mount.
+   **/
+  NODISCARD static Path
+  toVirtualPath(const Path& path);
+
+  static void
+  setBaseDirectory(const Path& directory);
+
+  NODISCARD static Path
+  getBaseDirectory();
+
+  /**
+   *   Returns the folder that holds the running executable, asked to the operating
+   *   system.
+   **/
+  NODISCARD static Path
+  getExecutableDirectory();
+
+  /**
+   *   Returns path relative to the base directory. A path outside the base
+   *   directory starts with "..".
+   **/
+  NODISCARD static Path
+  toRelativePath(const Path& path);
+
   /**
    *   Renames a regular file. Fails if oldPath is not a regular file.
    **/
@@ -40,8 +98,8 @@ class CH_UTILITY_EXPORT FileSystem
   removeFile(const Path& path);
 
   /**
-   *   Returns the absolute version of path, resolved against the current working
-   *   directory, with "." and ".." removed.
+   *   Returns the real absolute path on disk, with "." and ".." removed. A virtual
+   *   path gives the file in the layer that would be read.
    **/
   NODISCARD static Path
   absolutePath(const Path& path);
@@ -53,8 +111,8 @@ class CH_UTILITY_EXPORT FileSystem
   isDirectory(const Path& path);
 
   /**
-   *   Returns true if path is basePath itself or is inside it. Both paths are made
-   *   absolute first, so one can be relative and the other absolute.
+   *   Returns true if path is basePath itself or is inside it. Virtual and real
+   *   paths can be mixed, as can relative and absolute ones.
    **/
   NODISCARD static bool
   isSubPath(const Path& basePath, const Path& path);
@@ -151,8 +209,8 @@ class CH_UTILITY_EXPORT FileSystem
   fastRead(const Path& path);
 
   /**
-   *   Fills files and directories with the direct children of path, as absolute
-   *   paths.
+   *   Fills files and directories with the direct children of path. A virtual path
+   *   gives virtual children merged from every layer; a real path gives absolute paths.
    **/
   static void
   getChildren(const Path& path, Vector<Path>& files, Vector<Path>& directories);

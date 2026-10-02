@@ -14,8 +14,8 @@
 #include "chDisplayEventHandle.h"
 #include "chDisplayManager.h"
 #include "chDynamicLibManager.h"
+#include "chEnginePaths.h"
 #include "chEventDispatcherManager.h"
-#include "chFileSystem.h"
 #include "chGraphicsTypes.h"
 #include "chLogger.h"
 #include "chStringUtils.h"
@@ -186,20 +186,12 @@ WindowedApplication::initializeGraphics() {
   const String& graphicsAPIName =
       CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
 
-#if USING(CH_DEBUG_MODE) && !USING(CH_PLATFORM_WIN32)
-  const Path dllAbsolutePath =
-      FileSystem::absolutePath(std::move(Path("build/debug-x64/lib")));
+  const Path pluginDirectory = EnginePaths::getPluginDirectory();
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,
-               dllAbsolutePath.toString());
-#endif // CH_DEBUG_MODE
+               pluginDirectory);
 
   WeakPtr<DynamicLibrary> graphicsLib =
-      DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName
-#if USING(CH_DEBUG_MODE) && !USING(CH_PLATFORM_WIN32)
-                                                       ,
-                                                       dllAbsolutePath
-#endif // CH_DEBUG_MODE
-      );
+      DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName, pluginDirectory);
   if (graphicsLib.expired()) {
     CH_EXCEPT(InternalErrorException,
               chString::format("Failed to load graphics library: {0}", graphicsAPIName));

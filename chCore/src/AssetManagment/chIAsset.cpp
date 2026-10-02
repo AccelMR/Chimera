@@ -42,8 +42,9 @@ IAsset::setAssetPath(const ANSICHAR* assetPath) {
 bool
 IAsset::save() {
   const Path assetPath(String(m_metadata.assetPath));
-  if (assetPath.empty() || !assetPath.isRelative()) {
-    CH_LOG(AssetSystem, Error, "Asset path {0} is empty", assetPath.toString());
+  if (!FileSystem::isVirtual(assetPath)) {
+    CH_LOG(AssetSystem, Error, "Asset path '{0}' must be a virtual path such as /Game",
+           assetPath);
     return false;
   }
 
@@ -112,7 +113,7 @@ IAsset::rename(const ANSICHAR* newName) {
 bool
 IAsset::updateMetadata(const AssetMetadata& newMetadata) {
   const Path assetPath(String(m_metadata.assetPath));
-  if (assetPath.empty() || !assetPath.isRelative()) {
+  if (!FileSystem::isVirtual(assetPath)) {
     return false;
   }
 

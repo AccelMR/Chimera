@@ -5,7 +5,22 @@ project ("Chimera")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+# Every executable and plugin goes to one folder and codecs to its Codecs subfolder,
+# because the engine looks for plugins next to the executable. Multi-config
+# generators (Visual Studio) get one folder per configuration, chosen here with
+# $<CONFIG>; by default they would add it after Codecs/ too, giving lib/Codecs/Debug
+# instead of lib/Debug/Codecs.
+get_property(CH_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(CH_MULTI_CONFIG)
+  set(CH_OUTPUT_DIR "${CMAKE_BINARY_DIR}/lib/$<CONFIG>")
+else()
+  set(CH_OUTPUT_DIR "${CMAKE_BINARY_DIR}/lib")
+endif()
+set(CH_CODEC_OUTPUT_DIR "${CH_OUTPUT_DIR}/Codecs")
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR})
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
@@ -91,9 +106,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
 
   add_subdirectory(Externals/SDL3)
   set_target_properties(SDL3-shared PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
+    ARCHIVE_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
     POSITION_INDEPENDENT_CODE ON  # Add this line
   )
 

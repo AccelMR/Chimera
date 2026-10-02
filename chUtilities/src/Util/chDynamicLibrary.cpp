@@ -15,6 +15,7 @@
 /************************************************************************/
 #include "chDynamicLibrary.h"
 
+#include <algorithm>
 #include <iostream>
 
 #include "chFileSystem.h"
@@ -71,7 +72,11 @@ loadLibraryPlatformSpecific(const char* name) {
   }
   return handle;
 #elif USING(CH_PLATFORM_WIN32)
-  HMODULE handle = LoadLibraryEx(name, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  // LoadLibraryEx requires '\' separators; with '/' the dependencies of a library
+  // given by absolute path are not searched next to it.
+  String windowsName(name);
+  std::replace(windowsName.begin(), windowsName.end(), '/', '\\');
+  HMODULE handle = LoadLibraryEx(windowsName.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
   if (!handle) {
     std::cerr << "Error al cargar '" << name << "': " << GetLastError() << std::endl;
   }

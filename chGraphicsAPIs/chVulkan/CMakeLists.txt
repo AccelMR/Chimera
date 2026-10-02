@@ -17,7 +17,7 @@ set(CMAKE_DEBUG_POSTFIX "d")
 add_library(chVulkan SHARED ${SOURCE_FILES})
 
 set_target_properties(chVulkan PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
     OUTPUT_NAME "chVulkan"
     PREFIX ""
 )

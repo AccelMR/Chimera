@@ -2,7 +2,7 @@ file(GLOB SOURCE_FILES  ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp ${CMAKE_CURRENT_
 
 set(CMAKE_DEBUG_POSTFIX "d")
 add_library(chUtilities SHARED ${SOURCE_FILES})
-set_target_properties(chUtilities PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+set_target_properties(chUtilities PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
   OUTPUT_NAME "chUtilities"
     PREFIX "")
 

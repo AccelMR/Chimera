@@ -11,9 +11,9 @@ file(GLOB
 add_subdirectory(Externals/nativefiledialog-extended)
 
 set_target_properties(nfd PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
+    ARCHIVE_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
 )
 
 # Debug postfix configuration

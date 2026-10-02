@@ -13,6 +13,8 @@
 #include "chCommandParser.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
+#include "chEnginePaths.h"
+#include "chFileSystem.h"
 #include "chICommandBuffer.h"
 #include "chIDescriptorPool.h"
 #include "chIDescriptorSet.h"
@@ -55,16 +57,6 @@ Radian g_FOV(Degree(45.0f));
 float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
 Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
-
-#if USING(CH_CODECS)
-#if USING(CH_PLATFORM_LINUX)
-  #define CH_CODEC_PATH "build/debug-x64/lib/Codecs"
-#elif USING(CH_PLATFORM_WIN32)
-#define CH_CODEC_PATH "Codecs"
-#else
-  #error "Unsupported platform for codec loading"
-#endif // USING(CH_PLATFORM_LINUX)
-#endif // USING(CH_CODECS)
 
 /*
  */
@@ -151,7 +143,7 @@ EditorApplication::initializeEditorComponents() {
   AssetManager::startUp();
   AssetManager& assetManager = AssetManager::instance();
   assetManager.initialize();
-  assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getAbsoluteGameAssetDirectory());
+  assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
 
   const String sceneName = CommandParser::instance().getParam("scene", "DefaultScene");
   SceneManager::startUp();
@@ -298,6 +290,12 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
 
   ImGui::CreateContext();
 
+  // ImGui keeps the pointer, not a copy, so the string must outlive the context.
+  static const String iniFilePath =
+      FileSystem::absolutePath(EnginePaths::getConfigDirectory().join(Path("imgui.ini")))
+          .toString();
+  ImGui::GetIO().IniFilename = iniFilePath.c_str();
+
   UIHelpers::initStyle();
   UIHelpers::initFontConfig();
 
@@ -369,21 +367,21 @@ EditorApplication::loadCodecs() {
   CH_LOG_INFO(EditorApp, "Loading asset codecs.");
 #if USING(CH_CODECS)
   //AssetCodecManager& codecManager = AssetCodecManager::instance();
-  const  Path codecsPath(CH_CODEC_PATH);
+  const Path codecsPath = EnginePaths::getCodecDirectory();
   Vector<Path> files;
   Vector<Path> directories;
   FileSystem::getChildren(codecsPath, files, directories);
   for (const Path& file : files) {
     if (file.getExtension() == ".so" ||
-        file.getExtension() == ".dll") { //ugly but works for now
-        //TODO:  fix this, loadDynamicLibrary adds a d at the end of the file name
-        // but these dlls are not named with a d at the end
-        // so we need to remove the d from the end of the file name
+        file.getExtension() == ".dll") {
         String fileName = file.getFileName(false);
+#if USING(CH_DEBUG_MODE)
+        // Debug codecs are named with a "d" suffix, and loadDynLibrary adds it back.
         fileName.pop_back();
+#endif
         WeakPtr <DynamicLibrary> library =
             DynamicLibraryManager::instance().loadDynLibrary(fileName,
-                                                             FileSystem::absolutePath(codecsPath));
+                                                             codecsPath);
       if (library.expired()) {
         CH_LOG_ERROR(EditorApp, "Failed to load codec library: {0}", file.toString());
         continue;
