@@ -367,7 +367,7 @@ EditorApplication::loadCodecs() {
   CH_LOG_INFO(EditorApp, "Loading asset codecs.");
 #if USING(CH_CODECS)
   //AssetCodecManager& codecManager = AssetCodecManager::instance();
-  const Path codecsPath = EnginePaths::getCodecDirectory();
+  const Path& codecsPath = EnginePaths::getCodecDirectory();
   Vector<Path> files;
   Vector<Path> directories;
   FileSystem::getChildren(codecsPath, files, directories);

@@ -186,7 +186,7 @@ WindowedApplication::initializeGraphics() {
   const String& graphicsAPIName =
       CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
 
-  const Path pluginDirectory = EnginePaths::getPluginDirectory();
+  const Path& pluginDirectory = EnginePaths::getPluginDirectory();
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,
                pluginDirectory);
 

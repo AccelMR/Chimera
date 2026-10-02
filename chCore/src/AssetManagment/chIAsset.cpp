@@ -20,6 +20,18 @@
 #include "chLogger.h"
 
 namespace chEngineSDK {
+namespace {
+Path
+assetFilePath(const Path& folder, StringView assetName)
+{
+  const StringView extension = EnginePaths::getEngineAssetExtension();
+  String fileName;
+  fileName.reserve(assetName.size() + extension.size());
+  fileName.append(assetName);
+  fileName.append(extension);
+  return folder.join(Path(std::move(fileName)));
+}
+} // namespace
 
 /*
 */
@@ -40,16 +52,14 @@ IAsset::setAssetPath(const ANSICHAR* assetPath) {
  */
 bool
 IAsset::save() {
-  const Path assetPath(String(m_metadata.assetPath));
+  const Path assetPath(m_metadata.assetPath);
   if (!FileSystem::isVirtual(assetPath)) {
     CH_LOG(AssetSystem, Error, "Asset path '{0}' must be a virtual path such as /Game",
            assetPath);
     return false;
   }
 
-  String assetName(m_metadata.name);
-  assetName += EnginePaths::getEngineAssetExtension();
-  const Path fullFilePath = assetPath.join(Path(assetName));
+  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
   SPtr<DataStream> stream = FileSystem::createAndOpenFile(fullFilePath);
   if (!stream) {
     CH_LOG(AssetSystem, Error, "Failed to create asset file {0}", assetPath.toString());
@@ -95,11 +105,10 @@ IAsset::rename(const ANSICHAR* newName) {
     return false;
   }
 
-  String assetFullStr = String(m_metadata.assetPath) + "/" + String(m_metadata.name) + EnginePaths::getEngineAssetExtension();
-  const Path assetAbsPath(FileSystem::absolutePath(Path(assetFullStr)));
-
-  String newFullStr = String(m_metadata.assetPath) + "/" + String(newName) + EnginePaths::getEngineAssetExtension();
-  const Path newAssetPath(FileSystem::absolutePath(Path(newFullStr)));
+  const Path assetPath(m_metadata.assetPath);
+  const Path assetAbsPath =
+      FileSystem::absolutePath(assetFilePath(assetPath, m_metadata.name));
+  const Path newAssetPath = FileSystem::absolutePath(assetFilePath(assetPath, newName));
 
   const bool success = FileSystem::renameFile(assetAbsPath,
                                               newAssetPath);
@@ -118,14 +127,12 @@ IAsset::rename(const ANSICHAR* newName) {
  */
 bool
 IAsset::updateMetadata(const AssetMetadata& newMetadata) {
-  const Path assetPath(String(m_metadata.assetPath));
+  const Path assetPath(m_metadata.assetPath);
   if (!FileSystem::isVirtual(assetPath)) {
     return false;
   }
 
-  String assetName(m_metadata.name);
-  assetName += EnginePaths::getEngineAssetExtension();
-  const Path fullFilePath = assetPath.join(Path(assetName));
+  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
 
   // Open file in read/write mode instead of create mode
   SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, false); // read/write
@@ -159,7 +166,7 @@ IAsset::load() {
 
   m_state = AssetState::Loading;
 
-  const Path fullFilePath = assetPath.join(Path(String(m_metadata.name) + EnginePaths::getEngineAssetExtension()));
+  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
   SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, true);
 
   if (!stream || !stream->isReadable()) {

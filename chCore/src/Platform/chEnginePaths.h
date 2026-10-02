@@ -36,60 +36,65 @@ class CH_CORE_EXPORT EnginePaths
    * only needs to be called directly to choose when it happens, for example before
    * opening the log file. Reads -project from CommandParser if it has started.
    * Throws if the engine root or the requested project cannot be found.
+   * Every path is worked out here once, so the references returned by the getters
+   * stay valid until the program ends.
    */
   static void
   initialize();
 
-  static Path
+  NODISCARD static const Path&
   getEngineRootDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getProjectDirectory();
 
   /**
    * Real folder of the graphics API and other plugins: the executable folder.
    */
-  static Path
+  NODISCARD static const Path&
   getPluginDirectory();
 
   /**
    * Real folder of the asset codec plugins.
    */
-  static Path
+  NODISCARD static const Path&
   getCodecDirectory();
 
   /**
    * Virtual folder of the project assets, "/Game".
    */
-  static Path
+  NODISCARD static const Path&
   getGameAssetDirectory();
 
   /**
    * Real folder where new project assets are written, <Project>/Assets.
    */
-  static Path
+  NODISCARD static const Path&
   getAbsoluteGameAssetDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getEngineAssetDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getEngineShaderDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getEditorContentDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getSavedDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getLogDirectory();
 
-  static Path
+  NODISCARD static const Path&
   getConfigDirectory();
 
-  static String
-  getEngineAssetExtension();
+  NODISCARD static constexpr StringView
+  getEngineAssetExtension() noexcept
+  {
+    return ".chAss";
+  }
 };
 
 } // namespace chEngineSDK

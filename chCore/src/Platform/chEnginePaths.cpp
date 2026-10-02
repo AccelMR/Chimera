@@ -30,8 +30,17 @@ struct PathState
 {
   bool initialized = false;
   Path executableDirectory;
+  Path codecDirectory;
   Path engineRoot;
   Path projectRoot;
+  Path absoluteGameAssetDirectory;
+  Path gameAssetDirectory;
+  Path engineAssetDirectory;
+  Path engineShaderDirectory;
+  Path editorContentDirectory;
+  Path savedDirectory;
+  Path logDirectory;
+  Path configDirectory;
 };
 
 PathState&
@@ -141,9 +150,18 @@ EnginePaths::initialize()
   state.projectRoot = findProjectRoot(state.engineRoot, state.executableDirectory);
   FileSystem::setBaseDirectory(state.projectRoot);
 
-  const Path assetsDirectory = state.projectRoot.join(Path("Assets"));
+  state.codecDirectory = state.executableDirectory.join(Path("Codecs"));
+  state.absoluteGameAssetDirectory = state.projectRoot.join(Path("Assets"));
+  state.gameAssetDirectory = Path("/Game");
+  state.engineAssetDirectory = Path("/Engine");
+  state.engineShaderDirectory = state.engineAssetDirectory.join(Path("Shaders"));
+  state.editorContentDirectory = Path("/Editor");
+  state.savedDirectory = Path("/Saved");
+  state.logDirectory = state.savedDirectory.join(Path("Logs"));
+  state.configDirectory = state.savedDirectory.join(Path("Config"));
+
   const Path savedDirectory = state.projectRoot.join(Path("Saved"));
-  FileSystem::createDirectories(assetsDirectory);
+  FileSystem::createDirectories(state.absoluteGameAssetDirectory);
   FileSystem::createDirectories(savedDirectory.join(Path("Logs")));
   FileSystem::createDirectories(savedDirectory.join(Path("Config")));
 
@@ -151,7 +169,7 @@ EnginePaths::initialize()
 #if USING(CH_EDITOR)
   FileSystem::mount("Editor", state.engineRoot.join(Path(kEditorContentFolder)));
 #endif
-  FileSystem::mount("Game", assetsDirectory, 0, true);
+  FileSystem::mount("Game", state.absoluteGameAssetDirectory, 0, true);
   FileSystem::mount("Saved", savedDirectory, 0, true);
 
   state.initialized = true;
@@ -160,89 +178,88 @@ EnginePaths::initialize()
   CH_LOG_INFO(EnginePathsLog, "Project: {0}", state.projectRoot);
 }
 
-Path
+const Path&
 EnginePaths::getEngineRootDirectory()
 {
   initialize();
   return pathState().engineRoot;
 }
 
-Path
+const Path&
 EnginePaths::getProjectDirectory()
 {
   initialize();
   return pathState().projectRoot;
 }
 
-Path
+const Path&
 EnginePaths::getPluginDirectory()
 {
   initialize();
   return pathState().executableDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getCodecDirectory()
 {
-  return getPluginDirectory().join(Path("Codecs"));
+  initialize();
+  return pathState().codecDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getGameAssetDirectory()
 {
   initialize();
-  return Path("/Game");
+  return pathState().gameAssetDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getAbsoluteGameAssetDirectory()
 {
-  return getProjectDirectory().join(Path("Assets"));
+  initialize();
+  return pathState().absoluteGameAssetDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getEngineAssetDirectory()
 {
   initialize();
-  return Path("/Engine");
+  return pathState().engineAssetDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getEngineShaderDirectory()
 {
-  return getEngineAssetDirectory().join(Path("Shaders"));
+  initialize();
+  return pathState().engineShaderDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getEditorContentDirectory()
 {
   initialize();
-  return Path("/Editor");
+  return pathState().editorContentDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getSavedDirectory()
 {
   initialize();
-  return Path("/Saved");
+  return pathState().savedDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getLogDirectory()
 {
-  return getSavedDirectory().join(Path("Logs"));
+  initialize();
+  return pathState().logDirectory;
 }
 
-Path
+const Path&
 EnginePaths::getConfigDirectory()
 {
-  return getSavedDirectory().join(Path("Config"));
-}
-
-String
-EnginePaths::getEngineAssetExtension()
-{
-  return String(".chAss");
+  initialize();
+  return pathState().configDirectory;
 }
 
 } // namespace chEngineSDK
