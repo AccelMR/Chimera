@@ -44,8 +44,8 @@ debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity
   // Select prefix depending on flags passed to the callback
   String prefix;
 
-  CH_PAMRAMETER_UNUSED(messageType);
-  CH_PAMRAMETER_UNUSED(pUserData);
+  CH_PARAMETER_UNUSED(messageType);
+  CH_PARAMETER_UNUSED(pUserData);
   // CH_LOG_DEBUG(Vulkan, "Vulkan message type: {0}", messageType.value);
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {

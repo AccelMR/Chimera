@@ -63,7 +63,7 @@ class Exception : public std::exception
  /*
   * @brief Default destructor
   */
-  ~Exception() _NOEXCEPT = default;
+  ~Exception() noexcept = default;
 
   /**
    *   Returns a string with the full description.

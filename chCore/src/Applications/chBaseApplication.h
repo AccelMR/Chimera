@@ -65,7 +65,7 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   onPostDestoyModules() {}
 
   virtual void
-  update(const float deltaTime) { CH_PAMRAMETER_UNUSED(deltaTime); }
+  update(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }
 
  private:
   bool m_running = true; ///< Flag to indicate if the application is running.

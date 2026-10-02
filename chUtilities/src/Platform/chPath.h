@@ -63,7 +63,6 @@ class CH_UTILITY_EXPORT Path {
     (m_path /= ... /= paths.m_path); // Fold expression to join all paths
   }
 
-#if USING(CH_CPP17_OR_LATER)
   /**
    * Constructor from a filesystem path.
    *
@@ -81,7 +80,6 @@ class CH_UTILITY_EXPORT Path {
   operator fs::path() const {
     return m_path;
   }
-#endif // #if USING(CH_CPP17_OR_LATER)
 
 #if USING(CH_PLATFORM_WIN32)
   /**

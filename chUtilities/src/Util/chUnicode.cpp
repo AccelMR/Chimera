@@ -60,12 +60,12 @@ UTF8To32(T begin, T end, char32_t& output, char32_t invalidChar = 0) {
   output = 0;
   switch (numBytes)
   {
-    case 6: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUHG;
-    case 5: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUHG;
-    case 4: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUHG;
-    case 3: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUHG;
-    case 2: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUHG;
-    case 1: output += static_cast<uint8>(*begin); ++begin; CH_FALLTHROUHG;
+    case 6: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
+    case 5: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
+    case 4: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
+    case 3: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
+    case 2: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
+    case 1: output += static_cast<uint8>(*begin); ++begin; CH_FALLTHROUGH;
     default: break;
   }
 
@@ -126,13 +126,13 @@ UTF32To8(char32_t input, T output, uint32 maxElems, char invalidChar = 0) {
   switch (numBytes)
   {
     case 4:
-      bytes[3] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUHG;
+      bytes[3] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 3:
-      bytes[2] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUHG;
+      bytes[2] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 2:
-      bytes[1] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUHG;
+      bytes[1] = static_cast<char>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
     case 1:
-      bytes[0] = static_cast<char>(input | headers[numBytes]); CH_FALLTHROUHG;
+      bytes[0] = static_cast<char>(input | headers[numBytes]); CH_FALLTHROUGH;
     default:
       break;
   }

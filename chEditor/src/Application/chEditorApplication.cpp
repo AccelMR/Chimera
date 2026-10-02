@@ -113,8 +113,8 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
                              uint32 swapChainHeight) {
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  CH_PAMRAMETER_UNUSED(swapChainWidth);
-  CH_PAMRAMETER_UNUSED(swapChainHeight);
+  CH_PARAMETER_UNUSED(swapChainWidth);
+  CH_PARAMETER_UNUSED(swapChainHeight);
 
   if (!UIHelpers::bRenderImGui) {
     // If ImGui rendering is disabled, skip the rendering process

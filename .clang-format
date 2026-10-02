@@ -13,7 +13,7 @@ AccessModifierOffset: -1
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterClass: true
-  AfterFunction: false
+  AfterFunction: true
   AfterNamespace: false
   AfterStruct: false
   AfterControlStatement: false

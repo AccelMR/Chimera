@@ -3,376 +3,225 @@
  * @file chPlatformDefines.h
  * @author AccelMR <accel.mr@gmail.com>
  * @date 2021/09/10
- * @brief Basic definitions to describe target platform.
+ * @brief Macros that describe the compiler, platform and build type.
  *
- * This definitions are meant to describe the target platform.
+ * Every feature flag is defined as IN_USE or NOT_IN_USE on every supported
+ * platform, so it must be checked with USING() and never with #ifdef.
  *
  * @bug No bug known.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
-/************************************************************************/
-/**
- * Initial platform/compiler-related stuff to set.
-*/
-/************************************************************************/
 #include <cassert>
+
 #include "chUsing.h"
 
-//Define the actual endian type (little endian for Windows, Linux, Apple and PS4)
-#define CH_ENDIAN_LITTLE                   IN_USE
-#define CH_ENDIAN_BIG                      NOT_IN_USE
+/************************************************************************/
+/**
+ * Engine version
+ */
+/************************************************************************/
+#define CH_VERSION_MAJOR 0
+#define CH_VERSION_MINOR 2
+#define CH_VERSION_PATCH 0
+#define CH_VERSION_BUILD 1
 
-#define CH_VERSION_MAJOR    0                 //Engine version major
-#define CH_VERSION_MINIOR   2
-#define CH_VERSION_PATCH    0
-#define CH_VERSION_BUILD    1
+#define CH_STRINGIFY(x) #x
+#define CH_TOSTRING(x) CH_STRINGIFY(x)
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
-// The version string macro - completely resolved at compile time
-#define CH_ENGINE_VERSION_STRING \
-    TOSTRING(CH_VERSION_MAJOR) "." \
-    TOSTRING(CH_VERSION_MINIOR) "." \
-    TOSTRING(CH_VERSION_PATCH) "." \
-    TOSTRING(CH_VERSION_BUILD)
+#define CH_ENGINE_VERSION_STRING                                                              \
+  CH_TOSTRING(CH_VERSION_MAJOR) "." CH_TOSTRING(CH_VERSION_MINOR) "."                         \
+  CH_TOSTRING(CH_VERSION_PATCH) "." CH_TOSTRING(CH_VERSION_BUILD)
 
 /************************************************************************/
 /**
- * Compiler type and version
+ * Compiler
  */
- /************************************************************************/
-
+/************************************************************************/
+// Clang must be checked first because it also defines __GNUC__ and, as clang-cl, _MSC_VER.
 #if defined(__clang__)
-#   define CH_COMPILER_MSVC               NOT_IN_USE
-#   define CH_COMPILER_GNUC               NOT_IN_USE
-#   define CH_COMPILER_INTEL              NOT_IN_USE
-#   define CH_COMPILER_CLANG              IN_USE
-#   define CH_COMP_VER __cland_version__
-#   define CH_THREADLOCAL __thread
-#   define CH_STDCALL __attribute__((stdcall))
-#   define CH_CDECL __attribute__((cdecl))
-#   define CH_FALLTHROUHG [[clang::fallthrough]];
-#elif defined (__GNUC__) //Check after Cland, as Clang defines this too
-#   define CH_COMPILER_MSVC               NOT_IN_USE
-#   define CH_COMPILER_GNUC               IN_USE
-#   define CH_COMPILER_INTEL              NOT_IN_USE
-#   define CH_COMPILER_CLANG              NOT_IN_USE
-#   define CH_COMP_VER (((__GNUC__)*100)+(__GNUC_MINOR__*10)+__GNUC_PATCHLEVEL__)
-#   define CH_THREADLOCAL __thread
-#   define CH_STDCALL __attribute__((stdcall))
-#   define CH_CDECL __attribute__((cdecl))
-#   define CH_FALLTHROUHG __attribute__((fallthrough));
-#elif defined (__INTEL_COMPILER)
-#   define CH_COMPILER_MSVC               NOT_IN_USE
-#   define CH_COMPILER_GNUC               NOT_IN_USE
-#   define CH_COMPILER_INTEL              IN_USE
-#   define CH_COMPILER_CLANG              NOT_IN_USE
-#   define CH_COMPILER CH_COMPILER_INTEL
-#   define CH_COMP_VER __INTEL_COMPILER
-#   define CH_STDCALL __stdcall
-#   define CH_CDECL __cdecl
-#   define CH_FALLTHROUHG
-
-/**
- * CH_THREADLOCAL define is down below because Intel compiler defines it
- * differently based on platform
- */
-
- //Check after Clang end Intel, we could be building with either with Vs
-#elif defined (_MSC_VER)
-#   define CH_COMPILER_MSVC               IN_USE
-#   define CH_COMPILER_GNUC               NOT_IN_USE
-#   define CH_COMPILER_INTEL              NOT_IN_USE
-#   define CH_COMPILER_CLANG              NOT_IN_USE
-#   define CH_COMP_VER                    _MSC_VER
-#   define CH_THREADLOCAL                 __declspec
-#   define CH_STDCALL                     __stdcall
-#   define CH_CDECL                       __cdecl
-#   define CH_FALLTHROUHG
-#   undef                                 __PRETTY_FUNCTION__
-#   define                                __PRETTY_FUNCTION__ __FUNCSIG__
-#else
-//No know compiler found, send the error to the output (if any)
-#   define CH_COMPILER_MSVC               NOT_IN_USE
-#   define CH_COMPILER_MSVC               NOT_IN_USE
-#   define CH_COMPILER_GNUC               NOT_IN_USE
-#   define CH_COMPILER_INTEL              NOT_IN_USE
-#   define CH_COMPILER_CLANG              NOT_IN_USE
-#   define CH_COMP_VER                    _MSC_VER
-#   pragma error "No known compIler. "
-#endif
-
-#define CH_PAMRAMETER_UNUSED(x) (void)x
-
-/************************************************************************/
-/**
- * See if we can use __forceinline or if we need to use __inline instead
- */
- /************************************************************************/
-#if USING(CH_COMPILER_MSVC)
-#  define CH_CPP17_OR_LATER              USE_IF(_MSVC_LANG >= 201703L)
-# if CH_COMP_VER >= 1920
-#  define  NODISCARD [[nodiscard]]
-# else
-#  define  NODISCARD
-#  define CH_CPP17_OR_LATER                  USE_IF(__cplusplus >= 201703L)
-# endif
-# if CH_COMP_VER >= 1200
-#   define FORCEINLINE                     __forceinline
-#   ifndef RESTRICT
-#     define RESTRICT                      __restrict
-#   endif
-# endif
-#elif defined (__MINGW32__)
-# if !defined (FORCEINLINE)
-#   define FORCEINLINE                      __inline
-#   ifndef RESTRICT
-#     define RESTRICT
-#   endif
-# endif
-#else
-
-#  define CH_CPP17_OR_LATER              USE_IF(__cplusplus >= 201703L) //  CPP 17
-# define NODISCARD [[nodiscard]]
-# define FORCEINLINE                         __inline
-# ifndef RESTRICT
-#   define RESTRICT                          __restrict
-# endif
-#endif
-
-/************************************************************************/
-/**
- * Finds the current platform
- */
- /************************************************************************/
-#if defined (__WIN32__) || defined (_WIN32)
-#define CH_PLATFORM_LINUX                   NOT_IN_USE         //Linux Platform
-#define CH_PLATFORM_OSX                     NOT_IN_USE
-#define CH_PLATFORM_WIN32                   IN_USE
-#elif defined (__APPLE_CC__ )
-#define CH_PLATFORM_LINUX                   NOT_IN_USE         //Linux Platform
-#define CH_PLATFORM_OSX                     IN_USE
-#define CH_PLATFORM_WIN32                   NOT_IN_USE
-#elif defined (__linux__)
-#define CH_PLATFORM_LINUX                   IN_USE             //Linux Platform
-#define CH_PLATFORM_OSX                     NOT_IN_USE
-#define CH_PLATFORM_WIN32                   NOT_IN_USE
-#endif
-
-/************************************************************************/
-/**
- * Find the architecture type
- */
- /************************************************************************/
-#if defined (__x86_x64__) || defined(_M_X64)    //If this is a x64 compile
-# define CH_ARCHITECTURE_X86_64             IN_USE
-# define CH_ARCHITECTURE_X86_32             NOT_IN_USE
-#else                                         //If it's a x86 compile
-# define CH_ARCHITECTURE_X86_64             NOT_IN_USE
-# define CH_ARCHITECTURE_X86_32             IN_USE
-#endif
-
-/************************************************************************/
-/**
- * Memory Alignment macros
- */
- /************************************************************************/
-#if USING(CH_COMPILER_MSVC)
-# define MS_ALIGN(n)                        __declspec(align(n))
-# ifndef GCC_PACK
-#   define GCC_PACK(n)
-# endif
-# ifndef GCC_ALIGN
-#   define GCC_ALIGN(n)
-# endif
-#elif USING(CH_COMPILER_GNUC)
-# define MS_ALIGN(n)
-# define GCC_PACK(n)
-# define GCC_ALIGN(n)                      __attribute__( (__aligned__(n)) )
-#else
-# define MS_ALIGN(n)
-# define GCC_PACK(n)                      __attribute__((packed, aligned(n)))
-# define GCC_ALIGN(n)                     __attribute__( (__aligned__(n)) )
-#endif
-
-#if defined(__GNUC__) || defined(__clang__)
-#define DEPRECATED __attribute__((deprecated))
+# define CH_COMPILER_CLANG IN_USE
+# define CH_COMP_VER (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__)
+#elif defined(__GNUC__)
+# define CH_COMPILER_GNUC IN_USE
+# define CH_COMP_VER (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #elif defined(_MSC_VER)
-#define DEPRECATED __declspec(deprecated)
+# define CH_COMPILER_MSVC IN_USE
+# define CH_COMP_VER _MSC_VER
 #else
-#pragma message("WARNING: You need to implement DEPRECATED for this compiler")
-#define DEPRECATED
+# error "Unsupported compiler."
+#endif
+
+#if !defined(CH_COMPILER_CLANG)
+# define CH_COMPILER_CLANG NOT_IN_USE
+#endif
+#if !defined(CH_COMPILER_GNUC)
+# define CH_COMPILER_GNUC NOT_IN_USE
+#endif
+#if !defined(CH_COMPILER_MSVC)
+# define CH_COMPILER_MSVC NOT_IN_USE
+#endif
+
+// MSVC reports __cplusplus as 199711L unless /Zc:__cplusplus is set, so read _MSVC_LANG there.
+#if defined(_MSVC_LANG)
+# define CH_CPP_VERSION _MSVC_LANG
+#else
+# define CH_CPP_VERSION __cplusplus
+#endif
+
+#if CH_CPP_VERSION < 202002L
+# error "Chimera requires C++20 or later."
 #endif
 
 /************************************************************************/
 /**
- * For throw override (deprecated on c++11 but VS does not have handle )
+ * Platform
  */
- /************************************************************************/
+/************************************************************************/
+#if defined(_WIN32)
+# define CH_PLATFORM_WIN32 IN_USE
+#elif defined(__APPLE__)
+# define CH_PLATFORM_OSX IN_USE
+#elif defined(__linux__)
+# define CH_PLATFORM_LINUX IN_USE
+#else
+# error "Unsupported platform."
+#endif
+
+#if !defined(CH_PLATFORM_WIN32)
+# define CH_PLATFORM_WIN32 NOT_IN_USE
+#endif
+#if !defined(CH_PLATFORM_OSX)
+# define CH_PLATFORM_OSX NOT_IN_USE
+#endif
+#if !defined(CH_PLATFORM_LINUX)
+# define CH_PLATFORM_LINUX NOT_IN_USE
+#endif
+
+/************************************************************************/
+/**
+ * Architecture and endianness
+ */
+/************************************************************************/
+#if defined(__x86_64__) || defined(_M_X64)
+# define CH_ARCHITECTURE_X86_64 IN_USE
+#elif defined(__aarch64__) || defined(_M_ARM64)
+# define CH_ARCHITECTURE_ARM64 IN_USE
+#elif defined(__i386__) || defined(_M_IX86)
+# define CH_ARCHITECTURE_X86_32 IN_USE
+#else
+# error "Unsupported architecture."
+#endif
+
+#if !defined(CH_ARCHITECTURE_X86_64)
+# define CH_ARCHITECTURE_X86_64 NOT_IN_USE
+#endif
+#if !defined(CH_ARCHITECTURE_ARM64)
+# define CH_ARCHITECTURE_ARM64 NOT_IN_USE
+#endif
+#if !defined(CH_ARCHITECTURE_X86_32)
+# define CH_ARCHITECTURE_X86_32 NOT_IN_USE
+#endif
+
+// Every supported platform and architecture is little endian.
+#define CH_ENDIAN_LITTLE IN_USE
+#define CH_ENDIAN_BIG NOT_IN_USE
+
+/************************************************************************/
+/**
+ * Compiler specific keywords
+ */
+/************************************************************************/
+#define NODISCARD [[nodiscard]]
+#define RESTRICT __restrict
+#define CH_PARAMETER_UNUSED(x) (void)(x)
+#define CH_FALLTHROUGH [[fallthrough]]
+
+// Windows headers may already define FORCEINLINE.
+#if !defined(FORCEINLINE)
+# if USING(CH_COMPILER_MSVC)
+#   define FORCEINLINE __forceinline
+# else
+#   define FORCEINLINE __inline
+# endif
+#endif
+
 #if USING(CH_COMPILER_MSVC)
-# define _NOEXCEPT                        noexcept
-#elif USING(CH_COMPILER_INTEL)
-# define _NOEXCEPT                        noexcept
-#elif USING( CH_COMPILER_GNUC)
-# define _NOEXCEPT                        noexcept
+# define __PRETTY_FUNCTION__ __FUNCSIG__
+#endif
+
+// Both forms give the same 8 byte aligned layout, which matters for structs written to disk.
+#if USING(CH_COMPILER_MSVC)
+# define MS_ALIGN(n) __declspec(align(n))
+# define GCC_PACK(n)
+# define GCC_ALIGN(n)
 #else
-# define _NOEXCEPT
+# define MS_ALIGN(n)
+# define GCC_PACK(n) __attribute__((aligned(n)))
+# define GCC_ALIGN(n) __attribute__((aligned(n)))
 #endif
 
 /************************************************************************/
 /**
- * Library export specifics
+ * Library export
  */
- /************************************************************************/
+/************************************************************************/
 #if USING(CH_PLATFORM_WIN32)
-# if USING(CH_COMPILER_MSVC)
-#   if defined( CH_STATIC_LIB )
-#     define CH_UTILITY_EXPORT
-#   else
-#     if defined ( CH_UTILITY_EXPORTS )
-#       define CH_UTILITY_EXPORT          __declspec( dllexport )
-#     else
-#       define CH_UTILITY_EXPORT          __declspec( dllimport )
-#     endif
-#   endif
-#else //Any other compiler
-#   if defined( CH_STATIC_LIB )
-#     define CH_UTILITY_EXPORT
-#   else
-#     if defined( CH_UTILITY_EXPORTS )
-#       define CH_UTILITY_EXPORT         // __attribute__ ((dllexport))
-#     else
-#       define CH_UTILITY_EXPORT         // __attribute__ ((dllimport))
-#     endif
-#   endif
-# endif
-# define CH_UTILITY_HIDDEN
+# define CH_DLL_EXPORT __declspec(dllexport)
+# define CH_DLL_IMPORT __declspec(dllimport)
 #else
-# if defined( CH_UTILITY_EXPORTS )
-#   define CH_UTILITY_EXPORT __attribute__ ((visibility ("default")))
-# else
-#   define CH_UTILITY_EXPORT
-# endif
-# define CH_UTILITY_HIDDEN                __attribute__ ((visibility ("hidden")))
+# define CH_DLL_EXPORT __attribute__((visibility("default")))
+# define CH_DLL_IMPORT
 #endif
 
- //DLL export plug ins
-#if USING(CH_PLATFORM_WIN32)
-# if USING(CH_COMPILER_MSVC)
-#   define CH_PLUGIN_EXPORT               __declspec(dllexport)
-# else
-#   define CH_PLUGIN_EXPORT               __attribute__ ((dllexport))
-# endif
+#if defined(CH_STATIC_LIB)
+# define CH_UTILITY_EXPORT
+#elif defined(CH_UTILITY_EXPORTS)
+# define CH_UTILITY_EXPORT CH_DLL_EXPORT
 #else
-#  define CH_PLUGIN_EXPORT                __attribute__((visibility("default")))
+# define CH_UTILITY_EXPORT CH_DLL_IMPORT
 #endif
 
-/************************************************************************/
-/**
- * Window specific Settings
- */
- /************************************************************************/
- //Win32
-#if USING(CH_PLATFORM_WIN32)
-# if defined(_DEBUG) || defined(DEBUG)
-#   define CH_DEBUG_MODE                  IN_USE
-# else
-#   define CH_DEBUG_MODE                  NOT_IN_USE
-# endif
-# if USING(CH_COMPILER_INTEL)
-#   define CH_THREADLOCAL                 __declspec(thread)
-# endif
-#endif //CH_PLATFORM
-
-/************************************************************************/
-/**
- * LINUX-Apple specific Settings
- */
- /************************************************************************/
-
- //
-#if USING(CH_PLATFORM_LINUX) || USING(CH_PLATFORM_OSX)
-//if we're on debug mode
-# if defined(_DEBUG) || defined(DEBUG)
-#   define CH_DEBUG_MODE                  IN_USE
-# else
-#   define CH_DEBUG_MODE                  NOT_IN_USE
-# endif
-# if USING(CH_COMPILER_INTEL)
-#   define CH_THREADLOCAL                 thread
-# endif
-#endif //CH_PLATFORM
-
-/************************************************************************/
-/**
- * Definition of Debug macros
- */
- /************************************************************************/
-#if USING(CH_DEBUG_MODE)
-# define CH_ASSERT(x)                    assert(x)
-
-#else
-# define CH_DEBUG_ONLY(x)
-# define CH_ASSERT(x)
-#endif
-
-#define CH_ENABLE_BACKTRACE USE_IF(USING(CH_DEBUG_MODE))
-
-/************************************************************************/
-/*
- * Extern.
- */
- /************************************************************************/
+#define CH_PLUGIN_EXPORT CH_DLL_EXPORT
 #define CH_EXTERN extern "C"
 
 /************************************************************************/
 /**
- * Disable some compiler warnings
+ * Build type
  */
- /************************************************************************/
+/************************************************************************/
+// GCC and Clang never define _DEBUG, so a missing NDEBUG is what marks a debug build there.
+#if !defined(NDEBUG) || defined(_DEBUG) || defined(DEBUG)
+# define CH_DEBUG_MODE IN_USE
+#else
+# define CH_DEBUG_MODE NOT_IN_USE
+#endif
 
-//If we are compiling with Visual Studio
+#if USING(CH_DEBUG_MODE)
+# define CH_ASSERT(x) assert(x)
+# define CH_DEBUG_ONLY(x) x
+#else
+# define CH_ASSERT(x)
+# define CH_DEBUG_ONLY(x)
+#endif
+
+#define CH_ENABLE_BACKTRACE CH_DEBUG_MODE
+
+/************************************************************************/
+/**
+ * Compiler warnings
+ */
+/************************************************************************/
 #if USING(CH_COMPILER_MSVC)
-  /**
-   * TODO:  This is not deactivated anywhere, therefore it applies to any file
-   * that includes this header. Right now I don't have an easier way to apply
-   * these warnings globally so I'm keeping it this way.
-   */
+// TODO These pragmas leak into every file that includes this header; move them to CMake.
 
-   //Secure versions aren't multi platform, so we won't be using them
-# define _CRT_SECURE_NO_WARNINGS
-
-  /**
-   * Disable: nonstandard extension used: nameless struct/union.
-   * Happens when a struct or union is defined without a name.
-   */
+// Nameless structs and unions are accepted by every supported compiler.
 # pragma warning(disable : 4201)
 
-   /**
-    * Disable: "<type> needs to have DLL interface to be used by clients'
-    * Happens on STL member variables which are not public therefore is ok
-    */
-# pragma warning (disable: 4251)
+// STL members of exported classes are private, so clients never touch them across the DLL.
+# pragma warning(disable : 4251)
 
-    //Disable: 'X' Function call with parameters that may be unsafe
-# pragma warning(disable: 4996)
-
-  /**
-   * Disable: decorated name length exceeded, name was truncated. Happens with
-   * really long type names. Even fairly standard use of std::unordered_map
-   * with custom parameters, meaning I can't really do much to avoid it.
-   * It shouldn't effect execution but might cause problems if you compile
-   * library with one compiler and use it in another.
-   */
-# pragma warning(disable: 4503)
-
-   /**
-    * Disable: nonstandard extension used: override specifier 'keyword'.
-    * Happens when a keyword was used that is not in the C++ standard, for
-    * example, one of the override specifiers that also works under /clr.
-    */
-    //# pragma warning(disable : 4481)
+// The CRT "secure" functions are MSVC only, so the standard ones are used instead.
+# pragma warning(disable : 4996)
 #endif

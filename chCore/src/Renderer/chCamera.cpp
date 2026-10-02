@@ -201,7 +201,7 @@ Camera::pan(float deltaX, float deltaY) {
 */
 void
 Camera::rotate(float pitch, float yaw, float roll) {
-  CH_PAMRAMETER_UNUSED(roll);
+  CH_PARAMETER_UNUSED(roll);
   Vector3 viewDirection = m_lookAtPoint - m_position;
   float distance = viewDirection.magnitude();
 

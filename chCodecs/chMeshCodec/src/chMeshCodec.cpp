@@ -182,7 +182,7 @@ MeshCodec::loadModel(const Path& filePath) {
  */
 void
 MeshCodec::unloadMesh(const WeakPtr<Mesh>& mesh) {
-  CH_PAMRAMETER_UNUSED(mesh);
+  CH_PARAMETER_UNUSED(mesh);
 }
 
 /*

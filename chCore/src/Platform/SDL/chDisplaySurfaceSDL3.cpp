@@ -64,7 +64,7 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
     return false;
   }
 
-  CH_PAMRAMETER_UNUSED(eventHandler);
+  CH_PARAMETER_UNUSED(eventHandler);
 
   SDL_PropertiesID properties;
 

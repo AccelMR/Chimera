@@ -380,7 +380,7 @@ UIHelpers::bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler) {
     // Process SDL3 events with ImGui
     return ImGui_ImplSDL3_ProcessEvent(&event);
 #else
-    CH_PAMRAMETER_UNUSED(args);
+    CH_PARAMETER_UNUSED(args);
     CH_LOG_ERROR(UIImguiHelper, "SDL3 is not enabled. Cannot process SDL_Event.");
     return false;
 #endif // USING(CH_DISPLAY_SDL3)
