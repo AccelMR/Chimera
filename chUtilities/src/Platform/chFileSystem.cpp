@@ -39,18 +39,23 @@ enum class Access
   Write
 };
 
+// Roots and the base directory are kept as normalized text with '/' so most
+// queries can be answered without building a std::filesystem::path.
 struct Mount
 {
   String name;
-  fs::path root;
+  String root;
   int32 priority;
   bool writable;
 };
 
+// name and rest point into the original path text, or into storage when the text
+// had to be normalized first, so a VirtualPath must not be copied or moved.
 struct VirtualPath
 {
-  String name;
-  fs::path rest;
+  StringView name;
+  StringView rest;
+  String storage;
 };
 
 // The Logger opens its own file through FileSystem, and FileSystem can run before
@@ -73,23 +78,82 @@ logError(const String& action, const Path& path, const std::error_code& error)
            error.message());
 }
 
-fs::path
-normalize(fs::path path)
+String
+normalize(const fs::path& path)
 {
-  path = path.lexically_normal();
+  fs::path result = path.lexically_normal();
 
   // lexically_normal keeps a trailing separator ("C:/a/"), which would make the same
   // directory compare different from "C:/a".
-  if (!path.has_filename() && path.has_relative_path()) {
-    path = path.parent_path();
+  if (!result.has_filename() && result.has_relative_path()) {
+    result = result.parent_path();
   }
-  return path;
+  return result.generic_string();
 }
 
-fs::path&
+// True when normalize() would return the same text: no "." or ".." segment, no
+// "//" and no trailing '/'.
+bool
+isNormalized(StringView text) noexcept
+{
+  SIZE_T segmentStart = 0;
+  for (SIZE_T i = 0; i <= text.size(); ++i) {
+    if (i < text.size() && text[i] != '/') {
+      continue;
+    }
+
+    const StringView segment = text.substr(segmentStart, i - segmentStart);
+    if (segment == "." || segment == ".." || (segment.empty() && segmentStart != 0)) {
+      return false;
+    }
+    segmentStart = i + 1;
+  }
+  return true;
+}
+
+// Text that has a root ("/a", or "C:a" on Windows) cannot just be appended to the
+// base directory.
+bool
+hasRoot(StringView text) noexcept
+{
+#if USING(CH_PLATFORM_WIN32)
+  if (text.size() >= 2 && text[1] == ':') {
+    return true;
+  }
+#endif
+  return !text.empty() && text[0] == '/';
+}
+
+String
+joinText(StringView directory, StringView rest)
+{
+  String result;
+  result.reserve(directory.size() + rest.size() + 1);
+  result.append(directory);
+  if (!rest.empty()) {
+    if (!result.empty() && result.back() != '/') {
+      result.push_back('/');
+    }
+    result.append(rest);
+  }
+  return result;
+}
+
+// Both texts must be normalized. "C:/a" is inside "C:/a" and "C:/", not "C:/ab".
+bool
+isInside(StringView directory, StringView path) noexcept
+{
+  if (path.substr(0, directory.size()) != directory) {
+    return false;
+  }
+  return path.size() == directory.size() || directory.back() == '/' ||
+         path[directory.size()] == '/';
+}
+
+String&
 baseDirectory()
 {
-  static fs::path directory;
+  static String directory;
   return directory;
 }
 
@@ -101,79 +165,99 @@ mounts()
   return mountList;
 }
 
-bool
-isMountName(const String& name)
+uint32
+countLayers(StringView name) noexcept
 {
+  uint32 count = 0;
   for (const Mount& mount : mounts()) {
     if (mount.name == name) {
-      return true;
+      ++count;
     }
   }
-  return false;
+  return count;
 }
 
 bool
 splitVirtualPath(const Path& path, VirtualPath& output)
 {
-  const String& text = path.toString();
+  StringView text = path.toString();
   if (text.size() < 2 || text[0] != '/') {
     return false;
   }
 
   // Normalized first so "/Game/../x" cannot reach outside the mount.
-  const String normalized = normalize(fs::path(text)).generic_string();
-  if (normalized.size() < 2 || normalized[0] != '/') {
-    return false;
+  if (!isNormalized(text)) {
+    output.storage = normalize(fs::path(path.toString()));
+    text = output.storage;
+    if (text.size() < 2 || text[0] != '/') {
+      return false;
+    }
   }
 
-  const SIZE_T nameEnd = normalized.find('/', 1);
-  const String name = normalized.substr(1, nameEnd == String::npos ? String::npos
-                                                                   : nameEnd - 1);
-  if (!isMountName(name)) {
+  const SIZE_T nameEnd = text.find('/', 1);
+  const StringView name = text.substr(1, nameEnd == StringView::npos ? StringView::npos
+                                                                     : nameEnd - 1);
+  if (countLayers(name) == 0) {
     return false;
   }
 
   output.name = name;
-  output.rest = nameEnd == String::npos ? fs::path() : fs::path(normalized.substr(nameEnd + 1));
+  output.rest = nameEnd == StringView::npos ? StringView() : text.substr(nameEnd + 1);
   return true;
 }
 
 String
-toVirtualText(const VirtualPath& virtualPath)
+toVirtualText(StringView name, StringView rest)
 {
-  String text = "/" + virtualPath.name;
-  if (!virtualPath.rest.empty()) {
-    text += "/" + virtualPath.rest.generic_string();
+  String text;
+  text.reserve(name.size() + rest.size() + 2);
+  text.push_back('/');
+  text.append(name);
+  if (!rest.empty()) {
+    text.push_back('/');
+    text.append(rest);
   }
   return text;
 }
 
-fs::path
+String
 toDiskPath(const Path& path)
 {
-  const fs::path fsPath(path.toString());
+  const String& text = path.toString();
+  if (isNormalized(text)) {
+    if (!path.isRelative()) {
+      return text;
+    }
+    if (!baseDirectory().empty() && !hasRoot(text)) {
+      return joinText(baseDirectory(), text);
+    }
+  }
+
+  const fs::path fsPath(text);
   if (fsPath.is_absolute()) {
     return normalize(fsPath);
   }
 
   if (!baseDirectory().empty()) {
-    return normalize(baseDirectory() / fsPath);
+    return normalize(fs::path(baseDirectory()) / fsPath);
   }
 
   std::error_code error;
-  fs::path result = fs::absolute(fsPath, error);
+  const fs::path result = fs::absolute(fsPath, error);
   if (error) {
     logError("make absolute", path, error);
-    result = fsPath;
+    return normalize(fsPath);
   }
   return normalize(result);
 }
 
 // Reading uses the highest layer that has the path. If no layer has it, the path in
-// the highest writable layer is returned, which is where it would be created.
-fs::path
+// the highest writable layer is returned, which is where it would be created. With a
+// single layer the answer is the same either way, so the disk is not checked.
+String
 resolveVirtualPath(const VirtualPath& virtualPath, Access access)
 {
+  const bool checkDisk = access == Access::Read && countLayers(virtualPath.name) > 1;
   const Mount* writableMount = nullptr;
   const Mount* topMount = nullptr;
 
@@ -182,10 +266,10 @@ resolveVirtualPath(const VirtualPath& virtualPath, Access access)
       continue;
     }
 
-    const fs::path candidate = normalize(mount.root / virtualPath.rest);
-    if (access == Access::Read) {
+    if (checkDisk) {
+      String candidate = joinText(mount.root, virtualPath.rest);
       std::error_code error;
-      if (fs::exists(candidate, error)) {
+      if (fs::exists(fs::path(candidate), error)) {
         return candidate;
       }
     }
@@ -199,17 +283,17 @@ resolveVirtualPath(const VirtualPath& virtualPath, Access access)
   }
 
   if (writableMount) {
-    return normalize(writableMount->root / virtualPath.rest);
+    return joinText(writableMount->root, virtualPath.rest);
   }
 
   if (access == Access::Write) {
-    logError("FileSystem: '/" + virtualPath.name + "' has no writable mount");
-    return fs::path();
+    logError("FileSystem: '/" + String(virtualPath.name) + "' has no writable mount");
+    return String();
   }
-  return topMount ? normalize(topMount->root / virtualPath.rest) : fs::path();
+  return topMount ? joinText(topMount->root, virtualPath.rest) : String();
 }
 
-fs::path
+String
 toRealPath(const Path& path, Access access)
 {
   VirtualPath virtualPath;
@@ -220,32 +304,35 @@ toRealPath(const Path& path, Access access)
 }
 
 String
-diskToVirtualText(const fs::path& diskPath)
+diskToVirtualText(StringView diskPath)
 {
   for (const Mount& mount : mounts()) {
-    const fs::path relative = diskPath.lexically_relative(mount.root);
-    if (relative.empty() || *relative.begin() == "..") {
+    if (!isInside(mount.root, diskPath)) {
       continue;
     }
-    VirtualPath virtualPath{mount.name, relative == "." ? fs::path() : relative};
-    return toVirtualText(virtualPath);
+
+    StringView rest = diskPath.substr(mount.root.size());
+    if (!rest.empty() && rest[0] == '/') {
+      rest.remove_prefix(1);
+    }
+    return toVirtualText(mount.name, rest);
   }
   return String();
 }
 
 // A virtual path stays virtual; a disk path becomes virtual when it is inside a
 // mount, so both kinds can be compared with each other.
-fs::path
+String
 toComparablePath(const Path& path)
 {
   VirtualPath virtualPath;
   if (splitVirtualPath(path, virtualPath)) {
-    return fs::path(toVirtualText(virtualPath));
+    return toVirtualText(virtualPath.name, virtualPath.rest);
   }
 
-  const fs::path diskPath = toDiskPath(path);
-  const String virtualText = diskToVirtualText(diskPath);
-  return virtualText.empty() ? diskPath : fs::path(virtualText);
+  String diskPath = toDiskPath(path);
+  String virtualText = diskToVirtualText(diskPath);
+  return virtualText.empty() ? diskPath : virtualText;
 }
 
 bool
@@ -293,7 +380,8 @@ forEachVirtualEntry(const VirtualPath& virtualPath,
                     bool recursive,
                     const Function<void(const Path&, const fs::directory_entry&)>& func)
 {
-  const String prefix = toVirtualText(virtualPath);
+  const String prefix = toVirtualText(virtualPath.name, virtualPath.rest);
+  const bool mergeLayers = countLayers(virtualPath.name) > 1;
   UnorderedSet<String> seen;
   bool listedAny = false;
 
@@ -302,12 +390,26 @@ forEachVirtualEntry(const VirtualPath& virtualPath,
       continue;
     }
 
-    const fs::path layerDirectory = normalize(mount.root / virtualPath.rest);
-    listedAny |= forEachEntry(layerDirectory, recursive, [&](const fs::directory_entry& entry) {
-      const String relative = entry.path().lexically_relative(layerDirectory).generic_string();
-      if (seen.insert(relative).second) {
-        func(Path(prefix + "/" + relative), entry);
+    const String layerDirectory = joinText(mount.root, virtualPath.rest);
+    listedAny |= forEachEntry(fs::path(layerDirectory), recursive,
+                              [&](const fs::directory_entry& entry) {
+      // Entries are built from layerDirectory, so their text starts with it.
+      const String entryText = entry.path().generic_string();
+      StringView relative = StringView(entryText).substr(layerDirectory.size());
+      if (!relative.empty() && relative[0] == '/') {
+        relative.remove_prefix(1);
       }
+
+      if (mergeLayers && !seen.emplace(relative).second) {
+        return;
+      }
+
+      String childText;
+      childText.reserve(prefix.size() + relative.size() + 1);
+      childText.append(prefix);
+      childText.push_back('/');
+      childText.append(relative);
+      func(Path(std::move(childText)), entry);
     });
   }
 
@@ -327,8 +429,8 @@ forEachChild(const Path& path,
     return;
   }
 
-  const fs::path directory = toDiskPath(path);
-  if (!forEachEntry(directory, recursive, [&](const fs::directory_entry& entry) {
+  const String directory = toDiskPath(path);
+  if (!forEachEntry(fs::path(directory), recursive, [&](const fs::directory_entry& entry) {
         func(Path(entry.path().generic_string()), entry);
       })) {
     logError("FileSystem: '" + path.toString() + "' is not a directory");
@@ -362,7 +464,7 @@ FileSystem::mount(const String& name,
 bool
 FileSystem::unmount(const String& name, const Path& directory)
 {
-  const fs::path root = toRealPath(directory, Access::Read);
+  const String root = toRealPath(directory, Access::Read);
   Vector<Mount>& mountList = mounts();
   for (auto it = mountList.begin(); it != mountList.end(); ++it) {
     if (it->name == name && it->root == root) {
@@ -385,7 +487,10 @@ FileSystem::toVirtualPath(const Path& path)
 {
   VirtualPath virtualPath;
   if (splitVirtualPath(path, virtualPath)) {
-    return Path(toVirtualText(virtualPath));
+    if (virtualPath.storage.empty()) {
+      return path;
+    }
+    return Path(toVirtualText(virtualPath.name, virtualPath.rest));
   }
   return Path(diskToVirtualText(toDiskPath(path)));
 }
@@ -402,7 +507,10 @@ FileSystem::setBaseDirectory(const Path& directory)
 Path
 FileSystem::getBaseDirectory()
 {
-  return Path(toDiskPath(Path(".")).generic_string());
+  if (!baseDirectory().empty()) {
+    return Path(baseDirectory());
+  }
+  return Path(toDiskPath(Path(".")));
 }
 
 Path
@@ -435,31 +543,31 @@ FileSystem::getExecutableDirectory()
 #else
 #error "FileSystem::getExecutableDirectory is not implemented for this platform"
 #endif
-  return Path(normalize(executable.parent_path()).generic_string());
+  return Path(normalize(executable.parent_path()));
 }
 
 Path
 FileSystem::toRelativePath(const Path& path)
 {
-  return Path(toRealPath(path, Access::Read).lexically_relative(toDiskPath(Path(".")))
-                .generic_string());
+  const fs::path realPath(toRealPath(path, Access::Read));
+  return Path(realPath.lexically_relative(fs::path(toDiskPath(Path(".")))).generic_string());
 }
 
 bool
 FileSystem::renameFile(const Path& oldPath, const Path& newPath)
 {
-  const fs::path oldRealPath = toRealPath(oldPath, Access::Write);
-  const fs::path newRealPath = toRealPath(newPath, Access::Write);
+  const String oldRealPath = toRealPath(oldPath, Access::Write);
+  const String newRealPath = toRealPath(newPath, Access::Write);
   if (oldRealPath.empty() || newRealPath.empty()) {
     return false;
   }
 
   std::error_code error;
-  if (!fs::is_regular_file(oldRealPath, error)) {
+  if (!fs::is_regular_file(fs::path(oldRealPath), error)) {
     return false;
   }
 
-  fs::rename(oldRealPath, newRealPath, error);
+  fs::rename(fs::path(oldRealPath), fs::path(newRealPath), error);
   if (error) {
     logError("rename", oldPath, error);
     return false;
@@ -470,9 +578,9 @@ FileSystem::renameFile(const Path& oldPath, const Path& newPath)
 bool
 FileSystem::removeFile(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  const String realPath = toRealPath(path, Access::Write);
   std::error_code error;
-  if (realPath.empty() || !fs::is_regular_file(realPath, error)) {
+  if (realPath.empty() || !fs::is_regular_file(fs::path(realPath), error)) {
     return false;
   }
   return remove(path);
@@ -481,41 +589,39 @@ FileSystem::removeFile(const Path& path)
 Path
 FileSystem::absolutePath(const Path& path)
 {
-  return Path(toRealPath(path, Access::Read).generic_string());
+  return Path(toRealPath(path, Access::Read));
 }
 
 bool
 FileSystem::isFile(const Path& path)
 {
   std::error_code error;
-  return fs::is_regular_file(toRealPath(path, Access::Read), error);
+  return fs::is_regular_file(fs::path(toRealPath(path, Access::Read)), error);
 }
 
 bool
 FileSystem::isDirectory(const Path& path)
 {
   std::error_code error;
-  return fs::is_directory(toRealPath(path, Access::Read), error);
+  return fs::is_directory(fs::path(toRealPath(path, Access::Read)), error);
 }
 
 bool
 FileSystem::isSubPath(const Path& basePath, const Path& path)
 {
-  const fs::path relative = toComparablePath(path).lexically_relative(
-                              toComparablePath(basePath));
-  return !relative.empty() && *relative.begin() != "..";
+  return isInside(toComparablePath(basePath), toComparablePath(path));
 }
 
 bool
 FileSystem::createDirectory(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  const String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return false;
   }
 
   std::error_code error;
-  fs::create_directory(realPath, error);
+  fs::create_directory(fs::path(realPath), error);
   if (error) {
     logError("create directory", path, error);
     return false;
@@ -526,13 +632,13 @@ FileSystem::createDirectory(const Path& path)
 bool
 FileSystem::createDirectories(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  const String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return false;
   }
 
   std::error_code error;
-  fs::create_directories(realPath, error);
+  fs::create_directories(fs::path(realPath), error);
   if (error) {
     logError("create directories", path, error);
     return false;
@@ -544,13 +650,13 @@ bool
 FileSystem::exists(const Path& path)
 {
   std::error_code error;
-  return fs::exists(toRealPath(path, Access::Read), error);
+  return fs::exists(fs::path(toRealPath(path, Access::Read)), error);
 }
 
 SPtr<DataStream>
 FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
 {
-  const fs::path realPath = toRealPath(path, readOnly ? Access::Read : Access::Write);
+  String realPath = toRealPath(path, readOnly ? Access::Read : Access::Write);
   if (realPath.empty()) {
     return nullptr;
   }
@@ -561,7 +667,7 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
   }
 
   try {
-    return chMakeShared<FileDataStream>(Path(realPath.generic_string()), accessMode, true);
+    return chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode, true);
   }
   catch (const std::exception& e) {
     logError("FileSystem: " + String(e.what()));
@@ -572,20 +678,20 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
 SPtr<DataStream>
 FileSystem::createAndOpenFile(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return nullptr;
   }
 
   std::error_code error;
-  fs::create_directories(realPath.parent_path(), error);
+  fs::create_directories(fs::path(realPath).parent_path(), error);
   if (error) {
     logError("create directories for", path, error);
     return nullptr;
   }
 
   try {
-    return chMakeShared<FileDataStream>(Path(realPath.generic_string()),
+    return chMakeShared<FileDataStream>(Path(std::move(realPath)),
                                         ACCESS_MODE::kWRITE,
                                         true);
   }
@@ -598,14 +704,14 @@ FileSystem::createAndOpenFile(const Path& path)
 void
 FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return;
   }
 
   try {
     // The constructor writes the whole memory stream and the destructor closes the file.
-    FileDataStream fileStream(Path(realPath.generic_string()), memStream);
+    FileDataStream fileStream(Path(std::move(realPath)), memStream);
   }
   catch (const std::exception& e) {
     logError("FileSystem: " + String(e.what()));
@@ -615,13 +721,13 @@ FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path&
 bool
 FileSystem::remove(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  const String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return false;
   }
 
   std::error_code error;
-  const bool removed = fs::remove(realPath, error);
+  const bool removed = fs::remove(fs::path(realPath), error);
   if (error) {
     logError("remove", path, error);
     return false;
@@ -632,13 +738,13 @@ FileSystem::remove(const Path& path)
 bool
 FileSystem::removeAll(const Path& path)
 {
-  const fs::path realPath = toRealPath(path, Access::Write);
+  const String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
     return false;
   }
 
   std::error_code error;
-  const std::uintmax_t removedCount = fs::remove_all(realPath, error);
+  const std::uintmax_t removedCount = fs::remove_all(fs::path(realPath), error);
   if (error) {
     logError("remove all", path, error);
     return false;

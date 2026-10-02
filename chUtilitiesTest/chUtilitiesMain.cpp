@@ -33,6 +33,7 @@
 #include "chVector3.h"
 #include "chVector4.h"
 
+#include <algorithm>
 #include <filesystem>
 
 #define CATCH_CONFIG_MAIN
@@ -1928,9 +1929,45 @@ TEST_CASE("chUtilities - FileSystem") {
     REQUIRE(FileSystem::toVirtualPath(Path("chMountTestDir/Other.bin")).empty());
     REQUIRE(FileSystem::isSubPath(Path("/TestGame"), Path("chMountTestDir/Base/x")));
     REQUIRE_FALSE(FileSystem::isSubPath(Path("/TestGame"), Path("/TestEngine/engine.bin")));
+    REQUIRE(FileSystem::isSubPath(Path("/TestGame"), Path("/TestGame")));
+    REQUIRE_FALSE(FileSystem::isSubPath(Path("/TestGame"), Path("/TestGameX/a")));
+
+    // Text that is not normalized takes the slow path and must give the same answers.
+    REQUIRE(FileSystem::isVirtual(Path("/Other/../TestGame/shared.bin")));
+    REQUIRE(FileSystem::toVirtualPath(Path("/TestGame/./sub//x.bin/")) ==
+            Path("/TestGame/sub/x.bin"));
+    REQUIRE(FileSystem::toVirtualPath(Path("/TestGame/sub/x.bin")) ==
+            Path("/TestGame/sub/x.bin"));
+    REQUIRE(FileSystem::toVirtualPath(Path("chMountTestDir/Mod/../Base/baseOnly.bin")) ==
+            Path("/TestGame/baseOnly.bin"));
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/sub/../shared.bin"))[0] == 3);
+
+    writeFile(Path("chMountTestDir/Mod/sub/deep.bin"), 6);
+    writeFile(Path("chMountTestDir/Base/sub/deep.bin"), 7);
+    Vector<Path> recursiveFiles;
+    FileSystem::forEachFileChildRecursive(Path("/TestGame"), [&](const Path& file) {
+      recursiveFiles.push_back(file);
+    });
+    // shared.bin and sub/deep.bin are in both layers but listed once.
+    REQUIRE(recursiveFiles.size() == 5);
+    REQUIRE(std::find(recursiveFiles.begin(), recursiveFiles.end(),
+                      Path("/TestGame/sub/deep.bin")) != recursiveFiles.end());
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/sub/deep.bin"))[0] == 6);
+
+    // With one layer the path is not checked on disk, so a missing file still resolves
+    // to where it would be.
+    REQUIRE(FileSystem::absolutePath(Path("/TestEngine/missing.bin")) ==
+            FileSystem::absolutePath(Path("chMountTestDir/Engine/missing.bin")));
+    Vector<Path> engineFiles;
+    FileSystem::forEachFileChildRecursive(Path("/TestEngine"), [&](const Path& file) {
+      engineFiles.push_back(file);
+    });
+    REQUIRE(engineFiles.size() == 1);
+    REQUIRE(engineFiles[0] == Path("/TestEngine/engine.bin"));
 
     REQUIRE(FileSystem::unmount("TestGame", Path("chMountTestDir/Mod")));
     REQUIRE(FileSystem::fastRead(Path("/TestGame/shared.bin"))[0] == 1);
+    REQUIRE(FileSystem::fastRead(Path("/TestGame/sub/deep.bin"))[0] == 7);
 
     REQUIRE(FileSystem::unmount("TestGame", Path("chMountTestDir/Base")));
     REQUIRE(FileSystem::unmount("TestEngine", Path("chMountTestDir/Engine")));

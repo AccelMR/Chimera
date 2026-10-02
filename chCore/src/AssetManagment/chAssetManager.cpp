@@ -211,9 +211,9 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
 
     // The stored folder must match where the file really is. This also fixes files
     // moved by hand and assets saved before virtual paths, which stored "Assets/...".
-    const String assetDirectory = FileSystem::toVirtualPath(file).getDirectory().toString();
+    const Path assetDirectory = FileSystem::toVirtualPath(file).getDirectory();
 
-    if (!chString::equals(asset->getAssetPath(), assetDirectory)) {
+    if (!chString::equals(asset->getAssetPath(), assetDirectory.toString())) {
       CH_LOG_WARNING(AssetSystem,
                        "Asset path mismatch for {0}: stored {1}, found {2}.\n"
                        "Will update asset path to match file location.",
@@ -221,7 +221,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
                        asset->getAssetPath(),
                        assetDirectory);
 
-      asset->setAssetPath(assetDirectory.c_str());
+      asset->setAssetPath(assetDirectory.toString().c_str());
       //TODO: this is nasty fix it.
       // we can probably set a dirtyu flag and then save it later?
       // Main issue ius that we are soft loading here so model data does not exist yet.

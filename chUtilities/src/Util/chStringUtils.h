@@ -39,7 +39,7 @@ class FormatString
   }
 
   NODISCARD constexpr StringView
-  get() const
+  get() const noexcept
   {
     return m_text;
   }
@@ -80,7 +80,7 @@ class CH_UTILITY_EXPORT chString
 {
  public:
   NODISCARD static bool
-  equals(StringView str1, StringView str2)
+  equals(StringView str1, StringView str2) noexcept
   {
     return str1 == str2;
   }
@@ -93,7 +93,7 @@ class CH_UTILITY_EXPORT chString
    */
   template<SIZE_T N>
   static bool
-  copyToBuffer(ANSICHAR (&dest)[N], StringView src)
+  copyToBuffer(ANSICHAR (&dest)[N], StringView src) noexcept
   {
     static_assert(N > 0, "The destination buffer needs room for the '\\0'.");
     const SIZE_T count = src.size() < N ? src.size() : N - 1;
