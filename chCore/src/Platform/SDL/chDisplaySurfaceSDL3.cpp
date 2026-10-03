@@ -10,7 +10,6 @@
 #include "chDisplaySurface.h"
 
 #if USING (CH_DISPLAY_SDL3)
-#include "chCommandParser.h"
 
 #include <SDL3/SDL.h>
 //#include <SDL3/SDL_video.h>

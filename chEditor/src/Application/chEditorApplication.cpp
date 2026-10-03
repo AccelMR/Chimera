@@ -10,7 +10,7 @@
 
 #include "chEditorApplication.h"
 #include "chAssetManager.h"
-#include "chCommandParser.h"
+#include "chCommandLine.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
@@ -145,7 +145,7 @@ EditorApplication::initializeEditorComponents() {
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
 
-  const String sceneName = CommandParser::instance().getParam("scene", "DefaultScene");
+  const String sceneName = CommandLine::getValue("scene", "DefaultScene");
   SceneManager::startUp();
   SceneManager& sceneManager = SceneManager::instance();
 

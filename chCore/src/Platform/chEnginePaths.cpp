@@ -9,7 +9,7 @@
 /************************************************************************/
 #include "chEnginePaths.h"
 
-#include "chCommandParser.h"
+#include "chCommandLine.h"
 #include "chException.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
@@ -89,10 +89,7 @@ hasProjectFile(const Path& directory)
 Path
 findProjectRoot(const Path& engineRoot, const Path& executableDirectory)
 {
-  String requestedProject;
-  if (CommandParser::isStarted()) {
-    requestedProject = CommandParser::instance().getParam("project");
-  }
+  const String requestedProject = CommandLine::getValue("project");
 
   if (!requestedProject.empty()) {
     Path project = FileSystem::absolutePath(Path(requestedProject));

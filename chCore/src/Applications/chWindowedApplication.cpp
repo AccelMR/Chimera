@@ -10,7 +10,7 @@
 
 #include <chrono>
 
-#include "chCommandParser.h"
+#include "chCommandLine.h"
 #include "chDisplayEventHandle.h"
 #include "chDisplayManager.h"
 #include "chDynamicLibManager.h"
@@ -102,13 +102,11 @@ WindowedApplication::initialize() {
   CH_LOG_INFO(WindowedApp, "Initializing WindowedApplication.");
   initializeModules();
 
-  CommandParser& commandParser = CommandParser::instance();
-
   initializeDisplay(
-      {.name = commandParser.getParam("AppName", "Chimera Engine"),
-       .title = commandParser.getParam("WindowTitle", "Chimera Engine Windowed Application"),
-       .width = static_cast<uint32>(commandParser.getParamAsInt("Width", 1920)),
-       .height = static_cast<uint32>(commandParser.getParamAsInt("Height", 1080))});
+      {.name = CommandLine::getValue("AppName", "Chimera Engine"),
+       .title = CommandLine::getValue("WindowTitle", "Chimera Engine Windowed Application"),
+       .width = static_cast<uint32>(CommandLine::getInt("Width", 1920)),
+       .height = static_cast<uint32>(CommandLine::getInt("Height", 1080))});
   initializeGraphics();
   initializeRenderComponents();
   bindEvents();
@@ -124,13 +122,6 @@ void
 WindowedApplication::initializeModules() {
   CH_LOG_INFO(WindowedApp, "WindowedApplication initializing modules.");
   BaseApplication::initializeModules();
-
-  if (!CommandParser::isStarted()) {
-    CH_LOG_WARNING(
-        WindowedApp,
-        "CommandParser was not started before WindowedApplication, starting it now.");
-    CommandParser::startUp();
-  }
 
   DynamicLibraryManager::startUp();
   DisplayManager::startUp();
@@ -148,7 +139,6 @@ WindowedApplication::destroyModules() {
   EventDispatcherManager::shutDown();
   DisplayManager::shutDown();
   DynamicLibraryManager::shutDown();
-  CommandParser::shutDown();
 }
 
 /*
@@ -183,8 +173,7 @@ WindowedApplication::initializeGraphics() {
   CH_LOG_INFO(WindowedApp, "Initializing graphics subsystem.");
   // Initialize graphics subsystem here
   // Chimera.exe -GraphicsAPI=chVulkan -scene=MyScene
-  const String& graphicsAPIName =
-      CommandParser::instance().getParam("GraphicsAPI", "chVulkan");
+  const String graphicsAPIName = CommandLine::getValue("GraphicsAPI", "chVulkan");
 
   const Path& pluginDirectory = EnginePaths::getPluginDirectory();
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,

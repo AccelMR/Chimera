@@ -11,7 +11,7 @@
 // #ifdef RUN_UNIT_TESTS
 #include "chAlgorithm.h"
 #include "chBox2D.h"
-#include "chCommandParser.h"
+#include "chCommandLine.h"
 #include "chDegree.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
@@ -2240,59 +2240,54 @@ TEST_CASE("chUtilities - FileSystem") {
   }
 }
 
-TEST_CASE("CommandParser Tests", "[CommandParser]") {
+TEST_CASE("chUtilities - CommandLine") {
+  SECTION("values and flags") {
+    const ANSICHAR* argv[] = {"program", "-option1=value1", "-Option2=Value=2", "-flag"};
+    CommandLine::initialize(4, argv);
 
-  SECTION("TestParse") {
-    // Setup
-    const ANSICHAR* argv[] = {"program_name", "-option1=value1", "-option2=value2", "-flag"};
-    int32 argc = 4;
-
-    CommandParser::startUp();
-    CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (ANSICHAR**)argv);
-
-    // Test parsed parameters
-    REQUIRE(parser.getParam("option1") == "value1");
-    REQUIRE(parser.getParam("option2") == "value2");
-
-    // Test flag
-    REQUIRE(parser.isFlagSet("flag") == true);
+    REQUIRE(CommandLine::getValue("option1") == "value1");
+    REQUIRE(CommandLine::getValue("OPTION2") == "Value=2");
+    REQUIRE(CommandLine::hasFlag("FLAG"));
+    REQUIRE_FALSE(CommandLine::hasFlag("option1"));
+    REQUIRE(CommandLine::getValue("missing", "default") == "default");
+    REQUIRE_FALSE(CommandLine::hasFlag("missing"));
+    REQUIRE(CommandLine::getArgc() == 4);
   }
 
-  SECTION("TestDefaultParam") {
-    // Setup
-    const ANSICHAR* argv[] = {"program_name"};
-    int32 argc = 1;
+  SECTION("dashes and plain arguments") {
+    const ANSICHAR* argv[] = {"program", "--double", "plain", "-", "--", "-=x", "-empty="};
+    CommandLine::initialize(7, argv);
 
-    CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (ANSICHAR**)argv);
-
-    // Test default parameter
-    REQUIRE(parser.getParam("option_not_present", "default_value") == "default_value");
+    REQUIRE(CommandLine::hasFlag("double"));
+    REQUIRE_FALSE(CommandLine::hasFlag("plain"));
+    REQUIRE_FALSE(CommandLine::hasFlag("lain"));
+    REQUIRE_FALSE(CommandLine::hasFlag(""));
+    REQUIRE(CommandLine::getValue("", "none") == "none");
+    REQUIRE(CommandLine::getValue("empty", "none").empty());
   }
 
-  SECTION("TestMissingFlag") {
-    // Setup
-    const ANSICHAR* argv[] = {"program_name"};
-    int32 argc = 1;
+  SECTION("integers") {
+    const ANSICHAR* argv[] = {"program", "-Width=1280", "-Height=abc", "-Depth=12px",
+                              "-Big=99999999999", "-Negative=-5", "-Empty="};
+    CommandLine::initialize(7, argv);
 
-    CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (ANSICHAR**)argv);
-
-    // Test missing flag
-    REQUIRE(parser.isFlagSet("flag_not_present") == false);
+    REQUIRE(CommandLine::getInt("width", 1920) == 1280);
+    REQUIRE(CommandLine::getInt("height", 1080) == 1080);
+    REQUIRE(CommandLine::getInt("depth", 3) == 3);
+    REQUIRE(CommandLine::getInt("big", 7) == 7);
+    REQUIRE(CommandLine::getInt("negative") == -5);
+    REQUIRE(CommandLine::getInt("empty", 4) == 4);
+    REQUIRE(CommandLine::getInt("missing", 9) == 9);
   }
 
-  SECTION("TestCaseInsensitive") {
-    // Setup
-    const ANSICHAR* argv[] = {"program_name", "-OPTION=value"};
-    int32 argc = 2;
+  SECTION("initialize replaces the previous options") {
+    const ANSICHAR* first[] = {"program", "-old=1", "-oldFlag"};
+    CommandLine::initialize(3, first);
+    const ANSICHAR* second[] = {"program"};
+    CommandLine::initialize(1, second);
 
-    CommandParser& parser = CommandParser::instance();
-    parser.parse(argc, (ANSICHAR**)argv);
-
-    // Test case insensitivity
-    REQUIRE(parser.getParam("option") == "value");
+    REQUIRE(CommandLine::getValue("old").empty());
+    REQUIRE_FALSE(CommandLine::hasFlag("oldflag"));
   }
 }
 

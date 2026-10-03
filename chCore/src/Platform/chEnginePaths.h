@@ -34,7 +34,7 @@ class CH_CORE_EXPORT EnginePaths
   /**
    * Finds the folders and mounts them. Every getter calls it the first time, so it
    * only needs to be called directly to choose when it happens, for example before
-   * opening the log file. Reads -project from CommandParser if it has started.
+   * opening the log file. Reads -project from CommandLine.
    * Throws if the engine root or the requested project cannot be found.
    * Every path is worked out here once, so the references returned by the getters
    * stay valid until the program ends.

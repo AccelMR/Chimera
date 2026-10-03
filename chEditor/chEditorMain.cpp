@@ -1,6 +1,6 @@
 #include "chEditorApplication.h"
 
-#include "chCommandParser.h"
+#include "chCommandLine.h"
 #include "chEnginePaths.h"
 #include "chException.h"
 #include "chLogger.h"
@@ -19,9 +19,7 @@ main(int32 argc, ANSICHAR* argv[]) {
   logger.setGlobalVerbosity(LogVerbosity::Debug);
   logger.setBufferingEnabled(true, 500);
 
-  CommandParser::startUp();
-  CommandParser& commandParser = CommandParser::instance();
-  commandParser.parse(argc, argv);
+  CommandLine::initialize(argc, argv);
 
   try {
     // The log file lives in the project's Saved folder, so the project (-project) must
