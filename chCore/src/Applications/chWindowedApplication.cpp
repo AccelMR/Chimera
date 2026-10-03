@@ -105,8 +105,8 @@ WindowedApplication::initialize() {
   initializeDisplay(
       {.name = CommandLine::getValue("AppName", "Chimera Engine"),
        .title = CommandLine::getValue("WindowTitle", "Chimera Engine Windowed Application"),
-       .width = static_cast<uint32>(CommandLine::getInt("Width", 1920)),
-       .height = static_cast<uint32>(CommandLine::getInt("Height", 1080))});
+       .width = static_cast<uint32>(CommandLine::getInt("Width", 2560)),
+       .height = static_cast<uint32>(CommandLine::getInt("Height", 1440))});
   initializeGraphics();
   initializeRenderComponents();
   bindEvents();
