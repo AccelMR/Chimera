@@ -3,11 +3,9 @@
  * @file chDynamicLibManager.cpp
  * @author AccelMR
  * @date 2022/06/15
- * @brief This is a Dynamic Library Manager. This will keep every reference of each
- *        dll loaded.
- *
+ * @brief Keeps every dynamic library loaded by the engine.
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
@@ -17,98 +15,79 @@
 #include "chDynamicLibManager.h"
 
 #include "chDynamicLibrary.h"
+#include "chLogger.h"
 
-namespace chEngineSDK{
-/*
-*/
-void
-UtilUnloadLibrary(WeakPtr<DynamicLibrary> library) {
-  auto RealPointer = library.lock();
-  if (RealPointer) {
-    RealPointer->unload();
-  }
-}
+CH_LOG_DECLARE_STATIC(DynamicLibraryManagerLog, All);
+
+namespace chEngineSDK {
 
 /*
-*/
+ */
 WeakPtr<DynamicLibrary>
-DynamicLibraryManager::loadDynLibrary(const String& name, const Path& path)
+DynamicLibraryManager::loadDynLibrary(const String& name, const Path& directory)
 {
-  String fileName = sanitizeName(name);
+  const String fileName = getFileName(name);
 
-  WeakPtr<DynamicLibrary> lib = getLibrary(fileName);
-
-  if(lib.lock()){
-    return lib;
+  const auto found = m_loadedLibraries.find(fileName);
+  if (found != m_loadedLibraries.end()) {
+    return found->second;
   }
 
-  Path fileWholeName(fileName);
-  if (!path.empty()) {
-    fileWholeName = path / fileName;
+  const Path filePath = directory.empty() ? Path(fileName) : directory / fileName;
+  SPtr<DynamicLibrary> library = chMakeShared<DynamicLibrary>(filePath);
+  if (!library->isLoaded()) {
+    return {};
   }
 
-  SPtr<DynamicLibrary> newLib =  chMakeShared<DynamicLibrary>(fileWholeName.toString());
-  m_loadedLibraries.emplace(fileName, newLib);
-
-  return newLib;
+  m_loadedLibraries.emplace(fileName, library);
+  return library;
 }
 
 /*
-*/
+ */
 void
-DynamicLibraryManager::unloadDynLibrary(WeakPtr<DynamicLibrary> library)
+DynamicLibraryManager::unloadDynLibrary(const WeakPtr<DynamicLibrary>& library)
 {
-  auto RealLibrary = library.lock();
-  if (!RealLibrary) {
-    CH_EXCEPT(InternalErrorException, "Could not unload library because pointer is null.");
-    return;
+  const SPtr<DynamicLibrary> target = library.lock();
+  for (auto it = m_loadedLibraries.begin(); it != m_loadedLibraries.end(); ++it) {
+    if (it->second == target) {
+      target->unload();
+      m_loadedLibraries.erase(it);
+      return;
+    }
   }
 
-  const auto &iterFind = m_loadedLibraries.find(RealLibrary->getName());
-  if (iterFind == m_loadedLibraries.end()) {
-    CH_EXCEPT(InternalErrorException, "This Library was not added to the Dynamic Library Manager.");
-  }
-
-  m_loadedLibraries.erase(iterFind);
-  UtilUnloadLibrary(library);
+  CH_LOG_WARNING(DynamicLibraryManagerLog,
+                 "Cannot unload a library that was not loaded by this manager.");
 }
 
 /*
-*/
+ */
 WeakPtr<DynamicLibrary>
-DynamicLibraryManager::getLibrary(const String& name) {
-  const auto &iterFind = m_loadedLibraries.lower_bound(name);
-  if (iterFind != m_loadedLibraries.end() && iterFind->second->getName() == name) {
-    return iterFind->second;
+DynamicLibraryManager::getLibrary(const String& name) const
+{
+  const auto found = m_loadedLibraries.find(getFileName(name));
+  if (found != m_loadedLibraries.end()) {
+    return found->second;
   }
-
-  return SPtr<DynamicLibrary>(nullptr);
+  return {};
 }
 
 /*
-*/
+ */
 String
-DynamicLibraryManager::sanitizeName(const String& libName) {
-  String filename = libName;
-  //Add the extension (.dll, .so, ...) if necessary.
-  const SIZE_T length = filename.length();
-  const String extension = String( "." ) + DynamicLibrary::EXTENSION;
-  const SIZE_T extLength = extension.length();
-
-  #if USING(CH_DEBUG_MODE)
-  //Add the debug suffix if necessary.
-  filename.append("d");
-  #endif //USING(CH_DEBUG_MODE)
-
-  if ( length <= extLength || filename.substr( length - extLength ) != extension ) {
-    filename.append( extension );
+DynamicLibraryManager::getFileName(const String& name)
+{
+  if (name.ends_with(DynamicLibrary::EXTENSION)) {
+    return name;
   }
 
-  if ( nullptr != DynamicLibrary::PREFIX ) {
-    filename.insert( 0, DynamicLibrary::PREFIX );
-  }
-
-  return filename;
+  String fileName = name;
+#if USING(CH_DEBUG_MODE)
+  fileName += 'd';
+#endif
+  fileName += DynamicLibrary::EXTENSION;
+  return fileName;
 }
 
-}
+} // namespace chEngineSDK

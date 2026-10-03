@@ -372,16 +372,9 @@ EditorApplication::loadCodecs() {
   Vector<Path> directories;
   FileSystem::getChildren(codecsPath, files, directories);
   for (const Path& file : files) {
-    if (file.getExtension() == ".so" ||
-        file.getExtension() == ".dll") {
-        String fileName = file.getFileName(false);
-#if USING(CH_DEBUG_MODE)
-        // Debug codecs are named with a "d" suffix, and loadDynLibrary adds it back.
-        fileName.pop_back();
-#endif
-        WeakPtr <DynamicLibrary> library =
-            DynamicLibraryManager::instance().loadDynLibrary(fileName,
-                                                             codecsPath);
+    if (file.getExtension() == DynamicLibrary::EXTENSION) {
+      WeakPtr<DynamicLibrary> library =
+          DynamicLibraryManager::instance().loadDynLibrary(file.getFileName(), codecsPath);
       if (library.expired()) {
         CH_LOG_ERROR(EditorApp, "Failed to load codec library: {0}", file.toString());
         continue;

@@ -3,9 +3,9 @@
  * @file chDynamicLibrary.h
  * @author AccelMR
  * @date 2022/06/14
- * @brief Class that holds the actual data of a loaded Dynamic Library.
+ * @brief One loaded dynamic library (.dll / .so).
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
@@ -15,88 +15,71 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
-#if USING(CH_PLATFORM_WIN32)
-using DynamicLibraryHandle = void*;
-#elif USING( CH_PLATFORM_LINUX )
-using DynamicLibraryHandle = void*;
-#endif
+#include "chPath.h"
 
-namespace chEngineSDK{
-/*
- * Description:
- *     Dynamic Library wrapper that is Platform Independent.
- *
- * Sample usage:
- *
+namespace chEngineSDK {
+
+using DynamicLibraryHandle = void*;
+
+/**
+ * Wraps one dynamic library, so plugins are loaded and their symbols read without
+ * platform code. The library is loaded by the constructor; check isLoaded() before using
+ * it. The destructor does not unload it: plugin objects (the graphics API, codecs) are
+ * not destroyed before the libraries yet, so unloading would leave them without code.
  */
 class CH_UTILITY_EXPORT DynamicLibrary
 {
  public:
+  explicit DynamicLibrary(Path path);
 
- /*
-  * @brief Default constructor
-  */
-  DynamicLibrary() = delete;
-
-  /**
-   *   Constructs a Dynamic Library depending on its name.
-   **/
-  DynamicLibrary(String _name);
-
-  /**
-   *   Loads a dynamic library based on its name.
-   **/
-  void
-  load();
-
- /*
-  * @brief Default destructor
-  */
   ~DynamicLibrary() = default;
 
+  DynamicLibrary(const DynamicLibrary&) = delete;
+
+  DynamicLibrary&
+  operator=(const DynamicLibrary&) = delete;
+
+  NODISCARD FORCEINLINE bool
+  isLoaded() const noexcept
+  {
+    return m_handle != nullptr;
+  }
+
   /**
-   *   Unloads this dynamic library based on its name.
-   **/
-  void
+   * Returns false and logs when the system refuses to unload the library.
+   */
+  bool
   unload();
 
   /**
-   *   Returns the address of the given symbol from loaded library.
-   *
-   * @param strName
-   *   The name of the symbol to search.
-   *
-   * @return
-   *  Returns the handle to the needed symbol, nullptr if not found.
-   **/
-  void*
-  getSymbol(const String& strName);
+   * Returns nullptr when the library is not loaded or has no such symbol.
+   */
+  NODISCARD void*
+  getSymbol(const ANSICHAR* name) const;
 
-  template <typename T>
-  FORCEINLINE T
-  getSymbol(const String& strName) {
-    return reinterpret_cast<T>(getSymbol(strName));
+  template<typename T>
+  NODISCARD FORCEINLINE T
+  getSymbol(const ANSICHAR* name) const
+  {
+    return reinterpret_cast<T>(getSymbol(name));
   }
 
-  /**
-   *   Returns the name of this dynamic library.
-   **/
-  FORCEINLINE const String&
-  getName() const {
-    return m_name;
+  NODISCARD FORCEINLINE const Path&
+  getPath() const noexcept
+  {
+    return m_path;
   }
 
- protected:
- friend class DynamicLibraryManager;
+ public:
+#if USING(CH_PLATFORM_WIN32)
+  static constexpr StringView EXTENSION = ".dll";
+#else
+  static constexpr StringView EXTENSION = ".so";
+#endif
 
-public:
-  static const ANSICHAR *EXTENSION;
-  static const ANSICHAR *PREFIX;
-
-protected:
-  String m_name;
-  DynamicLibraryHandle m_dynLibHandler;
-
+ private:
+  Path m_path;
+  DynamicLibraryHandle m_handle = nullptr;
 };
 
-}
+} // namespace chEngineSDK

@@ -185,12 +185,8 @@ WindowedApplication::initializeGraphics() {
     CH_EXCEPT(InternalErrorException,
               StringUtils::format("Failed to load graphics library: {0}", graphicsAPIName));
   }
-  SPtr<DynamicLibrary> graphicsLibrary = graphicsLib.lock();
-
-  // Load graphics api function pointer C style
-  typedef void (*GraphicsAPIInitFunc)();
-  auto initFunc =
-      reinterpret_cast<GraphicsAPIInitFunc>(graphicsLibrary->getSymbol("loadPlugin"));
+  using GraphicsAPIInitFunc = void (*)();
+  const auto initFunc = graphicsLib.lock()->getSymbol<GraphicsAPIInitFunc>("loadPlugin");
 
   if (!initFunc) {
     CH_EXCEPT(InternalErrorException,

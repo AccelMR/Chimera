@@ -3,8 +3,7 @@
  * @file chDynamicLibrary.cpp
  * @author AccelMR
  * @date 2022/06/15
- * @brief Class that holds the actual data of a loaded Dynamic Library.
- *
+ * @brief One loaded dynamic library (.dll / .so).
  */
 /************************************************************************/
 
@@ -15,124 +14,110 @@
 /************************************************************************/
 #include "chDynamicLibrary.h"
 
-#include <algorithm>
-#include <iostream>
+#include "chLogger.h"
+#include "chStringUtils.h"
 
-#include "chFileSystem.h"
-#include "chPath.h"
+#if USING(CH_PLATFORM_WIN32)
+# include "Win32/chWindows.h"
+#else
+# include <dlfcn.h>
+#endif
+
+CH_LOG_DECLARE_STATIC(DynamicLibraryLog, All);
 
 namespace chEngineSDK {
-using std::move;
+namespace {
 
-/************************************************************************/
-/*
- * Platform specifics.
- */
-/************************************************************************/
 #if USING(CH_PLATFORM_WIN32)
-#include "Win32/chWindows.h"
+String
+lastErrorMessage()
+{
+  const DWORD code = GetLastError();
+  String message = StringUtils::format("error {0}", static_cast<uint32>(code));
 
-const ANSICHAR* DynamicLibrary::EXTENSION = "dll";
-const ANSICHAR* DynamicLibrary::PREFIX = nullptr;
-
-#elif USING(CH_PLATFORM_LINUX)
-#include <dlfcn.h>
-
-const ANSICHAR* DynamicLibrary::EXTENSION = "so";
-const ANSICHAR* DynamicLibrary::PREFIX = nullptr;
-#endif // USING(CH_PLATFORM_WIN32)
-
-namespace DynamicLibraryHelper {
-void*
-getSymbolPlatformSpecific(DynamicLibraryHandle handle, const ANSICHAR* name) {
-#if USING(CH_PLATFORM_LINUX)
-  return dlsym(handle, name);
-#elif USING(CH_PLATFORM_WIN32)
-  return GetProcAddress(reinterpret_cast<HMODULE>(handle), name);
+  LPSTR buffer = nullptr;
+  const DWORD length =
+      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS,
+                     nullptr, code, 0, reinterpret_cast<LPSTR>(&buffer), 0, nullptr);
+  if (length > 0 && buffer) {
+    message += ": ";
+    message += StringUtils::trim(String(buffer, length));
+    LocalFree(buffer);
+  }
+  return message;
+}
 #else
-  CH_EXCEPT(InternalErrorException, "Could not get symbol " + String(name));
-  return nullptr;
-#endif // USING(CH_PLATFORM_WIN32)
+String
+lastErrorMessage()
+{
+  const ANSICHAR* error = dlerror();
+  return error ? String(error) : String("unknown error");
+}
+#endif
+
+} // namespace
+
+/*
+ */
+DynamicLibrary::DynamicLibrary(Path path)
+ : m_path(std::move(path))
+{
+#if USING(CH_PLATFORM_WIN32)
+  // LoadLibraryEx needs '\' separators: with '/' the dependencies of a library given by
+  // absolute path are not searched next to it.
+  const String windowsPath = StringUtils::replaceAllChars(m_path.toString(), '/', '\\');
+  m_handle = LoadLibraryExA(windowsPath.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+#else
+  m_handle = dlopen(m_path.toString().c_str(), RTLD_LAZY | RTLD_GLOBAL);
+#endif
+
+  if (!m_handle) {
+    // Read before logging, because writing the log can overwrite the system error.
+    const String error = lastErrorMessage();
+    CH_LOG_ERROR(DynamicLibraryLog, "Failed to load '{0}': {1}", m_path, error);
+  }
 }
 
-void*
-loadLibraryPlatformSpecific(const ANSICHAR* name) {
-#if USING(CH_PLATFORM_LINUX)
-  void* handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
-  if (!handle) {
-    std::cerr << "Error al cargar '" << name << "': " << dlerror() << std::endl;
-
-    // Intenta con ruta absoluta como fallback
-    const String absolutePath = FileSystem::absolutePath(Path(name)).toString();
-    handle = dlopen(absolutePath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
-    if (!handle) {
-      std::cerr << "Error con ruta absoluta '" << absolutePath << "': " << dlerror()
-                << std::endl;
-    }
-  }
-  return handle;
-#elif USING(CH_PLATFORM_WIN32)
-  // LoadLibraryEx requires '\' separators; with '/' the dependencies of a library
-  // given by absolute path are not searched next to it.
-  String windowsName(name);
-  std::replace(windowsName.begin(), windowsName.end(), '/', '\\');
-  HMODULE handle = LoadLibraryEx(windowsName.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-  if (!handle) {
-    std::cerr << "Error al cargar '" << name << "': " << GetLastError() << std::endl;
-  }
-  return handle;
-#else
-  CH_EXCEPT(InternalErrorException, "Plataforma no soportada para: " + String(name));
-  return nullptr;
-#endif // USING(CH_PLATFORM_WIN32)
-}
-
+/*
+ */
 bool
-unloadLibraryPlatformSpecific(DynamicLibraryHandle handle) {
-#if USING(CH_PLATFORM_LINUX)
-  return dlclose(handle);
-#elif USING(CH_PLATFORM_WIN32)
-  return FreeLibrary(reinterpret_cast<HMODULE>(handle));
+DynamicLibrary::unload()
+{
+  if (!m_handle) {
+    return true;
+  }
+
+#if USING(CH_PLATFORM_WIN32)
+  const bool unloaded = FreeLibrary(static_cast<HMODULE>(m_handle)) != 0;
 #else
-  CH_EXCEPT(InternalErrorException, "Could not unload library");
+  const bool unloaded = dlclose(m_handle) == 0;
+#endif
+
+  if (!unloaded) {
+    const String error = lastErrorMessage();
+    CH_LOG_ERROR(DynamicLibraryLog, "Failed to unload '{0}': {1}", m_path, error);
+    return false;
+  }
+
+  m_handle = nullptr;
   return true;
-#endif // USING(CH_PLATFORM_WIN32)
-}
-} // namespace DynamicLibraryHelper
-using namespace DynamicLibraryHelper;
-
-/*
- */
-DynamicLibrary::DynamicLibrary(String _name)
- : m_name(std::move(_name)), m_dynLibHandler(nullptr) {
-  load();
-}
-
-/*
- */
-void
-DynamicLibrary::load() {
-  m_dynLibHandler =
-      static_cast<DynamicLibraryHandle>(loadLibraryPlatformSpecific(m_name.c_str()));
-  if (!m_dynLibHandler) {
-    // CH_EXCEPT(InternalErrorException, "Could not load dynamic library " + m_name);
-  }
-}
-
-/*
- */
-void
-DynamicLibrary::unload() {
-  if (unloadLibraryPlatformSpecific(m_dynLibHandler)) {
-    CH_EXCEPT(InternalErrorException, "Could not unload dynamic library " + m_name);
-  }
 }
 
 /*
  */
 void*
-DynamicLibrary::getSymbol(const String& strName) {
-  return static_cast<void*>(getSymbolPlatformSpecific(m_dynLibHandler, strName.c_str()));
+DynamicLibrary::getSymbol(const ANSICHAR* name) const
+{
+  if (!m_handle) {
+    return nullptr;
+  }
+
+#if USING(CH_PLATFORM_WIN32)
+  return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(m_handle), name));
+#else
+  return dlsym(m_handle, name);
+#endif
 }
 
 } // namespace chEngineSDK
