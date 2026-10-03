@@ -29,8 +29,6 @@ namespace chEngineSDK {
 class CH_UTILITY_EXPORT UTF8
 {
  public:
-  static constexpr WCHAR32 REPLACEMENT_CHAR = 0xFFFD;
-
   NODISCARD static String
   fromWide(const WString& wideString);
 
@@ -48,6 +46,8 @@ class CH_UTILITY_EXPORT UTF8
 
   NODISCARD static U32String
   toUTF32(const String& input);
+
+  static constexpr WCHAR32 REPLACEMENT_CHAR = 0xFFFD;
 };
 
 } // namespace chEngineSDK

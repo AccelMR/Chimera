@@ -161,13 +161,6 @@ class FormatString
 class CH_UTILITY_EXPORT StringUtils
 {
  public:
-  /**
-   * Buffer sizes that fit any number written by toChars: "-9223372036854775808" and
-   * "-2.2250738585072014e-308".
-   */
-  static constexpr SIZE_T MAX_INTEGER_CHARS = 20;
-  static constexpr SIZE_T MAX_FLOAT_CHARS = 24;
-
   NODISCARD static bool
   equals(StringView str1, StringView str2) noexcept
   {
@@ -290,6 +283,13 @@ class CH_UTILITY_EXPORT StringUtils
   NODISCARD static String
   trim(const String& str);
 
+  /**
+   * Buffer sizes that fit any number written by toChars: "-9223372036854775808" and
+   * "-2.2250738585072014e-308".
+   */
+  static constexpr SIZE_T MAX_INTEGER_CHARS = 20;
+  static constexpr SIZE_T MAX_FLOAT_CHARS = 24;
+
  private:
   /**
    * An argument of format without converting it: numbers, chars and bools keep their
@@ -310,11 +310,6 @@ class CH_UTILITY_EXPORT StringUtils
   };
 
   template<typename T>
-  static constexpr bool NEEDS_STRING = formatArgTypeOf<T>() == FormatArgType::Text &&
-                                       !std::is_convertible_v<const std::decay_t<T>&,
-                                                              StringView>;
-
-  template<typename T>
   static FormatArg
   makeFormatArg(T&& value, String*& nextString);
 
@@ -329,6 +324,11 @@ class CH_UTILITY_EXPORT StringUtils
 
   NODISCARD static StringView
   floatToChars(ANSICHAR* buffer, SIZE_T size, double value) noexcept;
+
+  template<typename T>
+  static constexpr bool NEEDS_STRING = formatArgTypeOf<T>() == FormatArgType::Text &&
+                                       !std::is_convertible_v<const std::decay_t<T>&,
+                                                              StringView>;
 };
 
 /************************************************************************/
