@@ -3,10 +3,9 @@
  * @file chUnicode.cpp
  * @author AccelMR
  * @date 2022/06/23
- * @brief Utilities Unicode to translate between UTF-8 and other encodings.
- *
+ * @brief Conversions between UTF-8 and the other Unicode encodings.
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
@@ -15,386 +14,266 @@
 /************************************************************************/
 #include "chUnicode.h"
 
-#include <algorithm>
-#include <locale>
+namespace chEngineSDK {
 
+namespace {
 
-namespace chEngineSDK{
-/**
- * @brief Converts an UTF-8 encoded character (possibly multi byte) into an UTF-32 character.
- */
-template<typename T>
-T
-UTF8To32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
-  //Nothing to parse
-  if (begin >= end) {
-    return begin;
-  }
+NODISCARD constexpr bool
+isSurrogate(WCHAR32 c) noexcept
+{
+  return c >= 0xD800 && c <= 0xDFFF;
+}
 
-  //Determine the number of bytes used by the character
-  uint32 numBytes;
-
-  uint8 firstByte = static_cast<uint8>(*begin);
-  if (192 > firstByte) {
-    numBytes = 1;
-  }
-  else if (224 > firstByte) {
-    numBytes = 2;
-  }
-  else if (240 > firstByte) {
-    numBytes = 3;
-  }
-  else if (248 > firstByte) {
-    numBytes = 4;
-  }
-  else if (252 > firstByte) {
-    numBytes = 5;
-  }
-  else {// < 256
-    numBytes = 6;
-  }
-
-  //Not enough bytes were provided, invalid character
-  if ((begin + numBytes) > end) {
-    output = invalidChar;
-    return end;
-  }
-
-  //Decode the character
-  output = 0;
-  switch (numBytes)
-  {
-    case 6: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
-    case 5: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
-    case 4: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
-    case 3: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
-    case 2: output += static_cast<uint8>(*begin); ++begin; output <<= 6; CH_FALLTHROUGH;
-    case 1: output += static_cast<uint8>(*begin); ++begin; CH_FALLTHROUGH;
-    default: break;
-  }
-
-  constexpr uint32 offsets[6] = { 0x00000000,
-                                  0x00003080,
-                                  0x000E2080,
-                                  0x03C82080,
-                                  0xFA082080,
-                                  0x82082080 };
-  output -= offsets[numBytes - 1];
-  return begin;
+NODISCARD constexpr WCHAR32
+validOrReplacement(WCHAR32 c) noexcept
+{
+  return (c > 0x10FFFF || isSurrogate(c)) ? UTF8::REPLACEMENT_CHAR : c;
 }
 
 /**
- * @brief Converts an UTF-32 encoded character into an (possibly multi byte) UTF-8 character.
+ * Reads one character and moves it past it. A bad sequence gives U+FFFD and only skips
+ * the bytes that were part of it, so the next valid character is not lost.
  */
-template<typename T>
-T
-UTF32To8(WCHAR32 input, T output, uint32 maxElems, ANSICHAR invalidChar = 0) {
-  //No place to write the character
-  if (0 == maxElems) {
-    return output;
+template<typename Iterator>
+NODISCARD WCHAR32
+decodeUTF8(Iterator& it, Iterator end) noexcept
+{
+  const uint8 first = static_cast<uint8>(*it);
+  ++it;
+  if (first < 0x80) {
+    return first;
   }
 
-  //Check if character is valid
-  if ((0x0010FFFF < input) || ((0xD800 <= input) && (0xDBFF >= input))) {
-    *output = invalidChar;
-    ++output;
-    return output;
+  uint32 continuationBytes = 0;
+  WCHAR32 minValue = 0;
+  WCHAR32 output = 0;
+  if ((first & 0xE0) == 0xC0) {
+    continuationBytes = 1;
+    minValue = 0x80;
+    output = first & 0x1F;
   }
-
-  //Determine the number of bytes used by the character
-  uint32 numBytes;
-  if (0x80 > input) {
-    numBytes = 1;
+  else if ((first & 0xF0) == 0xE0) {
+    continuationBytes = 2;
+    minValue = 0x800;
+    output = first & 0x0F;
   }
-  else if (0x800 > input) {
-    numBytes = 2;
-  }
-  else if (0x10000 > input) {
-    numBytes = 3;
-  }
-  else {// <= 0x0010FFFF
-    numBytes = 4;
-  }
-
-  //Check if we have enough space
-  if (numBytes > maxElems) {
-    *output = invalidChar;
-    ++output;
-    return output;
-  }
-
-  //Encode the character
-  constexpr uint8 headers[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
-
-  ANSICHAR bytes[4];
-  switch (numBytes)
-  {
-    case 4:
-      bytes[3] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
-    case 3:
-      bytes[2] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
-    case 2:
-      bytes[1] = static_cast<ANSICHAR>((input | 0x80) & 0xBF); input >>= 6; CH_FALLTHROUGH;
-    case 1:
-      bytes[0] = static_cast<ANSICHAR>(input | headers[numBytes]); CH_FALLTHROUGH;
-    default:
-      break;
-  }
-
-  output = std::copy(bytes, bytes + numBytes, output);
-  return output;
-}
-
-/**
- * @brief Converts an UTF-16 encoded character into an UTF-32 character.
- */
-template<typename T>
-T
-UTF16To32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
-  //Nothing to parse
-  if (begin >= end) {
-    return begin;
-  }
-
-  WCHAR16 firstElem = static_cast<WCHAR16>(*begin);
-  ++begin;
-
-  //Check if it's a surrogate pair
-  if ((0xD800 <= firstElem) && (0xDBFF >= firstElem)) {
-    //Invalid character
-    if (begin >= end) {
-      output = invalidChar;
-      return end;
-    }
-
-    WCHAR32 secondElem = static_cast<WCHAR32>(*begin);
-    ++begin;
-
-    if ((0xDC00 <= secondElem) && (0xDFFF >= secondElem)) {
-      output = static_cast<WCHAR32>(((firstElem - 0xD800) << 10) +
-                                      (secondElem - 0xDC00) + 0x0010000);
-    }
-    else {// Invalid character
-      output = invalidChar;
-    }
+  else if ((first & 0xF8) == 0xF0) {
+    continuationBytes = 3;
+    minValue = 0x10000;
+    output = first & 0x07;
   }
   else {
-    output = static_cast<WCHAR32>(firstElem);
-    return begin;
+    // A continuation byte without a lead byte, or the 5 and 6 byte forms that UTF-8
+    // no longer allows.
+    return UTF8::REPLACEMENT_CHAR;
   }
 
-  return begin;
+  for (uint32 i = 0; i < continuationBytes; ++i) {
+    if (it == end) {
+      return UTF8::REPLACEMENT_CHAR;
+    }
+    const uint8 byte = static_cast<uint8>(*it);
+    if ((byte & 0xC0) != 0x80) {
+      return UTF8::REPLACEMENT_CHAR;
+    }
+    output = (output << 6) | (byte & 0x3F);
+    ++it;
+  }
+
+  // A value written with more bytes than it needs is rejected, so the same character
+  // always has a single encoding.
+  if (output < minValue) {
+    return UTF8::REPLACEMENT_CHAR;
+  }
+  return validOrReplacement(output);
+}
+
+template<typename Container>
+void
+encodeUTF8(WCHAR32 c, Container& output)
+{
+  c = validOrReplacement(c);
+
+  uint8 bytes[4];
+  uint32 numBytes = 0;
+  if (c < 0x80) {
+    bytes[0] = static_cast<uint8>(c);
+    numBytes = 1;
+  }
+  else if (c < 0x800) {
+    bytes[0] = static_cast<uint8>(0xC0 | (c >> 6));
+    bytes[1] = static_cast<uint8>(0x80 | (c & 0x3F));
+    numBytes = 2;
+  }
+  else if (c < 0x10000) {
+    bytes[0] = static_cast<uint8>(0xE0 | (c >> 12));
+    bytes[1] = static_cast<uint8>(0x80 | ((c >> 6) & 0x3F));
+    bytes[2] = static_cast<uint8>(0x80 | (c & 0x3F));
+    numBytes = 3;
+  }
+  else {
+    bytes[0] = static_cast<uint8>(0xF0 | (c >> 18));
+    bytes[1] = static_cast<uint8>(0x80 | ((c >> 12) & 0x3F));
+    bytes[2] = static_cast<uint8>(0x80 | ((c >> 6) & 0x3F));
+    bytes[3] = static_cast<uint8>(0x80 | (c & 0x3F));
+    numBytes = 4;
+  }
+
+  for (uint32 i = 0; i < numBytes; ++i) {
+    output.push_back(static_cast<ANSICHAR>(bytes[i]));
+  }
 }
 
 /**
- * @brief Converts an UTF-32 encoded character into an UTF-16 character.
+ * Reads one character and moves it past it. A lone surrogate gives U+FFFD; when a high
+ * surrogate is not followed by a low one, the next unit is left to be read on its own.
  */
-template<typename T>
-T
-UTF32To16(WCHAR32 input, T output, uint32 maxElems, WCHAR16 invalidChar = 0) {
-  //No place to write the character
-  if (0 == maxElems) {
-    return output;
+template<typename Iterator>
+NODISCARD WCHAR32
+decodeUTF16(Iterator& it, Iterator end) noexcept
+{
+  const WCHAR32 first = static_cast<uint16>(*it);
+  ++it;
+  if (!isSurrogate(first)) {
+    return first;
+  }
+  if (first >= 0xDC00 || it == end) {
+    return UTF8::REPLACEMENT_CHAR;
   }
 
-  //Invalid character
-  if (0x0010FFFF < input) {
-    *output = invalidChar;
-    ++output;
-    return output;
+  const WCHAR32 second = static_cast<uint16>(*it);
+  if (second < 0xDC00 || second > 0xDFFF) {
+    return UTF8::REPLACEMENT_CHAR;
   }
-
-  //Can be encoded as a single element
-  if (0xFFFF >= input) {
-    //Check if in valid range
-    if ((0xD800 <= input) && (0xDFFF >= input)) {
-      *output = invalidChar;
-      ++output;
-      return output;
-    }
-
-    *output = static_cast<WCHAR16>(input);
-    ++output;
-  }
-  else {  //Must be encoded as two elements
-    //Two elements won't fit
-    if (2 > maxElems) {
-      *output = invalidChar;
-      ++output;
-      return output;
-    }
-
-    input -= 0x0010000;
-
-    *output = static_cast<WCHAR16>((input >> 10) + 0xD800);
-    ++output;
-
-    *output = static_cast<WCHAR16>((input & 0x3FFUL) + 0xDC00);
-    ++output;
-  }
-
-  return output;
+  ++it;
+  return ((first - 0xD800) << 10) + (second - 0xDC00) + 0x10000;
 }
 
-template<typename T>
-T
-wideToUTF32(T begin, T end, WCHAR32& output, WCHAR32 invalidChar = 0) {
-  //Assuming UTF-32 (i.e. Unix)
-  SIZE_T sizeofWChar = sizeof(WIDECHAR);
-  if (4 == sizeofWChar) {
-    output = (WCHAR32)*begin;
-    ++begin;
+template<typename Container>
+void
+encodeUTF16(WCHAR32 c, Container& output)
+{
+  using Unit = typename Container::value_type;
 
-    return begin;
+  c = validOrReplacement(c);
+  if (c < 0x10000) {
+    output.push_back(static_cast<Unit>(c));
+    return;
   }
 
-  //Assuming UTF-16 (i.e. Windows)
-  return UTF16To32(begin, end, output, invalidChar);
+  c -= 0x10000;
+  output.push_back(static_cast<Unit>((c >> 10) + 0xD800));
+  output.push_back(static_cast<Unit>((c & 0x3FF) + 0xDC00));
 }
 
-WCHAR32
-ANSIToUTF32(ANSICHAR input, const std::locale& locale = std::locale("")) {
-  const std::ctype<WIDECHAR>& facet = std::use_facet<std::ctype<WIDECHAR>>(locale);
-
-  /**
-   * Note: Not exactly valid on Windows, since the input character could
-   * require a surrogate pair. Consider improving this if it ever becomes an issue.
-   */
-  WIDECHAR wideChar = facet.widen(input);
-
-  WCHAR32 output;
-  wideToUTF32(&wideChar, &wideChar + 1, output);
-
-  return output;
-}
-
-template<typename T>
-T
-UTF32ToWide(WCHAR32 input, T output, uint32 maxElems, WIDECHAR invalidChar = 0) {
-  //Assuming UTF-32 (i.e. Unix)
-  SIZE_T sizeofWChar = sizeof(WIDECHAR);
-  if (4 == sizeofWChar) {
-    *output = (WIDECHAR)input;
-    ++output;
-    return output;
-  }
-
-  //Assuming UTF-16 (i.e. Windows)
-  return UTF32To16(input, output, maxElems, invalidChar);
-}
-
-ANSICHAR
-UTF32ToANSI(WCHAR32 input,
-            ANSICHAR invalidChar = 0,
-            const std::locale& locale = std::locale("")) {
-  const std::ctype<WIDECHAR>& facet = std::use_facet<std::ctype<WIDECHAR>>(locale);
-
-  //Note: Same as above, not exactly correct as narrow() doesn't accept a surrogate pair
-  return facet.narrow((WIDECHAR)input, invalidChar);
-}
+} // namespace
 
 /*
-*/
+ */
 String
-UTF8::fromWide(const WString& wideString) {
+UTF8::fromWide(const WString& wideString)
+{
   String output;
   output.reserve(wideString.size());
 
-  auto backInserter = std::back_inserter(output);
-
-  auto iter = wideString.begin();
-  while (iter != wideString.end()) {
-    WCHAR32 u32char = 0;
-    iter = wideToUTF32(iter, wideString.end(), u32char);
-    UTF32To8(u32char, backInserter, 4);
+  auto it = wideString.begin();
+  while (it != wideString.end()) {
+    if constexpr (sizeof(WIDECHAR) == 4) {
+      encodeUTF8(static_cast<WCHAR32>(*it), output);
+      ++it;
+    }
+    else {
+      encodeUTF8(decodeUTF16(it, wideString.end()), output);
+    }
   }
 
   return output;
 }
 
 /*
-*/
+ */
 WString
-UTF8::toWide(const String& str) {
+UTF8::toWide(const String& str)
+{
+  // A wide string never needs more units than the UTF-8 text has bytes.
   WString output;
-  auto backInserter = std::back_inserter(output);
+  output.reserve(str.size());
 
-  auto iter = str.begin();
-  while (iter != str.end()) {
-    WCHAR32 u32char = 0;
-    iter = UTF8To32(iter, str.end(), u32char);
-    UTF32ToWide(u32char, backInserter, 2);
+  auto it = str.begin();
+  while (it != str.end()) {
+    const WCHAR32 c = decodeUTF8(it, str.end());
+    if constexpr (sizeof(WIDECHAR) == 4) {
+      output.push_back(static_cast<WIDECHAR>(c));
+    }
+    else {
+      encodeUTF16(c, output);
+    }
   }
 
   return output;
 }
 
 /*
-*/
+ */
 String
-UTF8::fromUTF16(const U16String& input) {
+UTF8::fromUTF16(const U16String& input)
+{
   String output;
   output.reserve(input.size());
 
-  auto backInserter = std::back_inserter(output);
-
-  auto iter = input.begin();
-  while (iter != input.end()) {
-    WCHAR32 u32char = 0;
-    iter = UTF16To32(iter, input.end(), u32char);
-    UTF32To8(u32char, backInserter, 4);
+  auto it = input.begin();
+  while (it != input.end()) {
+    encodeUTF8(decodeUTF16(it, input.end()), output);
   }
 
   return output;
 }
 
 /*
-*/
+ */
 U16String
-UTF8::toUTF16(const String& input) {
+UTF8::toUTF16(const String& input)
+{
   U16String output;
-  auto backInserter = std::back_inserter(output);
+  output.reserve(input.size());
 
-  auto iter = input.begin();
-  while (iter != input.end()) {
-    WCHAR32 u32char = 0;
-    iter = UTF8To32(iter, input.end(), u32char);
-    UTF32To16(u32char, backInserter, 2);
+  auto it = input.begin();
+  while (it != input.end()) {
+    encodeUTF16(decodeUTF8(it, input.end()), output);
   }
 
   return output;
 }
 
 /*
-*/
+ */
 String
-UTF8::fromUTF32(const U32String& input) {
+UTF8::fromUTF32(const U32String& input)
+{
   String output;
   output.reserve(input.size());
 
-  auto backInserter = std::back_inserter(output);
-
-  auto iter = input.begin();
-  while (iter != input.end()) {
-    UTF32To8(*iter, backInserter, 4);
-    ++iter;
+  for (const WCHAR32 c : input) {
+    encodeUTF8(c, output);
   }
 
   return output;
 }
 
+/*
+ */
 U32String
-UTF8::toUTF32(const String& input) {
+UTF8::toUTF32(const String& input)
+{
   U32String output;
+  output.reserve(input.size());
 
-  auto iter = input.begin();
-  while ( iter != input.end() ) {
-    WCHAR32 u32char;
-    iter = UTF8To32( iter, input.end(), u32char );
-    output.push_back( u32char );
+  auto it = input.begin();
+  while (it != input.end()) {
+    output.push_back(decodeUTF8(it, input.end()));
   }
 
   return output;
 }
 
-}
+} // namespace chEngineSDK

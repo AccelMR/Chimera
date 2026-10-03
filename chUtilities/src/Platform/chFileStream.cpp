@@ -19,65 +19,100 @@
 #include <fstream>
 
 #include "chLogger.h"
-#include "chSTDStreams.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
 
 namespace chEngineSDK{
 
-/**
- * @brief	Checks does the provided buffer has an UTF32 byte order mark in
- *        little endian order.
- */
-bool
-isUTF32LE( const ANSICHAR *buffer ) {
-  return (0xFF == static_cast<uint8>(buffer[0]) &&
-    0xFE == static_cast<uint8>(buffer[1]) &&
-    0x00 == static_cast<uint8>(buffer[2]) &&
-    0x00 == static_cast<uint8>(buffer[3]));
+namespace {
+
+enum class TextEncoding : uint8
+{
+  UTF8,
+  UTF16LE,
+  UTF16BE,
+  UTF32LE,
+  UTF32BE
+};
+
+struct ByteOrderMark
+{
+  TextEncoding encoding = TextEncoding::UTF8;
+  SIZE_T size = 0;
+};
+
+constexpr uint8 kUTF8Mark[] = {0xEF, 0xBB, 0xBF};
+constexpr uint8 kUTF16LEMark[] = {0xFF, 0xFE};
+constexpr uint8 kUTF16BEMark[] = {0xFE, 0xFF};
+constexpr uint8 kUTF32LEMark[] = {0xFF, 0xFE, 0x00, 0x00};
+constexpr uint8 kUTF32BEMark[] = {0x00, 0x00, 0xFE, 0xFF};
+
+template<SIZE_T N>
+NODISCARD bool
+startsWith(const uint8* bytes, SIZE_T count, const uint8 (&mark)[N]) noexcept
+{
+  if (count < N) {
+    return false;
+  }
+  for (SIZE_T i = 0; i < N; ++i) {
+    if (bytes[i] != mark[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
- * @brief Checks does the provided buffer has an UTF32 byte order mark in
- *        big endian order.
+ * Text without a mark is read as UTF-8. The UTF-32 LE mark starts with the UTF-16 LE one,
+ * so it is checked first.
  */
-bool
-isUTF32BE(const ANSICHAR* buffer) {
-  return (0x00 == static_cast<uint8>(buffer[0]) &&
-          0x00 == static_cast<uint8>(buffer[1]) &&
-          0xFE == static_cast<uint8>(buffer[2]) &&
-          0xFF == static_cast<uint8>(buffer[3]));
+NODISCARD ByteOrderMark
+detectByteOrderMark(const uint8* bytes, SIZE_T count) noexcept
+{
+  if (startsWith(bytes, count, kUTF32LEMark)) {
+    return {TextEncoding::UTF32LE, sizeof(kUTF32LEMark)};
+  }
+  if (startsWith(bytes, count, kUTF32BEMark)) {
+    return {TextEncoding::UTF32BE, sizeof(kUTF32BEMark)};
+  }
+  if (startsWith(bytes, count, kUTF8Mark)) {
+    return {TextEncoding::UTF8, sizeof(kUTF8Mark)};
+  }
+  if (startsWith(bytes, count, kUTF16LEMark)) {
+    return {TextEncoding::UTF16LE, sizeof(kUTF16LEMark)};
+  }
+  if (startsWith(bytes, count, kUTF16BEMark)) {
+    return {TextEncoding::UTF16BE, sizeof(kUTF16BEMark)};
+  }
+  return {};
 }
 
 /**
- * @brief Checks does the provided buffer has an UTF16 byte order mark in
- *        little endian order.
+ * Builds each unit from its bytes in the file's order, so it works on any machine
+ * whatever its own byte order is. A trailing incomplete unit is dropped.
  */
-bool
-isUTF16LE(const ANSICHAR* buffer) {
-  return (0xFF == static_cast<uint8>(buffer[0]) &&
-          0xFE == static_cast<uint8>(buffer[1]));
+template<typename UnitString>
+NODISCARD UnitString
+unitsFromBytes(const String& bytes, bool bigEndian)
+{
+  using Unit = typename UnitString::value_type;
+  constexpr SIZE_T unitSize = sizeof(Unit);
+
+  UnitString units;
+  units.resize(bytes.size() / unitSize);
+  for (SIZE_T i = 0; i < units.size(); ++i) {
+    uint32 value = 0;
+    for (SIZE_T b = 0; b < unitSize; ++b) {
+      const uint32 byte = static_cast<uint8>(bytes[i * unitSize + b]);
+      const SIZE_T shift = (bigEndian ? unitSize - 1 - b : b) * 8;
+      value |= byte << shift;
+    }
+    units[i] = static_cast<Unit>(value);
+  }
+  return units;
 }
 
-/**
- * @brief Checks does the provided buffer has an UTF16 byte order mark in
- *        big endian order.
- */
-bool
-isUTF16BE(const ANSICHAR* buffer) {
-  return (0xFE == static_cast<uint8>(buffer[0]) &&
-          0xFF == static_cast<uint8>(buffer[1]));
-}
-
-/**
- * @brief Checks does the provided buffer has an UTF8 byte order mark.
- */
-bool
-isUTF8(const ANSICHAR* buffer) {
-  return (0xEF == static_cast<uint8>(buffer[0]) &&
-          0xBB == static_cast<uint8>(buffer[1]) &&
-          0xBF == static_cast<uint8>(buffer[2]));
-}
+} // namespace
 
 /*
 */
@@ -391,98 +426,61 @@ FileDataStream::init() {
 /*
 */
 String
-DataStream::getAsString() {
- //Ensure read from begin of stream
+DataStream::getAsString()
+{
   seek(0);
+  uint8 header[sizeof(kUTF32LEMark)];
+  const ByteOrderMark mark = detectByteOrderMark(header, read(header, sizeof(header)));
+  seek(mark.size);
 
-  //Try reading header
-  uint8 headerBytes[4];
-  SIZE_T numHeaderBytes = read(headerBytes, 4);
-
-  SIZE_T dataOffset = 0;
-  if (4 <= numHeaderBytes) {
-    if (isUTF32LE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
-      dataOffset = 4;
-    }
-    else if (isUTF32BE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
-      std::u8string s;
-      return String(s.begin(), s.end());
+  // UTF-8 text is read straight into the result, so it is copied only once.
+  String bytes;
+  if (m_size > 0) {
+    if (m_size > mark.size) {
+      bytes.resize(m_size - mark.size);
+      bytes.resize(read(bytes.data(), bytes.size()));
     }
   }
-
-  if (0 == dataOffset && 3 <= numHeaderBytes) {
-    if (isUTF8(reinterpret_cast<ANSICHAR*>(headerBytes))) {
-      dataOffset = 3;
-    }
-  }
-
-  if (0 == dataOffset && 2 <= numHeaderBytes) {
-    if (isUTF16LE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
-      dataOffset = 2;
-    }
-    else if (isUTF16BE(reinterpret_cast<ANSICHAR*>(headerBytes))) {
-      std::u8string s;
-      return String(s.begin(), s.end());
-    }
-  }
-
-  seek(dataOffset);
-
-  //Read the entire buffer - ideally in one read, but if the size of the
-  //buffer is unknown, do multiple fixed size reads.
-  SIZE_T bufSize = (m_size > 0 ? m_size : 4096);
-
-  auto* tempBuffer = static_cast<std::stringstream::char_type*>(malloc(bufSize));
-
-  std::stringstream result;
-  while (!isAtEnd()) {
-    SIZE_T numReadBytes = read(tempBuffer, bufSize);
-    result.write(tempBuffer, numReadBytes);
-  }
-
-  free(tempBuffer);
-
-  std::string string = result.str();
-
-  switch (dataOffset)
-  {
-    default:
-    case 0: //No BOM = assumed UTF-8
-    case 3: //UTF-8
-      return String(string.data(), string.length());
-    case 2: //UTF-16
-      {
-        SIZE_T numElems = string.length() / 2;
-        return UTF8::fromUTF16(U16String(reinterpret_cast<WCHAR16*>(
-                                          const_cast<ANSICHAR*>(string.data())),
-                                         numElems));
+  else {
+    // A stream that does not know its size is read in chunks.
+    ANSICHAR chunk[4096];
+    while (!isAtEnd()) {
+      const SIZE_T readBytes = read(chunk, sizeof(chunk));
+      if (0 == readBytes) {
+        break;
       }
-    case 4: //UTF-32
-      {
-        SIZE_T numElems = string.length() / 4;
-        return UTF8::fromUTF32(U32String(reinterpret_cast<WCHAR32*>(
-                                          const_cast<ANSICHAR*>(string.data())),
-                                         numElems));
-      }
+      bytes.append(chunk, readBytes);
+    }
+  }
+
+  switch (mark.encoding) {
+  case TextEncoding::UTF16LE:
+  case TextEncoding::UTF16BE:
+    return UTF8::fromUTF16(
+        unitsFromBytes<U16String>(bytes, TextEncoding::UTF16BE == mark.encoding));
+  case TextEncoding::UTF32LE:
+  case TextEncoding::UTF32BE:
+    return UTF8::fromUTF32(
+        unitsFromBytes<U32String>(bytes, TextEncoding::UTF32BE == mark.encoding));
+  case TextEncoding::UTF8:
+  default:
+    return bytes;
   }
 }
 
 /*
 */
 void
-DataStream::writeString(const String& str, STRING_ENCODER encoder /*= STRING_ENCODER(STRING_ENCODER::kUTF8)*/) {
-  if (encoder == STRING_ENCODER::kUTF16) {
-    //Write BOM
-    uint8 bom[2] = { 0xFF, 0xFE };
-    write(bom, sizeof(bom));
-
-    U16String u16string = UTF8::toUTF16(str);
+DataStream::writeString(const String& str, STRING_ENCODER encoder)
+{
+  // UTF-16 is written with a little endian mark and the units as they are in memory,
+  // which is little endian on every supported platform. UTF-8 is written without a mark.
+  if (STRING_ENCODER::kUTF16 == encoder) {
+    write(kUTF16LEMark, sizeof(kUTF16LEMark));
+    const U16String u16string = UTF8::toUTF16(str);
     write(u16string.data(), u16string.length() * sizeof(WCHAR16));
   }
   else {
-    // Write BOM
-    //uint8 bom[3] = { 0xEF, 0xBB, 0xBF };
-    //write(bom, sizeof(bom));
     write(str.data(), str.length());
   }
 }
@@ -490,24 +488,9 @@ DataStream::writeString(const String& str, STRING_ENCODER encoder /*= STRING_ENC
 /*
 */
 void
-DataStream::writeString(const WString& wStr, STRING_ENCODER encoder /*= STRING_ENCODER(STRING_ENCODER::kUTF16)*/) {
-  if ( STRING_ENCODER::kUTF16 == encoder ) {
-    //Write BOM
-    uint8 bom[2] = { 0xFF, 0xFE };
-    write(bom, sizeof(bom));
-
-    String u8string = UTF8::fromWide(wStr);
-    U16String u16string = UTF8::toUTF16(u8string);
-    write(u16string.data(), u16string.length() * sizeof(WCHAR16));
-  }
-  else {
-    // Write BOM
-    // uint8 bom[3] = { 0xEF, 0xBB, 0xBF };
-    // write(bom, sizeof(bom));
-
-    String u8string = UTF8::fromWide(wStr);
-    write(u8string.data(), u8string.length());
-  }
+DataStream::writeString(const WString& wStr, STRING_ENCODER encoder)
+{
+  writeString(UTF8::fromWide(wStr), encoder);
 }
 
 }

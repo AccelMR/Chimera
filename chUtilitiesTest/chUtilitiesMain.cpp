@@ -15,6 +15,7 @@
 #include "chDegree.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
+#include "chFileStream.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMath.h"
@@ -1765,6 +1766,61 @@ TEST_CASE("chUtilities - Algorithm") {
   REQUIRE(ring == Vector<int32>{1, 2, 3, 4, 5});
   Algorithm::rotateToFront(ring, ring.size());
   REQUIRE(ring == Vector<int32>{1, 2, 3, 4, 5});
+}
+
+TEST_CASE("chUtilities - Unicode") {
+  // "a", e acute, euro sign, and an emoji that needs a surrogate pair in UTF-16.
+  const String utf8 = "a\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80";
+  const U16String utf16 = u"a\xE9\x20AC\U0001F600";
+  const U32String utf32 = U"a\xE9\x20AC\U0001F600";
+  const String replacement = "\xEF\xBF\xBD";
+
+  SECTION("valid text") {
+    REQUIRE(UTF8::toUTF16(utf8) == utf16);
+    REQUIRE(UTF8::fromUTF16(utf16) == utf8);
+    REQUIRE(UTF8::toUTF32(utf8) == utf32);
+    REQUIRE(UTF8::fromUTF32(utf32) == utf8);
+    REQUIRE(UTF8::fromWide(UTF8::toWide(utf8)) == utf8);
+    REQUIRE(UTF8::toUTF16("").empty());
+  }
+
+  SECTION("invalid UTF-8") {
+    // Overlong '/', 5 byte form, cut sequence before 'A', lone continuation byte, encoded
+    // surrogate.
+    REQUIRE(UTF8::toUTF32("\xC0\xAF") == U"\xFFFD");
+    REQUIRE(UTF8::toUTF32("\xF8\x88\x80\x80\x80").size() == 5);
+    REQUIRE(UTF8::toUTF32("\xE2\x82" "A") == U"\xFFFD" "A");
+    REQUIRE(UTF8::toUTF32("\x80" "b") == U"\xFFFD" "b");
+    REQUIRE(UTF8::toUTF32("\xED\xA0\x80") == U"\xFFFD");
+  }
+
+  SECTION("invalid UTF-16 and UTF-32") {
+    const U16String loneHigh = {0xD800, u'A'};
+    const U16String loneLow = {0xDC00};
+    REQUIRE(UTF8::fromUTF16(loneHigh) == replacement + "A");
+    REQUIRE(UTF8::fromUTF16(loneLow) == replacement);
+
+    const U32String outOfRange = {0xD800, 0x110000};
+    REQUIRE(UTF8::fromUTF32(outOfRange) == replacement + replacement);
+    REQUIRE(UTF8::toUTF16(replacement) == u"\xFFFD");
+  }
+}
+
+TEST_CASE("chUtilities - DataStream getAsString") {
+  auto readText = [](Vector<uint8> bytes) {
+    MemoryDataStream stream(bytes.data(), bytes.size(), false);
+    return stream.getAsString();
+  };
+  const String expected = "A\xC3\xA9";
+
+  REQUIRE(readText({'A', 0xC3, 0xA9}) == expected);
+  REQUIRE(readText({0xEF, 0xBB, 0xBF, 'A', 0xC3, 0xA9}) == expected);
+  REQUIRE(readText({0xFF, 0xFE, 'A', 0x00, 0xE9, 0x00}) == expected);
+  REQUIRE(readText({0xFE, 0xFF, 0x00, 'A', 0x00, 0xE9}) == expected);
+  REQUIRE(readText({0xFF, 0xFE, 0x00, 0x00, 'A', 0, 0, 0, 0xE9, 0, 0, 0}) == expected);
+  REQUIRE(readText({0x00, 0x00, 0xFE, 0xFF, 0, 0, 0, 'A', 0, 0, 0, 0xE9}) == expected);
+  REQUIRE(readText({0xFF, 0xFE, 'A', 0x00, 0xE9}) == "A");
+  REQUIRE(readText({}).empty());
 }
 
 TEST_CASE("chUtilities - Path matches std::filesystem") {
