@@ -16,10 +16,10 @@
 namespace chEngineSDK {
 
 struct VulkanData {
-  VkInstance instance;
+  VkInstance instance = VK_NULL_HANDLE;
   VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-  VkDevice device;
-  VkDebugUtilsMessengerEXT debugMessenger;
+  VkDevice device = VK_NULL_HANDLE;
+  VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   VkFormat surfaceFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -29,7 +29,7 @@ struct VulkanData {
 class VulkanAPI : public IGraphicsAPI {
  public:
   VulkanAPI() : m_vulkanData(chMakeUnique<VulkanData>()) {}
-  ~VulkanAPI() override = default;
+  ~VulkanAPI() override;
 
   void
   initialize(const GraphicsAPIInfo& graphicsAPIInfo) override;

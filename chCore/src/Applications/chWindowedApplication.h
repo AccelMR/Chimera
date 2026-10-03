@@ -82,9 +82,6 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   destroyModules() override;
 
   virtual void
-  onPostDestoyModules() override;
-
-  virtual void
   initializeDisplay(const ScreenDescriptor& desc);
 
   virtual void
@@ -92,9 +89,6 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
 
   virtual void
   initializeRenderComponents();
-
-  virtual void
-  destroyGraphics();
 
   virtual void
   destroyDisplay();

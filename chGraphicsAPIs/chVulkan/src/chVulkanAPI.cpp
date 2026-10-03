@@ -127,6 +127,48 @@ struct VulkanContextData {
 
 /*
  */
+VulkanAPI::~VulkanAPI()
+{
+  VulkanData& data = *m_vulkanData;
+  if (data.device != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(data.device);
+  }
+
+  m_functionMap.clear();
+  m_graphicsQueue.reset();
+  m_presentQueue.reset();
+
+  if (data.device != VK_NULL_HANDLE) {
+    vkDestroyDevice(data.device, nullptr);
+    data.device = VK_NULL_HANDLE;
+  }
+
+  if (data.instance == VK_NULL_HANDLE) {
+    return;
+  }
+
+  if (data.surface != VK_NULL_HANDLE) {
+    vkDestroySurfaceKHR(data.instance, data.surface, nullptr);
+    data.surface = VK_NULL_HANDLE;
+  }
+
+  // Destroyed after the device, so the validation layers can still report the objects
+  // that were never released.
+  if (data.debugMessenger != VK_NULL_HANDLE) {
+    auto destroyMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(data.instance, "vkDestroyDebugUtilsMessengerEXT"));
+    if (destroyMessenger) {
+      destroyMessenger(data.instance, data.debugMessenger, nullptr);
+    }
+    data.debugMessenger = VK_NULL_HANDLE;
+  }
+
+  vkDestroyInstance(data.instance, nullptr);
+  data.instance = VK_NULL_HANDLE;
+}
+
+/*
+ */
 void
 VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
   CH_LOG_DEBUG(Vulkan, "Initializing Vulkan API");
@@ -874,6 +916,25 @@ VulkanAPI::initializeFunctionMap() {
 
   m_functionMap["newFrameImGui"] = [this](const Vector<Any>&) -> Any {
     ImGui_ImplVulkan_NewFrame();
+    return Any(true);
+  };
+
+  m_functionMap["shutdownImGui"] = [](const Vector<Any>&) -> Any {
+    // This library has its own copy of ImGui, whose context is only set once initImGui ran.
+    if (!ImGui::GetCurrentContext()) {
+      return Any(false);
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.BackendRendererUserData) {
+      ImGui_ImplVulkan_Shutdown();
+    }
+#if USING(CH_DISPLAY_SDL3)
+    if (io.BackendPlatformUserData) {
+      ImGui_ImplSDL3_Shutdown();
+    }
+#endif // USING(CH_DISPLAY_SDL3)
+    ImGui::SetCurrentContext(nullptr);
     return Any(true);
   };
 

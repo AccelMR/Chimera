@@ -45,18 +45,7 @@ WindowedApplication::WindowedApplication() {}
 
 /*
  */
-WindowedApplication::~WindowedApplication() {
-  for (auto& fence : m_renderComponents.inFlightFences) {
-    if (fence && !fence->wait(MAX_WAIT_TIME)) {
-      CH_LOG_WARNING(WindowedApp, "Fence wait timed out or failed to reset.");
-    }
-  }
-
-  m_renderComponents.commandBuffers.clear();
-  m_renderComponents.imageAvailableSemaphores.clear();
-  m_renderComponents.renderFinishedSemaphores.clear();
-  m_renderComponents.inFlightFences.clear();
-}
+WindowedApplication::~WindowedApplication() {}
 
 /*
  */
@@ -133,23 +122,34 @@ WindowedApplication::initializeModules() {
 /*
  */
 void
-WindowedApplication::destroyModules() {
-  BaseApplication::destroyModules();
+WindowedApplication::destroyModules()
+{
   CH_LOG_INFO(WindowedApp, "WindowedApplication destroying modules.");
-  EventDispatcherManager::shutDown();
-  DisplayManager::shutDown();
-  DynamicLibraryManager::shutDown();
-}
+  m_closeEvent.disconnect();
+  m_resizeEvent.disconnect();
 
-/*
-*/
-void
-WindowedApplication::onPostDestoyModules() {
-  CH_LOG_INFO(WindowedApp, "WindowedApplication pre-shutdown.");
   destroyRenderer();
-  destroyGraphics();
+
+  // Every GPU object keeps a copy of the device, so all of them must be gone by now.
+  if (IGraphicsAPI::isStarted()) {
+    IGraphicsAPI::shutDown();
+  }
+
+  // The window goes after the graphics API, which destroys the surface made on it.
   destroyDisplay();
-  CH_LOG_INFO(WindowedApp, "WindowedApplication pre-shutdown completed.");
+
+  if (EventDispatcherManager::isStarted()) {
+    EventDispatcherManager::shutDown();
+  }
+  if (DisplayManager::isStarted()) {
+    DisplayManager::shutDown();
+  }
+  // Last, because the graphics API and the codecs run code from the libraries it loaded.
+  if (DynamicLibraryManager::isStarted()) {
+    DynamicLibraryManager::shutDown();
+  }
+
+  BaseApplication::destroyModules();
 }
 
 /*
@@ -272,62 +272,42 @@ WindowedApplication::initializeRenderComponents() {
 /*
  */
 void
-WindowedApplication::destroyGraphics() {
-  CH_LOG_INFO(WindowedApp, "Destroying graphics subsystem.");
-
-  IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
-  graphicsAPI.waitIdle();
-
-  CH_LOG_INFO(WindowedApp, "Graphics subsystem destroyed successfully.");
-}
-
-/*
- */
-void
-WindowedApplication::destroyDisplay() {
-  CH_LOG_INFO(WindowedApp, "Destroying display.");
-  if (m_display) {
-    m_display->close();
-    m_display.reset();
-    m_eventhandler.reset();
-    CH_LOG_INFO(WindowedApp, "Display destroyed successfully.");
-  } else {
-    CH_LOG_WARNING(WindowedApp, "Display was not initialized, nothing to destroy.");
+WindowedApplication::destroyDisplay()
+{
+  m_eventhandler.reset();
+  if (!m_display) {
+    return;
   }
+
+  CH_LOG_INFO(WindowedApp, "Destroying display.");
+  m_display->close();
+  m_display.reset();
 }
 
 /*
  */
 void
-WindowedApplication::destroyRenderer() {
+WindowedApplication::destroyRenderer()
+{
   CH_LOG_INFO(WindowedApp, "Destroying renderer.");
 
-  // Wait for all operations to complete
-  if (IGraphicsAPI::instancePtr()) {
-    IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
-    graphicsAPI.waitIdle();
-
-    // Wait for all fences before destroying them
-    for (auto& fence : m_renderComponents.inFlightFences) {
-      if (fence) {
-        fence->wait(); // Wait indefinitely for completion
-      }
-    }
+  // An idle device has signaled every fence, so the fences need no wait of their own.
+  if (IGraphicsAPI::isStarted()) {
+    IGraphicsAPI::instance().waitIdle();
   }
 
-  // Clean up render components in correct order
+  // Command buffers go back to their pool, so they are released before it.
   m_renderComponents.commandBuffers.clear();
   m_renderComponents.commandPool.reset();
 
-  // Clear all synchronization objects
   m_renderComponents.inFlightFences.clear();
   m_renderComponents.renderFinishedSemaphores.clear();
   m_renderComponents.imageAvailableSemaphores.clear();
 
+  m_renderComponents.depthTextureView.reset();
+  m_renderComponents.depthTexture.reset();
   m_renderComponents.graphicsQueue.reset();
   m_renderComponents.swapChain.reset();
-
-  CH_LOG_INFO(WindowedApp, "Renderer destroyed successfully.");
 }
 
 /*

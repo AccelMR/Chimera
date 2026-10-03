@@ -40,9 +40,16 @@ BaseApplication::BaseApplication() {
 */
 BaseApplication::~BaseApplication() {
   CH_LOG_INFO(BaseApp, "Destroying BaseApplication");
+}
 
+/*
+*/
+void
+BaseApplication::onShutDown()
+{
+  // Module::shutDown calls this before the delete, while the object still has its full
+  // type. Called from the destructor, destroyModules would not reach the derived classes.
   destroyModules();
-  onPostDestoyModules();
 }
 
 /*

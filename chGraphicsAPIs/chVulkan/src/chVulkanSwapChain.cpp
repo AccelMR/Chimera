@@ -70,8 +70,10 @@ VulkanSwapChain::VulkanSwapChain(VkDevice device,
 
 /*
 */
-VulkanSwapChain::~VulkanSwapChain() {
-  cleanUp();
+VulkanSwapChain::~VulkanSwapChain()
+{
+  // The surface is not destroyed here: VulkanAPI made it and owns it.
+  cleanUpSwapChain();
 }
 
 /*
@@ -259,24 +261,6 @@ VulkanSwapChain::getTextureView(uint32 index) const {
                                          m_colorFormat,
                                          0, 1, 0, 1,
                                          TextureViewType::View2D);
-}
-
-/*
-*/
-void
-VulkanSwapChain::cleanUp() {
-  VkDevice device = g_vulkanAPI().getDevice();
-  VkInstance instance = g_vulkanAPI().getInstance();
-
-  if (m_swapChain != VK_NULL_HANDLE) {
-    vkDestroySwapchainKHR(device, m_swapChain, nullptr);
-    m_swapChain = VK_NULL_HANDLE;
-  }
-
-  if (m_surface != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(instance, m_surface, nullptr);
-    m_surface = VK_NULL_HANDLE;
-  }
 }
 
 /*

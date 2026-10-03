@@ -36,12 +36,21 @@ main(int32 argc, ANSICHAR* argv[]) {
     app.initialize();
     app.run();
     CH_LOG_INFO(EditorMain, "Chimera Editor finished successfully.");
-
-    BaseApplication::shutDown();
   } catch (const Exception& e) {
     CH_LOG_ERROR(EditorMain, "Exception caught: {0}", e.what());
   } catch (...) {
     CH_LOG_ERROR(EditorMain, "Unknown exception caught.");
+  }
+
+  // Also after a failed start up, so the modules that did start are shut down.
+  try {
+    if (BaseApplication::isStarted()) {
+      BaseApplication::shutDown();
+    }
+  } catch (const Exception& e) {
+    CH_LOG_ERROR(EditorMain, "Exception caught while shutting down: {0}", e.what());
+  } catch (...) {
+    CH_LOG_ERROR(EditorMain, "Unknown exception caught while shutting down.");
   }
 
   Logger::shutDown();

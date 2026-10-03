@@ -82,9 +82,6 @@ class VulkanSwapChain : public ISwapChain {
   createImageViews();
 
   void
-  cleanUp();
-
-  void
   createRenderPass();
 
   void

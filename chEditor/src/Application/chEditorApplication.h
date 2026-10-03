@@ -47,6 +47,9 @@ class EditorApplication : public WindowedApplication
   virtual void
   onPostInitialize() override;
 
+  virtual void
+  destroyModules() override;
+
   virtual RendererOutput
   onRender(float deltaTime);
 

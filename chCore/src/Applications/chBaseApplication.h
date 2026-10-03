@@ -52,17 +52,23 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   requestExit(const String& reason);
 
  protected:
+  void
+  onShutDown() override;
+
   virtual void
   initializeModules() {}
 
+  /*
+   * Description:
+   *     Each level frees what it created, in reverse order of initialization, and then
+   *     calls its parent. It also runs when initialize() failed half way, so every step
+   *     must accept modules and objects that were never created.
+   */
   virtual void
   destroyModules() {}
 
   virtual void
   onPostInitialize() {}
-
-  virtual void
-  onPostDestoyModules() {}
 
   virtual void
   update(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }

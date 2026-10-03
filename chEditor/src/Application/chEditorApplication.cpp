@@ -30,6 +30,7 @@
 #include "chStringUtils.h"
 
 #include "chContentAssetUI.h"
+#include "chEditorSelection.h"
 #include "chMainMenuBarUI.h"
 #include "chOutputLogUI.h"
 #include "chSceneGraphUI.h"
@@ -66,9 +67,7 @@ EditorApplication::EditorApplication() {
 
 /*
  */
-EditorApplication::~EditorApplication() {
-  m_outputLogUI.reset();
-}
+EditorApplication::~EditorApplication() {}
 
 /*
  */
@@ -86,6 +85,64 @@ EditorApplication::onPostInitialize() {
 
   initializeEditorComponents();
   bindEvents();
+}
+
+/*
+ */
+void
+EditorApplication::destroyModules()
+{
+  CH_LOG_INFO(EditorApp, "EditorApplication destroying modules.");
+  if (IGraphicsAPI::isStarted()) {
+    IGraphicsAPI::instance().waitIdle();
+  }
+
+  m_onKeyDownEvent.disconnect();
+  m_onKeyUpEvent.disconnect();
+  m_updateInjection.disconnect();
+
+  // The ImGui backends use the window and the device, which the parent destroys.
+  if (ImGui::GetCurrentContext()) {
+    if (IGraphicsAPI::isStarted()) {
+      IGraphicsAPI::instance().execute("shutdownImGui");
+    }
+    ImGui::DestroyContext();
+  }
+
+  m_gameObjectAssetUI.reset();
+  m_inspectorUI.reset();
+  m_sceneGraphUI.reset();
+  m_outputLogUI.reset();
+  m_mainMenuBar.reset();
+  m_contentAssetUI.reset();
+  m_textureDescriptorSets.clear();
+  //TEMPLEAKTEST m_defaultSampler.reset();
+
+  m_multiStageRenderer.reset();
+  m_nastyRenderer.reset();
+  m_activeScene.reset();
+  EditorSelection::setSelectedGameObject(nullptr);
+  EditorSelection::setGameObjectAssetPreview(nullptr);
+
+  if (RenderStageFactory::isStarted()) {
+    RenderStageFactory::shutDown();
+  }
+  if (SceneManager::isStarted()) {
+    SceneManager::shutDown();
+  }
+  // Assets hold GPU buffers and textures, so they go while the graphics API still exists.
+  if (AssetManager::isStarted()) {
+    AssetManager::shutDown();
+  }
+#if USING(CH_CODECS)
+  // The codec objects live in the codec libraries, which stay loaded until the parent
+  // shuts down the library manager.
+  if (AssetCodecManager::isStarted()) {
+    AssetCodecManager::shutDown();
+  }
+#endif // USING(CH_CODECS)
+
+  WindowedApplication::destroyModules();
 }
 
 /*
