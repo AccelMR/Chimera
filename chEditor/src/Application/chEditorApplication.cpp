@@ -116,7 +116,7 @@ EditorApplication::destroyModules()
   m_mainMenuBar.reset();
   m_contentAssetUI.reset();
   m_textureDescriptorSets.clear();
-  //TEMPLEAKTEST m_defaultSampler.reset();
+  m_defaultSampler.reset();
 
   m_multiStageRenderer.reset();
   m_nastyRenderer.reset();
