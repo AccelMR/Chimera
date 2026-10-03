@@ -8,8 +8,7 @@
 /************************************************************************/
 #include "chOutputLogUI.h"
 
-#include <algorithm>
-
+#include "chAlgorithm.h"
 #include "chMath.h"
 #include "chStringUtils.h"
 
@@ -478,9 +477,9 @@ OutputLogUI::rebuildFilteredEntries()
 void
 OutputLogUI::dropRemovedEntries()
 {
-  const auto firstKept = std::lower_bound(m_filteredSequences.begin(),
-                                          m_filteredSequences.end(), m_oldestSequence);
-  m_filteredSequences.erase(m_filteredSequences.begin(), firstKept);
+  const SIZE_T firstKept = Algorithm::lowerBound(m_filteredSequences, m_oldestSequence);
+  m_filteredSequences.erase(m_filteredSequences.begin(),
+                            m_filteredSequences.begin() + firstKept);
 
   if (NO_SELECTION != m_selectedSequence && m_selectedSequence < m_oldestSequence) {
     m_selectedSequence = NO_SELECTION;
@@ -512,7 +511,7 @@ OutputLogUI::setMaxLogEntries(uint32 maxEntries)
   maxEntries = Math::max<uint32>(maxEntries, 1);
 
   // Puts the entries back in order, so the ring starts at index 0 again.
-  std::rotate(m_entries.begin(), m_entries.begin() + m_oldestIndex, m_entries.end());
+  Algorithm::rotateToFront(m_entries, m_oldestIndex);
   m_oldestIndex = 0;
 
   if (m_entries.size() > maxEntries) {

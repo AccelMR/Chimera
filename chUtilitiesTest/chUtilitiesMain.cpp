@@ -9,6 +9,7 @@
  */
 /************************************************************************/
 // #ifdef RUN_UNIT_TESTS
+#include "chAlgorithm.h"
 #include "chBox2D.h"
 #include "chCommandParser.h"
 #include "chDegree.h"
@@ -1717,6 +1718,53 @@ TEST_CASE("chUtilities - Format") {
     REQUIRE(StringUtils::format("[{0:>3}][{0}]", 'c') == "[  c][c]");
     REQUIRE(StringUtils::format("{:2}", "longer") == "longer");
   }
+}
+
+TEST_CASE("chUtilities - ToChars") {
+  ANSICHAR integer[StringUtils::MAX_INTEGER_CHARS];
+  REQUIRE(StringUtils::toChars(integer, 0) == "0");
+  REQUIRE(StringUtils::toChars(integer, static_cast<uint32>(437)) == "437");
+  REQUIRE(StringUtils::toChars(integer, static_cast<uint8>(255)) == "255");
+  REQUIRE(StringUtils::toChars(integer, static_cast<int64>(-9223372036854775807ll - 1)) ==
+          "-9223372036854775808");
+  REQUIRE(StringUtils::toChars(integer, static_cast<uint64>(18446744073709551615ull)) ==
+          "18446744073709551615");
+
+  ANSICHAR number[StringUtils::MAX_FLOAT_CHARS];
+  REQUIRE(StringUtils::toChars(number, 0.1) == "0.1");
+  REQUIRE(StringUtils::toChars(number, -2.5f) == "-2.5");
+  REQUIRE(StringUtils::toChars(number, -2.2250738585072014e-308) ==
+          "-2.2250738585072014e-308");
+}
+
+TEST_CASE("chUtilities - Algorithm") {
+  Vector<int32> values = {5, 1, 4, 1, 3};
+  REQUIRE(Algorithm::contains(values, 4));
+  REQUIRE_FALSE(Algorithm::contains(values, 7));
+
+  REQUIRE(Algorithm::removeAll(values, 1) == 2);
+  REQUIRE(values == Vector<int32>{5, 4, 3});
+  REQUIRE(Algorithm::removeFirst(values, 4));
+  REQUIRE_FALSE(Algorithm::removeFirst(values, 4));
+  REQUIRE(values == Vector<int32>{5, 3});
+
+  values = {3, 1, 2};
+  Algorithm::sort(values);
+  REQUIRE(values == Vector<int32>{1, 2, 3});
+  Algorithm::sort(values, [](int32 a, int32 b) { return a > b; });
+  REQUIRE(values == Vector<int32>{3, 2, 1});
+
+  const Vector<uint64> sorted = {2, 4, 4, 8};
+  REQUIRE(Algorithm::lowerBound(sorted, uint64{0}) == 0);
+  REQUIRE(Algorithm::lowerBound(sorted, uint64{4}) == 1);
+  REQUIRE(Algorithm::lowerBound(sorted, uint64{5}) == 3);
+  REQUIRE(Algorithm::lowerBound(sorted, uint64{9}) == 4);
+
+  Vector<int32> ring = {4, 5, 1, 2, 3};
+  Algorithm::rotateToFront(ring, 2);
+  REQUIRE(ring == Vector<int32>{1, 2, 3, 4, 5});
+  Algorithm::rotateToFront(ring, ring.size());
+  REQUIRE(ring == Vector<int32>{1, 2, 3, 4, 5});
 }
 
 TEST_CASE("chUtilities - Path matches std::filesystem") {

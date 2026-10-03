@@ -28,7 +28,7 @@ constexpr SIZE_T kNumberSizeGuess = 16;
 
 template<typename T>
 StringView
-writeInteger(ANSICHAR (&buffer)[kNumberBufferSize], T value, ANSICHAR type) noexcept
+writeInteger(ANSICHAR* buffer, SIZE_T size, T value, ANSICHAR type) noexcept
 {
   int32 base = 10;
   if (type == 'x' || type == 'X') {
@@ -42,7 +42,10 @@ writeInteger(ANSICHAR (&buffer)[kNumberBufferSize], T value, ANSICHAR type) noex
   }
 
   const std::to_chars_result result =
-      std::to_chars(buffer, buffer + kNumberBufferSize, value, base);
+      std::to_chars(buffer, buffer + size, value, base);
+  if (result.ec != std::errc()) {
+    return "?";
+  }
   if (type == 'X') {
     for (ANSICHAR* c = buffer; c != result.ptr; ++c) {
       if (*c >= 'a' && *c <= 'f') {
@@ -56,11 +59,9 @@ writeInteger(ANSICHAR (&buffer)[kNumberBufferSize], T value, ANSICHAR type) noex
 // Without type or precision a float gets the shortest text that reads back as the same
 // value, like std::format.
 StringView
-writeFloat(ANSICHAR (&buffer)[kNumberBufferSize],
-           double value,
-           const FormatSpec& spec) noexcept
+writeFloat(ANSICHAR* buffer, SIZE_T size, double value, const FormatSpec& spec) noexcept
 {
-  ANSICHAR* const end = buffer + kNumberBufferSize;
+  ANSICHAR* const end = buffer + size;
   std::to_chars_result result;
   if (spec.type == '\0' && spec.precision < 0) {
     result = std::to_chars(buffer, end, value);
@@ -250,6 +251,30 @@ StringUtils::containsIgnoreCase(StringView text, StringView search) noexcept
 
 /*
  */
+StringView
+StringUtils::signedToChars(ANSICHAR* buffer, SIZE_T size, int64 value) noexcept
+{
+  return writeInteger(buffer, size, value, '\0');
+}
+
+/*
+ */
+StringView
+StringUtils::unsignedToChars(ANSICHAR* buffer, SIZE_T size, uint64 value) noexcept
+{
+  return writeInteger(buffer, size, value, '\0');
+}
+
+/*
+ */
+StringView
+StringUtils::floatToChars(ANSICHAR* buffer, SIZE_T size, double value) noexcept
+{
+  return writeFloat(buffer, size, value, FormatSpec());
+}
+
+/*
+ */
 String
 StringUtils::toLower(const String& str)
 {
@@ -398,13 +423,13 @@ StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
       isNumber = false;
       break;
     case FormatArgType::Signed:
-      text = writeInteger(numberBuffer, arg.signedValue, spec.type);
+      text = writeInteger(numberBuffer, kNumberBufferSize, arg.signedValue, spec.type);
       break;
     case FormatArgType::Unsigned:
-      text = writeInteger(numberBuffer, arg.unsignedValue, spec.type);
+      text = writeInteger(numberBuffer, kNumberBufferSize, arg.unsignedValue, spec.type);
       break;
     case FormatArgType::Float:
-      text = writeFloat(numberBuffer, arg.floatValue, spec);
+      text = writeFloat(numberBuffer, kNumberBufferSize, arg.floatValue, spec);
       break;
     }
     appendPadded(result, text, spec, isNumber);

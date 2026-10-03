@@ -15,6 +15,7 @@
 
 #if USING(CH_CODECS)
 
+#include "chAlgorithm.h"
 #include "chAssetManager.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
@@ -60,6 +61,14 @@ MeshCodec::getSupportedExtensions() const {
   }
 
   return supportedExtensions;
+}
+
+/*
+ */
+bool
+MeshCodec::canImport(const String& extension) const
+{
+  return Algorithm::contains(getSupportedExtensions(), extension);
 }
 
 /*
@@ -339,8 +348,7 @@ MeshCodec::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> m
   ModelNode* modelNode = model->createNode(nodeName, nodeLocalTransform, parentNode);
 
   CH_ASSERT(parentNode == nullptr ||
-            std::find(parentNode->getChildren().begin(), parentNode->getChildren().end(),
-                      modelNode) != parentNode->getChildren().end());
+            Algorithm::contains(parentNode->getChildren(), modelNode));
 
   for (uint32 i = 0; i < node->mNumMeshes; i++) {
     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];

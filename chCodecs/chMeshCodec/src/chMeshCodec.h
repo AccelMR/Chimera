@@ -11,8 +11,6 @@
 
 #include "chPrerequisitesCore.h"
 
-#include <algorithm>
-
 #if USING(CH_CODECS)
 
 #include "chAssetCodec.h"
@@ -54,10 +52,7 @@ class MeshCodec  : public IAssetCodec {
   importAsset(const Path& filePath, const String& assetName) override;
 
   bool
-  canImport(const String& extension) const override{
-    const Vector<String> supportedExtensions = getSupportedExtensions();
-    return std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) != supportedExtensions.end();
-  }
+  canImport(const String& extension) const override;
 
   /**
    * Load a mesh from a file

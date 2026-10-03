@@ -9,8 +9,7 @@
 /************************************************************************/
 #include "chModel.h"
 
-#include <algorithm>
-
+#include "chAlgorithm.h"
 #include "chSphereBoxBounds.h"
 #include "chVector3.h"
 #include "chVector4.h"
@@ -37,12 +36,12 @@ ModelNode::ModelNode(const String& nodeName, Model* ownerModel, ModelNode* paren
  * Add a child node
  */
 void
-ModelNode::addChild(ModelNode* child) {
+ModelNode::addChild(ModelNode* child)
+{
   if (!child) {
     return;
   }
-  auto it = std::find(m_children.begin(), m_children.end(), child);
-  if (it == m_children.end()) {
+  if (!Algorithm::contains(m_children, child)) {
     m_children.push_back(child);
     child->m_parent = this;
     child->markDirty();
@@ -53,11 +52,10 @@ ModelNode::addChild(ModelNode* child) {
  * Remove a child node
  */
 void
-ModelNode::removeChild(ModelNode* child) {
-  auto it = std::find(m_children.begin(), m_children.end(), child);
-  if (it != m_children.end()) {
-    (*it)->m_parent = nullptr;
-    m_children.erase(it);
+ModelNode::removeChild(ModelNode* child)
+{
+  if (Algorithm::removeFirst(m_children, child)) {
+    child->m_parent = nullptr;
   }
 }
 
@@ -79,11 +77,9 @@ ModelNode::addMesh(SPtr<Mesh> mesh) {
  * Remove a mesh from this node
  */
 void
-ModelNode::removeMesh(SPtr<Mesh> mesh) {
-  auto it = std::find(m_meshes.begin(), m_meshes.end(), mesh);
-  if (it != m_meshes.end()) {
-    m_meshes.erase(it);
-
+ModelNode::removeMesh(SPtr<Mesh> mesh)
+{
+  if (Algorithm::removeFirst(m_meshes, mesh)) {
     if (m_model) {
       m_model->unregisterMeshForNode(mesh, this);
     }
@@ -286,12 +282,13 @@ Model::registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
 }
 
 void
-Model::unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
+Model::unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node)
+{
   auto& nodes = m_meshToNodesMap[mesh];
-  nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
+  Algorithm::removeAll(nodes, node);
 
   if (nodes.empty()) {
-      m_meshToNodesMap.erase(mesh);
+    m_meshToNodesMap.erase(mesh);
   }
 }
 
@@ -311,28 +308,19 @@ Model::addNodeToStructures(ModelNode* node) {
  * Remove a node from internal structures
  */
 void
-Model::removeNodeFromStructures(ModelNode* node) {
-  // Eliminar de m_allNodes
-  auto it = std::find(m_allNodes.begin(), m_allNodes.end(), node);
-  if (it != m_allNodes.end()) {
-    m_allNodes.erase(it);
-  }
+Model::removeNodeFromStructures(ModelNode* node)
+{
+  Algorithm::removeFirst(m_allNodes, node);
 
-  // Eliminar del mapa de nombres
   if (node->getName()[0] != '\0') {
     m_nodeMap.erase(node->getName());
   }
 
-  // Eliminar de los nodos raíz si es necesario
-  auto rootIt = std::find(m_rootNodes.begin(), m_rootNodes.end(), node);
-  if (rootIt != m_rootNodes.end()) {
-    m_rootNodes.erase(rootIt);
-  }
+  Algorithm::removeFirst(m_rootNodes, node);
 
-  // Actualizar el mapeo de mesh a nodos
   for (const auto& mesh : node->getMeshes()) {
     auto& nodes = m_meshToNodesMap[mesh];
-    nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
+    Algorithm::removeAll(nodes, node);
 
     if (nodes.empty()) {
       m_meshToNodesMap.erase(mesh);

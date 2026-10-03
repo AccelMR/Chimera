@@ -10,9 +10,9 @@
 #include "chVulkanAPI.h"
 
 #include <cstring>
-#include <algorithm>
 #include <iostream>
 
+#include "chAlgorithm.h"
 #include "chDisplaySurface.h"
 #include "chSTDStreams.h"
 #include "chVulkanBuffer.h"
@@ -458,73 +458,73 @@ VulkanAPI::pickPhysicalDevice() {
   Vector<VkPhysicalDevice> devices(deviceCount);
   vkEnumeratePhysicalDevices(m_vulkanData->instance, &deviceCount, devices.data());
 
-  std::sort(devices.begin(), devices.end(),
-            [](const VkPhysicalDevice& a, const VkPhysicalDevice& b) {
-              VkPhysicalDeviceProperties propertiesA;
-              vkGetPhysicalDeviceProperties(a, &propertiesA);
-              VkPhysicalDeviceProperties propertiesB;
-              vkGetPhysicalDeviceProperties(b, &propertiesB);
+  Algorithm::sort(devices,
+                  [](const VkPhysicalDevice& a, const VkPhysicalDevice& b) {
+                    VkPhysicalDeviceProperties propertiesA;
+                    vkGetPhysicalDeviceProperties(a, &propertiesA);
+                    VkPhysicalDeviceProperties propertiesB;
+                    vkGetPhysicalDeviceProperties(b, &propertiesB);
 
-              int32 scoreA = 0;
-              int32 scoreB = 0;
+                    int32 scoreA = 0;
+                    int32 scoreB = 0;
 
-              switch (propertiesA.deviceType) {
-              case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                scoreA = 4;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-                scoreA = 3;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-                scoreA = 2;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                scoreA = 1;
-                break;
-              default:
-                scoreA = 0;
-              }
+                    switch (propertiesA.deviceType) {
+                    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                      scoreA = 4;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                      scoreA = 3;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                      scoreA = 2;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+                      scoreA = 1;
+                      break;
+                    default:
+                      scoreA = 0;
+                    }
 
-              switch (propertiesB.deviceType) {
-              case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                scoreB = 4;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-                scoreB = 3;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-                scoreB = 2;
-                break;
-              case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                scoreB = 1;
-                break;
-              default:
-                scoreB = 0;
-              }
+                    switch (propertiesB.deviceType) {
+                    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                      scoreB = 4;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                      scoreB = 3;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                      scoreB = 2;
+                      break;
+                    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+                      scoreB = 1;
+                      break;
+                    default:
+                      scoreB = 0;
+                    }
 
-              if (scoreA == scoreB) {
-                VkPhysicalDeviceMemoryProperties memPropsA, memPropsB;
-                vkGetPhysicalDeviceMemoryProperties(a, &memPropsA);
-                vkGetPhysicalDeviceMemoryProperties(b, &memPropsB);
+                    if (scoreA == scoreB) {
+                      VkPhysicalDeviceMemoryProperties memPropsA, memPropsB;
+                      vkGetPhysicalDeviceMemoryProperties(a, &memPropsA);
+                      vkGetPhysicalDeviceMemoryProperties(b, &memPropsB);
 
-                VkDeviceSize localMemA = 0, localMemB = 0;
-                for (uint32 i = 0; i < memPropsA.memoryHeapCount; i++) {
-                  if (memPropsA.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                    localMemA += memPropsA.memoryHeaps[i].size;
-                  }
-                }
+                      VkDeviceSize localMemA = 0, localMemB = 0;
+                      for (uint32 i = 0; i < memPropsA.memoryHeapCount; i++) {
+                        if (memPropsA.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                          localMemA += memPropsA.memoryHeaps[i].size;
+                        }
+                      }
 
-                for (uint32 i = 0; i < memPropsB.memoryHeapCount; i++) {
-                  if (memPropsB.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                    localMemB += memPropsB.memoryHeaps[i].size;
-                  }
-                }
+                      for (uint32 i = 0; i < memPropsB.memoryHeapCount; i++) {
+                        if (memPropsB.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                          localMemB += memPropsB.memoryHeaps[i].size;
+                        }
+                      }
 
-                return localMemA > localMemB;
-              }
+                      return localMemA > localMemB;
+                    }
 
-              return scoreA > scoreB;
-            });
+                    return scoreA > scoreB;
+                  });
 
   for (const auto& device : devices) {
     if (isDeviceSuitable(device)) {

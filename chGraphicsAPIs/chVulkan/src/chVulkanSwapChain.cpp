@@ -12,8 +12,7 @@
 /************************************************************************/
 #include "chVulkanSwapChain.h"
 
-#include <algorithm>
-
+#include "chAlgorithm.h"
 #include "chMath.h"
 #include "chVulkanAPI.h"
 #include "chVulkanSynchronization.h"
@@ -140,16 +139,12 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
   if (!vsync) {
     // Prefer MAILBOX (triple buffering) if it is available
-    auto it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_MAILBOX_KHR);
-    if (it != presentModes.end()) {
+    if (Algorithm::contains(presentModes, VK_PRESENT_MODE_MAILBOX_KHR)) {
       presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     }
-    else {
+    else if (Algorithm::contains(presentModes, VK_PRESENT_MODE_IMMEDIATE_KHR)) {
       // Fallback to IMMEDIATE (no VSync)
-      it = std::find(presentModes.begin(), presentModes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR);
-      if (it != presentModes.end()) {
-          presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-      }
+      presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     }
   }
 

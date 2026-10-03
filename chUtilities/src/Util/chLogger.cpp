@@ -14,12 +14,11 @@
 /************************************************************************/
 #include "chLogger.h"
 
-#include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <ctime>
 #include <iostream>
 
+#include "chAlgorithm.h"
 #include "chFileSystem.h"
 #include "chMath.h"
 #include "chPath.h"
@@ -319,7 +318,7 @@ Logger::setBufferingEnabled(bool enabled, uint32 maxSize)
   }
 
   // Puts the entries back in order, so the ring starts at index 0 again.
-  std::rotate(buffer.begin(), buffer.begin() + m_impl->logBufferStart, buffer.end());
+  Algorithm::rotateToFront(buffer, m_impl->logBufferStart);
   m_impl->logBufferStart = 0;
 
   if (buffer.size() > m_impl->maxBufferSize) {
@@ -433,10 +432,9 @@ Logger::writeLogMessage(const LogCategory& category,
   text.append("] [").append(getVerbosityName(verbosity));
   text.append("] [").append(entry->category).append("]");
   if (!entry->sourceFile.empty() && line > 0) {
-    ANSICHAR lineNumber[12];
-    const auto result = std::to_chars(lineNumber, lineNumber + sizeof(lineNumber), line);
+    ANSICHAR lineNumber[StringUtils::MAX_INTEGER_CHARS];
     text.append(" [").append(entry->sourceFile).append(":");
-    text.append(lineNumber, result.ptr).append("]");
+    text.append(StringUtils::toChars(lineNumber, line)).append("]");
     if (!entry->sourceFunctionName.empty()) {
       text.append(" ").append(entry->sourceFunctionName);
     }

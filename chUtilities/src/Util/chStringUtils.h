@@ -161,6 +161,13 @@ class FormatString
 class CH_UTILITY_EXPORT StringUtils
 {
  public:
+  /**
+   * Buffer sizes that fit any number written by toChars: "-9223372036854775808" and
+   * "-2.2250738585072014e-308".
+   */
+  static constexpr SIZE_T MAX_INTEGER_CHARS = 20;
+  static constexpr SIZE_T MAX_FLOAT_CHARS = 24;
+
   NODISCARD static bool
   equals(StringView str1, StringView str2) noexcept
   {
@@ -248,6 +255,32 @@ class CH_UTILITY_EXPORT StringUtils
   NODISCARD static bool
   containsIgnoreCase(StringView text, StringView search) noexcept;
 
+  /**
+   * Writes a number in decimal into buffer without allocating; floats get the shortest
+   * text that reads back as the same value. No '\0' is added.
+   *
+   * @return The written text, which points into buffer.
+   */
+  template<SIZE_T N, typename T>
+    requires(std::is_arithmetic_v<T> && !std::is_same_v<T, bool> &&
+             !std::is_same_v<T, ANSICHAR>)
+  NODISCARD static StringView
+  toChars(ANSICHAR (&buffer)[N], T value) noexcept
+  {
+    if constexpr (std::is_floating_point_v<T>) {
+      static_assert(N >= MAX_FLOAT_CHARS, "The buffer is too small for a float.");
+      return floatToChars(buffer, N, static_cast<double>(value));
+    }
+    else if constexpr (std::is_signed_v<T>) {
+      static_assert(N >= MAX_INTEGER_CHARS, "The buffer is too small for an integer.");
+      return signedToChars(buffer, N, static_cast<int64>(value));
+    }
+    else {
+      static_assert(N >= MAX_INTEGER_CHARS, "The buffer is too small for an integer.");
+      return unsignedToChars(buffer, N, static_cast<uint64>(value));
+    }
+  }
+
   NODISCARD static String
   lTrim(const String& str);
 
@@ -287,6 +320,15 @@ class CH_UTILITY_EXPORT StringUtils
 
   static String
   formatArgs(StringView format, const FormatArg* args, SIZE_T count);
+
+  NODISCARD static StringView
+  signedToChars(ANSICHAR* buffer, SIZE_T size, int64 value) noexcept;
+
+  NODISCARD static StringView
+  unsignedToChars(ANSICHAR* buffer, SIZE_T size, uint64 value) noexcept;
+
+  NODISCARD static StringView
+  floatToChars(ANSICHAR* buffer, SIZE_T size, double value) noexcept;
 };
 
 /************************************************************************/
