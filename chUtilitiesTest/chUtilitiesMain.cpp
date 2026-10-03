@@ -1684,6 +1684,11 @@ TEST_CASE("chUtilities - ContainsIgnoreCase") {
   REQUIRE_FALSE(StringUtils::containsIgnoreCase("", "a"));
   REQUIRE_FALSE(StringUtils::containsIgnoreCase("Texture_Wood", "stone"));
   REQUIRE_FALSE(StringUtils::containsIgnoreCase("aab", "abb"));
+
+  REQUIRE(StringUtils::equalsIgnoreCase("PNG", "png"));
+  REQUIRE(StringUtils::equalsIgnoreCase("", ""));
+  REQUIRE_FALSE(StringUtils::equalsIgnoreCase("png", "pn"));
+  REQUIRE_FALSE(StringUtils::equalsIgnoreCase("png", "jpg"));
 }
 
 TEST_CASE("chUtilities - Format") {

@@ -40,15 +40,6 @@ loadImage(const Path& path, int32* width, int32* height, int32* channels) {
 }
 } // namespace ImageImpoterHelpers
 
-
-/*
-*/
-Vector<String>
-ImageCodec::getSupportedExtensions() const {
-  // Add more supported image formats as needed
-  return {"png", "jpg", "jpeg", "bmp", "tga", "hdr", "exr"};
-}
-
 /*
 */
 SPtr<IAsset>
@@ -88,14 +79,6 @@ ImageCodec::importAsset(const Path& filePath, const String& assetName) {
   CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", assetName, filePath.toString());
   registerNewAsset(textureAsset);
   return std::static_pointer_cast<IAsset>(textureAsset);
-}
-
-/*
-*/
-bool
-ImageCodec::canImport(const String&) const {
-  // Check if the extension is supported
-  return true;
 }
 
 } // namespace chEngineSDK

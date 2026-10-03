@@ -42,33 +42,21 @@ CH_LOG_DECLARE_STATIC(MeshSystem, All);
 
 /*
  */
-Vector<String>
-MeshCodec::getSupportedExtensions() const {
+MeshCodec::MeshCodec()
+{
+  // An Importer registers every Assimp format, so it is built once here instead of on
+  // every query. Assimp lists the extensions as "*.3ds;*.obj;...".
   Assimp::Importer importer;
   String extensions;
   importer.GetExtensionList(extensions);
 
-  Vector<String> supportedExtensions;
-  for (const String& ext : StringUtils::splitString(extensions, ';')) {
-    // Remove any leading '*' or '.' characters
-    SIZE_T start = 0;
-    while (start < ext.size() && (ext[start] == '*' || ext[start] == '.')) {
-      ++start;
-    }
-    if (start < ext.size()) {
-      supportedExtensions.push_back(ext.substr(start));
+  for (const String& pattern : StringUtils::splitString(extensions, ';')) {
+    const SIZE_T start = pattern.find_first_not_of("*.");
+    if (String::npos != start) {
+      const StringView extension = StringView(pattern).substr(start);
+      m_extensions.push_back(IAssetCodec::normalizeExtension(extension));
     }
   }
-
-  return supportedExtensions;
-}
-
-/*
- */
-bool
-MeshCodec::canImport(const String& extension) const
-{
-  return Algorithm::contains(getSupportedExtensions(), extension);
 }
 
 /*

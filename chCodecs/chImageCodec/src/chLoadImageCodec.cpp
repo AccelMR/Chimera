@@ -26,5 +26,5 @@ loadPlugin() {
     return;
   }
   AssetCodecManager::instance().registerCodec<chEngineSDK::ImageCodec>();
-  CH_LOG_DEBUG(ImageCodecLog, "Mesh Codec Plugin loaded successfully.");
+  CH_LOG_DEBUG(ImageCodecLog, "Image Codec Plugin loaded successfully.");
 }

@@ -37,49 +37,58 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
     return std::static_pointer_cast<AssetType>(importAsset(importPath, assetName));
   }
 
-  template <typename AssetCodecType = IAssetCodec>
-  FORCEINLINE SPtr<AssetCodecType>
-  getCodec() const {
+  template<typename AssetCodecType>
+  NODISCARD FORCEINLINE SPtr<AssetCodecType>
+  getCodec() const
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before accessing codecs.");
     return m_codecRegistry->getCodec<AssetCodecType>();
   }
 
-  FORCEINLINE Vector<SPtr<IAssetCodec>>
-  getAllCodecs() const {
+  NODISCARD FORCEINLINE const Vector<SPtr<IAssetCodec>>&
+  getAllCodecs() const
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before accessing codecs.");
     return m_codecRegistry->getAllCodecs();
   }
 
-  Vector<String>
+  NODISCARD Vector<String>
   getSupportedAllExtensions() const;
 
-  SPtr<IAssetCodec>
-  FORCEINLINE getCodecForExtension(const String& extension) const {
+  /**
+   * Accepts the extension with or without the dot, in any case (".PNG").
+   */
+  NODISCARD FORCEINLINE SPtr<IAssetCodec>
+  getCodecForExtension(StringView extension) const
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before accessing codecs.");
     return m_codecRegistry->getCodecForExtension(extension);
   }
 
-  SPtr<IAssetCodec>
-  FORCEINLINE getCodecForAssetType(const UUID& assetType) const {
+  NODISCARD FORCEINLINE SPtr<IAssetCodec>
+  getCodecForAssetType(const UUID& assetType) const
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before accessing codecs.");
     return m_codecRegistry->getCodecForAssetType(assetType);
   }
 
-  template <typename AssetType = IAsset>
-  SPtr<IAssetCodec>
-  FORCEINLINE getCodecForAssetType() const {
+  template<typename AssetType>
+  NODISCARD FORCEINLINE SPtr<IAssetCodec>
+  getCodecForAssetType() const
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before accessing codecs.");
     return m_codecRegistry->getCodecForAssetType<AssetType>();
   }
 
-  template <typename AssetCodecType = IAssetCodec>
+  template<typename AssetCodecType>
   FORCEINLINE void
-  registerCodec() {
+  registerCodec()
+  {
     CH_ASSERT(m_codecRegistry &&
               "AssetCodecRegistry must be initialized before registering codecs.");
     m_codecRegistry->registerCodec<AssetCodecType>();

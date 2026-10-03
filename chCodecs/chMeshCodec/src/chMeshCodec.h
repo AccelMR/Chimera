@@ -31,7 +31,7 @@ struct aiScene;
 namespace chEngineSDK {
 class MeshCodec  : public IAssetCodec {
  public:
-  MeshCodec() = default;
+  MeshCodec();
   ~MeshCodec() = default;
 
   UUID
@@ -45,14 +45,14 @@ class MeshCodec  : public IAssetCodec {
     return {AssetTypeTraits<ModelAsset>::getTypeId()};
   }
 
-  Vector<String>
-  getSupportedExtensions() const override;
+  NODISCARD const Vector<String>&
+  getSupportedExtensions() const override
+  {
+    return m_extensions;
+  }
 
   SPtr<IAsset>
   importAsset(const Path& filePath, const String& assetName) override;
-
-  bool
-  canImport(const String& extension) const override;
 
   /**
    * Load a mesh from a file
@@ -111,6 +111,7 @@ class MeshCodec  : public IAssetCodec {
 
 
  private:
+  Vector<String> m_extensions;
   UnorderedMap<String, SPtr<Mesh>> m_meshes;
   UnorderedMap<String, SPtr<Model>> m_models;
   Mutex m_mutex;

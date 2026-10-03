@@ -26,6 +26,12 @@ constexpr StringView kWhitespace = " \n\r\t\f\v";
 constexpr SIZE_T kNumberBufferSize = 512;
 constexpr SIZE_T kNumberSizeGuess = 16;
 
+NODISCARD constexpr ANSICHAR
+toLowerASCII(ANSICHAR c) noexcept
+{
+  return (c >= 'A' && c <= 'Z') ? static_cast<ANSICHAR>(c - 'A' + 'a') : c;
+}
+
 template<typename T>
 StringView
 writeInteger(ANSICHAR* buffer, SIZE_T size, T value, ANSICHAR type) noexcept
@@ -228,10 +234,6 @@ StringUtils::join(const Vector<String>& toJoin, const String& separator)
 bool
 StringUtils::containsIgnoreCase(StringView text, StringView search) noexcept
 {
-  auto toLowerASCII = [](ANSICHAR c) {
-    return (c >= 'A' && c <= 'Z') ? static_cast<ANSICHAR>(c - 'A' + 'a') : c;
-  };
-
   if (search.size() > text.size()) {
     return false;
   }
@@ -247,6 +249,22 @@ StringUtils::containsIgnoreCase(StringView text, StringView search) noexcept
     }
   }
   return false;
+}
+
+/*
+ */
+bool
+StringUtils::equalsIgnoreCase(StringView str1, StringView str2) noexcept
+{
+  if (str1.size() != str2.size()) {
+    return false;
+  }
+  for (SIZE_T i = 0; i < str1.size(); ++i) {
+    if (toLowerASCII(str1[i]) != toLowerASCII(str2[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /*

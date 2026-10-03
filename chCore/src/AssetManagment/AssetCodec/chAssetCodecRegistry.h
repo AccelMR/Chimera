@@ -3,89 +3,74 @@
  * @file chAssetCodecRegistry.h
  * @author AccelMR
  * @date 2025/07/12
- * @details  Asset codec registry for Chimera Core.
+ * @brief Keeps the registered asset codecs and finds them by extension or type.
  */
-/***************************************************** *******************/
+/************************************************************************/
 #pragma once
 
 #include "chPrerequisitesCore.h"
 
-#include <ranges>
-
 #include "chAssetCodec.h"
 #include "chTypeTraits.h"
-
 #include "chUUID.h"
 
 namespace chEngineSDK {
-class IAssetCodec;
 
-struct RegisterResponse {
-  bool success;
-  String message;
-};
-
-class AssetCodecRegistry
+/**
+ * Indexes the codecs once, when they register, so finding the codec for an extension, a
+ * codec type or an asset type is a single map lookup.
+ */
+class CH_CORE_EXPORT AssetCodecRegistry
 {
  public:
-
-  template <typename AssetCodecType = IAssetCodec>
+  template<typename AssetCodecType>
   void
-  registerCodec() {
-    SPtr<AssetCodecType> codec = chMakeShared<AssetCodecType>();
+  registerCodec()
+  {
+    addCodec(chMakeShared<AssetCodecType>(), AssetTypeTraits<AssetCodecType>::getTypeId());
+  }
 
-    for (const String& ext : codec->getSupportedExtensions()) {
-      m_extensionToCodec[ext] = codec;
+  template<typename AssetCodecType>
+  NODISCARD SPtr<AssetCodecType>
+  getCodec() const
+  {
+    const auto it = m_codecsByCodecType.find(AssetTypeTraits<AssetCodecType>::getTypeId());
+    if (m_codecsByCodecType.end() == it) {
+      return nullptr;
     }
-
-    m_typeToCodec[AssetTypeTraits<AssetCodecType>::getTypeId()] = codec;
+    return std::static_pointer_cast<AssetCodecType>(it->second);
   }
 
-  /*
-  */
-  template <typename AssetCodecType = IAssetCodec>
-  SPtr<AssetCodecType>
-  getCodec() const {
-    auto it = m_typeToCodec.find(AssetTypeTraits<AssetCodecType>::getTypeId());
-    if (it != m_typeToCodec.end()) {
-      return std::static_pointer_cast<AssetCodecType>(it->second);
-    }
-    return nullptr;
-  }
+  /**
+   * Accepts the extension with or without the dot, in any case (".PNG").
+   */
+  NODISCARD SPtr<IAssetCodec>
+  getCodecForExtension(StringView extension) const;
 
-  SPtr<IAssetCodec>
-  getCodecForExtension(const String& extension) const {
-    auto it = m_extensionToCodec.find(extension);
-    return (it != m_extensionToCodec.end()) ? it->second : nullptr;
-  }
+  NODISCARD SPtr<IAssetCodec>
+  getCodecForAssetType(const UUID& assetType) const;
 
-  SPtr<IAssetCodec>
-  getCodecForAssetType(const UUID& assetType) const {
-    auto it = m_typeToCodec.find(assetType);
-    return (it != m_typeToCodec.end()) ? it->second : nullptr;
-  }
-
-  template <typename AssetType = IAsset>
-  SPtr<IAssetCodec>
-  getCodecForAssetType() const {
+  template<typename AssetType>
+  NODISCARD SPtr<IAssetCodec>
+  getCodecForAssetType() const
+  {
     return getCodecForAssetType(AssetTypeTraits<AssetType>::getTypeId());
   }
 
-  const Vector<SPtr<IAssetCodec>>
-  getAllCodecs() const {
-    Vector<SPtr<IAssetCodec>> codecs;
-    codecs.reserve(m_typeToCodec.size());
-
-    auto codec_view = m_typeToCodec | std::views::transform([](const auto& pair) {
-        return pair.second;
-    });
-
-    codecs.assign(codec_view.begin(), codec_view.end());
-    return codecs;
+  NODISCARD const Vector<SPtr<IAssetCodec>>&
+  getAllCodecs() const noexcept
+  {
+    return m_codecs;
   }
 
  private:
-  UnorderedMap<String, SPtr<IAssetCodec>> m_extensionToCodec;
-  UnorderedMap<UUID, SPtr<IAssetCodec>> m_typeToCodec;
+  void
+  addCodec(const SPtr<IAssetCodec>& codec, const UUID& codecType);
+
+  Vector<SPtr<IAssetCodec>> m_codecs;
+  UnorderedMap<UUID, SPtr<IAssetCodec>> m_codecsByCodecType;
+  UnorderedMap<UUID, SPtr<IAssetCodec>> m_codecsByAssetType;
+  UnorderedMap<String, SPtr<IAssetCodec>> m_codecsByExtension;
 };
+
 } // namespace chEngineSDK

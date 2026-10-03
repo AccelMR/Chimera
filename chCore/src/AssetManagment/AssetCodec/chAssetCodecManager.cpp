@@ -53,7 +53,7 @@ AssetCodecManager::getSupportedAllExtensions() const {
   Vector<String> allExtensions;
 
   for (const auto& codec : m_codecRegistry->getAllCodecs()) {
-    Vector<String> extensions = codec->getSupportedExtensions();
+    const Vector<String>& extensions = codec->getSupportedExtensions();
     allExtensions.insert(allExtensions.end(), extensions.begin(), extensions.end());
   }
 

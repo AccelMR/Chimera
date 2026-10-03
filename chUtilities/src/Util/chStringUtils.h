@@ -249,6 +249,12 @@ class CH_UTILITY_EXPORT StringUtils
   containsIgnoreCase(StringView text, StringView search) noexcept;
 
   /**
+   * Compares ignoring ASCII case. Does not allocate.
+   */
+  NODISCARD static bool
+  equalsIgnoreCase(StringView str1, StringView str2) noexcept;
+
+  /**
    * Writes a number in decimal into buffer without allocating; floats get the shortest
    * text that reads back as the same value. No '\0' is added.
    *
