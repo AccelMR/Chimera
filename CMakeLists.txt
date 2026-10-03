@@ -84,7 +84,8 @@ if(MSVC)
   # C4201: nameless structs and unions are accepted by every supported compiler.
   # C4251: STL members of exported classes are private, so clients never touch them across the DLL.
   # C4996: the CRT "secure" functions are MSVC only, so the standard ones are used instead.
-  add_compile_options(/wd4201 /wd4251 /wd4996)
+  # C4324: math types are aligned for SIMD on purpose, so structs holding them get padding.
+  add_compile_options(/wd4201 /wd4251 /wd4996 /wd4324)
 endif()
 
 if(WIN32)

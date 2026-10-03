@@ -3,9 +3,9 @@
  * @file chMatrixHelpers.h
  * @author AccelMR
  * @date 2025/05/01
- *   Helper matrix classes that inherit from Matrix4
+ * @brief Matrix4 subclasses that build common transforms in their constructor.
  *
- * Coordinate system being X = front, Z = up, Y = right
+ * Coordinate system: X = forward, Y = right, Z = up, left-handed.
  */
 /************************************************************************/
 #pragma once
@@ -16,148 +16,79 @@
 
 namespace chEngineSDK {
 
-/************************************************************************/
-/*
- * Translation Matrix
- */
-/************************************************************************/
 /**
- * @brief Translation Matrix class
- *
- * Sample usage:
- *  const TranslationMatrix posMatrix(Vector3(2.0f, 3.0f, 150.0f))
+ * Builds a translation, so code reads TranslationMatrix(position) instead of filling 16
+ * values by hand.
  */
-class CH_UTILITY_EXPORT TranslationMatrix : public Matrix4
+class TranslationMatrix : public Matrix4
 {
  public:
-  /**
-   * @brief Constructor for translation matrix given a vector
-   *
-   * @param translation Initial position for this Matrix to be
-   */
-  FORCEINLINE
-  TranslationMatrix(const Vector3& translation)
-   : Matrix4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-             translation.x, translation.y, translation.z, 1.0f) {}
+  FORCEINLINE explicit
+  TranslationMatrix(const Vector3& translation) noexcept
+   : Matrix4(1.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f, 0.0f, 0.0f,
+             0.0f, 0.0f, 1.0f, 0.0f,
+             translation.x, translation.y, translation.z, 1.0f)
+  {}
 };
 
-/************************************************************************/
-/*
- * Rotation Translation Matrix
- */
-/************************************************************************/
 /**
- * @brief Rotation Translation matrix class
- *
- * Sample usage:
- *   RotationTranslationMatrix RTM(Rotator(90.f,90.f,90.f), Vector3::UNITY);
+ * Builds a rotation followed by a translation from a Rotator, the same way Unreal does,
+ * so the rows are the rotated forward, right and up axes.
  */
-class CH_UTILITY_EXPORT RotationTranslationMatrix : public Matrix4
+class RotationTranslationMatrix : public Matrix4
 {
  public:
-  /**
-   * @brief Constructor base for Rotation-Translation matrix
-   *
-   * @param rotator Rotation component
-   * @param origin Translation component
-   */
-  RotationTranslationMatrix(const Rotator& rotator, const Vector3& origin);
+  CH_UTILITY_EXPORT
+  RotationTranslationMatrix(const Rotator& rotator, const Vector3& origin) noexcept;
 };
 
-/************************************************************************/
-/*
- * Rotation Matrix
- */
-/************************************************************************/
 /**
- * @brief Rotation Matrix class
- *
- * Sample usage:
- *   RotationMatrix RM(Rotator(90.f, 90.f, 90.f));
+ * Builds a rotation with no translation from a Rotator.
  */
-class CH_UTILITY_EXPORT RotationMatrix : public RotationTranslationMatrix
+class RotationMatrix : public RotationTranslationMatrix
 {
  public:
-  /**
-   * @brief Constructor for pure rotation matrix
-   *
-   * @param rotator Rotation component
-   */
-  FORCEINLINE
-  RotationMatrix(const Rotator& rotator) : RotationTranslationMatrix(rotator, Vector3::ZERO) {}
+  FORCEINLINE explicit
+  RotationMatrix(const Rotator& rotator) noexcept
+   : RotationTranslationMatrix(rotator, Vector3::ZERO)
+  {}
 };
 
-/************************************************************************/
-/*
- * Scale Rotation Translation Matrix
- */
-/************************************************************************/
 /**
- * @brief Scale Rotation Translation Matrix
- *
- * Sample usage:
- *  ScaleRotationTranslationMatrix SRTM(Vector3(1.f,1.f,1.f),
- *                                      Rotator(90.f,90.f,90.f),
- *                                      Vector3::ZERO);
+ * Builds scale, then rotation, then translation in one step, which is cheaper than
+ * multiplying three matrices.
  */
-class CH_UTILITY_EXPORT ScaleRotationTranslationMatrix : public Matrix4
+class ScaleRotationTranslationMatrix : public Matrix4
 {
  public:
-  /**
-   * @brief Constructor for Scale-Rotation-Translation matrix
-   *
-   * @param scale Scale component
-   * @param rotator Rotation component
-   * @param origin Translation component
-   */
+  CH_UTILITY_EXPORT
   ScaleRotationTranslationMatrix(const Vector3& scale, const Rotator& rotator,
-                                 const Vector3& origin);
+                                 const Vector3& origin) noexcept;
 };
 
-/************************************************************************/
-/*
- * Perspective Matrix
- */
-/************************************************************************/
 /**
- * @brief Perspective projection matrix class
+ * Builds a perspective projection with depth in [0, 1] (Vulkan and Direct3D).
+ * halfFOV is half of the horizontal field of view, so changing the window height keeps
+ * the visible width.
  */
-class CH_UTILITY_EXPORT PerspectiveMatrix : public Matrix4
+class PerspectiveMatrix : public Matrix4
 {
  public:
-  /**
-   * @brief Constructor for perspective projection matrix
-   *
-   * @param halfFOV Half Field of View in the Y direction
-   * @param width View space width
-   * @param height View space height
-   * @param near Distance to the near Z plane
-   * @param far Distance to the far Z plane
-   */
-  PerspectiveMatrix(const Radian& halfFOV, float width, float height, float near, float far);
+  CH_UTILITY_EXPORT
+  PerspectiveMatrix(const Radian& halfFOV, float width, float height, float near,
+                    float far) noexcept;
 };
 
-/************************************************************************/
-/*
- * Look At Matrix
- */
-/************************************************************************/
 /**
- * @brief Look at matrix class for view transformations
+ * Builds a view matrix from the camera position, the point it looks at and its up vector.
  */
-class CH_UTILITY_EXPORT LookAtMatrix : public Matrix4
+class LookAtMatrix : public Matrix4
 {
  public:
-  /**
-   * @brief Creates a view matrix using an eye position, a look at position, and up vector
-   * This does the same thing as D3DXMatrixLookAtLH
-   *
-   * @param eyePosition Position of the camera
-   * @param lookAtPosition Point the camera is looking at
-   * @param upVector Up vector for orientation
-   */
+  CH_UTILITY_EXPORT
   LookAtMatrix(const Vector3& eyePosition, const Vector3& lookAtPosition,
-               const Vector3& upVector);
+               const Vector3& upVector) noexcept;
 };
 
 } // namespace chEngineSDK

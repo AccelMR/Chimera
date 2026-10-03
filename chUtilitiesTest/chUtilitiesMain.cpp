@@ -829,12 +829,50 @@ TEST_CASE("chUtilities - Rotator") {
  * Matrix
  */
 /************************************************************************/
+namespace {
+// Covers every branch of Quaternion(Matrix4): positive trace and each largest diagonal.
+const Rotator kTestRotators[] = {
+    Rotator(0.0f, 0.0f, 0.0f),      Rotator(30.0f, 0.0f, 0.0f),
+    Rotator(0.0f, 30.0f, 0.0f),     Rotator(0.0f, 0.0f, 30.0f),
+    Rotator(20.0f, 40.0f, 60.0f),   Rotator(0.0f, 180.0f, 0.0f),
+    Rotator(0.0f, 180.0f, 180.0f),  Rotator(170.0f, 10.0f, 0.0f),
+    Rotator(10.0f, 20.0f, 175.0f),  Rotator(80.0f, -120.0f, 33.0f),
+    Rotator(-45.0f, 135.0f, -90.0f), Rotator(10.0f, 170.0f, 175.0f)};
+
+bool
+isSameRotation(const Matrix4& matrix, const Quaternion& quaternion)
+{
+  for (const Vector3& axis : {Vector3::FORWARD, Vector3::RIGHT, Vector3::UP}) {
+    if (!Vector3(matrix.transformVector(axis)).nearEqual(quaternion.rotateVector(axis), 1e-5f)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Matrix4
+multiplyReference(const Matrix4& a, const Matrix4& b)
+{
+  Matrix4 result = Matrix4::ZERO;
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      for (int32 k = 0; k < 4; ++k) {
+        result[row][column] += a[row][k] * b[k][column];
+      }
+    }
+  }
+  return result;
+}
+} // namespace
+
 TEST_CASE("chUtilities - Matrix4") {
-  REQUIRE(sizeof(Matrix4) == 16 * 4);
+  static_assert(sizeof(Matrix4) == 16 * 4);
+  static_assert(alignof(Matrix4) == 16);
+  static_assert(std::is_trivially_copyable_v<Matrix4>);
+  static_assert(Matrix4::IDENTITY.data()[0] == 1.0f && Matrix4::IDENTITY.data()[1] == 0.0f);
 
   const Matrix4 Identity(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                          0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
   REQUIRE(Identity == Matrix4::IDENTITY);
 
   Matrix4 Temporal1(Identity);
@@ -842,16 +880,12 @@ TEST_CASE("chUtilities - Matrix4") {
 
   Matrix4 Temporal2(9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
                     0.0f, 0.0f, 0.0f, 1.0f);
-
-  Temporal1.at(0, 0) = 9.0f; // Changed from m00 to at(0,0)
+  Temporal1.at(0, 0) = 9.0f;
   REQUIRE(Temporal1 == Temporal2);
-
-  Matrix4 MultiplicationResult = Temporal1 * Matrix4::UNITY;
 
   const Matrix4 ActualResult(9.0f, 9.0f, 9.0f, 9.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                              1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-
-  REQUIRE(MultiplicationResult == ActualResult);
+  REQUIRE(Temporal1 * Matrix4::UNITY == ActualResult);
 
   Temporal1 *= Matrix4::UNITY;
   REQUIRE(Temporal1 == ActualResult);
@@ -860,14 +894,11 @@ TEST_CASE("chUtilities - Matrix4") {
   const Matrix4 RealAdditionResult(18.0f, 18.0f, 18.0f, 18.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f,
                                    2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f);
   REQUIRE(AdditionResult == RealAdditionResult);
+  REQUIRE(AdditionResult - ActualResult == ActualResult);
 
-  Matrix4 SubtractResult = AdditionResult - ActualResult;
-  REQUIRE(SubtractResult == ActualResult);
-
-  Matrix4 MultiplicationValueResult = Matrix4::IDENTITY * 4.0f;
   const Matrix4 ValMulFixedresult(4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                   4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f);
-  REQUIRE(MultiplicationValueResult == ValMulFixedresult);
+  REQUIRE(Matrix4::IDENTITY * 4.0f == ValMulFixedresult);
 
   Temporal2 *= 0.0f;
   REQUIRE(Temporal2 == Matrix4::ZERO);
@@ -875,161 +906,106 @@ TEST_CASE("chUtilities - Matrix4") {
   Temporal1.setIdentity();
   REQUIRE(Temporal1 == Matrix4::IDENTITY);
 
-  Temporal2 = Matrix4::IDENTITY;
-  REQUIRE(Temporal2 == Matrix4::IDENTITY);
-
   Temporal2 = RealAdditionResult.getTransposed();
   const Matrix4 TransposedResult(18.0f, 2.0f, 2.0f, 2.0f, 18.0f, 2.0f, 2.0f, 2.0f, 18.0f, 2.0f,
                                  2.0f, 2.0f, 18.0f, 2.0f, 2.0f, 2.0f);
   REQUIRE(Temporal2 == TransposedResult);
 
-  Temporal2.transposed();
+  Temporal2.transpose();
   REQUIRE(Temporal2 == RealAdditionResult);
 
-  float Determinant = Temporal2.getDeterminant();
-  REQUIRE(Determinant == Approx(0.0f));
+  // SIMD multiplication against a plain triple loop.
+  const Matrix4 A(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f,
+                  13.0f, 14.0f, 15.0f, 16.0f);
+  const Matrix4 B(0.5f, -1.0f, 2.0f, 0.0f, 3.0f, 0.25f, -2.0f, 1.0f, -1.5f, 4.0f, 1.0f, 2.0f,
+                  0.0f, 1.0f, -3.0f, 0.75f);
+  REQUIRE(A * B == multiplyReference(A, B));
+  REQUIRE(B * A == multiplyReference(B, A));
+  Matrix4 selfMultiplied = A;
+  selfMultiplied *= selfMultiplied;
+  REQUIRE(selfMultiplied == multiplyReference(A, A));
 
-  Matrix4 NotValidInverse = Temporal2.getInverse();
-  REQUIRE(NotValidInverse == Matrix4::IDENTITY);
+  // Determinant and inverse.
+  REQUIRE(RealAdditionResult.getDeterminant() == Approx(0.0f));
+  REQUIRE(RealAdditionResult.getInverse() == Matrix4::IDENTITY);
 
-  Matrix4 ToInverse(1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 3.0f, 1.0f, 2.0f, 2.0f, 3.0f, 1.0f, 0.0f,
-                    1.0f, 0.0f, 2.0f, 1.0f);
-  const Matrix4 ValidInverse = ToInverse.getInverse();
+  const Matrix4 ToInverse(1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 3.0f, 1.0f, 2.0f, 2.0f, 3.0f, 1.0f,
+                          0.0f, 1.0f, 0.0f, 2.0f, 1.0f);
+  const Matrix4 KnownInverse(-3.0f, -0.5f, 1.5f, 1.0f, 1.0f, 0.25f, -0.25f, -0.5f, 3.0f, 0.25f,
+                             -1.25f, -0.5f, -3.0f, 0.0f, 1.0f, 1.0f);
+  REQUIRE(ToInverse.getInverse().nearEqual(KnownInverse, 1e-5f));
+  REQUIRE(ToInverse.getDeterminant() == Approx(-4.0f));
+  REQUIRE((ToInverse * ToInverse.getInverse()).nearEqual(Matrix4::IDENTITY, 1e-5f));
+  REQUIRE(Vector4(ToInverse.getRow(1)) == Vector4(0.0f, 3.0f, 1.0f, 2.0f));
 
-  REQUIRE(ValidInverse == Matrix4(-3.0f, -0.5f, 1.5f, 1.0f, 1.0f, 0.25f, -0.25f, -0.5f, 3.0f,
-                                  0.25f, -1.25f, -0.5f, -3.0f, 0.0f, 1.0f, 1.0f));
+  // Small scales used to be taken as singular and returned IDENTITY.
+  for (const Vector3& scale : {Vector3(1.0f, 1.0f, 1.0f), Vector3(2.0f, 3.0f, 0.5f),
+                               Vector3(0.001f, 0.002f, 0.001f), Vector3(-1.0f, 1.0f, 4.0f)}) {
+    const ScaleRotationTranslationMatrix srt(scale, Rotator(20.0f, 40.0f, 60.0f),
+                                             Vector3(5.0f, -2.0f, 7.0f));
+    REQUIRE(srt.getDeterminant() == Approx(scale.x * scale.y * scale.z));
 
-  // Replaced direct row access with getRow() or operator[]
-  Vector4 FRow(ToInverse[0][0], ToInverse[0][1], ToInverse[0][2], ToInverse[0][3]);
-  REQUIRE(FRow == Vector4(1.0f, 1.0f, 1.0f, 0.0f));
+    const Matrix4 inverse = srt.getInverse();
+    REQUIRE((inverse * srt).nearEqual(Matrix4::IDENTITY, 1e-4f));
+    // With scale 0.001 the inverse moves about 5000 units, and float rounding of numbers
+    // that big cancelling each other is around 1e-3.
+    REQUIRE((srt * inverse).nearEqual(Matrix4::IDENTITY, 1e-2f));
+    REQUIRE(srt.getInverseAffine().nearEqual(inverse, 1e-2f));
+    REQUIRE((srt.getInverseAffine() * srt).nearEqual(Matrix4::IDENTITY, 1e-4f));
+  }
+  const ScaleRotationTranslationMatrix flat(Vector3(0.0f, 1.0f, 1.0f), Rotator::ZERO,
+                                            Vector3::ZERO);
+  REQUIRE(flat.getInverseAffine() == Matrix4::IDENTITY);
 
-  Vector4 SecRow(ToInverse[1][0], ToInverse[1][1], ToInverse[1][2], ToInverse[1][3]);
-  REQUIRE(Vector4(0.0f, 3.0f, 1.0f, 2.0f) == SecRow);
-
-  Vector4 ThirdRow(ToInverse[2][0], ToInverse[2][1], ToInverse[2][2], ToInverse[2][3]);
-  REQUIRE(ThirdRow == Vector4(2.0f, 3.0f, 1.0f, 0.0f));
-
-  Vector4 FourthRow(ToInverse[3][0], ToInverse[3][1], ToInverse[3][2], ToInverse[3][3]);
-  REQUIRE(FourthRow == Vector4(1.0f, 0.0f, 2.0f, 1.0f));
-
+  // Transforms.
   const TranslationMatrix T(Vector3(10.0f, 2.0f, 1.0f));
-  Vector4 newPos = T.transformPosition(Vector3(1.8f, 52.f, 26.6f));
-  REQUIRE(newPos == Vector4(11.8f, 54.f, 27.6f, 1.0f));
-
-  /************************************************************************/
-  /*
-   * Matrix inheritance.
-   */
-  /************************************************************************/
+  REQUIRE(T.transformPosition(Vector3(1.8f, 52.f, 26.6f)) == Vector4(11.8f, 54.f, 27.6f, 1.0f));
+  REQUIRE(T.transformVector(Vector3(1.8f, 52.f, 26.6f)) == Vector4(1.8f, 52.f, 26.6f, 0.0f));
+  REQUIRE(A.transformVector4(Vector4(1.0f, 2.0f, 3.0f, 4.0f)) ==
+          Vector4(90.0f, 100.0f, 110.0f, 120.0f));
 
   REQUIRE(sizeof(TranslationMatrix) == 16 * 4);
-
   const TranslationMatrix PositionMat(Vector3(2.0f, 3.0f, 150.0f));
-  // Use operator[] for row access instead of FourthRow
-  Vector4 posMatRow3(PositionMat[3][0], PositionMat[3][1], PositionMat[3][2],
-                     PositionMat[3][3]);
-  REQUIRE(Vector4(2.0f, 3.0f, 150.0f, 1.0f) == posMatRow3);
+  REQUIRE(Vector4(PositionMat.getRow(3)) == Vector4(2.0f, 3.0f, 150.0f, 1.0f));
 
-  Rotator Rotator4Matrix(90.f, 180.f, 90.f);
-  const RotationTranslationMatrix RotTransMatrix(Rotator4Matrix, Vector3::UNIT);
+  // X forward, Y right, Z up: positive pitch turns forward up, positive yaw turns it right,
+  // positive roll turns right down.
+  const float c30 = Math::cos(Degree(30.0f));
+  const float s30 = Math::sin(Degree(30.0f));
+  REQUIRE(Vector3(RotationMatrix(Rotator(30.0f, 0.0f, 0.0f)).transformVector(Vector3::FORWARD))
+              .nearEqual(Vector3(c30, 0.0f, s30), 1e-6f));
+  REQUIRE(Vector3(RotationMatrix(Rotator(0.0f, 30.0f, 0.0f)).transformVector(Vector3::FORWARD))
+              .nearEqual(Vector3(c30, s30, 0.0f), 1e-6f));
+  REQUIRE(Vector3(RotationMatrix(Rotator(0.0f, 0.0f, 30.0f)).transformVector(Vector3::RIGHT))
+              .nearEqual(Vector3(0.0f, c30, -s30), 1e-6f));
 
-  float SP = Math::sin(Rotator4Matrix.pitch);
-  float CP = Math::cos(Rotator4Matrix.pitch);
+  for (const Rotator& rotator : kTestRotators) {
+    const RotationMatrix pure(rotator);
+    REQUIRE((pure * pure.getTransposed()).nearEqual(Matrix4::IDENTITY, 1e-5f));
+    REQUIRE(pure.getDeterminant() == Approx(1.0f));
+    REQUIRE(Vector4(pure.getRow(3)) == Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+    REQUIRE(RotationMatrix(pure.rotator()).nearEqual(pure, 1e-4f));
+    REQUIRE(isSameRotation(pure, pure.toQuaternion()));
 
-  float SY = Math::sin(Rotator4Matrix.yaw);
-  float CY = Math::cos(Rotator4Matrix.yaw);
+    const RotationTranslationMatrix moved(rotator, Vector3(1.0f, 2.0f, 3.0f));
+    REQUIRE(moved == pure * TranslationMatrix(Vector3(1.0f, 2.0f, 3.0f)));
+  }
+  REQUIRE(RotationMatrix(Rotator(30.0f, 0.0f, 0.0f))
+              .rotator()
+              .nearEqual(Rotator(30.0f, 0.0f, 0.0f), 1e-3f));
+  REQUIRE(RotationMatrix(Rotator(20.0f, 40.0f, 60.0f))
+              .rotator()
+              .nearEqual(Rotator(20.0f, 40.0f, 60.0f), 1e-3f));
 
-  float SR = Math::sin(Rotator4Matrix.roll);
-  float CR = Math::cos(Rotator4Matrix.roll);
-
-  // Create Vector4 from individual matrix elements instead of using FirstRow, etc.
-  Vector4 rtmRow0(RotTransMatrix[0][0], RotTransMatrix[0][1], RotTransMatrix[0][2],
-                  RotTransMatrix[0][3]);
-  REQUIRE(Vector4(CP * CY, CP * SY, SP, 0.0f) == rtmRow0);
-
-  Vector4 rtmRow1(RotTransMatrix[1][0], RotTransMatrix[1][1], RotTransMatrix[1][2],
-                  RotTransMatrix[1][3]);
-  REQUIRE(Vector4(SR * SP * CY - CR * SY, SR * SP * SY + CR * CY, -SR * CP, 0.0f) == rtmRow1);
-
-  Vector4 rtmRow2(RotTransMatrix[2][0], RotTransMatrix[2][1], RotTransMatrix[2][2],
-                  RotTransMatrix[2][3]);
-  REQUIRE(Vector4(-(CR * SP * CY + SR * SY), CY * SR - CR * SP * SY, CR * CP, 0.0f) ==
-          rtmRow2);
-
-  Vector4 rtmRow3(RotTransMatrix[3][0], RotTransMatrix[3][1], RotTransMatrix[3][2],
-                  RotTransMatrix[3][3]);
-  REQUIRE(Vector4(1.0f, 1.0f, 1.0f, 1.0f) == rtmRow3);
-
-  RotationMatrix RM(Rotator4Matrix);
-  Vector4 rmRow0(RM[0][0], RM[0][1], RM[0][2], RM[0][3]);
-  REQUIRE(Vector4(CP * CY, CP * SY, SP, 0.0f) == rmRow0);
-
-  Vector4 rmRow1(RM[1][0], RM[1][1], RM[1][2], RM[1][3]);
-  REQUIRE(Vector4(SR * SP * CY - CR * SY, SR * SP * SY + CR * CY, -SR * CP, 0.0f) == rmRow1);
-
-  Vector4 rmRow2(RM[2][0], RM[2][1], RM[2][2], RM[2][3]);
-  REQUIRE(Vector4(-(CR * SP * CY + SR * SY), CY * SR - CR * SP * SY, CR * CP, 0.0f) == rmRow2);
-
-  Vector4 rmRow3(RM[3][0], RM[3][1], RM[3][2], RM[3][3]);
-  REQUIRE(Vector4(0.0f, 0.0f, 0.0f, 1.0f) == rmRow3);
-
-  ScaleRotationTranslationMatrix SRTM(Vector3(2.f, 2.f, 2.f), Rotator4Matrix, Vector3::ZERO);
-
-  Vector4 srtmRow0(SRTM[0][0], SRTM[0][1], SRTM[0][2], SRTM[0][3]);
-  REQUIRE(Vector4((CP * CY) * 2, (CP * SY) * 2, SP * 2, 0.0f) == srtmRow0);
-
-  Vector4 srtmRow1(SRTM[1][0], SRTM[1][1], SRTM[1][2], SRTM[1][3]);
-  REQUIRE(Vector4((SR * SP * CY - CR * SY) * 2, (SR * SP * SY + CR * CY) * 2, (-SR * CP) * 2,
-                  0.0f) == srtmRow1);
-
-  Vector4 srtmRow2(SRTM[2][0], SRTM[2][1], SRTM[2][2], SRTM[2][3]);
-  REQUIRE(Vector4(-(CR * SP * CY + SR * SY) * 2, (CY * SR - CR * SP * SY) * 2, (CR * CP) * 2,
-                  0.0f) == srtmRow2);
-
-  Vector4 srtmRow3(SRTM[3][0], SRTM[3][1], SRTM[3][2], SRTM[3][3]);
-  REQUIRE(Vector4(0.0f, 0.0f, 0.0f, 1.0f) == srtmRow3);
-
-  /************************************************************************/
-  /*
-   * Quaternion Matrix
-   */
-  /************************************************************************/
-  const Matrix4 M270X90Y(0.0f, 0.0f, 1.0f, 0.0f, -1.0f, -0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
-                         0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-  Quaternion QFromMatrix = M270X90Y.toQuaternion();
-  const Quaternion RIGHT_QUATERNION(0.5f, -0.5f, 0.5f, -0.5f);
-  REQUIRE(QFromMatrix.nearEqual(RIGHT_QUATERNION));
-
-  // Additional tests for the new Matrix4 interface
-
-  // Test at() method
-  Matrix4 TestAt(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f,
-                 13.0f, 14.0f, 15.0f, 16.0f);
-
-  REQUIRE(TestAt.at(0, 0) == 1.0f);
-  REQUIRE(TestAt.at(1, 2) == 7.0f);
-  REQUIRE(TestAt.at(2, 3) == 12.0f);
-  REQUIRE(TestAt.at(3, 1) == 14.0f);
-
-  // Test subscript operator
-  REQUIRE(TestAt[0][0] == 1.0f);
-  REQUIRE(TestAt[1][2] == 7.0f);
-  REQUIRE(TestAt[2][3] == 12.0f);
-  REQUIRE(TestAt[3][1] == 14.0f);
-
-  // Test data() method
-  const float* rawData = TestAt.data();
-  REQUIRE(rawData[0] == 1.0f);
-  REQUIRE(rawData[5] == 6.0f);
-  REQUIRE(rawData[10] == 11.0f);
-  REQUIRE(rawData[15] == 16.0f);
-
-  // Test getRow() method
-  const float* row2 = TestAt.getRow(2);
-  REQUIRE(row2[0] == 9.0f);
-  REQUIRE(row2[1] == 10.0f);
-  REQUIRE(row2[2] == 11.0f);
-  REQUIRE(row2[3] == 12.0f);
+  // Scale, then rotation, then translation.
+  const Vector3 scale(2.0f, 3.0f, 0.5f);
+  const Rotator rotation(20.0f, 40.0f, 60.0f);
+  const Vector3 origin(5.0f, -2.0f, 7.0f);
+  const Matrix4 scaleMatrix(scale.x, 0.0f, 0.0f, 0.0f, 0.0f, scale.y, 0.0f, 0.0f, 0.0f, 0.0f,
+                            scale.z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+  REQUIRE(ScaleRotationTranslationMatrix(scale, rotation, origin)
+              .nearEqual(scaleMatrix * RotationMatrix(rotation) * TranslationMatrix(origin),
+                         1e-5f));
 
   // Test PerspectiveMatrix
   Radian halfFOV(Math::PI / 4.0f); // 45 degrees
@@ -1108,7 +1084,6 @@ TEST_CASE("chUtilities - Matrix4") {
 TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(sizeof(Quaternion) == 4 * 4);
 
-  // Test default constructor
   Quaternion quaternionDefault;
   REQUIRE(quaternionDefault.x == 0.0f);
   REQUIRE(quaternionDefault.y == 0.0f);
@@ -1116,94 +1091,76 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(quaternionDefault.w == 1.0f);
   REQUIRE(quaternionDefault == Quaternion::IDENTITY);
 
-  // Test basic quaternion values for common rotations
-  const Quaternion RealQuat90Pitch(0.0f, 0.707106769f, 0.0f, 0.707106769f);
-  const Quaternion RealQuat90Yaw(0.0f, 0.0f, 0.707106769f, 0.707106769f);
-  const Quaternion RealQuat90Roll(0.707106769f, 0.0f, 0.0f, 0.707106769f);
+  // Positive pitch turns forward up, positive yaw turns it right, positive roll turns
+  // right down, the same as RotationMatrix.
+  const Quaternion quatPitch90(Rotator(90.0f, 0.0f, 0.0f));
+  const Quaternion quatYaw90(Rotator(0.0f, 90.0f, 0.0f));
+  const Quaternion quatRoll90(Rotator(0.0f, 0.0f, 90.0f));
+  REQUIRE(quatPitch90.rotateVector(Vector3::FORWARD).nearEqual(Vector3::UP, 1e-5f));
+  REQUIRE(quatYaw90.rotateVector(Vector3::FORWARD).nearEqual(Vector3::RIGHT, 1e-5f));
+  REQUIRE(quatRoll90.rotateVector(Vector3::RIGHT).nearEqual(Vector3::DOWN, 1e-5f));
+  REQUIRE(quatPitch90.nearEqual(Quaternion(0.0f, -0.707106769f, 0.0f, 0.707106769f), 1e-6f));
+  REQUIRE(quatYaw90.nearEqual(Quaternion(0.0f, 0.0f, 0.707106769f, 0.707106769f), 1e-6f));
+  REQUIRE(quatRoll90.nearEqual(Quaternion(-0.707106769f, 0.0f, 0.0f, 0.707106769f), 1e-6f));
+  REQUIRE(Rotator(20.0f, 40.0f, 60.0f).toQuaternion() ==
+          Quaternion(Rotator(20.0f, 40.0f, 60.0f)));
 
-  REQUIRE_FALSE(quaternionDefault == RealQuat90Roll);
+  REQUIRE(Quaternion(Rotator(45.0f, 45.0f, 0.0f))
+              .rotateVector(Vector3::FORWARD)
+              .nearEqual(Vector3(0.5f, 0.5f, 0.707106769f), 1e-5f));
 
-  // Test constructor from Rotator
-  Rotator rotPitch90(90.0f, 0.0f, 0.0f);
-  Rotator rotYaw90(0.0f, 90.0f, 0.0f);
-  const Rotator rotRoll90(0.0f, 0.0f, 90.0f);
+  for (const Rotator& rotator : kTestRotators) {
+    const RotationMatrix matrix(rotator);
+    const Quaternion fromRotator(rotator);
+    REQUIRE(isSameRotation(matrix, fromRotator));
+    REQUIRE(isSameRotation(matrix, Quaternion(static_cast<const Matrix4&>(matrix))));
 
-  const Quaternion quatYaw90(rotYaw90);
-  const Quaternion quatRoll90(rotRoll90);
-  const Quaternion quatPitch90(rotPitch90);
+    // Euler angles have more than one answer for the same rotation, so the round trip
+    // compares rotations, not angles.
+    REQUIRE(RotationMatrix(fromRotator.toRotator()).nearEqual(matrix, 1e-4f));
+  }
 
-  REQUIRE(quatRoll90 == RealQuat90Roll);
-  REQUIRE(quatYaw90 == RealQuat90Yaw);
-  REQUIRE(quatPitch90 == RealQuat90Pitch);
+  // At pitch +-90 only yaw minus roll can be recovered, but the rotation must match.
+  for (const Rotator& rotator : {Rotator(90.0f, 30.0f, 10.0f), Rotator(-90.0f, 30.0f, 10.0f)}) {
+    const Rotator back = Quaternion(rotator).toRotator();
+    REQUIRE(RotationMatrix(back).nearEqual(RotationMatrix(rotator), 1e-3f));
+  }
 
-  // Test toRotator method
-  Rotator RotFromQuat90Roll = quatRoll90.toRotator();
-  Rotator RotFromQuat90Yaw = quatYaw90.toRotator();
-  Rotator RotFromQuat90Pitch = quatPitch90.toRotator();
+  // Axis-angle follows the right-hand formula, so +90 around the right axis turns forward
+  // down, which is pitch -90.
+  const Quaternion axisAngleQuat(Vector3::RIGHT, Degree(90.0f));
+  REQUIRE(axisAngleQuat.rotateVector(Vector3::FORWARD).nearEqual(Vector3::DOWN, 1e-5f));
+  REQUIRE(axisAngleQuat.isRotationEqual(Quaternion(Rotator(-90.0f, 0.0f, 0.0f)), 1e-6f));
 
-  REQUIRE(RotFromQuat90Roll.nearEqual(rotRoll90));
-  REQUIRE(RotFromQuat90Yaw.nearEqual(rotYaw90));
-  REQUIRE(RotFromQuat90Pitch.nearEqual(rotPitch90, 0.02f));
+  Quaternion conjugated = quatYaw90;
+  conjugated.conjugate();
+  REQUIRE(conjugated.nearEqual(quatYaw90.getConjugated()));
+  REQUIRE(conjugated.nearEqual(quatYaw90.getInverse(), 1e-6f));
 
-  // Test more complex rotations
-  const Rotator RotatorXY90(90.0f, 90.0f, 0.0f);
-  Quaternion QXY90(RotatorXY90);
-  const Quaternion QRot90XYHardCoded(-0.5f, 0.5f, 0.5f, 0.5f);
-  REQUIRE(QXY90.nearEqual(QRot90XYHardCoded));
+  Quaternion nonUnit(1.0f, 2.0f, 3.0f, 4.0f);
+  const Quaternion normalized = nonUnit.getNormalized();
+  nonUnit.normalize();
+  REQUIRE(nonUnit.nearEqual(normalized));
+  REQUIRE(normalized.length() == Approx(1.0f));
 
-  const Rotator RotatorX270Y90(35.0f, 45.0f, 0.0f);
-  Quaternion QX270Y90(RotatorX270Y90);
-  const Quaternion QRotX270Y90HardCoded(-0.115075134f, 0.277815908f, 0.364971697f,
-                                        0.881119549f);
-  REQUIRE(QX270Y90.nearEqual(QRotX270Y90HardCoded));
-
-  const Rotator TestRotator(65.0f, 33.0f, 20.0f);
-  Quaternion Q65P33Y120R(TestRotator);
-  const Quaternion QRotHD6533120(-0.0098606f, 0.5489418f, 0.1464381f, 0.8228739f);
-  REQUIRE(Q65P33Y120R.nearEqual(QRotHD6533120));
-
-  // Test conjugate methods
-  QXY90.conjugate();
-  Quaternion QConjugated = QRot90XYHardCoded.getConjugated();
-  REQUIRE(QXY90.nearEqual(QConjugated));
-
-  // Test normalize methods
-  QX270Y90.normalize();
-  Quaternion QNormalized = QRotX270Y90HardCoded.getNormalized();
-  REQUIRE(QX270Y90.nearEqual(QNormalized));
-
-  // Test NaN handling
+  // Debug builds turn a NaN quaternion back into IDENTITY.
   Quaternion Qnan((float)NAN, 0.0f, 0.0f, (float)NAN);
-  // REQUIRE(Qnan.containsNaN()); //Quaternion fixes itself when it is in debug mode.
 
-  // Test rotateVector method
   const Vector3 Right = quatYaw90.rotateVector(Vector3::FORWARD);
-  REQUIRE(Right.nearEqual(Vector3::RIGHT, Math::SMALL_NUMBER));
-
   const Vector3 Backwards = quatYaw90.rotateVector(Right);
   REQUIRE(Backwards.nearEqual(-Vector3::FORWARD, Math::KINDA_SMALL_NUMBER));
 
-  Quaternion Q45PY(Rotator(45.0f, 45.0f, 0.0f));
-  const Vector3 VMiddle(.5f, .5f, -0.707106829f);
-  Vector3 TestMiddle = Q45PY.rotateVector(Vector3::FORWARD);
-  REQUIRE(TestMiddle.nearEqual(VMiddle));
-
-  // New tests for additional methods in refactored Quaternion class
-
-  // Test operator[]
   Quaternion testQuat(1.0f, 2.0f, 3.0f, 4.0f);
   REQUIRE(testQuat[0] == 1.0f);
   REQUIRE(testQuat[1] == 2.0f);
   REQUIRE(testQuat[2] == 3.0f);
   REQUIRE(testQuat[3] == 4.0f);
 
-  // Test mutable operator[]
   testQuat[0] = 5.0f;
   testQuat[1] = 6.0f;
   REQUIRE(testQuat.x == 5.0f);
   REQUIRE(testQuat.y == 6.0f);
 
-  // Test squaredLength and length
   Quaternion unitQuat = Quaternion::IDENTITY;
   REQUIRE(unitQuat.squaredLength() == Approx(1.0f));
   REQUIRE(unitQuat.length() == Approx(1.0f));
@@ -1212,7 +1169,6 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(twoQuat.squaredLength() == Approx(4.0f));
   REQUIRE(twoQuat.length() == Approx(2.0f));
 
-  // Test addition
   Quaternion q1(1.0f, 2.0f, 3.0f, 4.0f);
   Quaternion q2(5.0f, 6.0f, 7.0f, 8.0f);
   Quaternion sum = q1 + q2;
@@ -1221,14 +1177,12 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(sum.z == 10.0f);
   REQUIRE(sum.w == 12.0f);
 
-  // Test multiplication by scalar
   Quaternion scaled = q1 * 2.0f;
   REQUIRE(scaled.x == 2.0f);
   REQUIRE(scaled.y == 4.0f);
   REQUIRE(scaled.z == 6.0f);
   REQUIRE(scaled.w == 8.0f);
 
-  // Test in-place multiplication by scalar
   Quaternion inPlace = q1;
   inPlace *= 2.0f;
   REQUIRE(inPlace.x == 2.0f);
@@ -1236,82 +1190,25 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(inPlace.z == 6.0f);
   REQUIRE(inPlace.w == 8.0f);
 
-  Rotator rotRoll45(0.0f, 0.0f, 45.0f);  // Roll 45 degrees
-  Rotator rotPitch45(45.0f, 0.0f, 0.0f); // Pitch 45 degrees
-  Quaternion qRoll45(rotRoll45);
-  Quaternion qPitch45(rotPitch45);
-
+  // A * B applies B first, then A.
+  Quaternion qRoll45(Rotator(0.0f, 0.0f, 45.0f));
+  Quaternion qPitch45(Rotator(45.0f, 0.0f, 0.0f));
   Quaternion combined = qRoll45 * qPitch45;
-
-  // Rotating a vector with the combined quaternion should match
-  // rotating first by pitch then by roll
   Vector3 testVec(1.0f, 0.0f, 0.0f);
-  Vector3 rotatedOnce = qPitch45.rotateVector(testVec);
-  Vector3 rotatedTwice = qRoll45.rotateVector(rotatedOnce);
-  Vector3 rotatedCombined = combined.rotateVector(testVec);
+  Vector3 rotatedTwice = qRoll45.rotateVector(qPitch45.rotateVector(testVec));
+  REQUIRE(rotatedTwice.nearEqual(combined.rotateVector(testVec), Math::SMALL_NUMBER));
 
-  REQUIRE(rotatedTwice.nearEqual(rotatedCombined, Math::SMALL_NUMBER));
-
-  // Test quaternion inversion
   Quaternion arbitrary(0.1f, 0.2f, 0.3f, 0.4f);
-  arbitrary.normalize(); // Make sure it's a unit quaternion
-  Quaternion inverse = arbitrary.getInverse();
-
-  // q * q^-1 should be identity
-  Quaternion shouldBeIdentity = arbitrary * inverse;
+  arbitrary.normalize();
+  Quaternion shouldBeIdentity = arbitrary * arbitrary.getInverse();
   REQUIRE(shouldBeIdentity.nearEqual(Quaternion::IDENTITY, Math::SMALL_NUMBER));
 
-  // Test unrotateVector (rotation by inverse)
   Vector3 originalVec(1.0f, 2.0f, 3.0f);
-  Vector3 rotated = arbitrary.rotateVector(originalVec);
-  Vector3 unrotated = arbitrary.unrotateVector(rotated);
+  Vector3 unrotated = arbitrary.unrotateVector(arbitrary.rotateVector(originalVec));
   REQUIRE(unrotated.nearEqual(originalVec, Math::SMALL_NUMBER));
 
-  // Test from axis-angle constructor
-  Vector3 axis(0.0f, 1.0f, 0.0f); // Y-axis
-  Degree angle(90.0f);
-  Quaternion axisAngleQuat(axis, angle);
-  REQUIRE(axisAngleQuat.nearEqual(RealQuat90Pitch, Math::SMALL_NUMBER));
-
-  // Test from Vector4 constructor
-  Vector4 vec4(0.0f, 0.0f, 0.707106769f, 0.707106769f);
-  Quaternion fromVec4(vec4);
-  REQUIRE(fromVec4.nearEqual(RealQuat90Yaw, Math::SMALL_NUMBER));
-
-  // Test from Matrix4 constructor - create a rotation matrix first
-  // RotationMatrix rotMat(Rotator(0.0f, 90.0f, 0.0f)); // Create a 90-degree Y rotation matrix
-  // Quaternion fromMatrix(rotMat);
-  // REQUIRE(fromMatrix.nearEqual(RealQuat90Yaw, Math::SMALL_NUMBER));
-
-  // // Also test with a different rotation
-  // RotationMatrix rotMatPitch(
-  // Rotator(90.0f, 0.0f, 0.0f)); // Create a 90-degree X rotation matrix
-  // Quaternion fromMatrixPitch(rotMatPitch);
-  // REQUIRE(fromMatrixPitch.nearEqual(RealQuat90Pitch, Math::SMALL_NUMBER));
-
-  // // Test with a combined rotation matrix
-  // RotationMatrix rotMatCombined(Rotator(45.0f, 45.0f, 0.0f));
-  // Quaternion fromMatrixCombined(rotMatCombined);
-  // // Verify by checking that the quaternion produces the same rotations as the matrix
-  // Vector4 rotatedByMatrix = rotMatCombined.transformPosition(Vector3::FORWARD);
-  // Vector3 rotatedByQuaternion = fromMatrixCombined.rotateVector(Vector3::FORWARD);
-  // Vector4 rotatedByQuaternion4(rotatedByQuaternion, 1.0f);
-  // REQUIRE(rotatedByMatrix.nearEqual(rotatedByQuaternion4, Math::SMALL_NUMBER));
-
-  // // Test normalization of very small quaternion
-  // Quaternion tiny(0.00001f, 0.00001f, 0.00001f, 0.00001f);
-  // tiny.normalize();
-  // REQUIRE(tiny == Quaternion::IDENTITY); // Should reset to identity
-
-  // // Test normalization of typical quaternion
-  // Quaternion nonUnit(1.0f, 2.0f, 3.0f, 4.0f);
-  // float length = nonUnit.length();
-  // Quaternion normalized = nonUnit.getNormalized();
-  // REQUIRE(normalized.length() == Approx(1.0f).epsilon(0.00001f));
-  // REQUIRE(normalized.x == Approx(1.0f / length).epsilon(0.00001f));
-  // REQUIRE(normalized.y == Approx(2.0f / length).epsilon(0.00001f));
-  // REQUIRE(normalized.z == Approx(3.0f / length).epsilon(0.00001f));
-  // REQUIRE(normalized.w == Approx(4.0f / length).epsilon(0.00001f));
+  Quaternion fromVec4(Vector4(0.0f, 0.0f, 0.707106769f, 0.707106769f));
+  REQUIRE(fromVec4.nearEqual(quatYaw90, 1e-6f));
 }
 
 /**********************************************************************/

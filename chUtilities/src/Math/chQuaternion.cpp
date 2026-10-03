@@ -9,8 +9,6 @@
 
 #include "chQuaternion.h"
 
-#include <cmath>
-
 #include "chMatrix4.h"
 #include "chRadian.h"
 #include "chRotator.h"
@@ -55,58 +53,33 @@ Quaternion::Quaternion(const Vector4& v4) : x(v4.x), y(v4.y), z(v4.z), w(v4.w) {
  * Convert quaternion to Rotator (Euler angles)
  */
 Rotator
-Quaternion::toRotator() const {
+Quaternion::toRotator() const
+{
   diagnosticCheckNaN();
 
-  // Instead of testing x*y + z*w, let's set up specific tests for each rotation component
+  // Half the sine of the pitch. Close to +-0.5 the nose points straight up or down, where
+  // yaw and roll turn around the same axis and only their difference can be recovered.
+  const float pitchTest = z * x - w * y;
+  const float yawY = 2.0f * (w * z + x * y);
+  const float yawX = 1.0f - 2.0f * (y * y + z * z);
 
-  // For roll detection (around X axis)
-  float rollTest = w*x - y*z;
-  // For pitch detection (around Y axis)
-  float pitchTest = x*z + w*y;
+  const float yaw = Math::atan2(yawY, yawX).valueDegree();
 
-  const float SINGULARITY_THRESHOLD = 0.4999995f;
-  Rotator result;
-
-  // Check for roll singularity
-  if (abs(rollTest) > SINGULARITY_THRESHOLD) {
-    // Roll singularity detected
-    result.roll = 90.0f * (rollTest > 0 ? 1.0f : -1.0f);
-    result.pitch = 0.0f;
-    result.yaw = 0.0f;
-    return result;
+  constexpr float kSingularityThreshold = 0.4999995f;
+  if (pitchTest < -kSingularityThreshold) {
+    const float roll = -yaw - 2.0f * Math::atan2(x, w).valueDegree();
+    return Rotator(-90.0f, yaw, Math::unwindDegrees(roll));
   }
 
-  // Check for pitch singularity
-  if (abs(pitchTest) > SINGULARITY_THRESHOLD) {
-    // Pitch singularity detected
-    result.pitch = 90.0f * (pitchTest > 0 ? 1.0f : -1.0f);
-    result.roll = 0.0f;
-    result.yaw = 0.0f;
-    return result;
+  if (pitchTest > kSingularityThreshold) {
+    const float roll = yaw - 2.0f * Math::atan2(x, w).valueDegree();
+    return Rotator(90.0f, yaw, Math::unwindDegrees(roll));
   }
 
-  // Check for yaw singularity
-  float yawTest = x*y + w*z;
-  if (abs(yawTest) > SINGULARITY_THRESHOLD) {
-    // Yaw singularity detected
-    result.yaw = 90.0f * (yawTest > 0 ? 1.0f : -1.0f);
-    result.roll = 0.0f;
-    result.pitch = 0.0f;
-    return result;
-  }
-
-  // No singularity detected, use standard conversion
-  const float sqx = x * x;
-  const float sqy = y * y;
-  const float sqz = z * z;
-
-  // Regular Euler angle calculation adjusted for your coordinate system
-  result.roll = Math::atan2(2.0f * (w*x - y*z), 1.0f - 2.0f * (sqx + sqy)).valueDegree();
-  result.pitch = Math::asin(2.0f * (x*z + w*y)).valueDegree();
-  result.yaw = Math::atan2(2.0f * (w*z - x*y), 1.0f - 2.0f * (sqy + sqz)).valueDegree();
-
-  return result;
+  const float pitch = Math::asin(2.0f * pitchTest).valueDegree();
+  const float roll =
+      Math::atan2(-2.0f * (w * x + y * z), 1.0f - 2.0f * (x * x + y * y)).valueDegree();
+  return Rotator(pitch, yaw, roll);
 }
 
 /*
@@ -153,70 +126,59 @@ Quaternion::unrotateVector(const Vector3& v) const {
 /*
  * Construct a quaternion from a rotator (Euler angles)
  */
-Quaternion::Quaternion(const Rotator& rotator) {
-  // Convert Euler angles to quaternion following standard algorithm
+Quaternion::Quaternion(const Rotator& rotator)
+{
+  float sp, cp, sy, cy, sr, cr;
+  Math::sin_cos(&sp, &cp, rotator.pitch.valueRadian() * 0.5f);
+  Math::sin_cos(&sy, &cy, rotator.yaw.valueRadian() * 0.5f);
+  Math::sin_cos(&sr, &cr, rotator.roll.valueRadian() * 0.5f);
 
-  // Convert angles to radians and halve them
-  const Radian pitchHalves(rotator.pitch.valueRadian() * 0.5f);
-  const Radian yawHalves(rotator.yaw.valueRadian() * 0.5f);
-  const Radian rollHalves(rotator.roll.valueRadian() * 0.5f);
+  // Same rotation as RotationMatrix(rotator), so both can be mixed freely.
+  x = cr * sp * sy - sr * cp * cy;
+  y = -cr * sp * cy - sr * cp * sy;
+  z = cr * cp * sy - sr * sp * cy;
+  w = cr * cp * cy + sr * sp * sy;
 
-  // Precompute sin/cos values
-  const float SP = Math::sin(pitchHalves);
-  const float CP = Math::cos(pitchHalves);
-
-  const float SY = Math::sin(yawHalves);
-  const float CY = Math::cos(yawHalves);
-
-  const float SR = Math::sin(rollHalves);
-  const float CR = Math::cos(rollHalves);
-
-  // Calculate quaternion components
-  // Using the Euler angles to quaternion formula from:
-  // http://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/
-  w = CY * CP * CR + SY * SP * SR;
-  x = CY * CP * SR - SY * SP * CR;
-  y = SY * CP * SR + CY * SP * CR;
-  z = SY * CP * CR - CY * SP * SR;
-
-  // Verify that the result is valid
   diagnosticCheckNaN();
 }
 
 /*
  * Construct a quaternion from a rotation matrix
  */
-Quaternion::Quaternion(const Matrix4& m) {
+Quaternion::Quaternion(const Matrix4& m)
+{
   const float trace = m[0][0] + m[1][1] + m[2][2];
 
+  // Each branch divides by the largest of w, x, y, z, so the square root never gets a
+  // value close to zero.
   if (trace > 0.0f) {
     const float s = Math::sqrt(trace + 1.0f) * 2.0f;
-    w = 0.25f * s;
     const float invS = 1.0f / s;
+    w = 0.25f * s;
     x = (m[1][2] - m[2][1]) * invS;
     y = (m[2][0] - m[0][2]) * invS;
-    z = (m[0][1] - m[1][0]) * invS;  // (m[1][0] - m[0][1])
+    z = (m[0][1] - m[1][0]) * invS;
   }
   else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
     const float s = Math::sqrt(1.0f + m[0][0] - m[1][1] - m[2][2]) * 2.0f;
-    x = 0.25f * s;
     const float invS = 1.0f / s;
-    w = (m[2][1] - m[1][2]) * invS;
+    w = (m[1][2] - m[2][1]) * invS;
+    x = 0.25f * s;
     y = (m[0][1] + m[1][0]) * invS;
     z = (m[0][2] + m[2][0]) * invS;
   }
   else if (m[1][1] > m[2][2]) {
-    const float s = std::sqrt(1.0f + m[1][1] - m[0][0] - m[2][2]) * 2.0f;
-    y = 0.25f * s;
+    const float s = Math::sqrt(1.0f + m[1][1] - m[0][0] - m[2][2]) * 2.0f;
     const float invS = 1.0f / s;
-    w = (m[0][2] - m[2][0]) * invS;
+    w = (m[2][0] - m[0][2]) * invS;
     x = (m[0][1] + m[1][0]) * invS;
+    y = 0.25f * s;
     z = (m[1][2] + m[2][1]) * invS;
   }
   else {
     const float s = Math::sqrt(1.0f + m[2][2] - m[0][0] - m[1][1]) * 2.0f;
     const float invS = 1.0f / s;
-    w = (m[1][0] - m[0][1]) * invS;
+    w = (m[0][1] - m[1][0]) * invS;
     x = (m[0][2] + m[2][0]) * invS;
     y = (m[1][2] + m[2][1]) * invS;
     z = 0.25f * s;

@@ -234,20 +234,18 @@ class CH_UTILITY_EXPORT Rotator
 
  public:
  /**
-  * @brief Rotation around the right axis (around Y axis), Looking up and down
-  *        (0=Straight Ahead, +Up, -Down)
+  * Rotation around the right axis (Y). Positive turns forward up.
   */
   Degree pitch;
 
  /**
-  * @brief Rotation around the up axis (around Z axis), Running in circles
-  *        0=East, +North, -South.
+  * Rotation around the up axis (Z). Positive turns forward to the right.
   */
   Degree yaw;
 
  /**
-  * @brief Rotation around the forward axis (around X axis), Tilting your head,
-  *        0=Straight, +Clockwise, -CCW.
+  * Rotation around the forward axis (X). Positive turns right down, clockwise when
+  * looking forward.
   */
   Degree roll;
 

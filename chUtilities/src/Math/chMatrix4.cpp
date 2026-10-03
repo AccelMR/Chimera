@@ -3,7 +3,7 @@
  * @file chMatrix4.cpp
  * @author AccelMR
  * @date 2022/02/20
- *   Matrix 4 math file. Here goes all matrix 4 related content.
+ * @brief 4x4 matrix for transforms and projections.
  */
 /************************************************************************/
 
@@ -25,269 +25,241 @@
 
 namespace chEngineSDK {
 
-// Initialize static constants
-const Matrix4 Matrix4::ZERO = Matrix4(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                      0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+namespace {
 
-const Matrix4 Matrix4::IDENTITY = Matrix4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
-                                          0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+Matrix4
+buildPerspective(const Radian& halfFOV, float width, float height, float near,
+                 float far) noexcept
+{
+  const float xScale = 1.0f / Math::tan(halfFOV);
+  const float yScale = xScale * width / height;
+  const float depthScale = far / (far - near);
 
-const Matrix4 Matrix4::UNITY = Matrix4(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                                       1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-
-/*
-*/
-Matrix4::Matrix4(const Vector4& firstRow,
-                const Vector4& secondRow,
-                const Vector4& thirdRow,
-                const Vector4& fourthRow) {
-  m_data[0][0] = firstRow.x;  m_data[0][1] = firstRow.y;  m_data[0][2] = firstRow.z;  m_data[0][3] = firstRow.w;
-  m_data[1][0] = secondRow.x; m_data[1][1] = secondRow.y; m_data[1][2] = secondRow.z; m_data[1][3] = secondRow.w;
-  m_data[2][0] = thirdRow.x;  m_data[2][1] = thirdRow.y;  m_data[2][2] = thirdRow.z;  m_data[2][3] = thirdRow.w;
-  m_data[3][0] = fourthRow.x; m_data[3][1] = fourthRow.y; m_data[3][2] = fourthRow.z; m_data[3][3] = fourthRow.w;
+  return Matrix4(xScale, 0.0f, 0.0f, 0.0f,
+                 0.0f, yScale, 0.0f, 0.0f,
+                 0.0f, 0.0f, depthScale, 1.0f,
+                 0.0f, 0.0f, -near * depthScale, 0.0f);
 }
 
+Matrix4
+buildLookAt(const Vector3& eyePosition, const Vector3& lookAtPosition,
+            const Vector3& upVector) noexcept
+{
+  const Vector3 zAxis = (lookAtPosition - eyePosition).getNormalized();
 
-/*
-*/
-FORCEINLINE
-Matrix4::Matrix4(const Plane& InX,
-                const Plane& InY,
-                const Plane& InZ,
-                const Plane& InW) {
-  m_data[0][0] = InX.x; m_data[0][1] = InX.y; m_data[0][2] = InX.z; m_data[0][3] = InX.w;
-  m_data[1][0] = InY.x; m_data[1][1] = InY.y; m_data[1][2] = InY.z; m_data[1][3] = InY.w;
-  m_data[2][0] = InZ.x; m_data[2][1] = InZ.y; m_data[2][2] = InZ.z; m_data[2][3] = InZ.w;
-  m_data[3][0] = InW.x; m_data[3][1] = InW.y; m_data[3][2] = InW.z; m_data[3][3] = InW.w;
+  const float upDot = Math::abs(upVector.dot(zAxis));
+  Vector3 effectiveUp = upVector;
+
+  if (upDot > (1.0f - Math::SMALL_NUMBER)) {
+    const float upForwardDot = Math::abs(upVector.dot(Vector3::FORWARD));
+    const float upRightDot = Math::abs(upVector.dot(Vector3::RIGHT));
+    if (upForwardDot < upRightDot) {
+      effectiveUp = Vector3::FORWARD;
+    }
+    else {
+      effectiveUp = Vector3::RIGHT;
+    }
+  }
+
+  const Vector3 xAxis = zAxis.cross(effectiveUp).getNormalized();
+  const Vector3 yAxis = zAxis.cross(xAxis);
+
+  return Matrix4(xAxis.x, yAxis.x, zAxis.x, 0.0f,
+                 xAxis.y, yAxis.y, zAxis.y, 0.0f,
+                 xAxis.z, yAxis.z, zAxis.z, 0.0f,
+                 -eyePosition.dot(xAxis), -eyePosition.dot(yAxis), -eyePosition.dot(zAxis),
+                 1.0f);
 }
 
+} // namespace
 
 /*
- * Extracts a rotation matrix as a Rotator (Euler angles)
+ */
+Matrix4::Matrix4(const Plane& row0, const Plane& row1, const Plane& row2,
+                 const Plane& row3) noexcept
+ : m_data{{row0.x, row0.y, row0.z, row0.w},
+          {row1.x, row1.y, row1.z, row1.w},
+          {row2.x, row2.y, row2.z, row2.w},
+          {row3.x, row3.y, row3.z, row3.w}}
+{}
+
+/*
+ */
+float
+Matrix4::getDeterminant() const noexcept
+{
+  const auto& m = m_data;
+
+  const float top01 = m[0][0] * m[1][1] - m[1][0] * m[0][1];
+  const float top02 = m[0][0] * m[1][2] - m[1][0] * m[0][2];
+  const float top03 = m[0][0] * m[1][3] - m[1][0] * m[0][3];
+  const float top12 = m[0][1] * m[1][2] - m[1][1] * m[0][2];
+  const float top13 = m[0][1] * m[1][3] - m[1][1] * m[0][3];
+  const float top23 = m[0][2] * m[1][3] - m[1][2] * m[0][3];
+
+  const float bottom01 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
+  const float bottom02 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
+  const float bottom03 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
+  const float bottom12 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
+  const float bottom13 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
+  const float bottom23 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
+
+  return top01 * bottom23 - top02 * bottom13 + top03 * bottom12 + top12 * bottom03 -
+         top13 * bottom02 + top23 * bottom01;
+}
+
+/*
+ */
+Matrix4
+Matrix4::getInverse() const noexcept
+{
+  const auto& m = m_data;
+
+  // The 2x2 determinants of the top and bottom row pairs are shared by every cofactor,
+  // so they are computed once.
+  const float top01 = m[0][0] * m[1][1] - m[1][0] * m[0][1];
+  const float top02 = m[0][0] * m[1][2] - m[1][0] * m[0][2];
+  const float top03 = m[0][0] * m[1][3] - m[1][0] * m[0][3];
+  const float top12 = m[0][1] * m[1][2] - m[1][1] * m[0][2];
+  const float top13 = m[0][1] * m[1][3] - m[1][1] * m[0][3];
+  const float top23 = m[0][2] * m[1][3] - m[1][2] * m[0][3];
+
+  const float bottom01 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
+  const float bottom02 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
+  const float bottom03 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
+  const float bottom12 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
+  const float bottom13 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
+  const float bottom23 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
+
+  const float determinant = top01 * bottom23 - top02 * bottom13 + top03 * bottom12 +
+                            top12 * bottom03 - top13 * bottom02 + top23 * bottom01;
+
+  // A zero or denormal determinant gives an infinite scale, which would fill the result
+  // with infinities and NaN.
+  const float invDet = 1.0f / determinant;
+  if (!Math::isFinite(invDet)) {
+    return IDENTITY;
+  }
+
+  return Matrix4(
+      ( m[1][1] * bottom23 - m[1][2] * bottom13 + m[1][3] * bottom12) * invDet,
+      (-m[0][1] * bottom23 + m[0][2] * bottom13 - m[0][3] * bottom12) * invDet,
+      ( m[3][1] * top23 - m[3][2] * top13 + m[3][3] * top12) * invDet,
+      (-m[2][1] * top23 + m[2][2] * top13 - m[2][3] * top12) * invDet,
+
+      (-m[1][0] * bottom23 + m[1][2] * bottom03 - m[1][3] * bottom02) * invDet,
+      ( m[0][0] * bottom23 - m[0][2] * bottom03 + m[0][3] * bottom02) * invDet,
+      (-m[3][0] * top23 + m[3][2] * top03 - m[3][3] * top02) * invDet,
+      ( m[2][0] * top23 - m[2][2] * top03 + m[2][3] * top02) * invDet,
+
+      ( m[1][0] * bottom13 - m[1][1] * bottom03 + m[1][3] * bottom01) * invDet,
+      (-m[0][0] * bottom13 + m[0][1] * bottom03 - m[0][3] * bottom01) * invDet,
+      ( m[3][0] * top13 - m[3][1] * top03 + m[3][3] * top01) * invDet,
+      (-m[2][0] * top13 + m[2][1] * top03 - m[2][3] * top01) * invDet,
+
+      (-m[1][0] * bottom12 + m[1][1] * bottom02 - m[1][2] * bottom01) * invDet,
+      ( m[0][0] * bottom12 - m[0][1] * bottom02 + m[0][2] * bottom01) * invDet,
+      (-m[3][0] * top12 + m[3][1] * top02 - m[3][2] * top01) * invDet,
+      ( m[2][0] * top12 - m[2][1] * top02 + m[2][2] * top01) * invDet);
+}
+
+/*
+ */
+Matrix4
+Matrix4::getInverseAffine() const noexcept
+{
+  const auto& m = m_data;
+  CH_ASSERT(m[0][3] == 0.0f && m[1][3] == 0.0f && m[2][3] == 0.0f && m[3][3] == 1.0f);
+
+  const float cofactor00 = m[1][1] * m[2][2] - m[1][2] * m[2][1];
+  const float cofactor01 = m[0][2] * m[2][1] - m[0][1] * m[2][2];
+  const float cofactor02 = m[0][1] * m[1][2] - m[0][2] * m[1][1];
+
+  const float determinant = m[0][0] * cofactor00 + m[1][0] * cofactor01 +
+                            m[2][0] * cofactor02;
+  const float invDet = 1.0f / determinant;
+  if (!Math::isFinite(invDet)) {
+    return IDENTITY;
+  }
+
+  const float r00 = cofactor00 * invDet;
+  const float r01 = cofactor01 * invDet;
+  const float r02 = cofactor02 * invDet;
+  const float r10 = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * invDet;
+  const float r11 = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invDet;
+  const float r12 = (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * invDet;
+  const float r20 = (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * invDet;
+  const float r21 = (m[0][1] * m[2][0] - m[0][0] * m[2][1]) * invDet;
+  const float r22 = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * invDet;
+
+  const float tx = m[3][0];
+  const float ty = m[3][1];
+  const float tz = m[3][2];
+
+  return Matrix4(r00, r01, r02, 0.0f,
+                 r10, r11, r12, 0.0f,
+                 r20, r21, r22, 0.0f,
+                 -(tx * r00 + ty * r10 + tz * r20),
+                 -(tx * r01 + ty * r11 + tz * r21),
+                 -(tx * r02 + ty * r12 + tz * r22),
+                 1.0f);
+}
+
+/*
  */
 Rotator
-Matrix4::rotator() const {
-  // Extract the rotation axes
-  const Vector3 XAxis(m_data[0][0], m_data[0][1], m_data[0][2]);
-  const Vector3 YAxis(m_data[1][0], m_data[1][1], m_data[1][2]);
-  const Vector3 ZAxis(m_data[2][0], m_data[2][1], m_data[2][2]);
+Matrix4::rotator() const noexcept
+{
+  const Vector3 forward(m_data[0][0], m_data[0][1], m_data[0][2]);
+  const Vector3 right(m_data[1][0], m_data[1][1], m_data[1][2]);
+  const Vector3 up(m_data[2][0], m_data[2][1], m_data[2][2]);
 
-  // Calculate pitch from the x-axis (elevation angle)
-  Rotator tmpRotator =
-      Rotator(Math::atan2(XAxis.z, Math::sqrt(Math::sqrt(XAxis.x) + Math::sqrt(XAxis.y)))
-                  .valueDegree(),
-              Math::atan2(XAxis.y, XAxis.x).valueDegree(), 0);
+  Rotator result(
+      Math::atan2(forward.z, Math::sqrt(forward.x * forward.x + forward.y * forward.y))
+          .valueDegree(),
+      Math::atan2(forward.y, forward.x).valueDegree(),
+      0.0f);
 
-  // Calculate roll using the temporary rotator to get a reference frame
-  RotationMatrix RM(tmpRotator);
-  const Vector3 SYAxis(RM.m_data[1][0], RM.m_data[1][1], RM.m_data[1][2]);
-  tmpRotator.roll = Math::atan2(ZAxis.dot(SYAxis), YAxis.dot(SYAxis)).valueDegree();
+  // Pitch and yaw already place the forward axis; roll is how far this matrix's right
+  // axis is turned from the right axis of that rotation without roll.
+  const RotationMatrix noRoll(result);
+  const Vector3 noRollRight(noRoll[1][0], noRoll[1][1], noRoll[1][2]);
+  result.roll = Math::atan2(up.dot(noRollRight), right.dot(noRollRight)).valueDegree();
 
-  // Check for NaN values
-  tmpRotator.diagnosticNaN();
-  return tmpRotator;
+  return result;
 }
 
 /*
- * Converts this matrix to a quaternion
  */
 Quaternion
-Matrix4::toQuaternion() const {
-  // Create quaternion from this matrix
-  // This assumes the matrix contains a pure rotation part
-  Quaternion Result(*this);
-  return Result;
-}
-
-/*
- * Transforms a position vector by this matrix
- */
-Vector4
-Matrix4::transformPosition(const Vector3& v) const {
-  // Transform position vectors with homogeneous coordinate w=1.0
-  return transformVector4(Vector4(v.x, v.y, v.z, 1.0f));
-}
-
-/*
- * Transforms a direction vector by this matrix
- */
-Vector4
-Matrix4::transformVector(const Vector3& v) const {
-  // Transform direction vectors with homogeneous coordinate w=0.0
-  return transformVector4(Vector4(v.x, v.y, v.z, 0.0f));
-}
-
-/*
-*/
-Matrix4
-Matrix4::getInverse()
+Matrix4::toQuaternion() const noexcept
 {
-  Matrix4 Result;
-  const float Det = getDeterminant();
-
-  if (Math::abs(Det) < Math::SMALL_NUMBER) {
-    Result = Matrix4::IDENTITY;
-    // TODO: Log a warning about matrix being non-invertible
-  }
-  else {
-    const float InvDet = 1.0f / Det;
-
-    // Calculate cofactors and adjugate matrix
-    // This approach is clearer and less prone to errors than the previous implementation
-
-    // First row of cofactors
-    Result.m_data[0][0] = InvDet * (
-      m_data[1][1] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-      m_data[1][2] * (m_data[2][1] * m_data[3][3] - m_data[2][3] * m_data[3][1]) +
-      m_data[1][3] * (m_data[2][1] * m_data[3][2] - m_data[2][2] * m_data[3][1])
-    );
-
-    Result.m_data[0][1] = -InvDet * (
-      m_data[0][1] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-      m_data[0][2] * (m_data[2][1] * m_data[3][3] - m_data[2][3] * m_data[3][1]) +
-      m_data[0][3] * (m_data[2][1] * m_data[3][2] - m_data[2][2] * m_data[3][1])
-    );
-
-    Result.m_data[0][2] = InvDet * (
-      m_data[0][1] * (m_data[1][2] * m_data[3][3] - m_data[1][3] * m_data[3][2]) -
-      m_data[0][2] * (m_data[1][1] * m_data[3][3] - m_data[1][3] * m_data[3][1]) +
-      m_data[0][3] * (m_data[1][1] * m_data[3][2] - m_data[1][2] * m_data[3][1])
-    );
-
-    Result.m_data[0][3] = -InvDet * (
-      m_data[0][1] * (m_data[1][2] * m_data[2][3] - m_data[1][3] * m_data[2][2]) -
-      m_data[0][2] * (m_data[1][1] * m_data[2][3] - m_data[1][3] * m_data[2][1]) +
-      m_data[0][3] * (m_data[1][1] * m_data[2][2] - m_data[1][2] * m_data[2][1])
-    );
-
-    // Second row of cofactors
-    Result.m_data[1][0] = -InvDet * (
-      m_data[1][0] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-      m_data[1][2] * (m_data[2][0] * m_data[3][3] - m_data[2][3] * m_data[3][0]) +
-      m_data[1][3] * (m_data[2][0] * m_data[3][2] - m_data[2][2] * m_data[3][0])
-    );
-
-    Result.m_data[1][1] = InvDet * (
-      m_data[0][0] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-      m_data[0][2] * (m_data[2][0] * m_data[3][3] - m_data[2][3] * m_data[3][0]) +
-      m_data[0][3] * (m_data[2][0] * m_data[3][2] - m_data[2][2] * m_data[3][0])
-    );
-
-    Result.m_data[1][2] = -InvDet * (
-      m_data[0][0] * (m_data[1][2] * m_data[3][3] - m_data[1][3] * m_data[3][2]) -
-      m_data[0][2] * (m_data[1][0] * m_data[3][3] - m_data[1][3] * m_data[3][0]) +
-      m_data[0][3] * (m_data[1][0] * m_data[3][2] - m_data[1][2] * m_data[3][0])
-    );
-
-    Result.m_data[1][3] = InvDet * (
-      m_data[0][0] * (m_data[1][2] * m_data[2][3] - m_data[1][3] * m_data[2][2]) -
-      m_data[0][2] * (m_data[1][0] * m_data[2][3] - m_data[1][3] * m_data[2][0]) +
-      m_data[0][3] * (m_data[1][0] * m_data[2][2] - m_data[1][2] * m_data[2][0])
-    );
-
-    // Third row of cofactors
-    Result.m_data[2][0] = InvDet * (
-      m_data[1][0] * (m_data[2][1] * m_data[3][3] - m_data[2][3] * m_data[3][1]) -
-      m_data[1][1] * (m_data[2][0] * m_data[3][3] - m_data[2][3] * m_data[3][0]) +
-      m_data[1][3] * (m_data[2][0] * m_data[3][1] - m_data[2][1] * m_data[3][0])
-    );
-
-    Result.m_data[2][1] = -InvDet * (
-      m_data[0][0] * (m_data[2][1] * m_data[3][3] - m_data[2][3] * m_data[3][1]) -
-      m_data[0][1] * (m_data[2][0] * m_data[3][3] - m_data[2][3] * m_data[3][0]) +
-      m_data[0][3] * (m_data[2][0] * m_data[3][1] - m_data[2][1] * m_data[3][0])
-    );
-
-    Result.m_data[2][2] = InvDet * (
-      m_data[0][0] * (m_data[1][1] * m_data[3][3] - m_data[1][3] * m_data[3][1]) -
-      m_data[0][1] * (m_data[1][0] * m_data[3][3] - m_data[1][3] * m_data[3][0]) +
-      m_data[0][3] * (m_data[1][0] * m_data[3][1] - m_data[1][1] * m_data[3][0])
-    );
-
-    Result.m_data[2][3] = -InvDet * (
-      m_data[0][0] * (m_data[1][1] * m_data[2][3] - m_data[1][3] * m_data[2][1]) -
-      m_data[0][1] * (m_data[1][0] * m_data[2][3] - m_data[1][3] * m_data[2][0]) +
-      m_data[0][3] * (m_data[1][0] * m_data[2][1] - m_data[1][1] * m_data[2][0])
-    );
-
-    // Fourth row of cofactors
-    Result.m_data[3][0] = -InvDet * (
-      m_data[1][0] * (m_data[2][1] * m_data[3][2] - m_data[2][2] * m_data[3][1]) -
-      m_data[1][1] * (m_data[2][0] * m_data[3][2] - m_data[2][2] * m_data[3][0]) +
-      m_data[1][2] * (m_data[2][0] * m_data[3][1] - m_data[2][1] * m_data[3][0])
-    );
-
-    Result.m_data[3][1] = InvDet * (
-      m_data[0][0] * (m_data[2][1] * m_data[3][2] - m_data[2][2] * m_data[3][1]) -
-      m_data[0][1] * (m_data[2][0] * m_data[3][2] - m_data[2][2] * m_data[3][0]) +
-      m_data[0][2] * (m_data[2][0] * m_data[3][1] - m_data[2][1] * m_data[3][0])
-    );
-
-    Result.m_data[3][2] = -InvDet * (
-      m_data[0][0] * (m_data[1][1] * m_data[3][2] - m_data[1][2] * m_data[3][1]) -
-      m_data[0][1] * (m_data[1][0] * m_data[3][2] - m_data[1][2] * m_data[3][0]) +
-      m_data[0][2] * (m_data[1][0] * m_data[3][1] - m_data[1][1] * m_data[3][0])
-    );
-
-    Result.m_data[3][3] = InvDet * (
-      m_data[0][0] * (m_data[1][1] * m_data[2][2] - m_data[1][2] * m_data[2][1]) -
-      m_data[0][1] * (m_data[1][0] * m_data[2][2] - m_data[1][2] * m_data[2][0]) +
-      m_data[0][2] * (m_data[1][0] * m_data[2][1] - m_data[1][1] * m_data[2][0])
-    );
-  }
-
-  return Result;
+  return Quaternion(*this);
 }
 
 /*
-*/
-Vector4
-Matrix4::transformVector4(const Vector4& p) const {
-  Vector4 Result;
-  Result.x = m_data[0][0] * p.x + m_data[1][0] * p.y + m_data[2][0] * p.z + m_data[3][0] * p.w;
-  Result.y = m_data[0][1] * p.x + m_data[1][1] * p.y + m_data[2][1] * p.z + m_data[3][1] * p.w;
-  Result.z = m_data[0][2] * p.x + m_data[1][2] * p.y + m_data[2][2] * p.z + m_data[3][2] * p.w;
-  Result.w = m_data[0][3] * p.x + m_data[1][3] * p.y + m_data[2][3] * p.z + m_data[3][3] * p.w;
-  return Result;
-}
-
-} // namespace chEngineSDK
-
-
-
-/*Helper matrixes*/
-
-namespace chEngineSDK {
-
-/*
- * Implementation of RotationTranslationMatrix constructor
  */
 RotationTranslationMatrix::RotationTranslationMatrix(const Rotator& rotator,
-                                                     const Vector3& origin)
- : Matrix4() {
-  const float SP = Math::sin(rotator.pitch);
-  const float CP = Math::cos(rotator.pitch);
+                                                     const Vector3& origin) noexcept
+{
+  float sp, cp, sy, cy, sr, cr;
+  Math::sin_cos(&sp, &cp, rotator.pitch.valueRadian());
+  Math::sin_cos(&sy, &cy, rotator.yaw.valueRadian());
+  Math::sin_cos(&sr, &cr, rotator.roll.valueRadian());
 
-  const float SY = Math::sin(rotator.yaw);
-  const float CY = Math::cos(rotator.yaw);
-
-  const float SR = Math::sin(rotator.roll);
-  const float CR = Math::cos(rotator.roll);
-
-
-  m_data[0][0] = CP * CY;    // cos(0) * cos(90) = 1 * 0 = 0 ✔
-  m_data[0][1] = CP * SY;    // cos(0) * sin(90) = 1 * 1 = 1 ✔
-  m_data[0][2] = SP;         // sin(0) = 0 ✔
+  m_data[0][0] = cp * cy;
+  m_data[0][1] = cp * sy;
+  m_data[0][2] = sp;
   m_data[0][3] = 0.0f;
 
-  m_data[1][0] = SR * SP * CY - CR * SY;  // = 0 - (1 * 1) = -1 ✔
-  m_data[1][1] = SR * SP * SY + CR * CY;  // = 0 + (1 * 0) = 0 ✔
-  m_data[1][2] = -SR * CP;                // = 0 ✔
+  m_data[1][0] = sr * sp * cy - cr * sy;
+  m_data[1][1] = sr * sp * sy + cr * cy;
+  m_data[1][2] = -sr * cp;
   m_data[1][3] = 0.0f;
 
-  m_data[2][0] = -(CR * SP * CY + SR * SY);  // = -(0 + 0) = 0 ✔
-  m_data[2][1] = CY * SR - CR * SP * SY;     // = 0 - 0 = 0 ✔
-  m_data[2][2] = CR * CP;
+  m_data[2][0] = -(cr * sp * cy + sr * sy);
+  m_data[2][1] = cy * sr - cr * sp * sy;
+  m_data[2][2] = cr * cp;
   m_data[2][3] = 0.0f;
 
   m_data[3][0] = origin.x;
@@ -297,95 +269,32 @@ RotationTranslationMatrix::RotationTranslationMatrix(const Rotator& rotator,
 }
 
 /*
- * Implementation of ScaleRotationTranslationMatrix constructor
  */
 ScaleRotationTranslationMatrix::ScaleRotationTranslationMatrix(const Vector3& scale,
                                                                const Rotator& rotator,
-                                                               const Vector3& origin)
- : Matrix4() {
-  const float SP = Math::sin(rotator.pitch);
-  const float CP = Math::cos(rotator.pitch);
-
-  const float SY = Math::sin(rotator.yaw);
-  const float CY = Math::cos(rotator.yaw);
-
-  const float SR = Math::sin(rotator.roll);
-  const float CR = Math::cos(rotator.roll);
-
-  // Compute rotation matrix elements with scale (Rx * Ry * Rz * S)
-  at(0, 0) = (CP * CY) * scale.x;
-  at(0, 1) = (CP * SY) * scale.x;
-  at(0, 2) = (SP)*scale.x;
-  at(0, 3) = 0.0f;
-
-  at(1, 0) = (SR * SP * CY - CR * SY) * scale.y;
-  at(1, 1) = (SR * SP * SY + CR * CY) * scale.y;
-  at(1, 2) = (-SR * CP) * scale.y;
-  at(1, 3) = 0.0f;
-
-  at(2, 0) = (-(CR * SP * CY + SR * SY)) * scale.z;
-  at(2, 1) = (CY * SR - CR * SP * SY) * scale.z;
-  at(2, 2) = (CR * CP) * scale.z;
-  at(2, 3) = 0.0f;
-
-  // Set translation components
-  at(3, 0) = origin.x;
-  at(3, 1) = origin.y;
-  at(3, 2) = origin.z;
-  at(3, 3) = 1.0f;
+                                                               const Vector3& origin) noexcept
+ : Matrix4(RotationTranslationMatrix(rotator, origin))
+{
+  // With row vectors, scaling first is the same as scaling each rotation row.
+  for (int32 column = 0; column < 3; ++column) {
+    m_data[0][column] *= scale.x;
+    m_data[1][column] *= scale.y;
+    m_data[2][column] *= scale.z;
+  }
 }
 
 /*
- * Implementation of PerspectiveMatrix constructor
  */
 PerspectiveMatrix::PerspectiveMatrix(const Radian& halfFOV, float width, float height,
-                                     float near, float far)
- : Matrix4(Plane(1.0f / Math::tan(halfFOV), 0.0f, 0.0f, 0.0f),
-           Plane(0.0f, (width / Math::tan(halfFOV)) / height, 0.0f, 0.0f),
-           Plane(0.0f, 0.0f, far / (far - near), 1.0f),
-           Plane(0.0f, 0.0f, -near * far / (far - near), 0.0f)) {}
+                                     float near, float far) noexcept
+ : Matrix4(buildPerspective(halfFOV, width, height, near, far))
+{}
 
 /*
- * Implementation of LookAtMatrix constructor
  */
 LookAtMatrix::LookAtMatrix(const Vector3& eyePosition, const Vector3& lookAtPosition,
-                           const Vector3& upVector)
- : Matrix4() {
-  const Vector3 ZAxis = (lookAtPosition - eyePosition).getNormalized();
-
-  const float UpDot = Math::abs(upVector.dot(ZAxis));
-  Vector3 effectiveUp = upVector;
-
-  if (UpDot > (1.0f - Math::SMALL_NUMBER)) {
-    const float UpForwardDot = Math::abs(upVector.dot(Vector3::FORWARD));
-    const float UpRightDot = Math::abs(upVector.dot(Vector3::RIGHT));
-    if (UpForwardDot < UpRightDot) {
-      effectiveUp = Vector3::FORWARD;
-    }
-    else {
-      effectiveUp = Vector3::RIGHT;
-    }
-  }
-
-  const Vector3 XAxis = ZAxis.cross(effectiveUp).getNormalized();
-  const Vector3 YAxis = ZAxis.cross(XAxis);
-
-  m_data[0][0] = XAxis.x;
-  m_data[0][1] = YAxis.x;
-  m_data[0][2] = ZAxis.x;
-  m_data[0][3] = 0.0f;
-  m_data[1][0] = XAxis.y;
-  m_data[1][1] = YAxis.y;
-  m_data[1][2] = ZAxis.y;
-  m_data[1][3] = 0.0f;
-  m_data[2][0] = XAxis.z;
-  m_data[2][1] = YAxis.z;
-  m_data[2][2] = ZAxis.z;
-  m_data[2][3] = 0.0f;
-  m_data[3][0] = -eyePosition.dot(XAxis);
-  m_data[3][1] = -eyePosition.dot(YAxis);
-  m_data[3][2] = -eyePosition.dot(ZAxis);
-  m_data[3][3] = 1.0f;
-}
+                           const Vector3& upVector) noexcept
+ : Matrix4(buildLookAt(eyePosition, lookAtPosition, upVector))
+{}
 
 } // namespace chEngineSDK

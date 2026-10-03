@@ -3,322 +3,159 @@
  * @file chMatrix4.h
  * @author AccelMR
  * @date 2022/02/20
- *   Matrix 4 math file. Here goes all matrix 4 related content.
+ * @brief 4x4 matrix for transforms and projections.
  *
- * Coordinate system being X = front, Z = up, Y = right
- *
- * Left hand
+ * Coordinate system: X = forward, Y = right, Z = up, left-handed.
  */
 /************************************************************************/
 #pragma once
 
 #include "chPrerequisitesUtilities.h"
 
+#include "chSIMD.h"
+#include "chVector3.h"
+#include "chVector4.h"
+
 namespace chEngineSDK {
-/*
- * Description:
- *     Class that holds a 4x4 matrix, represented as Row-Major.
- *     That means a matrix-vector multiplication will be Result = Vector * Matrix.
+
+/**
+ * Holds a 4x4 matrix for transforms and projections. It uses row vectors: a point is
+ * transformed as point * matrix, so matrices are combined in the order they apply
+ * (local * parent, world * view * projection) and the translation lives in row 3.
+ * It is stored row by row, which is byte for byte what GLSL reads as a column-major
+ * matrix for column vectors, so it is uploaded as is and the shader writes
+ * projection * view * model * position.
  *
- * Sample usage:
- *  Matrix4 m4(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
- *  m4.transpose();
- *
+ * The class itself is not exported, only its functions that live in the .cpp, so the
+ * constants can be inline constexpr and other modules fold them at compile time.
  */
-class CH_UTILITY_EXPORT Matrix4
+class Matrix4
 {
  public:
-  /*
-   * @brief Default constructor
+  /**
+   * Leaves the values uninitialized, so arrays of matrices cost nothing to create.
    */
   Matrix4() = default;
 
-  /**
-   * @brief Construct a Matrix4 from 16 individual float values
-   */
+  FORCEINLINE constexpr
+  Matrix4(float m00, float m01, float m02, float m03,
+          float m10, float m11, float m12, float m13,
+          float m20, float m21, float m22, float m23,
+          float m30, float m31, float m32, float m33) noexcept;
+
   FORCEINLINE
-  Matrix4(float _m00, float _m01, float _m02, float _m03, float _m10, float _m11, float _m12,
-          float _m13, float _m20, float _m21, float _m22, float _m23, float _m30, float _m31,
-          float _m32, float _m33);
+  Matrix4(const Vector4& row0, const Vector4& row1, const Vector4& row2,
+          const Vector4& row3) noexcept;
 
-  /**
-   * @brief Copy constructor
-   */
-  FORCEINLINE
-  Matrix4(const Matrix4& copy);
+  CH_UTILITY_EXPORT
+  Matrix4(const Plane& row0, const Plane& row1, const Plane& row2, const Plane& row3) noexcept;
 
-  /*
-   * @brief Default destructor
-   */
-  ~Matrix4() = default;
-
-  /************************************************************************/
-  /*
-   * Vector4 interaction if its included before this file.
-   */
-  /************************************************************************/
-
-  /**
-   * @brief Constructor from four Vectors 4
-   */
-  Matrix4(const Vector4& firstRow, const Vector4& secondRow, const Vector4& thirdRow,
-          const Vector4& fourthRow);
-
-  /**
-   * @brief Constructor from four planes
-   */
-  Matrix4(const Plane& InX, const Plane& InY, const Plane& InZ, const Plane& InW);
-
-  /************************************************************************/
-  /*
-   * Methods
-   */
-  /************************************************************************/
-
-  /**
-   * @brief Sets this matrix to identity
-   */
   FORCEINLINE void
-  setIdentity();
+  setIdentity() noexcept;
 
-  /**
-   * @brief Creates a new transposed matrix with this as reference
-   *
-   * @return Matrix4 The new matrix created from this
-   */
   NODISCARD FORCEINLINE Matrix4
-  getTransposed() const;
+  getTransposed() const noexcept;
+
+  FORCEINLINE void
+  transpose() noexcept;
+
+  NODISCARD CH_UTILITY_EXPORT float
+  getDeterminant() const noexcept;
 
   /**
-   * @brief Transpose this Matrix
-   *
-   * @return Matrix4& This reference
+   * Inverse of any matrix. Returns IDENTITY when the matrix has no inverse.
    */
-  FORCEINLINE Matrix4&
-  transposed();
+  NODISCARD CH_UTILITY_EXPORT Matrix4
+  getInverse() const noexcept;
 
   /**
-   * @brief Computes the determinant of this matrix
-   *
-   * @return float The determinant value
+   * Faster inverse for matrices whose last column is (0, 0, 0, 1): any mix of scale,
+   * rotation and translation, but not a projection. Returns IDENTITY when the matrix
+   * has no inverse.
    */
-  NODISCARD FORCEINLINE float
-  getDeterminant() const;
+  NODISCARD CH_UTILITY_EXPORT Matrix4
+  getInverseAffine() const noexcept;
 
   /**
-   * @brief Computes the inverse matrix from this
-   *
-   * @return Matrix4 A new Matrix4 created from this
+   * Rotation of the matrix as Euler angles. Scale is ignored.
    */
-   NODISCARD Matrix4
-  getInverse();
+  NODISCARD CH_UTILITY_EXPORT Rotator
+  rotator() const noexcept;
 
   /**
-   * @brief Computes the conversion between this matrix to a rotator
-   *
-   * @return Rotator Representation of this matrix
+   * Rotation of the matrix as a quaternion. The rotation rows must have unit length.
    */
-  NODISCARD  Rotator
-  rotator() const;
+  NODISCARD CH_UTILITY_EXPORT Quaternion
+  toQuaternion() const noexcept;
 
   /**
-   * @brief Transform a rotation matrix into a quaternion
-   * NOTE: rotation part will need to be unit length for this to be right!
-   *
-   * @return Quaternion representing this rotation matrix
+   * Transforms a point (w = 1), so the translation is applied.
    */
-  NODISCARD  Quaternion
-  toQuaternion() const;
+  NODISCARD FORCEINLINE Vector4
+  transformPosition(const Vector3& position) const noexcept;
 
   /**
-   * @brief Transforms a position with this matrix
-   *
-   * @param v Position vector to transform
-   * @return Vector4 The transformed position
+   * Transforms a direction (w = 0), so the translation is ignored.
    */
-  NODISCARD  Vector4
-  transformPosition(const Vector3& v) const;
+  NODISCARD FORCEINLINE Vector4
+  transformVector(const Vector3& direction) const noexcept;
 
-  /**
-   * @brief Transform a direction vector by this matrix
-   *
-   * @param v The vector to be transformed
-   * @return Vector4 The new vector transformed in world space
-   */
-  NODISCARD  Vector4
-  transformVector(const Vector3& v) const;
+  NODISCARD FORCEINLINE Vector4
+  transformVector4(const Vector4& vector) const noexcept;
 
-  /**
-   * @brief Transforms a vector 4 by this matrix
-   *
-   * @param p Vector to be transformed
-   * @return Vector4 The new Vector created by the transformation
-   */
-  NODISCARD  Vector4
-  transformVector4(const Vector4& p) const;
-
-  /**
-   * @brief Get the element at the specified row and column
-   *
-   * @param row Row index (0-3)
-   * @param col Column index (0-3)
-   * @return float& Reference to the element
-   */
   NODISCARD FORCEINLINE float&
-  at(int32 row, int32 col);
+  at(int32 row, int32 column) noexcept;
 
-  /**
-   * @brief Get the element at the specified row and column (const version)
-   *
-   * @param row Row index (0-3)
-   * @param col Column index (0-3)
-   * @return const float& Const reference to the element
-   */
   NODISCARD FORCEINLINE const float&
-  at(int32 row, int32 col) const;
+  at(int32 row, int32 column) const noexcept;
 
-  /**
-   * @brief Get a specific row as an array of 4 floats
-   *
-   * @param row Row index (0-3)
-   * @return const float* Pointer to the row
-   */
   NODISCARD FORCEINLINE const float*
-  getRow(int32 row) const;
+  getRow(int32 row) const noexcept;
 
-  /**
-   * @brief Get all elements as a contiguous array of 16 floats
-   *
-   * @return const float* Pointer to the elements
-   */
-  NODISCARD FORCEINLINE const float*
-  data() const;
+  NODISCARD FORCEINLINE constexpr const float*
+  data() const noexcept;
 
-  /************************************************************************/
-  /*
-   * Operator overload
-   */
-  /************************************************************************/
-
-  /**
-   * @brief Computes a multiplication between two matrices
-   *
-   * @param other The other matrix to be multiplied
-   * @return Matrix4 A new matrix result
-   */
-  NODISCARD FORCEINLINE Matrix4
-  operator*(const Matrix4& other) const;
-
-  /**
-   * @brief Computes a multiplication between two matrices, modifying this matrix
-   *
-   * @param other The other matrix to be multiplied
-   */
-  FORCEINLINE void
-  operator*=(const Matrix4& other);
-
-  /**
-   * @brief Computes a sum between two matrices
-   *
-   * @param other The other matrix to be summed
-   * @return Matrix4 A new matrix result
-   */
-  NODISCARD FORCEINLINE Matrix4
-  operator+(const Matrix4& other) const;
-
-  /**
-   * @brief Computes a subtraction between two matrices
-   *
-   * @param other The other matrix to be subtracted
-   * @return Matrix4 A new matrix result
-   */
-  NODISCARD FORCEINLINE Matrix4
-  operator-(const Matrix4& other) const;
-
-  /**
-   * @brief Computes a multiplication between a matrix and a float
-   * NOTE: This does not change the scale of this Matrix. It'll multiply
-   * all the elements by the value.
-   *
-   * @param value The float value to be multiplied
-   * @return Matrix4 A new matrix result
-   */
-  NODISCARD FORCEINLINE Matrix4
-  operator*(float value) const;
-
-  /**
-   * @brief Computes a multiplication between a matrix and a float, modifying this matrix
-   *
-   * @param value The float value to be multiplied
-   * @return Matrix4& Reference to this modified matrix
-   */
-  FORCEINLINE Matrix4&
-  operator*=(float value);
-
-  /**
-   * @brief Assigns to this all the given values from another matrix4
-   *
-   * @param assignable Matrix4 to be taken as source
-   * @return Matrix4& Reference to this changed Matrix4
-   */
-  FORCEINLINE Matrix4&
-  operator=(const Matrix4& assignable);
-
-  /**
-   * @brief Assigns to this all the given values from another rValue matrix4
-   *
-   * @param move RValue matrix4 to be taken as source
-   * @return Matrix4& Reference to this changed Matrix4
-   */
-  FORCEINLINE Matrix4&
-  operator=(Matrix4&& move) noexcept;
-
-  /**
-   * @brief Checks if this matrix is exactly equal to another Matrix4
-   *
-   * @param other The other matrix to check against this one
-   * @return bool True if both matrices are exactly equals
-   */
   NODISCARD FORCEINLINE bool
-  operator==(const Matrix4& other) const;
+  nearEqual(const Matrix4& other, float tolerance = Math::KINDA_SMALL_NUMBER) const noexcept;
+
+  NODISCARD FORCEINLINE Matrix4
+  operator*(const Matrix4& other) const noexcept;
+
+  FORCEINLINE Matrix4&
+  operator*=(const Matrix4& other) noexcept;
+
+  NODISCARD FORCEINLINE Matrix4
+  operator+(const Matrix4& other) const noexcept;
+
+  NODISCARD FORCEINLINE Matrix4
+  operator-(const Matrix4& other) const noexcept;
 
   /**
-   * @brief Subscript operator for accessing matrix elements
-   *
-   * @param row Row index (0-3)
-   * @return float* Pointer to the row
+   * Multiplies every element, so it also scales the translation and the last column.
    */
+  NODISCARD FORCEINLINE Matrix4
+  operator*(float value) const noexcept;
+
+  FORCEINLINE Matrix4&
+  operator*=(float value) noexcept;
+
+  NODISCARD FORCEINLINE bool
+  operator==(const Matrix4& other) const noexcept;
+
   NODISCARD FORCEINLINE float*
-  operator[](int32 row);
+  operator[](int32 row) noexcept;
 
-  /**
-   * @brief Subscript operator for accessing matrix elements (const version)
-   *
-   * @param row Row index (0-3)
-   * @return const float* Pointer to the row
-   */
   NODISCARD FORCEINLINE const float*
-  operator[](int32 row) const;
+  operator[](int32 row) const noexcept;
 
  public:
-  /**
-   * All zero matrix
-   */
-  static  const Matrix4 ZERO;
-
-  /**
-   * Identity Matrix
-   */
-  static  const Matrix4 IDENTITY;
-
-  /**
-   * All one matrix
-   */
-  static  const Matrix4 UNITY;
+  static const Matrix4 ZERO;
+  static const Matrix4 IDENTITY;
+  static const Matrix4 UNITY;
 
  protected:
-  // Matrix data stored in row-major order (m[row][column])
-  float m_data[4][4];
+  // Aligned so every row loads into one SIMD register.
+  alignas(16) float m_data[4][4];
 };
 
 /************************************************************************/
@@ -329,239 +166,251 @@ class CH_UTILITY_EXPORT Matrix4
 
 /*
  */
-FORCEINLINE
-Matrix4::Matrix4(float _m00, float _m01, float _m02, float _m03, float _m10, float _m11,
-                 float _m12, float _m13, float _m20, float _m21, float _m22, float _m23,
-                 float _m30, float _m31, float _m32, float _m33) {
-  m_data[0][0] = _m00;
-  m_data[0][1] = _m01;
-  m_data[0][2] = _m02;
-  m_data[0][3] = _m03;
-  m_data[1][0] = _m10;
-  m_data[1][1] = _m11;
-  m_data[1][2] = _m12;
-  m_data[1][3] = _m13;
-  m_data[2][0] = _m20;
-  m_data[2][1] = _m21;
-  m_data[2][2] = _m22;
-  m_data[2][3] = _m23;
-  m_data[3][0] = _m30;
-  m_data[3][1] = _m31;
-  m_data[3][2] = _m32;
-  m_data[3][3] = _m33;
-}
+FORCEINLINE constexpr
+Matrix4::Matrix4(float m00, float m01, float m02, float m03,
+                 float m10, float m11, float m12, float m13,
+                 float m20, float m21, float m22, float m23,
+                 float m30, float m31, float m32, float m33) noexcept
+ : m_data{{m00, m01, m02, m03},
+          {m10, m11, m12, m13},
+          {m20, m21, m22, m23},
+          {m30, m31, m32, m33}}
+{}
+
+inline constexpr Matrix4 Matrix4::ZERO{0.0f, 0.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 0.0f, 0.0f};
+
+inline constexpr Matrix4 Matrix4::IDENTITY{1.0f, 0.0f, 0.0f, 0.0f,
+                                           0.0f, 1.0f, 0.0f, 0.0f,
+                                           0.0f, 0.0f, 1.0f, 0.0f,
+                                           0.0f, 0.0f, 0.0f, 1.0f};
+
+inline constexpr Matrix4 Matrix4::UNITY{1.0f, 1.0f, 1.0f, 1.0f,
+                                        1.0f, 1.0f, 1.0f, 1.0f,
+                                        1.0f, 1.0f, 1.0f, 1.0f,
+                                        1.0f, 1.0f, 1.0f, 1.0f};
 
 /*
  */
 FORCEINLINE
-Matrix4::Matrix4(const Matrix4& copy) {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      m_data[i][j] = copy.m_data[i][j];
+Matrix4::Matrix4(const Vector4& row0, const Vector4& row1, const Vector4& row2,
+                 const Vector4& row3) noexcept
+ : m_data{{row0.x, row0.y, row0.z, row0.w},
+          {row1.x, row1.y, row1.z, row1.w},
+          {row2.x, row2.y, row2.z, row2.w},
+          {row3.x, row3.y, row3.z, row3.w}}
+{}
+
+/*
+ */
+FORCEINLINE void
+Matrix4::setIdentity() noexcept
+{
+  *this = IDENTITY;
+}
+
+/*
+ */
+FORCEINLINE Matrix4
+Matrix4::getTransposed() const noexcept
+{
+  return Matrix4(m_data[0][0], m_data[1][0], m_data[2][0], m_data[3][0],
+                 m_data[0][1], m_data[1][1], m_data[2][1], m_data[3][1],
+                 m_data[0][2], m_data[1][2], m_data[2][2], m_data[3][2],
+                 m_data[0][3], m_data[1][3], m_data[2][3], m_data[3][3]);
+}
+
+/*
+ */
+FORCEINLINE void
+Matrix4::transpose() noexcept
+{
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = row + 1; column < 4; ++column) {
+      const float value = m_data[row][column];
+      m_data[row][column] = m_data[column][row];
+      m_data[column][row] = value;
     }
   }
+}
+
+/*
+ */
+FORCEINLINE Vector4
+Matrix4::transformPosition(const Vector3& position) const noexcept
+{
+  SIMD::Float4 result = SIMD::loadAligned(m_data[3]);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[0]), position.x);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[1]), position.y);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[2]), position.z);
+
+  alignas(16) float values[4];
+  SIMD::storeAligned(values, result);
+  return Vector4(values[0], values[1], values[2], values[3]);
+}
+
+/*
+ */
+FORCEINLINE Vector4
+Matrix4::transformVector(const Vector3& direction) const noexcept
+{
+  SIMD::Float4 result = SIMD::multiply(SIMD::loadAligned(m_data[0]), direction.x);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[1]), direction.y);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[2]), direction.z);
+
+  alignas(16) float values[4];
+  SIMD::storeAligned(values, result);
+  return Vector4(values[0], values[1], values[2], values[3]);
+}
+
+/*
+ */
+FORCEINLINE Vector4
+Matrix4::transformVector4(const Vector4& vector) const noexcept
+{
+  SIMD::Float4 result = SIMD::multiply(SIMD::loadAligned(m_data[0]), vector.x);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[1]), vector.y);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[2]), vector.z);
+  result = SIMD::multiplyAdd(result, SIMD::loadAligned(m_data[3]), vector.w);
+
+  alignas(16) float values[4];
+  SIMD::storeAligned(values, result);
+  return Vector4(values[0], values[1], values[2], values[3]);
 }
 
 /*
  */
 FORCEINLINE float&
-Matrix4::at(int32 row, int32 col) {
-  CH_ASSERT(row >= 0 && row < 4 && col >= 0 && col < 4);
-  return m_data[row][col];
+Matrix4::at(int32 row, int32 column) noexcept
+{
+  CH_ASSERT(row >= 0 && row < 4 && column >= 0 && column < 4);
+  return m_data[row][column];
 }
 
 /*
  */
 FORCEINLINE const float&
-Matrix4::at(int32 row, int32 col) const {
-  CH_ASSERT(row >= 0 && row < 4 && col >= 0 && col < 4);
-  return m_data[row][col];
+Matrix4::at(int32 row, int32 column) const noexcept
+{
+  CH_ASSERT(row >= 0 && row < 4 && column >= 0 && column < 4);
+  return m_data[row][column];
 }
 
 /*
  */
 FORCEINLINE const float*
-Matrix4::getRow(int32 row) const {
+Matrix4::getRow(int32 row) const noexcept
+{
   CH_ASSERT(row >= 0 && row < 4);
   return m_data[row];
 }
 
 /*
  */
-FORCEINLINE const float*
-Matrix4::data() const {
+FORCEINLINE constexpr const float*
+Matrix4::data() const noexcept
+{
   return &m_data[0][0];
 }
 
 /*
  */
-FORCEINLINE float*
-Matrix4::operator[](int32 row) {
-  CH_ASSERT(row >= 0 && row < 4);
-  return m_data[row];
-}
-
-/*
- */
-FORCEINLINE const float*
-Matrix4::operator[](int32 row) const {
-  CH_ASSERT(row >= 0 && row < 4);
-  return m_data[row];
-}
-
-/*
- */
-FORCEINLINE void
-Matrix4::setIdentity() {
-  *this = Matrix4::IDENTITY;
+FORCEINLINE bool
+Matrix4::nearEqual(const Matrix4& other, float tolerance) const noexcept
+{
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      if (Math::abs(m_data[row][column] - other.m_data[row][column]) > tolerance) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 /*
  */
 FORCEINLINE Matrix4
-Matrix4::getTransposed() const {
-  Matrix4 Result;
+Matrix4::operator*(const Matrix4& other) const noexcept
+{
+  const SIMD::Float4 otherRow0 = SIMD::loadAligned(other.m_data[0]);
+  const SIMD::Float4 otherRow1 = SIMD::loadAligned(other.m_data[1]);
+  const SIMD::Float4 otherRow2 = SIMD::loadAligned(other.m_data[2]);
+  const SIMD::Float4 otherRow3 = SIMD::loadAligned(other.m_data[3]);
 
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      Result.m_data[i][j] = m_data[j][i];
-    }
+  // With row vectors, each result row is this row's values weighting the other rows.
+  Matrix4 result;
+  for (int32 row = 0; row < 4; ++row) {
+    SIMD::Float4 combined = SIMD::multiply(otherRow0, m_data[row][0]);
+    combined = SIMD::multiplyAdd(combined, otherRow1, m_data[row][1]);
+    combined = SIMD::multiplyAdd(combined, otherRow2, m_data[row][2]);
+    combined = SIMD::multiplyAdd(combined, otherRow3, m_data[row][3]);
+    SIMD::storeAligned(result.m_data[row], combined);
   }
-
-  return Result;
+  return result;
 }
 
 /*
  */
 FORCEINLINE Matrix4&
-Matrix4::transposed() {
-  *this = getTransposed();
-  return *this;
-}
-
-/*
- */
-FORCEINLINE float
-Matrix4::getDeterminant() const {
-  return m_data[0][0] *
-             (m_data[1][1] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-              m_data[2][1] * (m_data[1][2] * m_data[3][3] - m_data[1][3] * m_data[3][2]) +
-              m_data[3][1] * (m_data[1][2] * m_data[2][3] - m_data[1][3] * m_data[2][2])) -
-         m_data[1][0] *
-             (m_data[0][1] * (m_data[2][2] * m_data[3][3] - m_data[2][3] * m_data[3][2]) -
-              m_data[2][1] * (m_data[0][2] * m_data[3][3] - m_data[0][3] * m_data[3][2]) +
-              m_data[3][1] * (m_data[0][2] * m_data[2][3] - m_data[0][3] * m_data[2][2])) +
-         m_data[2][0] *
-             (m_data[0][1] * (m_data[1][2] * m_data[3][3] - m_data[1][3] * m_data[3][2]) -
-              m_data[1][1] * (m_data[0][2] * m_data[3][3] - m_data[0][3] * m_data[3][2]) +
-              m_data[3][1] * (m_data[0][2] * m_data[1][3] - m_data[0][3] * m_data[1][2])) -
-         m_data[3][0] *
-             (m_data[0][1] * (m_data[1][2] * m_data[2][3] - m_data[1][3] * m_data[2][2]) -
-              m_data[1][1] * (m_data[0][2] * m_data[2][3] - m_data[0][3] * m_data[2][2]) +
-              m_data[2][1] * (m_data[0][2] * m_data[1][3] - m_data[0][3] * m_data[1][2]));
-}
-
-/*
- */
-FORCEINLINE Matrix4
-Matrix4::operator*(const Matrix4& other) const {
-  Matrix4 Result;
-
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      Result.m_data[i][j] =
-          m_data[i][0] * other.m_data[0][j] + m_data[i][1] * other.m_data[1][j] +
-          m_data[i][2] * other.m_data[2][j] + m_data[i][3] * other.m_data[3][j];
-    }
-  }
-
-  return Result;
-}
-
-/*
- */
-FORCEINLINE void
-Matrix4::operator*=(const Matrix4& other) {
+Matrix4::operator*=(const Matrix4& other) noexcept
+{
   *this = *this * other;
-}
-
-/*
- */
-FORCEINLINE Matrix4
-Matrix4::operator+(const Matrix4& other) const {
-  Matrix4 Result;
-
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      Result.m_data[i][j] = m_data[i][j] + other.m_data[i][j];
-    }
-  }
-
-  return Result;
-}
-
-/*
- */
-FORCEINLINE Matrix4
-Matrix4::operator-(const Matrix4& other) const {
-  Matrix4 Result;
-
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      Result.m_data[i][j] = m_data[i][j] - other.m_data[i][j];
-    }
-  }
-
-  return Result;
-}
-
-/*
- */
-FORCEINLINE Matrix4
-Matrix4::operator*(float value) const {
-  Matrix4 Result;
-
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      Result.m_data[i][j] = m_data[i][j] * value;
-    }
-  }
-
-  return Result;
-}
-
-/*
- */
-FORCEINLINE Matrix4&
-Matrix4::operator*=(float value) {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      m_data[i][j] *= value;
-    }
-  }
-
   return *this;
 }
 
 /*
  */
-FORCEINLINE Matrix4&
-Matrix4::operator=(const Matrix4& assignable) {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      m_data[i][j] = assignable.m_data[i][j];
+FORCEINLINE Matrix4
+Matrix4::operator+(const Matrix4& other) const noexcept
+{
+  Matrix4 result;
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      result.m_data[row][column] = m_data[row][column] + other.m_data[row][column];
     }
   }
-  return *this;
+  return result;
+}
+
+/*
+ */
+FORCEINLINE Matrix4
+Matrix4::operator-(const Matrix4& other) const noexcept
+{
+  Matrix4 result;
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      result.m_data[row][column] = m_data[row][column] - other.m_data[row][column];
+    }
+  }
+  return result;
+}
+
+/*
+ */
+FORCEINLINE Matrix4
+Matrix4::operator*(float value) const noexcept
+{
+  Matrix4 result;
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      result.m_data[row][column] = m_data[row][column] * value;
+    }
+  }
+  return result;
 }
 
 /*
  */
 FORCEINLINE Matrix4&
-Matrix4::operator=(Matrix4&& move) noexcept {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      m_data[i][j] = move.m_data[i][j];
+Matrix4::operator*=(float value) noexcept
+{
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      m_data[row][column] *= value;
     }
   }
   return *this;
@@ -570,14 +419,34 @@ Matrix4::operator=(Matrix4&& move) noexcept {
 /*
  */
 FORCEINLINE bool
-Matrix4::operator==(const Matrix4& other) const {
-  for (int32 i = 0; i < 4; ++i) {
-    for (int32 j = 0; j < 4; ++j) {
-      if (m_data[i][j] != other.m_data[i][j]) {
+Matrix4::operator==(const Matrix4& other) const noexcept
+{
+  for (int32 row = 0; row < 4; ++row) {
+    for (int32 column = 0; column < 4; ++column) {
+      if (m_data[row][column] != other.m_data[row][column]) {
         return false;
       }
     }
   }
   return true;
 }
+
+/*
+ */
+FORCEINLINE float*
+Matrix4::operator[](int32 row) noexcept
+{
+  CH_ASSERT(row >= 0 && row < 4);
+  return m_data[row];
+}
+
+/*
+ */
+FORCEINLINE const float*
+Matrix4::operator[](int32 row) const noexcept
+{
+  CH_ASSERT(row >= 0 && row < 4);
+  return m_data[row];
+}
+
 } // namespace chEngineSDK
