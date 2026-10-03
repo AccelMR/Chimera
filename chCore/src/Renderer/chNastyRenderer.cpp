@@ -442,13 +442,6 @@ NastyRenderer::loadModel(const SPtr<Model>& model) {
   createMeshBuffers();
   createNodeDescriptorResources();
 
-  // Apply initial transformation
-  RotationMatrix rotationMatrix(Rotator(180.0f, 0.0f, 90.0f));
-  if (!NodeNames.empty()) {
-    m_currentModel->updateNodeTransform(m_currentModel->findNode(NodeNames[NodeIndex]),
-                                        rotationMatrix);
-  }
-
   CH_LOG_INFO(NastyRendererSystem, "Model loaded successfully");
 }
 
@@ -735,8 +728,9 @@ NastyRenderer::renderModel(const SPtr<ICommandBuffer>& commandBuffer, float delt
   if (bIsModelRotating && !NodeNames.empty()) {
     if (ModelNode* targetNode = m_currentModel->findNode(NodeNames[NodeIndex])) {
       const Matrix4 originalTransform = targetNode->getLocalTransform();
+      // Rotating before the node's own transform spins it in place, around its own up.
       RotationMatrix rotationMatrix(Rotator(0.0f, deltaTime * 20, 0.0f));
-      const Matrix4 newTransform = originalTransform * rotationMatrix;
+      const Matrix4 newTransform = rotationMatrix * originalTransform;
       m_currentModel->updateNodeTransform(targetNode, newTransform);
     }
   }

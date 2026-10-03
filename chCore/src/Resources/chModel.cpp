@@ -104,11 +104,12 @@ ModelNode::updateGlobalTransform() {
     return;
   }
 
+  // Row vectors: the node's own transform applies first, then its parent's.
   if (m_parent) {
-    m_globalTransform = m_parent->getGlobalTransform() * m_localTransform;
+    m_globalTransform = m_localTransform * m_parent->getGlobalTransform();
   }
   else if (m_model){
-    m_globalTransform = m_model->getTransform() * m_localTransform;
+    m_globalTransform = m_localTransform * m_model->getTransform();
   }
   else {
     m_globalTransform = m_localTransform;
@@ -299,7 +300,7 @@ void
 Model::addNodeToStructures(ModelNode* node) {
   m_allNodes.push_back(node);
 
-  if (node->getName()[0] == '\0') {
+  if (node->getName()[0] != '\0') {
     m_nodeMap[node->getName()] = node;
   }
 }

@@ -1052,28 +1052,43 @@ TEST_CASE("chUtilities - Matrix4") {
   REQUIRE(isNear(perspective.at(3, 0), 0.0f));
   REQUIRE(isNear(perspective.at(3, 1), 0.0f));
 
+  // View space is X right, Y up, Z forward, like D3DXMatrixLookAtLH.
+  const LookAtMatrix lookForward(Vector3::ZERO, Vector3::FORWARD * 10.0f, Vector3::UP);
+  REQUIRE(lookForward.transformPosition(Vector3(10.0f, 5.0f, 0.0f)) ==
+          Vector4(5.0f, 0.0f, 10.0f, 1.0f));
+  REQUIRE(lookForward.transformPosition(Vector3(10.0f, 0.0f, 5.0f)) ==
+          Vector4(0.0f, 5.0f, 10.0f, 1.0f));
 
-  // Test LookAtMatrix
-  Vector3 eyePos(0.0f, 0.0f, 5.0f);
-  LookAtMatrix lookAtMatrix(eyePos, Vector3::FORWARD, Vector3::UP);
-  REQUIRE(lookAtMatrix.at(0, 0) ==  0.0f);
-  REQUIRE(lookAtMatrix.at(1, 1) ==  0.0f);
-  REQUIRE(lookAtMatrix.at(2, 2) == -0.980580687f);
-  REQUIRE(lookAtMatrix.at(3, 2) ==  4.90290356f);
+  const Vector3 eyePos(3.0f, 2.0f, 1.0f);
+  const Vector3 target(-1.0f, 4.0f, 2.0f);
+  const LookAtMatrix lookAtMatrix(eyePos, target, Vector3::UP);
+  REQUIRE(Vector3(lookAtMatrix.transformPosition(eyePos)).nearEqual(Vector3::ZERO, 1e-5f));
+  REQUIRE(Vector3(lookAtMatrix.transformPosition(target))
+              .nearEqual(Vector3(0.0f, 0.0f, (target - eyePos).magnitude()), 1e-5f));
+  REQUIRE((lookAtMatrix * lookAtMatrix.getInverseAffine()).nearEqual(Matrix4::IDENTITY, 1e-5f));
+  REQUIRE(lookAtMatrix.getDeterminant() == Approx(1.0f));
 
-  eyePos = Vector3(3.0f, 2.0f, 1.0f);
-  lookAtMatrix = LookAtMatrix(eyePos, Vector3(0.0f, 0.0f, 0.0f), Vector3::UP);
-  REQUIRE(isNear(lookAtMatrix.at(0, 0), -0.5547f));  // XAxis.x
-  REQUIRE(isNear(lookAtMatrix.at(0, 1), 0.2223f ));   // YAxis.x
-  REQUIRE(isNear(lookAtMatrix.at(0, 2), -0.8018f));  // ZAxis.x
+  // Looking straight up still gives a valid view.
+  const LookAtMatrix lookUp(Vector3::ZERO, Vector3::UP, Vector3::UP);
+  REQUIRE(lookUp.getDeterminant() == Approx(1.0f));
+  REQUIRE(Vector3(lookUp.transformPosition(Vector3::UP)).nearEqual(Vector3(0.0f, 0.0f, 1.0f),
+                                                                     1e-5f));
 
-  REQUIRE(isNear(lookAtMatrix.at(1, 0), 0.8321f ));   // XAxis.y
-  REQUIRE(isNear(lookAtMatrix.at(1, 1), 0.1482f ));   // YAxis.y
-  REQUIRE(isNear(lookAtMatrix.at(1, 2), -0.5345f));  // ZAxis.y
+  // Clip space is X right, Y up, depth 0 at near and 1 at far.
+  const Matrix4 viewProj = lookForward * PerspectiveMatrix(Radian(Math::PI * 0.25f), 800.0f,
+                                                           600.0f, 1.0f, 100.0f);
+  Vector4 clip = viewProj.transformPosition(Vector3(10.0f, 5.0f, 5.0f));
+  REQUIRE(clip.x / clip.w > 0.0f);
+  REQUIRE(clip.y / clip.w > 0.0f);
+  clip = viewProj.transformPosition(Vector3(1.0f, 0.0f, 0.0f));
+  REQUIRE(clip.z / clip.w == Approx(0.0f).margin(1e-6f));
+  clip = viewProj.transformPosition(Vector3(100.0f, 0.0f, 0.0f));
+  REQUIRE(clip.z / clip.w == Approx(1.0f));
 
-  REQUIRE(isNear(lookAtMatrix.at(2, 0), 0.0f    ));      // XAxis.z
-  REQUIRE(isNear(lookAtMatrix.at(2, 1), -0.9636f));  // YAxis.z
-  REQUIRE(isNear(lookAtMatrix.at(2, 2), -0.2673f));  // ZAxis.z
+  const OrthographicMatrix ortho(4.0f, 2.0f, 1.0f, 11.0f);
+  REQUIRE(ortho.transformPosition(Vector3(4.0f, 2.0f, 1.0f)) == Vector4(1.0f, 1.0f, 0.0f, 1.0f));
+  REQUIRE(ortho.transformPosition(Vector3(-4.0f, -2.0f, 11.0f)) ==
+          Vector4(-1.0f, -1.0f, 1.0f, 1.0f));
 }
 
 /************************************************************************/

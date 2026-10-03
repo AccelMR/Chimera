@@ -282,7 +282,7 @@ public:
    * @return View-projection matrix
    */
   NODISCARD FORCEINLINE Matrix4
-  getViewProjectionMatrix() const { return m_projectionMatrix * m_viewMatrix; }
+  getViewProjectionMatrix() const { return m_viewMatrix * m_projectionMatrix; }
 
   /**
    * Get the forward direction vector
@@ -369,7 +369,8 @@ private:
   calculateOrthographicMatrix();
 
   /**
-   * Calculate view matrix
+   * Rebuilds the view matrix from position and look at point, and keeps m_rotation in
+   * sync with it.
    */
   void
   calculateViewMatrix();

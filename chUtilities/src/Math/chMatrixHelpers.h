@@ -68,7 +68,8 @@ class ScaleRotationTranslationMatrix : public Matrix4
 };
 
 /**
- * Builds a perspective projection with depth in [0, 1] (Vulkan and Direct3D).
+ * Builds a perspective projection into Direct3D's clip space: X right, Y up, depth in
+ * [0, 1]. The Vulkan backend flips Y with its viewport, so this stays API-agnostic.
  * halfFOV is half of the horizontal field of view, so changing the window height keeps
  * the visible width.
  */
@@ -81,7 +82,23 @@ class PerspectiveMatrix : public Matrix4
 };
 
 /**
- * Builds a view matrix from the camera position, the point it looks at and its up vector.
+ * Builds an orthographic projection into the same clip space as PerspectiveMatrix.
+ */
+class OrthographicMatrix : public Matrix4
+{
+ public:
+  FORCEINLINE
+  OrthographicMatrix(float halfWidth, float halfHeight, float near, float far) noexcept
+   : Matrix4(1.0f / halfWidth, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f / halfHeight, 0.0f, 0.0f,
+             0.0f, 0.0f, 1.0f / (far - near), 0.0f,
+             0.0f, 0.0f, -near / (far - near), 1.0f)
+  {}
+};
+
+/**
+ * Builds a view matrix from the camera position, the point it looks at and its up vector,
+ * like D3DXMatrixLookAtLH: in view space X is right, Y is up and Z is forward.
  */
 class LookAtMatrix : public Matrix4
 {

@@ -174,11 +174,13 @@ VulkanCommandBuffer::drawIndexed(uint32 indexCount, uint32 instanceCount, uint32
 */
 void
 VulkanCommandBuffer::setViewport(float x, float y, float width, float height, float minDepth, float maxDepth) {
+  // The engine projects into Direct3D's clip space (Y up) and Vulkan's Y points down, so
+  // a negative height starting at the bottom edge flips it back (core since Vulkan 1.1).
   VkViewport viewport = {
     .x = x,
-    .y = y,
+    .y = y + height,
     .width = width,
-    .height = height,
+    .height = -height,
     .minDepth = minDepth,
     .maxDepth = maxDepth
   };

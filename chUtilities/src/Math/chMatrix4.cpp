@@ -61,7 +61,7 @@ buildLookAt(const Vector3& eyePosition, const Vector3& lookAtPosition,
     }
   }
 
-  const Vector3 xAxis = zAxis.cross(effectiveUp).getNormalized();
+  const Vector3 xAxis = effectiveUp.cross(zAxis).getNormalized();
   const Vector3 yAxis = zAxis.cross(xAxis);
 
   return Matrix4(xAxis.x, yAxis.x, zAxis.x, 0.0f,

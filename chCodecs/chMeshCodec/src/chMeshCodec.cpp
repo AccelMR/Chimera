@@ -28,13 +28,32 @@
 
 namespace chEngineSDK {
 namespace MeshManagerHelpers {
+// With aiProcess_MakeLeftHanded assimp gives X right, Y up, Z forward; the engine uses
+// X forward, Y right, Z up. Engine axis i reads assimp axis kAssimpAxis[i]. It is a
+// rotation, not a mirror, so triangle winding stays the same.
+constexpr uint32 kAssimpAxis[4] = {2, 0, 1, 3};
+
+/*
+ */
+static Vector3
+convertAssimpVector(const aiVector3D& vector)
+{
+  return Vector3(vector[kAssimpAxis[0]], vector[kAssimpAxis[1]], vector[kAssimpAxis[2]]);
+}
+
 /*
  */
 static Matrix4
-convertAssimpMatrix(const aiMatrix4x4& matrix) {
-  return Matrix4(matrix.a1, matrix.a2, matrix.a3, matrix.a4, matrix.b1, matrix.b2, matrix.b3,
-                 matrix.b4, matrix.c1, matrix.c2, matrix.c3, matrix.c4, matrix.d1, matrix.d2,
-                 matrix.d3, matrix.d4);
+convertAssimpMatrix(const aiMatrix4x4& matrix)
+{
+  // Assimp uses column vectors, so the matrix is transposed while its axes are reordered.
+  Matrix4 result;
+  for (uint32 row = 0; row < 4; ++row) {
+    for (uint32 column = 0; column < 4; ++column) {
+      result[row][column] = matrix[kAssimpAxis[column]][kAssimpAxis[row]];
+    }
+  }
+  return result;
 }
 } // namespace MeshManagerHelpers
 
@@ -225,14 +244,8 @@ MeshCodec::processMesh(aiMesh* mesh, const aiScene* scene) {
     Vector<VertexNormalTexCoord> vertices(mesh->mNumVertices);
 
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = {
-          mesh->mVertices[i].z, mesh->mVertices[i].x, mesh->mVertices[i].y
-          //mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z
-      };
-      vertices[i].normal = {
-          mesh->mNormals[i].z, mesh->mNormals[i].x, mesh->mNormals[i].y
-          //mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z
-      };
+      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
+      vertices[i].normal = MeshManagerHelpers::convertAssimpVector(mesh->mNormals[i]);
 
       if (hasTexCoords) {
         vertices[i].texCoord = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
@@ -249,8 +262,7 @@ MeshCodec::processMesh(aiMesh* mesh, const aiScene* scene) {
     Vector<VertexPosColor> vertices(mesh->mNumVertices);
 
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = {mesh->mVertices[i].x, mesh->mVertices[i].y,
-                              mesh->mVertices[i].z};
+      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
 
       if (hasColors) {
         vertices[i].color = {mesh->mColors[0][i].r, mesh->mColors[0][i].g,
@@ -268,8 +280,7 @@ MeshCodec::processMesh(aiMesh* mesh, const aiScene* scene) {
     Vector<VertexPosColor> vertices(mesh->mNumVertices);
 
     for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = {mesh->mVertices[i].x, mesh->mVertices[i].y,
-                              mesh->mVertices[i].z};
+      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
 
       // Assign default color if no color data is available
       vertices[i].color = {0.7f, 0.7f, 0.7f, 1.0f};
