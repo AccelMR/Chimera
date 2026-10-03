@@ -95,7 +95,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   WeakPtr<SceneAsset>
   getSceneByName(const String& name) const{
     for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (chString::equals(asset->getName(), name)) {
+      if (StringUtils::equals(asset->getName(), name)) {
         return asset->as<SceneAsset>();
       }
     }
@@ -119,7 +119,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   FORCEINLINE bool
   doesSceneExist(const String& name) const{
     for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (chString::equals(asset->getName(), name)) {
+      if (StringUtils::equals(asset->getName(), name)) {
         return true;
       }
     }
@@ -201,8 +201,8 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   validateInfo(FileSystem::exists(assetPath),
                 "Asset path does not exist: " + assetPath.toString());
   validateInfo(FileSystem::isSubPath(EnginePaths::getGameAssetDirectory(), assetPath),
-                chString::format("Asset path must be relative to the asset directory: {0}",
-                                 EnginePaths::getGameAssetDirectory().toString()));
+                StringUtils::format("Asset path must be relative to the asset directory: {0}",
+                                    EnginePaths::getGameAssetDirectory().toString()));
   if (!validationPassed) {
     CH_LOG(AssetSystem, Error, "Failed to create asset due to validation errors");
     return WeakPtr<TAsset>();
@@ -221,10 +221,10 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   metadata.uuid = refUUID;
   metadata.assetType = assetUUID;
   metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  chString::copyToBuffer(metadata.typeName, AssetTypeName);
-  chString::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  chString::copyToBuffer(metadata.name, name);
-  chString::copyToBuffer(metadata.assetPath, assetPath.toString());
+  StringUtils::copyToBuffer(metadata.typeName, AssetTypeName);
+  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  StringUtils::copyToBuffer(metadata.name, name);
+  StringUtils::copyToBuffer(metadata.assetPath, assetPath.toString());
 
   SPtr<IAsset> asset = assetCreator(metadata);
 

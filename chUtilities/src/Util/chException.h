@@ -168,6 +168,6 @@ public:
 static_assert((std::is_base_of<chEngineSDK::Exception, type>::value),           \
   "Invalid exception type (" #type ") for CH_EXEPT macro."                      \
   "It needs to derive from chEngineSDK::Exception.");                           \
-  throw type(desc, __PRETTY_FUNCTION__, __FILE__, __LINE__);                    \
+  throw type(desc, CH_FUNCTION_SIGNATURE, __FILE__, __LINE__);                  \
 }
 }

@@ -213,7 +213,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
     // moved by hand and assets saved before virtual paths, which stored "Assets/...".
     const Path assetDirectory = FileSystem::toVirtualPath(file).getDirectory();
 
-    if (!chString::equals(asset->getAssetPath(), assetDirectory.toString())) {
+    if (!StringUtils::equals(asset->getAssetPath(), assetDirectory.toString())) {
       CH_LOG_WARNING(AssetSystem,
                        "Asset path mismatch for {0}: stored {1}, found {2}.\n"
                        "Will update asset path to match file location.",
@@ -241,7 +241,7 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
 WeakPtr<SceneAsset>
 AssetManager::loadSceneByName(const String& name) {
   for (const auto& [uuid, asset] : m_sceneAssets) {
-    if (chString::equals(asset->getName(), name)) {
+    if (StringUtils::equals(asset->getName(), name)) {
       if (!syncLoadAsset(asset)) {
         CH_LOG_ERROR(AssetSystem, "Failed to load scene asset: {0}", name);
         return WeakPtr<SceneAsset>();

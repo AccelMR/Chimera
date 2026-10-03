@@ -194,7 +194,7 @@ WindowedApplication::initializeGraphics() {
       DynamicLibraryManager::instance().loadDynLibrary(graphicsAPIName, pluginDirectory);
   if (graphicsLib.expired()) {
     CH_EXCEPT(InternalErrorException,
-              chString::format("Failed to load graphics library: {0}", graphicsAPIName));
+              StringUtils::format("Failed to load graphics library: {0}", graphicsAPIName));
   }
   SPtr<DynamicLibrary> graphicsLibrary = graphicsLib.lock();
 
@@ -205,7 +205,7 @@ WindowedApplication::initializeGraphics() {
 
   if (!initFunc) {
     CH_EXCEPT(InternalErrorException,
-              chString::format("Failed to get symbol 'loadPlugin' from "
+              StringUtils::format("Failed to get symbol 'loadPlugin' from "
                                "graphics library: {0}",
                                graphicsAPIName));
   }
@@ -263,7 +263,7 @@ WindowedApplication::initializeRenderComponents() {
         m_renderComponents.commandPool->allocateCommandBuffer();
     if (!m_renderComponents.commandBuffers[i]) {
       CH_EXCEPT(InternalErrorException,
-                chString::format("Failed to create command buffer {0}.", i));
+                StringUtils::format("Failed to create command buffer {0}.", i));
     }
   }
 

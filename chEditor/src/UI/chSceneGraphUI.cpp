@@ -41,7 +41,7 @@ SceneGraphUI::renderSceneGraphUI() {
     m_titleSceneName = sceneName;
     // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
     // scene changes.
-    m_windowTitle = chString::format("Scene Graph - {0}###SceneGraph", m_titleSceneName);
+    m_windowTitle = StringUtils::format("Scene Graph - {0}###SceneGraph", m_titleSceneName);
   }
 
   ImGui::Begin(m_windowTitle.c_str(), &m_isVisible);

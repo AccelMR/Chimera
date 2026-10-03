@@ -572,8 +572,8 @@ OutputLogUI::LogFilter::passesFilter(const LogBufferEntry& entry) const
     return false;
   }
 
-  return chString::containsIgnoreCase(entry.message, searchText) ||
-         chString::containsIgnoreCase(entry.category, searchText);
+  return StringUtils::containsIgnoreCase(entry.message, searchText) ||
+         StringUtils::containsIgnoreCase(entry.category, searchText);
 }
 
 } // namespace chEngineSDK

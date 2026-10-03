@@ -306,8 +306,8 @@ getVerbosityName(LogVerbosity verbosity) noexcept;
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     chEngineSDK::chString::format(Format, ##__VA_ARGS__),                    \
-                     __FILE__, __LINE__, __PRETTY_FUNCTION__);                                \
+                     chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__),                 \
+                     __FILE__, __LINE__, CH_FUNCTION_SIGNATURE);                              \
     }                                                                                         \
   } while (0)
 #else
@@ -315,7 +315,7 @@ getVerbosityName(LogVerbosity verbosity) noexcept;
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     chEngineSDK::chString::format(Format, ##__VA_ARGS__),                    \
+                     chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__),                 \
                      nullptr, 0, nullptr);                                                    \
     }                                                                                         \
   } while (0)

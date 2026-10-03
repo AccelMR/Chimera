@@ -48,7 +48,7 @@ MeshCodec::getSupportedExtensions() const {
   importer.GetExtensionList(extensions);
 
   Vector<String> supportedExtensions;
-  for (const String& ext : chString::splitString(extensions, ';')) {
+  for (const String& ext : StringUtils::splitString(extensions, ';')) {
     // Remove any leading '*' or '.' characters
     SIZE_T start = 0;
     while (start < ext.size() && (ext[start] == '*' || ext[start] == '.')) {
@@ -82,13 +82,13 @@ MeshCodec::importAsset(const Path& filePath, const String& assetName) {
   metadata.uuid = UUID::createRandom();
   metadata.assetType = AssetTypeTraits<ModelAsset>::getTypeId();
   metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  chString::copyToBuffer(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
-  chString::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  chString::copyToBuffer(metadata.name, assetName);
+  StringUtils::copyToBuffer(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
+  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  StringUtils::copyToBuffer(metadata.name, assetName);
 
   const Path importedPath = FileSystem::absolutePath(Path(filePath));
-  chString::copyToBuffer(metadata.importedPath, importedPath.toString());
-  chString::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
+  StringUtils::copyToBuffer(metadata.importedPath, importedPath.toString());
+  StringUtils::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
 
   SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
 

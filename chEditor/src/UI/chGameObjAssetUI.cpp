@@ -28,8 +28,8 @@ GameObjectAssetUI::renderGameObjectAssetUI() {
     m_titleName = gameObject->getName();
     // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
     // edited object changes.
-    m_windowTitle =
-        chString::format("GameObject Asset Editor - {0}###GameObjectAssetEditor", m_titleName);
+    m_windowTitle = StringUtils::format(
+        "GameObject Asset Editor - {0}###GameObjectAssetEditor", m_titleName);
   }
   ImGui::Begin(m_windowTitle.c_str(), &windowOpen);
 

@@ -290,7 +290,7 @@ ContentAssetUI::shouldShowAsset(const SPtr<IAsset>& asset) const
 bool
 ContentAssetUI::passesSearchFilter(const SPtr<IAsset>& asset) const
 {
-  return chString::containsIgnoreCase(asset->getName(), searchBuffer);
+  return StringUtils::containsIgnoreCase(asset->getName(), searchBuffer);
 }
 
 /*
@@ -563,7 +563,7 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
     std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", timeInfo);
   }
   else {
-    chString::copyToBuffer(createdAtStr, "Unknown");
+    StringUtils::copyToBuffer(createdAtStr, "Unknown");
   }
 
   ImGui::BeginTooltip();
@@ -650,8 +650,8 @@ ContentAssetUI::renderDeleteConfirmationPopup()
 
       if (ImGui::Button("Delete", ImVec2(120, 0))) {
         const String fullAssetToDelete =
-            chString::format("{0}/{1}.chAss", m_assetToDelete->getAssetPath(),
-                             m_assetToDelete->getName());
+            StringUtils::format("{0}/{1}.chAss", m_assetToDelete->getAssetPath(),
+                                m_assetToDelete->getName());
         const bool bRemovedCorrectly = FileSystem::removeFile(Path(fullAssetToDelete));
 
         if (bRemovedCorrectly) {
@@ -783,7 +783,7 @@ ContentAssetUI::startInlineRename(const SPtr<IAsset>& asset)
   m_renamingAsset = asset;
   m_renameFocusRequested = true;
 
-  chString::copyToBuffer(m_renameBuffer, asset->getName());
+  StringUtils::copyToBuffer(m_renameBuffer, asset->getName());
 
   CH_LOG_DEBUG(ContentAssetUILog, "Started inline rename for asset: {0}", asset->getName());
 }
@@ -797,7 +797,7 @@ ContentAssetUI::finishInlineRename()
     return;
   }
 
-  const String newName = chString::trim(String(m_renameBuffer));
+  const String newName = StringUtils::trim(String(m_renameBuffer));
 
   if (!newName.empty() && newName != m_renamingAsset->getName()) {
     if (!AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str())) {

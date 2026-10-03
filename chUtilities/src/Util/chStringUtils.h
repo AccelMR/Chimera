@@ -20,7 +20,7 @@
 namespace chEngineSDK {
 
 /**
- * How chString::format writes an argument. Decided at compile time from the argument
+ * How StringUtils::format writes an argument. Decided at compile time from the argument
  * type, so FormatString can check that a spec fits its argument.
  */
 enum class FormatArgType : uint8
@@ -93,7 +93,7 @@ struct FormatSpec
 };
 
 /**
- * Format string for chString::format, checked at compile time against the arguments so a
+ * Format string for StringUtils::format, checked at compile time against the arguments so a
  * wrong placeholder stops the build instead of failing at runtime.
  *
  * Placeholders: "{}" takes the arguments in order, "{0}" picks one by index (it can be
@@ -158,7 +158,7 @@ class FormatString
 /**
  * Helpers for String that the standard library does not have.
  */
-class CH_UTILITY_EXPORT chString
+class CH_UTILITY_EXPORT StringUtils
 {
  public:
   NODISCARD static bool
@@ -470,7 +470,7 @@ FormatString<Args...>::check() const
  */
 template<typename T>
 String
-chString::toString(T&& value)
+StringUtils::toString(T&& value)
 {
   using Type = std::decay_t<T>;
 
@@ -492,7 +492,7 @@ chString::toString(T&& value)
     // sizeof(Type*) == 0 is never true but depends on T, so it only fails when this
     // branch is used.
     static_assert(sizeof(Type*) == 0,
-                  "chString::toString: the type is not a string, number or enum, is not "
+                  "StringUtils::toString: the type is not a string, number or enum, is not "
                   "convertible to String and has no toString() method.");
   }
 }
@@ -500,8 +500,8 @@ chString::toString(T&& value)
 /*
  */
 template<typename T>
-chString::FormatArg
-chString::makeFormatArg(T&& value, String*& nextString)
+StringUtils::FormatArg
+StringUtils::makeFormatArg(T&& value, String*& nextString)
 {
   using Type = std::decay_t<T>;
   constexpr FormatArgType type = formatArgTypeOf<T>();
@@ -543,7 +543,7 @@ chString::makeFormatArg(T&& value, String*& nextString)
 template<typename... Args>
   requires(sizeof...(Args) > 0)
 String
-chString::format(FormatString<std::type_identity_t<Args>...> format, Args&&... args)
+StringUtils::format(FormatString<std::type_identity_t<Args>...> format, Args&&... args)
 {
   // Only types written through toString() need a String. They are filled in place and
   // never moved, so the views to them stay valid.

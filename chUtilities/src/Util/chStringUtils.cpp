@@ -107,7 +107,7 @@ appendPadded(String& output, StringView text, const FormatSpec& spec, bool isNum
 /*
  */
 String
-chString::replaceAllChars(const String& toReplace, ANSICHAR from, ANSICHAR to)
+StringUtils::replaceAllChars(const String& toReplace, ANSICHAR from, ANSICHAR to)
 {
   String output = toReplace;
   for (auto& c : output) {
@@ -121,7 +121,7 @@ chString::replaceAllChars(const String& toReplace, ANSICHAR from, ANSICHAR to)
 /*
  */
 String
-chString::replaceAllSubStr(const String& toReplace, const String& from, const String& to)
+StringUtils::replaceAllSubStr(const String& toReplace, const String& from, const String& to)
 {
   // An empty 'from' matches everywhere and would never stop.
   if (from.empty()) {
@@ -146,7 +146,7 @@ chString::replaceAllSubStr(const String& toReplace, const String& from, const St
 /*
  */
 Vector<String>
-chString::splitString(const String& toSplit, ANSICHAR separator)
+StringUtils::splitString(const String& toSplit, ANSICHAR separator)
 {
   Vector<String> ret;
   SIZE_T start = 0;
@@ -169,7 +169,7 @@ chString::splitString(const String& toSplit, ANSICHAR separator)
 /*
  */
 Vector<String>
-chString::splitString(const String& toSplit, const String& separator)
+StringUtils::splitString(const String& toSplit, const String& separator)
 {
   Vector<String> ret;
 
@@ -200,7 +200,7 @@ chString::splitString(const String& toSplit, const String& separator)
 /*
  */
 String
-chString::join(const Vector<String>& toJoin, const String& separator)
+StringUtils::join(const Vector<String>& toJoin, const String& separator)
 {
   if (toJoin.empty()) {
     return String();
@@ -225,7 +225,7 @@ chString::join(const Vector<String>& toJoin, const String& separator)
 /*
  */
 bool
-chString::containsIgnoreCase(StringView text, StringView search) noexcept
+StringUtils::containsIgnoreCase(StringView text, StringView search) noexcept
 {
   auto toLowerASCII = [](ANSICHAR c) {
     return (c >= 'A' && c <= 'Z') ? static_cast<ANSICHAR>(c - 'A' + 'a') : c;
@@ -251,7 +251,7 @@ chString::containsIgnoreCase(StringView text, StringView search) noexcept
 /*
  */
 String
-chString::toLower(const String& str)
+StringUtils::toLower(const String& str)
 {
   String ret = str;
   for (auto& c : ret) {
@@ -265,7 +265,7 @@ chString::toLower(const String& str)
 /*
  */
 String
-chString::toUpper(const String& str)
+StringUtils::toUpper(const String& str)
 {
   String ret = str;
   for (auto& c : ret) {
@@ -279,7 +279,7 @@ chString::toUpper(const String& str)
 /*
  */
 String
-chString::lTrim(const String& str)
+StringUtils::lTrim(const String& str)
 {
   const SIZE_T start = str.find_first_not_of(kWhitespace);
   return (start == String::npos) ? String() : str.substr(start);
@@ -288,7 +288,7 @@ chString::lTrim(const String& str)
 /*
  */
 String
-chString::rTrim(const String& str)
+StringUtils::rTrim(const String& str)
 {
   const SIZE_T end = str.find_last_not_of(kWhitespace);
   return (end == String::npos) ? String() : str.substr(0, end + 1);
@@ -297,7 +297,7 @@ chString::rTrim(const String& str)
 /*
  */
 String
-chString::trim(const String& str)
+StringUtils::trim(const String& str)
 {
   const SIZE_T start = str.find_first_not_of(kWhitespace);
   if (start == String::npos) {
@@ -312,7 +312,7 @@ chString::trim(const String& str)
 /*
  */
 String
-chString::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
+StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
 {
   SIZE_T size = format.size();
   for (SIZE_T i = 0; i < count; ++i) {

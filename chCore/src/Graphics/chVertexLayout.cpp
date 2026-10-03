@@ -94,7 +94,7 @@ VertexLayout::addCustomAttribute(const String& semanticName,
     .binding = binding,
     .semanticName = ""
   };
-  chString::copyToBuffer(desc.semanticName, semanticName);
+  StringUtils::copyToBuffer(desc.semanticName, semanticName);
 
   m_attributes.push_back(desc);
 

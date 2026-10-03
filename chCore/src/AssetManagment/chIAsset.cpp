@@ -41,7 +41,7 @@ IAsset::setAssetPath(const ANSICHAR* assetPath) {
     CH_LOG(AssetSystem, Error, "Invalid asset path for asset {0}", m_metadata.name);
     return;
   }
-  chString::copyToBuffer(m_metadata.assetPath, assetPath);
+  StringUtils::copyToBuffer(m_metadata.assetPath, assetPath);
   CH_LOG(AssetSystem, Debug, "Set asset path for asset {0} to {1}", m_metadata.name,
          m_metadata.assetPath);
   //updateMetadata(m_metadata);
@@ -92,7 +92,7 @@ IAsset::rename(const ANSICHAR* newName) {
     return false;
   }
 
-  if (chString::equals(m_metadata.name, newName)) {
+  if (StringUtils::equals(m_metadata.name, newName)) {
     CH_LOG(AssetSystem, Warning, "Asset {0} already has the name {1}", m_metadata.name,
            newName);
     return true;
@@ -118,7 +118,7 @@ IAsset::rename(const ANSICHAR* newName) {
   }
 
   // Update the metadata
-  chString::copyToBuffer(m_metadata.name, newName);
+  StringUtils::copyToBuffer(m_metadata.name, newName);
 
   return updateMetadata(m_metadata);
 }

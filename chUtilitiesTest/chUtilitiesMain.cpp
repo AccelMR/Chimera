@@ -1672,50 +1672,50 @@ TEST_CASE("chUtilities - Logger") {
 }
 
 TEST_CASE("chUtilities - ContainsIgnoreCase") {
-  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "wood"));
-  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "TEXTURE"));
-  REQUIRE(chString::containsIgnoreCase("Texture_Wood", "e_w"));
-  REQUIRE(chString::containsIgnoreCase("abc", "abc"));
-  REQUIRE(chString::containsIgnoreCase("abc", ""));
-  REQUIRE(chString::containsIgnoreCase("", ""));
-  REQUIRE_FALSE(chString::containsIgnoreCase("abc", "abcd"));
-  REQUIRE_FALSE(chString::containsIgnoreCase("", "a"));
-  REQUIRE_FALSE(chString::containsIgnoreCase("Texture_Wood", "stone"));
-  REQUIRE_FALSE(chString::containsIgnoreCase("aab", "abb"));
+  REQUIRE(StringUtils::containsIgnoreCase("Texture_Wood", "wood"));
+  REQUIRE(StringUtils::containsIgnoreCase("Texture_Wood", "TEXTURE"));
+  REQUIRE(StringUtils::containsIgnoreCase("Texture_Wood", "e_w"));
+  REQUIRE(StringUtils::containsIgnoreCase("abc", "abc"));
+  REQUIRE(StringUtils::containsIgnoreCase("abc", ""));
+  REQUIRE(StringUtils::containsIgnoreCase("", ""));
+  REQUIRE_FALSE(StringUtils::containsIgnoreCase("abc", "abcd"));
+  REQUIRE_FALSE(StringUtils::containsIgnoreCase("", "a"));
+  REQUIRE_FALSE(StringUtils::containsIgnoreCase("Texture_Wood", "stone"));
+  REQUIRE_FALSE(StringUtils::containsIgnoreCase("aab", "abb"));
 }
 
 TEST_CASE("chUtilities - Format") {
   enum class TestEnum : int32 { A = 3, B = -2 };
 
   SECTION("default output") {
-    REQUIRE(chString::format("{} {} {}", 42, -7, 18446744073709551615ull) ==
+    REQUIRE(StringUtils::format("{} {} {}", 42, -7, 18446744073709551615ull) ==
             "42 -7 18446744073709551615");
-    REQUIRE(chString::format("{} {} {} {}", 1.0, 0.1, 1e20, -2.5f) == "1 0.1 1e+20 -2.5");
-    REQUIRE(chString::format("{}|{}|{}", 'a', true, false) == "a|true|false");
-    REQUIRE(chString::format("{}", static_cast<uint8>(65)) == "65");
-    REQUIRE(chString::format("{} {}", TestEnum::A, TestEnum::B) == "3 -2");
-    REQUIRE(chString::format("{1}-{0}-{1}", "x", String("y")) == "y-x-y");
-    REQUIRE(chString::format("{} {}", Path("a\\b"), static_cast<const ANSICHAR*>(nullptr)) ==
+    REQUIRE(StringUtils::format("{} {} {} {}", 1.0, 0.1, 1e20, -2.5f) == "1 0.1 1e+20 -2.5");
+    REQUIRE(StringUtils::format("{}|{}|{}", 'a', true, false) == "a|true|false");
+    REQUIRE(StringUtils::format("{}", static_cast<uint8>(65)) == "65");
+    REQUIRE(StringUtils::format("{} {}", TestEnum::A, TestEnum::B) == "3 -2");
+    REQUIRE(StringUtils::format("{1}-{0}-{1}", "x", String("y")) == "y-x-y");
+    REQUIRE(StringUtils::format("{} {}", Path("a\\b"), static_cast<const ANSICHAR*>(nullptr)) ==
             "a/b (null)");
-    REQUIRE(chString::format("{{{}}}", 5) == "{5}");
-    REQUIRE(chString::toString(0.5) == "0.5");
+    REQUIRE(StringUtils::format("{{{}}}", 5) == "{5}");
+    REQUIRE(StringUtils::toString(0.5) == "0.5");
   }
 
   SECTION("specs") {
-    REQUIRE(chString::format("{:.2f}", 3.14159) == "3.14");
-    REQUIRE(chString::format("{:f}", 1.0) == "1.000000");
-    REQUIRE(chString::format("{:.3e}", 12345.678) == "1.235e+04");
-    REQUIRE(chString::format("{:.3}", 3.14159) == "3.14");
-    REQUIRE(chString::format("{:.1f}", 1e300).size() == 303);
-    REQUIRE(chString::format("{:x} {:X} {:b} {:o}", 255, 255u, 5, 8) == "ff FF 101 10");
-    REQUIRE(chString::format("{:08x}", 0xbeefu) == "0000beef");
-    REQUIRE(chString::format("{:05}", -42) == "-0042");
-    REQUIRE(chString::format("{:6.2f}", -1.5) == " -1.50");
-    REQUIRE(chString::format("[{:>5}][{:<5}][{:^5}]", 1, 2, 3) == "[    1][2    ][  3  ]");
-    REQUIRE(chString::format("[{:6}][{:>6}][{:*^7}]", "ab", "ab", "ab") ==
+    REQUIRE(StringUtils::format("{:.2f}", 3.14159) == "3.14");
+    REQUIRE(StringUtils::format("{:f}", 1.0) == "1.000000");
+    REQUIRE(StringUtils::format("{:.3e}", 12345.678) == "1.235e+04");
+    REQUIRE(StringUtils::format("{:.3}", 3.14159) == "3.14");
+    REQUIRE(StringUtils::format("{:.1f}", 1e300).size() == 303);
+    REQUIRE(StringUtils::format("{:x} {:X} {:b} {:o}", 255, 255u, 5, 8) == "ff FF 101 10");
+    REQUIRE(StringUtils::format("{:08x}", 0xbeefu) == "0000beef");
+    REQUIRE(StringUtils::format("{:05}", -42) == "-0042");
+    REQUIRE(StringUtils::format("{:6.2f}", -1.5) == " -1.50");
+    REQUIRE(StringUtils::format("[{:>5}][{:<5}][{:^5}]", 1, 2, 3) == "[    1][2    ][  3  ]");
+    REQUIRE(StringUtils::format("[{:6}][{:>6}][{:*^7}]", "ab", "ab", "ab") ==
             "[ab    ][    ab][**ab***]");
-    REQUIRE(chString::format("[{0:>3}][{0}]", 'c') == "[  c][c]");
-    REQUIRE(chString::format("{:2}", "longer") == "longer");
+    REQUIRE(StringUtils::format("[{0:>3}][{0}]", 'c') == "[  c][c]");
+    REQUIRE(StringUtils::format("{:2}", "longer") == "longer");
   }
 }
 
@@ -1774,22 +1774,22 @@ TEST_CASE("chUtilities - Path matches std::filesystem") {
 
 //     const String ReplaceTestString("Test-string-that-should-replace-all-hyphens");
 //     const String WellPerformedReplacing("Test string that should replace all hyphens");
-//     REQUIRE(chString::replaceAllChars(ReplaceTestString, '-', ' ') ==
+//     REQUIRE(StringUtils::replaceAllChars(ReplaceTestString, '-', ' ') ==
 //     WellPerformedReplacing);
 
 //     const String ReplaceSubStringtest("Test that asdfg contains asdfg some asdfg substrings
 //     to erase"); const String WellPerformedSubStrReplace("Test that sd contains sd some sd
-//     substrings to erase"); REQUIRE(chString::replaceAllSubStr(ReplaceSubStringtest, "asdfg",
+//     substrings to erase"); REQUIRE(StringUtils::replaceAllSubStr(ReplaceSubStringtest, "asdfg",
 //     "sd") == WellPerformedSubStrReplace);
 
 //     const String ToSplitChar("This-is-a-test-that-should-split-by-hyphens");
-//     REQUIRE(chString::splitString(ToSplitChar, '-').size() == 9);
+//     REQUIRE(StringUtils::splitString(ToSplitChar, '-').size() == 9);
 
 //     const String
 //     ToSplitString("This123is123a123test123that123should123split123by123hyphen");
-//     REQUIRE(chString::splitString(ToSplitString, "123").size() == 9);
+//     REQUIRE(StringUtils::splitString(ToSplitString, "123").size() == 9);
 
-//     String Formated = chString::format("hello world, {0}, {0}, {1}, {2}, {3}",
+//     String Formated = StringUtils::format("hello world, {0}, {0}, {1}, {2}, {3}",
 //         123, 1.23, "123", String("123"));
 
 //     const String Anwser("hello world, 123, 123, 1.230000, 123, 123");

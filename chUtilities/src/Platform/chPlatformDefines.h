@@ -147,8 +147,11 @@
 # endif
 #endif
 
+// Full signature of the current function, used by logs and exceptions.
 #if USING(CH_COMPILER_MSVC)
-# define __PRETTY_FUNCTION__ __FUNCSIG__
+# define CH_FUNCTION_SIGNATURE __FUNCSIG__
+#else
+# define CH_FUNCTION_SIGNATURE __PRETTY_FUNCTION__
 #endif
 
 // Both forms give the same 8 byte aligned layout, which matters for structs written to disk.
