@@ -1823,6 +1823,74 @@ TEST_CASE("chUtilities - DataStream getAsString") {
   REQUIRE(readText({}).empty());
 }
 
+TEST_CASE("chUtilities - MemoryDataStream") {
+  SECTION("read and write stop at the end") {
+    MemoryDataStream stream(4);
+    const uint8 source[6] = {1, 2, 3, 4, 5, 6};
+    REQUIRE(stream.write(source, sizeof(source)) == 4);
+    REQUIRE(stream.write(source, 1) == 0);
+
+    stream.seek(2);
+    uint8 target[6] = {};
+    REQUIRE(stream.read(target, sizeof(target)) == 2);
+    REQUIRE(target[0] == 3);
+    REQUIRE(target[1] == 4);
+    REQUIRE(target[2] == 0);
+    REQUIRE(stream.read(target, sizeof(target)) == 0);
+    REQUIRE(stream.isAtEnd());
+  }
+
+  SECTION("copies keep their data") {
+    auto source = chMakeShared<MemoryDataStream>(3);
+    const uint8 bytes[3] = {7, 8, 9};
+    source->write(bytes, sizeof(bytes));
+
+    SPtr<DataStream> clone = source->clone();
+    source->seek(0);
+    MemoryDataStream copy{SPtr<DataStream>(source)};
+    source->close();
+
+    uint8 fromClone[3] = {};
+    REQUIRE(clone->read(fromClone, sizeof(fromClone)) == 3);
+    REQUIRE(fromClone[2] == 9);
+
+    uint8 fromCopy[3] = {};
+    REQUIRE(copy.size() == 3);
+    REQUIRE(copy.read(fromCopy, sizeof(fromCopy)) == 3);
+    REQUIRE(fromCopy[0] == 7);
+  }
+
+  SECTION("a file stream copies any stream") {
+    const Path memoryFile("chStreamTest_memory.bin");
+    const Path fileFile("chStreamTest_file.bin");
+
+    auto memory = chMakeShared<MemoryDataStream>(3);
+    const uint8 bytes[3] = {'a', 'b', 'c'};
+    memory->write(bytes, sizeof(bytes));
+    FileSystem::dumpMemStreamIntoFile(memory, memoryFile);
+
+    SPtr<DataStream> fromMemory = FileSystem::openFile(memoryFile);
+    REQUIRE(fromMemory);
+    REQUIRE(fromMemory->getAsString() == "abc");
+
+    FileSystem::dumpMemStreamIntoFile(fromMemory, fileFile);
+    fromMemory->close();
+    SPtr<DataStream> fromFile = FileSystem::openFile(fileFile);
+    REQUIRE(fromFile);
+    REQUIRE(fromFile->getAsString() == "abc");
+    fromFile->close();
+
+    REQUIRE(FileSystem::remove(memoryFile));
+    REQUIRE(FileSystem::remove(fileFile));
+  }
+
+  SECTION("a missing file does not throw") {
+    REQUIRE_NOTHROW(FileDataStream(Path("chStreamTest_missing.bin")));
+    REQUIRE_FALSE(FileDataStream(Path("chStreamTest_missing.bin")).isOpen());
+    REQUIRE(FileSystem::openFile(Path("chStreamTest_missing.bin")) == nullptr);
+  }
+}
+
 TEST_CASE("chUtilities - Path matches std::filesystem") {
   namespace fs = std::filesystem;
   const Vector<String> cases = {

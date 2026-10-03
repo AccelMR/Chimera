@@ -666,13 +666,12 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
     accessMode.set(ACCESS_MODE::kWRITE);
   }
 
-  try {
-    return chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode, true);
-  }
-  catch (const std::exception& e) {
-    logError("FileSystem: " + String(e.what()));
+  auto stream = chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode, true);
+  if (!stream->isOpen()) {
+    logError("FileSystem: failed to open '" + path.toString() + "'");
     return nullptr;
   }
+  return stream;
 }
 
 SPtr<DataStream>
@@ -690,15 +689,13 @@ FileSystem::createAndOpenFile(const Path& path)
     return nullptr;
   }
 
-  try {
-    return chMakeShared<FileDataStream>(Path(std::move(realPath)),
-                                        ACCESS_MODE::kWRITE,
-                                        true);
-  }
-  catch (const std::exception& e) {
-    logError("FileSystem: " + String(e.what()));
+  auto stream =
+      chMakeShared<FileDataStream>(Path(std::move(realPath)), ACCESS_MODE::kWRITE, true);
+  if (!stream->isOpen()) {
+    logError("FileSystem: failed to create '" + path.toString() + "'");
     return nullptr;
   }
+  return stream;
 }
 
 void
@@ -709,12 +706,10 @@ FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path&
     return;
   }
 
-  try {
-    // The constructor writes the whole memory stream and the destructor closes the file.
-    FileDataStream fileStream(Path(std::move(realPath)), memStream);
-  }
-  catch (const std::exception& e) {
-    logError("FileSystem: " + String(e.what()));
+  // The constructor writes the whole memory stream and the destructor closes the file.
+  FileDataStream fileStream(Path(std::move(realPath)), memStream);
+  if (!fileStream.isOpen()) {
+    logError("FileSystem: failed to write '" + path.toString() + "'");
   }
 }
 

@@ -304,8 +304,8 @@ class CH_UTILITY_EXPORT MemoryDataStream: public DataStream
    *    Size of the chunk of memory.
    * 
    * @param  _freeOnClose
-   *    If this Memory stream should delete memory pointer on close or 
-   *    something else will take care of freeing memory.
+   *    If true, the stream frees memory with free() on close, so it must come from
+   *    malloc(). If false, something else frees it.
    **/
   MemoryDataStream(void* memory, SIZE_T _size, bool _freeOnClose = true);
 
@@ -434,17 +434,18 @@ class CH_UTILITY_EXPORT MemoryDataStream: public DataStream
 class CH_UTILITY_EXPORT FileDataStream: public DataStream
 {
  public:
- /*
-  *   Default constructor
-  */
-  FileDataStream(const Path& _path, 
+  /**
+   * Opens the file. It never throws: if the file cannot be opened, isOpen() is false and
+   * reads return 0.
+   */
+  FileDataStream(const Path& _path,
                  AccesModeFlag _accessMode = AccesModeFlag(ACCESS_MODE::kREAD), 
                  bool _freeOnClose = true);
 
-  /** 
-   *   Constructor from Memory stream.
-   * 
-   **/
+  /**
+   * Creates the file and writes the whole source stream into it, from its start. Any
+   * kind of stream can be the source.
+   */
   explicit FileDataStream(const Path& _path, const SPtr<DataStream>& sourceDataStream);
 
  /*

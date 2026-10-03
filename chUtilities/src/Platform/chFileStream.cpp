@@ -19,6 +19,7 @@
 #include <fstream>
 
 #include "chLogger.h"
+#include "chMath.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
 
@@ -151,14 +152,9 @@ MemoryDataStream::MemoryDataStream(const SPtr<DataStream>& sourceStream)
 
   m_data = reinterpret_cast<uint8*>(malloc(m_size));
   m_currPos = m_data;
-  m_end = m_data + sourceStream->read(m_data, m_size);
+  m_size = sourceStream->read(m_data, m_size);
+  m_end = m_data + m_size;
   m_freeOnClose = true;
-
-#if USING(CH_DEBUG_MODE)
-  memset(m_data, 0, m_size);
-#endif
-
-  CH_ASSERT( m_end >= m_currPos );
 }
 
 /*
@@ -170,48 +166,35 @@ MemoryDataStream::~MemoryDataStream() {
 /*
 */
 SIZE_T
-MemoryDataStream::read(void* buf, SIZE_T size) {
-  SIZE_T cnt = size;
-
-  if (m_currPos + cnt > m_end) {
-    cnt = m_end - m_currPos;
-  }
-  if (0 == cnt) {
+MemoryDataStream::read(void* buf, SIZE_T size)
+{
+  const SIZE_T count = Math::min(size, static_cast<SIZE_T>(m_end - m_currPos));
+  if (0 == count) {
     return 0;
   }
 
-  CH_ASSERT(cnt <= size);
-
-#if USING (CH_PLATFORM_WIN32)
-  memcpy_s(buf, size, m_currPos, cnt);
-#elif USING (CH_PLATFORM_LINUX)
-  memcpy(buf, m_currPos, size);
-#endif
-  m_currPos += cnt;
-
-  return cnt;
+  memcpy(buf, m_currPos, count);
+  m_currPos += count;
+  return count;
 }
 
 /*
 */
 SIZE_T
-MemoryDataStream::write(const void* buf, SIZE_T size) {
-  SIZE_T written = 0;
-  if (isWriteable()) {
-    written = size;
-
-    if (m_currPos + written > m_end) {
-      written = m_end - m_currPos;
-    }
-    if (0 == written) {
-      return 0;
-    }
-    memcpy(m_currPos, buf, size);
-
-    m_currPos += written;
+MemoryDataStream::write(const void* buf, SIZE_T size)
+{
+  if (!isWriteable()) {
+    return 0;
   }
 
-  return written;
+  const SIZE_T count = Math::min(size, static_cast<SIZE_T>(m_end - m_currPos));
+  if (0 == count) {
+    return 0;
+  }
+
+  memcpy(m_currPos, buf, count);
+  m_currPos += count;
+  return count;
 }
 
 /*
@@ -248,20 +231,27 @@ MemoryDataStream::isAtEnd() const {
 /*
 */
 void
-MemoryDataStream::close() {
+MemoryDataStream::close()
+{
   if (nullptr != m_data) {
     if (m_freeOnClose) {
-      delete m_data;
+      free(m_data);
     }
-    m_data = nullptr;
+    m_data = m_currPos = m_end = nullptr;
   }
 }
 
 /*
 */
 SPtr<DataStream>
-MemoryDataStream::clone() const {
-  return chMakeShared<MemoryDataStream>(m_data, m_size, false);
+MemoryDataStream::clone() const
+{
+  // The copy owns its data, so it stays valid after this stream is closed.
+  auto* copy = static_cast<uint8*>(malloc(m_size));
+  if (m_size > 0) {
+    memcpy(copy, m_data, m_size);
+  }
+  return chMakeShared<MemoryDataStream>(copy, m_size, true);
 }
 
 /*
@@ -283,10 +273,21 @@ FileDataStream::FileDataStream(const Path& _path, const SPtr<DataStream>& source
     m_freeOnClose(true) {
   CH_ASSERT(sourceDataStream->isReadable());
   init();
+  if (!isOpen()) {
+    return;
+  }
 
-  auto memStream = std::reinterpret_pointer_cast<MemoryDataStream>(sourceDataStream);
-  CH_ASSERT(memStream);
-  write(memStream->m_data, memStream->size());
+  // Copies through the DataStream interface, so any kind of stream can be the source.
+  constexpr SIZE_T kChunkSize = 64 * 1024;
+  Vector<uint8> chunk(kChunkSize);
+  sourceDataStream->seek(0);
+  while (true) {
+    const SIZE_T readBytes = sourceDataStream->read(chunk.data(), kChunkSize);
+    if (0 == readBytes) {
+      break;
+    }
+    write(chunk.data(), readBytes);
+  }
 }
 
 FileDataStream::~FileDataStream() {
@@ -411,11 +412,11 @@ FileDataStream::init() {
     m_pInStream = m_pFStreamRO;
   }
 
-  //Should check ensure open succeeded, in case fail for some reason.
+  // Nothing is logged here because the Logger opens its own file through this class.
+  // The streams are kept when opening fails, so reads return 0 instead of crashing;
+  // callers check isOpen().
   if (m_pInStream->fail()) {
-    // trow an exception or log an error
-    const String msg = "Failed to open file: " + m_path.toString();
-    throw std::runtime_error(msg.c_str());
+    return;
   }
 
   m_pInStream->seekg(0, std::ios_base::end);
