@@ -28,6 +28,9 @@ namespace chEngineSDK {
  * A name without extension gets the platform extension, and in debug builds the "d"
  * suffix CMake gives debug libraries ("chVulkan" -> "chVulkand.dll"). A name that already
  * ends with the extension is taken as the exact file name.
+ *
+ * Shutting the manager down unloads the libraries in reverse load order, so everything
+ * created by a plugin must be destroyed before.
  */
 class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryManager>
 {
@@ -47,12 +50,21 @@ class CH_UTILITY_EXPORT DynamicLibraryManager : public Module<DynamicLibraryMana
   NODISCARD WeakPtr<DynamicLibrary>
   getLibrary(const String& name) const;
 
+ protected:
+  void
+  onShutDown() override;
+
  private:
   NODISCARD static String
   getFileName(const String& name);
 
+  NODISCARD SPtr<DynamicLibrary>
+  findByFileName(const String& fileName) const;
+
  private:
-  Map<String, SPtr<DynamicLibrary>> m_loadedLibraries;
+  // In load order, so they can be unloaded in reverse. There are only a few libraries and
+  // they are looked up only when loading, so a linear search is enough.
+  Vector<Pair<String, SPtr<DynamicLibrary>>> m_loadedLibraries;
 };
 
 } // namespace chEngineSDK

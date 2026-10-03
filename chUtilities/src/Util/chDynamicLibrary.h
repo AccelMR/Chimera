@@ -24,15 +24,14 @@ using DynamicLibraryHandle = void*;
 /**
  * Wraps one dynamic library, so plugins are loaded and their symbols read without
  * platform code. The library is loaded by the constructor; check isLoaded() before using
- * it. The destructor does not unload it: plugin objects (the graphics API, codecs) are
- * not destroyed before the libraries yet, so unloading would leave them without code.
+ * it. The destructor unloads it, so every object created by its code must be gone first.
  */
 class CH_UTILITY_EXPORT DynamicLibrary
 {
  public:
   explicit DynamicLibrary(Path path);
 
-  ~DynamicLibrary() = default;
+  ~DynamicLibrary();
 
   DynamicLibrary(const DynamicLibrary&) = delete;
 

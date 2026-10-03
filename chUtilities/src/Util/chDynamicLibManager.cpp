@@ -28,9 +28,8 @@ DynamicLibraryManager::loadDynLibrary(const String& name, const Path& directory)
 {
   const String fileName = getFileName(name);
 
-  const auto found = m_loadedLibraries.find(fileName);
-  if (found != m_loadedLibraries.end()) {
-    return found->second;
+  if (SPtr<DynamicLibrary> found = findByFileName(fileName)) {
+    return found;
   }
 
   const Path filePath = directory.empty() ? Path(fileName) : directory / fileName;
@@ -39,7 +38,7 @@ DynamicLibraryManager::loadDynLibrary(const String& name, const Path& directory)
     return {};
   }
 
-  m_loadedLibraries.emplace(fileName, library);
+  m_loadedLibraries.emplace_back(fileName, library);
   return library;
 }
 
@@ -66,11 +65,19 @@ DynamicLibraryManager::unloadDynLibrary(const WeakPtr<DynamicLibrary>& library)
 WeakPtr<DynamicLibrary>
 DynamicLibraryManager::getLibrary(const String& name) const
 {
-  const auto found = m_loadedLibraries.find(getFileName(name));
-  if (found != m_loadedLibraries.end()) {
-    return found->second;
+  return findByFileName(getFileName(name));
+}
+
+/*
+ */
+void
+DynamicLibraryManager::onShutDown()
+{
+  // A library loaded later may use one loaded before it, never the other way around.
+  while (!m_loadedLibraries.empty()) {
+    m_loadedLibraries.back().second->unload();
+    m_loadedLibraries.pop_back();
   }
-  return {};
 }
 
 /*
@@ -88,6 +95,19 @@ DynamicLibraryManager::getFileName(const String& name)
 #endif
   fileName += DynamicLibrary::EXTENSION;
   return fileName;
+}
+
+/*
+ */
+SPtr<DynamicLibrary>
+DynamicLibraryManager::findByFileName(const String& fileName) const
+{
+  for (const auto& [loadedName, library] : m_loadedLibraries) {
+    if (loadedName == fileName) {
+      return library;
+    }
+  }
+  return nullptr;
 }
 
 } // namespace chEngineSDK

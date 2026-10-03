@@ -81,6 +81,13 @@ DynamicLibrary::DynamicLibrary(Path path)
 
 /*
  */
+DynamicLibrary::~DynamicLibrary()
+{
+  unload();
+}
+
+/*
+ */
 bool
 DynamicLibrary::unload()
 {
@@ -101,6 +108,7 @@ DynamicLibrary::unload()
   }
 
   m_handle = nullptr;
+  CH_LOG_DEBUG(DynamicLibraryLog, "Unloaded '{0}'", m_path);
   return true;
 }
 
