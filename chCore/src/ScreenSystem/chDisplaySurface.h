@@ -37,6 +37,7 @@ struct CH_CORE_EXPORT ScreenDescriptor {
   String title = "chimeraDEfaultTitle";
   uint32 width = 1280;
   uint32 height = 720;
+  bool resizable = true;
 };
 
 /*
@@ -94,11 +95,15 @@ class CH_CORE_EXPORT DisplaySurface
   void
   close();
 
-  FORCEINLINE uint32
-  getWidth(){ return m_width; }
+  /**
+   * Size of the drawable area in pixels, read from the window each time, so it is right
+   * after a resize and on screens scaled for high DPI.
+   */
+  NODISCARD uint32
+  getWidth() const;
 
-  FORCEINLINE uint32
-  getHeight() { return m_height; }
+  NODISCARD uint32
+  getHeight() const;
 
   FORCEINLINE PlatformDisplay
   getPlatformHandler() { return m_displayHandle; }
@@ -137,11 +142,7 @@ protected:
 
  private:
  //Pointer to the actual screen.
-  PlatformDisplay m_displayHandle;
-
-  uint32 m_width;
-  uint32 m_height;
-
+  PlatformDisplay m_displayHandle = nullptr;
 };
 /************************************************************************/
 /*

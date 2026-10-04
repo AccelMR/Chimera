@@ -312,7 +312,15 @@ DisplayEventHandle::update() {
       addEvent(PlatformEventType::Close);
       break;
 
-    case SDL_EVENT_WINDOW_RESIZED:
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+      if (event.window.windowID == m_mainWindowId) {
+        addEvent(PlatformEventType::Close);
+      }
+      break;
+
+    // Pixels, not the window size in screen units: the swap chain and render targets are
+    // sized in pixels, and the two differ on screens scaled for high DPI.
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
       addEvent(PlatformEventType::Resize, std::move(ResizeData{static_cast<uint32>(event.window.data1),
                                                      static_cast<uint32>(event.window.data2)}));
 

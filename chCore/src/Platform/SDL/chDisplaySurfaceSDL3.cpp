@@ -63,8 +63,6 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
     return false;
   }
 
-  CH_PARAMETER_UNUSED(eventHandler);
-
   SDL_PropertiesID properties;
 
   // Create SDL3 properties for advanced window creation
@@ -82,12 +80,8 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
                        SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
                        desc.height);
 
-  //Configure capabilities based on descriptor
-  if (true) {
-    SDL_SetBooleanProperty(properties,
-                          SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN,
-                          true);
-  }
+  SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+  SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, desc.resizable);
 
   // TODO: Add more capabilities based on descriptor
   // if (true) {
@@ -103,9 +97,11 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
     return false;
   }
 
-  m_width = desc.width;
-  m_height = desc.height;
   ++s_windowCount;
+
+  if (eventHandler) {
+    eventHandler->m_mainWindowId = SDL_GetWindowID(m_displayHandle);
+  }
 
   return true;
 }
@@ -136,6 +132,26 @@ bool
 DisplaySurface::isMinimized() const
 {
   return (SDL_GetWindowFlags(m_displayHandle) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+/*
+ */
+uint32
+DisplaySurface::getWidth() const
+{
+  int32 width = 0;
+  SDL_GetWindowSizeInPixels(m_displayHandle, &width, nullptr);
+  return static_cast<uint32>(width);
+}
+
+/*
+ */
+uint32
+DisplaySurface::getHeight() const
+{
+  int32 height = 0;
+  SDL_GetWindowSizeInPixels(m_displayHandle, nullptr, &height);
+  return static_cast<uint32>(height);
 }
 
 } // namespace chEngineSDK

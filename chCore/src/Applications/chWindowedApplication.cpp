@@ -242,9 +242,10 @@ WindowedApplication::initializeRenderComponents() {
   // Get SwapChain image count
   uint32 imageCount = m_renderComponents.swapChain->getTextureCount();
 
-  // Create command buffers (one per swap chain image)
-  m_renderComponents.commandBuffers.resize(imageCount);
-  for (uint32 i = 0; i < imageCount; ++i) {
+  // One per frame in flight, not per swap chain image: the frame fence is what proves a
+  // command buffer has finished, and the same image can come back two frames in a row.
+  m_renderComponents.commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     m_renderComponents.commandBuffers[i] =
         m_renderComponents.commandPool->allocateCommandBuffer();
     if (!m_renderComponents.commandBuffers[i]) {
@@ -352,7 +353,7 @@ WindowedApplication::render(const float deltaTime)
   currentFence->reset();
 
   uint32 imageIndex = m_renderComponents.swapChain->getCurrentImageIndex();
-  auto& commandBuffer = m_renderComponents.commandBuffers[imageIndex];
+  auto& commandBuffer = m_renderComponents.commandBuffers[currentFrame];
   auto renderPass = m_renderComponents.swapChain->getRenderPass();
   auto framebuffer = m_renderComponents.swapChain->getFramebuffer(imageIndex);
 
@@ -451,7 +452,7 @@ WindowedApplication::resize(uint32 width, uint32 height) {
   createSyncObjects();
 
   m_renderComponents.commandBuffers.clear();
-  m_renderComponents.commandBuffers.resize(m_renderComponents.swapChain->getTextureCount());
+  m_renderComponents.commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
   for (auto& commandBuffer : m_renderComponents.commandBuffers) {
     commandBuffer = m_renderComponents.commandPool->allocateCommandBuffer();
   }

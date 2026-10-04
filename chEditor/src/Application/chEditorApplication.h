@@ -72,6 +72,9 @@ class EditorApplication : public WindowedApplication
   renderFullScreenRenderer(const RendererOutput& rendererOutput);
 
   void
+  resizeViewport(uint32 viewportWidth, uint32 viewportHeight);
+
+  void
   loadCodecs();
 
   void
@@ -86,6 +89,10 @@ class EditorApplication : public WindowedApplication
 
   SPtr<ISampler> m_defaultSampler;
   Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
+
+  // Pixel size of the viewport panel in the last UI frame; the renderer follows it.
+  uint32 m_viewportWidth = 0;
+  uint32 m_viewportHeight = 0;
 
   UniquePtr<ContentAssetUI> m_contentAssetUI; ///< Content Asset UI instance
   UniquePtr<MainMenuBarUI> m_mainMenuBar; ///< Main menu bar instance

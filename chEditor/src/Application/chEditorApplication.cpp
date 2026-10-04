@@ -149,6 +149,13 @@ EditorApplication::destroyModules()
  */
 RendererOutput
 EditorApplication::onRender(float deltaTime) {
+  // Resized before the frame is recorded, so this frame's UI only uses the new target.
+  if (m_viewportWidth > 0 && m_viewportHeight > 0 &&
+      (m_viewportWidth != m_nastyRenderer->getWidth() ||
+       m_viewportHeight != m_nastyRenderer->getHeight())) {
+    resizeViewport(m_viewportWidth, m_viewportHeight);
+  }
+
   RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
   //RendererOutput renderOut = m_multiStageRenderer->onRender(deltaTime);
   return renderOut;
@@ -374,9 +381,7 @@ void
 EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize({static_cast<float>(rendererOutput.width-50),
-                            static_cast<float>(rendererOutput.height-50)},
-    ImGuiCond_Always);
+  ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
 
   ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
                                   ImGuiWindowFlags_NoMove |
@@ -387,8 +392,14 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
 
   if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
     ImGui::End();
+    return;
   }
   m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
+
+  const ImVec2 panelSize = ImGui::GetWindowSize();
+  const ImVec2 framebufferScale = ImGui::GetIO().DisplayFramebufferScale;
+  m_viewportWidth = static_cast<uint32>(panelSize.x * framebufferScale.x);
+  m_viewportHeight = static_cast<uint32>(panelSize.y * framebufferScale.y);
 
   if (rendererOutput.colorTarget) {
     auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
@@ -409,12 +420,26 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
     }
 
     if (descriptorSet) {
-      // La imagen ocupará toda la ventana
-      ImVec2 windowSize = ImGui::GetWindowSize();
-      ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), windowSize);
+      ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), panelSize);
     }
   }
   ImGui::End();
+}
+
+/*
+ */
+void
+EditorApplication::resizeViewport(uint32 viewportWidth, uint32 viewportHeight)
+{
+  // Waits for the GPU, so no frame in flight still draws the ImGui textures of the old
+  // target and they can go back to ImGui's pool.
+  m_nastyRenderer->resize(viewportWidth, viewportHeight);
+
+  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
+  for (const auto& [textureView, descriptorSet] : m_textureDescriptorSets) {
+    graphicAPI.execute("removeImGuiTexture", {Any(descriptorSet)});
+  }
+  m_textureDescriptorSets.clear();
 }
 
 /*

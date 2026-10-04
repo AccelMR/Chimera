@@ -1118,6 +1118,20 @@ VulkanAPI::initializeFunctionMap() {
     return Any(std::static_pointer_cast<IDescriptorSet>(descriptorSetWrapper));
   };
 
+  // The set goes back to ImGui's pool at once, so the caller must make sure no frame in
+  // flight still draws it.
+  m_functionMap["removeImGuiTexture"] = [](const Vector<Any>& args) -> Any {
+    SPtr<IDescriptorSet> descriptorSet;
+    if (args.empty() || !AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(args[0], descriptorSet) ||
+        !descriptorSet) {
+      CH_LOG_ERROR(Vulkan, "removeImGuiTexture requires the descriptor set to remove");
+      return {};
+    }
+
+    ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(descriptorSet->getRaw()));
+    return {};
+  };
+
 #endif // USING (CH_VK_IMGUI)
 }
 

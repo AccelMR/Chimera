@@ -24,7 +24,7 @@ struct ApplicationRenderContext {
   SPtr<ITexture> depthTexture;
   SPtr<ITextureView> depthTextureView;
   SPtr<ICommandPool> commandPool;
-  Vector<SPtr<ICommandBuffer>> commandBuffers;
+  Vector<SPtr<ICommandBuffer>> commandBuffers;       // One per frame in flight
   SPtr<ICommandQueue> graphicsQueue;
 
   Vector<SPtr<ISemaphore>> imageAvailableSemaphores; // One per SwapChain image

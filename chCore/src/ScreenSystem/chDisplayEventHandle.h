@@ -139,6 +139,10 @@ class CH_CORE_EXPORT DisplayEventHandle
 
   PlatformPtr m_platformPtr;
 
+  // Closing this window closes the application. Other windows (ImGui panels dragged out of
+  // it) handle their own close requests, and while they exist the platform sends no quit.
+  uint32 m_mainWindowId = 0;
+
   // Receives every platform event before the engine handles it. With SDL3 the Any holds
   // a const SDL_Event*, so no event is copied.
   const Event<bool(const Any&)> m_updateInjection;
