@@ -141,6 +141,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   add_subdirectory(chCore)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/chCoreTest")
+  add_subdirectory(chCoreTest)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/chGraphicsAPIs/chVulkan")
   add_subdirectory(chGraphicsAPIs/chVulkan)
 endif()
