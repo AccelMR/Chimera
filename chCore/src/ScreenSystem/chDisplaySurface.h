@@ -104,6 +104,13 @@ class CH_CORE_EXPORT DisplaySurface
   getPlatformHandler() { return m_displayHandle; }
 
   /**
+   * A minimized window has no drawable area (its surface is 0x0), so nothing can be
+   * rendered or presented until it is restored.
+   */
+  NODISCARD bool
+  isMinimized() const;
+
+  /**
    *   Do not use unless you know what you are doing.
    *  This function is used to get very specific platform handler.
    **/

@@ -145,11 +145,9 @@ VulkanSampler::VulkanSampler(VkDevice device, const SamplerCreateInfo& createInf
   VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler));
 }
 
-VulkanSampler::~VulkanSampler() {
-  if (m_sampler != VK_NULL_HANDLE) {
-    vkDestroySampler(m_device, m_sampler, nullptr);
-    m_sampler = VK_NULL_HANDLE;
-  }
+VulkanSampler::~VulkanSampler()
+{
+  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_SAMPLER, m_sampler);
 }
 
 } // namespace chEngineSDK

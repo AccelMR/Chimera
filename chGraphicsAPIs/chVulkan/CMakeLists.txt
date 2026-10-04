@@ -71,6 +71,10 @@ endif()
 find_package(Vulkan REQUIRED)                # Exporta el target Vulkan::Vulkan
 target_link_libraries(chVulkan PRIVATE Vulkan::Vulkan chImgui)
 
+# Header-only library; SYSTEM keeps the project warning level out of its code.
+target_include_directories(chVulkan SYSTEM PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/Externals/VulkanMemoryAllocator/include)
+
 # ---------- Plataforma: Windows ----------
 if(WIN32)
     # Define para surface Win32

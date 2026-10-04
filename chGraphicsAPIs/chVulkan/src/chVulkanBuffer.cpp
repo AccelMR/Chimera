@@ -1,169 +1,116 @@
 /************************************************************************/
 /**
- * @file chIBuffer.cpp
+ * @file chVulkanBuffer.cpp
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Interface for the buffer. This is the base class for all buffers.
- * It is used to create buffers and allocate them.
- * It is also used to reset buffers and free them.
+ * Vulkan implementation of IBuffer.
  */
 /************************************************************************/
-
 #include "chVulkanBuffer.h"
 
 #include <cstring>
 
-#include "chICommandQueue.h"
+#include <vk_mem_alloc.h>
+
 #include "chVulkanAPI.h"
 
 namespace chEngineSDK {
-namespace chVulkanBufferUtils {
-uint32
-findMemoryType(VkPhysicalDevice physicalDevice,
-               uint32 typeFilter,
-               VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
-
-    for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) &&
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    CH_EXCEPT(VulkanErrorException, "Failed to find suitable memory type");
+namespace {
+VkBufferUsageFlags
+toVkBufferUsage(BufferUsageFlags usage)
+{
+  VkBufferUsageFlags vkUsage = 0;
+  if (usage.isSet(BufferUsage::VertexBuffer)) {
+    vkUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+  }
+  if (usage.isSet(BufferUsage::IndexBuffer)) {
+    vkUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  }
+  if (usage.isSet(BufferUsage::UniformBuffer)) {
+    vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+  }
+  if (usage.isSet(BufferUsage::StorageBuffer)) {
+    vkUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+  }
+  if (usage.isSet(BufferUsage::TransferSrc)) {
+    vkUsage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  }
+  if (usage.isSet(BufferUsage::TransferDst)) {
+    vkUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  }
+  return vkUsage;
 }
-} // namespace chVulkanBufferUtils
-using namespace chVulkanBufferUtils;
 
-/*
-*/
-VulkanBuffer::VulkanBuffer(VkDevice device,
-                           VkPhysicalDevice physicalDevice,
-                           const BufferCreateInfo& createInfo)
-    : m_device(device), m_size(createInfo.size) {
-  VkBufferUsageFlags usage = 0;
-  if (createInfo.usage.isSet(BufferUsage::VertexBuffer)) {
-    usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-  }
-  if (createInfo.usage.isSet(BufferUsage::IndexBuffer)) {
-    usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-  }
-  if (createInfo.usage.isSet(BufferUsage::UniformBuffer)) {
-    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-  }
-  if (createInfo.usage.isSet(BufferUsage::StorageBuffer)) {
-    usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  }
-  if (createInfo.usage.isSet(BufferUsage::TransferSrc)) {
-    usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  }
-  if (createInfo.usage.isSet(BufferUsage::TransferDst)) {
-    usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  }
-
-  VkBufferCreateInfo bufferInfo = {
-    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = 0,
-    .size = m_size,
-    .usage = usage,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = 0,
-    .pQueueFamilyIndices = nullptr
-  };
-
-  VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &m_buffer));
-
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(device, m_buffer, &memRequirements);
-
-  VkMemoryPropertyFlags memoryFlags = 0;
-  switch (createInfo.memoryUsage) {
-  case MemoryUsage::GpuOnly:
-    memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    m_mappable = false;
-    break;
+VmaAllocationCreateFlags
+toVmaAllocationFlags(MemoryUsage memoryUsage)
+{
+  switch (memoryUsage) {
   case MemoryUsage::CpuOnly:
-    memoryFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    m_mappable = true;
-    break;
   case MemoryUsage::CpuToGpu:
-    memoryFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    m_mappable = true;
-    break;
+    return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+           VMA_ALLOCATION_CREATE_MAPPED_BIT;
   case MemoryUsage::GpuToCpu:
-    memoryFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-    m_mappable = true;
-    break;
+    return VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  case MemoryUsage::GpuOnly:
+  default:
+    return 0;
   }
+}
+} // namespace
 
-  uint32 memoryTypeIndex = findMemoryType(physicalDevice,
-                                          memRequirements.memoryTypeBits,
-                                          memoryFlags);
+/*
+ */
+VulkanBuffer::VulkanBuffer(VmaAllocator allocator, const BufferCreateInfo& createInfo)
+  : m_allocator(allocator),
+    m_size(createInfo.size)
+{
+  const VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                      .pNext = nullptr,
+                                      .flags = 0,
+                                      .size = m_size,
+                                      .usage = toVkBufferUsage(createInfo.usage),
+                                      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                                      .queueFamilyIndexCount = 0,
+                                      .pQueueFamilyIndices = nullptr};
 
-  VkMemoryAllocateInfo allocInfo = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-    .pNext = nullptr,
-    .allocationSize = memRequirements.size,
-    .memoryTypeIndex = memoryTypeIndex
-  };
-  VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &m_memory));
-  VK_CHECK(vkBindBufferMemory(device, m_buffer, m_memory, 0));
+  VmaAllocationCreateInfo allocationInfo{};
+  allocationInfo.usage = createInfo.memoryUsage == MemoryUsage::GpuOnly
+                             ? VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+                             : VMA_MEMORY_USAGE_AUTO;
+  allocationInfo.flags = toVmaAllocationFlags(createInfo.memoryUsage);
 
-  if (m_mappable){
-    VK_CHECK(vkMapMemory(device, m_memory, 0, m_size, 0, (void**)&m_mappedData));
+  VmaAllocationInfo allocationResult{};
+  VK_CHECK(vmaCreateBuffer(m_allocator, &bufferInfo, &allocationInfo, &m_buffer,
+                           &m_allocation, &allocationResult));
+  m_mappedData = allocationResult.pMappedData;
 
-    if (createInfo.initialData) {
-      update(createInfo.initialData, createInfo.initialDataSize);
-    }
+  if (createInfo.initialData) {
+    update(createInfo.initialData, createInfo.initialDataSize);
   }
 }
 
 /*
-*/
-VulkanBuffer::~VulkanBuffer() {
-  if (m_device == VK_NULL_HANDLE) {
+ */
+VulkanBuffer::~VulkanBuffer()
+{
+  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_BUFFER, m_buffer, m_allocation);
+}
+
+/*
+ */
+void
+VulkanBuffer::update(const void* data, SIZE_T size, uint32 offset)
+{
+  if (m_mappedData == nullptr) {
+    CH_LOG_ERROR(Vulkan, "Buffer is not mappable");
     return;
   }
-  VkResult result = vkDeviceWaitIdle(m_device);
-  if (result != VK_SUCCESS) {
-    CH_LOG_ERROR(Vulkan, "VulkanBuffer::Destructor: Failed to wait for device idle.");
-  }
 
-  if (m_buffer != VK_NULL_HANDLE) {
-    vkDestroyBuffer(m_device, m_buffer, nullptr);
-    m_buffer = VK_NULL_HANDLE;
-  }
-
-  if (m_mappedData && m_mappable) {
-    vkUnmapMemory(m_device, m_memory);
-    m_mappedData = nullptr;
-  }
-
-  if (m_memory != VK_NULL_HANDLE) {
-    vkFreeMemory(m_device, m_memory, nullptr);
-    m_memory = VK_NULL_HANDLE;
-  }
+  CH_ASSERT(offset + size <= m_size);
+  memcpy(static_cast<uint8*>(m_mappedData) + offset, data, size);
+  // Does nothing on host coherent memory, which VMA may not have picked.
+  VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));
 }
 
-/*
-*/
-void
-VulkanBuffer::update(const void* data, SIZE_T size, uint32 offset) {
-  if (m_mappable && m_mappedData) {
-    memcpy(static_cast<uint8*>(m_mappedData) + offset, data, size);
-  }
-  else if (m_mappable) {
-    void* mappedData = nullptr;
-    VK_CHECK(vkMapMemory(m_device, m_memory, offset, size, 0, &mappedData));
-    memcpy(static_cast<uint8*>(mappedData), data, size);
-    vkUnmapMemory(m_device, m_memory);
-  }
-  else {
-    CH_LOG_ERROR(Vulkan, "Buffer is not mappable");
-  }
-}
 } // namespace chEngineSDK

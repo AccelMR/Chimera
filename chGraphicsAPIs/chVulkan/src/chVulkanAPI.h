@@ -12,6 +12,7 @@
 #include "chVulkanPrerequisites.h"
 
 #include "chIGraphicsAPI.h"
+#include "chVulkanDeletionQueue.h"
 
 namespace chEngineSDK {
 
@@ -105,8 +106,34 @@ class VulkanAPI : public IGraphicsAPI {
     return m_graphicsQueueFamilyIndex;
   }
 
+  NODISCARD FORCEINLINE VkQueue
+  getGraphicsQueueHandle() const
+  {
+    return m_graphicsQueueHandle;
+  }
+
+  NODISCARD FORCEINLINE VmaAllocator
+  getAllocator() const
+  {
+    return m_allocator;
+  }
+
+  NODISCARD FORCEINLINE VulkanDeletionQueue&
+  getDeletionQueue()
+  {
+    return m_deletionQueue;
+  }
+
+  /**
+   * Names an object for the validation messages and for RenderDoc. Does nothing when the
+   * debug utils extension is off.
+   */
+  template<typename HandleType>
   void
-  waitForDeviceIdle();
+  setDebugName(VkObjectType type, HandleType handle, const ANSICHAR* name) const
+  {
+    setDebugNameHandle(type, reinterpret_cast<uint64>(handle), name);
+  }
 
   virtual Any
   execute(const String& functionName, const Vector<Any>& args = {}) override;
@@ -140,9 +167,20 @@ class VulkanAPI : public IGraphicsAPI {
   void
   initializeFunctionMap();
 
+  void
+  createAllocator();
+
+  void
+  setDebugNameHandle(VkObjectType type, uint64 handle, const ANSICHAR* name) const;
+
   UniquePtr<VulkanData> m_vulkanData;
 
+  VmaAllocator m_allocator = nullptr;
+  VulkanDeletionQueue m_deletionQueue;
+  PFN_vkSetDebugUtilsObjectNameEXT m_setDebugUtilsObjectName = nullptr;
+
   SPtr<ICommandQueue> m_graphicsQueue;
+  VkQueue m_graphicsQueueHandle = VK_NULL_HANDLE;
   uint32 m_graphicsQueueFamilyIndex = 0;
 
   SPtr<ICommandQueue> m_presentQueue;

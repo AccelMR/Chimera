@@ -130,5 +130,13 @@ DisplaySurface::getPlatformHandlerAsInteger() const {
   return reinterpret_cast<uint64>(m_displayHandle);
 }
 
+/*
+ */
+bool
+DisplaySurface::isMinimized() const
+{
+  return (SDL_GetWindowFlags(m_displayHandle) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
 } // namespace chEngineSDK
 #endif // CH_DISPLAY_SDL3

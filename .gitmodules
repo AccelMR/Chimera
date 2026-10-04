@@ -11,3 +11,6 @@
 [submodule "chCodecs/chMeshCodec/Externals/assimp"]
 	path = chCodecs/chMeshCodec/Externals/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "chGraphicsAPIs/chVulkan/Externals/VulkanMemoryAllocator"]
+	path = chGraphicsAPIs/chVulkan/Externals/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

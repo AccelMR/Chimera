@@ -29,12 +29,9 @@ VulkanSemaphore::VulkanSemaphore(VkDevice device)
 
 /*
 */
-VulkanSemaphore::~VulkanSemaphore() {
-  if (m_semaphore != VK_NULL_HANDLE && m_device != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(m_device);
-    vkDestroySemaphore(m_device, m_semaphore, nullptr);
-    m_semaphore = VK_NULL_HANDLE;
-  }
+VulkanSemaphore::~VulkanSemaphore()
+{
+  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_SEMAPHORE, m_semaphore);
 }
 
 /*
@@ -50,11 +47,9 @@ VulkanFence::VulkanFence(VkDevice device, bool signaled)
 
 /*
 */
-VulkanFence::~VulkanFence() {
-  if (m_fence != VK_NULL_HANDLE) {
-    vkDestroyFence(m_device, m_fence, nullptr);
-    m_fence = VK_NULL_HANDLE;
-  }
+VulkanFence::~VulkanFence()
+{
+  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_FENCE, m_fence);
 }
 
 /*

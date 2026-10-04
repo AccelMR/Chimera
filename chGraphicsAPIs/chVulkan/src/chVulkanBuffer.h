@@ -1,12 +1,10 @@
 /************************************************************************/
 /**
- * @file chIBuffer.h
+ * @file chVulkanBuffer.h
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Interface for the buffer. This is the base class for all buffers.
- * It is used to create buffers and allocate them.
- * It is also used to reset buffers and free them.
+ * Vulkan implementation of IBuffer.
  */
 /************************************************************************/
 #pragma once
@@ -16,29 +14,38 @@
 #include "chIBuffer.h"
 
 namespace chEngineSDK {
-class VulkanBuffer : public IBuffer {
+
+/**
+ * Vulkan buffer whose memory comes from VMA. Buffers the CPU writes stay mapped for their
+ * whole life; the buffer and its memory are freed through the deletion queue.
+ */
+class VulkanBuffer : public IBuffer
+{
  public:
-  VulkanBuffer(VkDevice device,
-               VkPhysicalDevice physicalDevice, 
-               const BufferCreateInfo& createInfo);
+  VulkanBuffer(VmaAllocator allocator, const BufferCreateInfo& createInfo);
+  ~VulkanBuffer() override;
 
-  ~VulkanBuffer();
+  NODISCARD SIZE_T
+  getSize() const override
+  {
+    return m_size;
+  }
 
-  NODISCARD virtual SIZE_T
-  getSize() const override { return m_size; }
-
-  virtual void
+  void
   update(const void* data, SIZE_T size, uint32 offset = 0) override;
 
   NODISCARD FORCEINLINE VkBuffer
-  getHandle() const { return m_buffer; }
+  getHandle() const
+  {
+    return m_buffer;
+  }
 
  private:
   VkBuffer m_buffer = VK_NULL_HANDLE;
-  VkDeviceMemory m_memory = VK_NULL_HANDLE;
-  VkDevice m_device = VK_NULL_HANDLE;
-  SIZE_T m_size = 0;
-  bool m_mappable = false;
+  VmaAllocator m_allocator = nullptr;
+  VmaAllocation m_allocation = nullptr;
   void* m_mappedData = nullptr;
+  SIZE_T m_size = 0;
 };
+
 } // namespace chEngineSDK

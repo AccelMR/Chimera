@@ -11,6 +11,8 @@
 
 #include <cstring>
 
+#include <vk_mem_alloc.h>
+
 #include "chAlgorithm.h"
 #include "chDisplaySurface.h"
 #include "chSTDStreams.h"
@@ -36,8 +38,69 @@ namespace chVulkanAPIHelpers {
 constexpr chEngineSDK::Array<const chEngineSDK::ANSICHAR*, 1> VALIDATION_LAYERS = {
     "VK_LAYER_KHRONOS_validation"};
 
-constexpr chEngineSDK::Array<const chEngineSDK::ANSICHAR*, 1> DEVICE_EXTENSIONS = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+// Shaders read every resource from one bindless heap (ResourceDescriptorHeap), which DXC
+// maps to a single binding, so that binding must accept several descriptor types.
+constexpr chEngineSDK::Array<const chEngineSDK::ANSICHAR*, 2> DEVICE_EXTENSIONS = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME};
+
+/**
+ * Feature structs of the device, linked in the order vkGetPhysicalDeviceFeatures2 and
+ * vkCreateDevice read them. Not copyable: the structs point to each other.
+ */
+struct DeviceFeatureChain
+{
+  DeviceFeatureChain()
+  {
+    mutableDescriptor.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
+    vulkan13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    vulkan13.pNext = &mutableDescriptor;
+    vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    vulkan12.pNext = &vulkan13;
+    core.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    core.pNext = &vulkan12;
+  }
+
+  DeviceFeatureChain(const DeviceFeatureChain&) = delete;
+  DeviceFeatureChain&
+  operator=(const DeviceFeatureChain&) = delete;
+
+  VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptor{};
+  VkPhysicalDeviceVulkan13Features vulkan13{};
+  VkPhysicalDeviceVulkan12Features vulkan12{};
+  VkPhysicalDeviceFeatures2 core{};
+};
+
+/**
+ * Calls visit(feature, name) for every feature the engine needs, so checking support and
+ * enabling them use the same list.
+ */
+template<typename Visitor>
+void
+visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
+{
+  visit(chain.vulkan13.dynamicRendering, "dynamicRendering");
+  visit(chain.vulkan13.synchronization2, "synchronization2");
+  visit(chain.vulkan12.timelineSemaphore, "timelineSemaphore");
+  visit(chain.vulkan12.descriptorIndexing, "descriptorIndexing");
+  visit(chain.vulkan12.runtimeDescriptorArray, "runtimeDescriptorArray");
+  visit(chain.vulkan12.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
+  visit(chain.vulkan12.descriptorBindingUpdateUnusedWhilePending,
+        "descriptorBindingUpdateUnusedWhilePending");
+  visit(chain.vulkan12.descriptorBindingSampledImageUpdateAfterBind,
+        "descriptorBindingSampledImageUpdateAfterBind");
+  visit(chain.vulkan12.descriptorBindingStorageImageUpdateAfterBind,
+        "descriptorBindingStorageImageUpdateAfterBind");
+  visit(chain.vulkan12.descriptorBindingStorageBufferUpdateAfterBind,
+        "descriptorBindingStorageBufferUpdateAfterBind");
+  visit(chain.vulkan12.shaderSampledImageArrayNonUniformIndexing,
+        "shaderSampledImageArrayNonUniformIndexing");
+  visit(chain.vulkan12.shaderStorageImageArrayNonUniformIndexing,
+        "shaderStorageImageArrayNonUniformIndexing");
+  visit(chain.vulkan12.shaderStorageBufferArrayNonUniformIndexing,
+        "shaderStorageBufferArrayNonUniformIndexing");
+  visit(chain.mutableDescriptor.mutableDescriptorType, "mutableDescriptorType");
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -138,6 +201,15 @@ VulkanAPI::~VulkanAPI()
   m_presentQueue.reset();
 
   if (data.device != VK_NULL_HANDLE) {
+    m_deletionQueue.destroy();
+  }
+
+  if (m_allocator != nullptr) {
+    vmaDestroyAllocator(m_allocator);
+    m_allocator = nullptr;
+  }
+
+  if (data.device != VK_NULL_HANDLE) {
     vkDestroyDevice(data.device, nullptr);
     data.device = VK_NULL_HANDLE;
   }
@@ -180,10 +252,13 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
   }
 
   if (!pickPhysicalDevice()) {
-    CH_EXCEPT(VulkanErrorException, "Failed to pick a physical device");
+    CH_EXCEPT(VulkanErrorException,
+              "No GPU supports Vulkan 1.3 with the features the engine needs; the warnings "
+              "above list what each GPU is missing.");
   }
 
   createLogicalDevice();
+  createAllocator();
 
   createSurface(graphicsAPIInfo.weakDisplaySurface);
 
@@ -223,16 +298,14 @@ VulkanAPI::createSwapChain(uint32 width, uint32 height, bool vsync) {
  */
 NODISCARD SPtr<IBuffer>
 VulkanAPI::createBuffer(const BufferCreateInfo& createInfo) {
-  return chMakeShared<VulkanBuffer>(m_vulkanData->device, m_vulkanData->physicalDevice,
-                                    createInfo);
+  return chMakeShared<VulkanBuffer>(m_allocator, createInfo);
 }
 
 /*
  */
 NODISCARD SPtr<ITexture>
 VulkanAPI::createTexture(const TextureCreateInfo& createInfo) {
-  return chMakeShared<VulkanTexture>(m_vulkanData->device, m_vulkanData->physicalDevice,
-                                     createInfo);
+  return chMakeShared<VulkanTexture>(m_vulkanData->device, m_allocator, createInfo);
 }
 
 /*
@@ -623,14 +696,33 @@ VulkanAPI::isDeviceSuitable(VkPhysicalDevice device) const {
     requiredExtensions.erase(extension.extensionName);
   }
 
+  VkPhysicalDeviceProperties properties;
+  vkGetPhysicalDeviceProperties(device, &properties);
+
   if (!requiredExtensions.empty()) {
+    CH_LOG_WARNING(Vulkan, "{0} is missing the device extension {1}",
+                   properties.deviceName, *requiredExtensions.begin());
     return false;
   }
 
-  // TODO: Check for swapchain support
+  if (properties.apiVersion < VK_API_VERSION_1_3) {
+    CH_LOG_WARNING(Vulkan, "{0} supports Vulkan {1}.{2}, the engine needs 1.3",
+                   properties.deviceName, VK_API_VERSION_MAJOR(properties.apiVersion),
+                   VK_API_VERSION_MINOR(properties.apiVersion));
+    return false;
+  }
 
-  // Additional checks can be added here (e.g., swapchain support if needed)
-  return true;
+  DeviceFeatureChain supported;
+  vkGetPhysicalDeviceFeatures2(device, &supported.core);
+
+  bool hasAllFeatures = true;
+  visitRequiredFeatures(supported, [&](VkBool32 feature, const ANSICHAR* name) {
+    if (feature != VK_TRUE) {
+      CH_LOG_WARNING(Vulkan, "{0} is missing the feature {1}", properties.deviceName, name);
+      hasAllFeatures = false;
+    }
+  });
+  return hasAllFeatures;
 }
 
 /*
@@ -682,10 +774,12 @@ VulkanAPI::createLogicalDevice() {
                                           .queueCount = 1,
                                           .pQueuePriorities = &queuePriority};
 
-  VkPhysicalDeviceFeatures deviceFeatures{};
+  DeviceFeatureChain enabledFeatures;
+  visitRequiredFeatures(enabledFeatures,
+                        [](VkBool32& feature, const ANSICHAR*) { feature = VK_TRUE; });
 
   VkDeviceCreateInfo createInfo{.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                                .pNext = nullptr,
+                                .pNext = &enabledFeatures.core,
                                 .flags = 0,
                                 .queueCreateInfoCount = 1,
                                 .pQueueCreateInfos = &queueCreateInfo,
@@ -694,14 +788,52 @@ VulkanAPI::createLogicalDevice() {
                                 .enabledExtensionCount =
                                     static_cast<uint32>(DEVICE_EXTENSIONS.size()),
                                 .ppEnabledExtensionNames = DEVICE_EXTENSIONS.data(),
-                                .pEnabledFeatures = &deviceFeatures};
+                                .pEnabledFeatures = nullptr};
 
   VK_CHECK(vkCreateDevice(m_vulkanData->physicalDevice, &createInfo, nullptr,
                           &m_vulkanData->device));
 
-  // Get the graphics queue and encapsulate it in a command queue
-  m_graphicsQueue = chMakeShared<VulkanCommandQueue>(
-      m_vulkanData->device, m_graphicsQueueFamilyIndex, QueueType::Graphics);
+  vkGetDeviceQueue(m_vulkanData->device, m_graphicsQueueFamilyIndex, 0,
+                   &m_graphicsQueueHandle);
+  setDebugName(VK_OBJECT_TYPE_QUEUE, m_graphicsQueueHandle, "Graphics Queue");
+
+  m_graphicsQueue = chMakeShared<VulkanCommandQueue>(m_graphicsQueueHandle,
+                                                     QueueType::Graphics);
+}
+
+/*
+ */
+void
+VulkanAPI::createAllocator()
+{
+  VmaAllocatorCreateInfo createInfo{};
+  createInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+  createInfo.physicalDevice = m_vulkanData->physicalDevice;
+  createInfo.device = m_vulkanData->device;
+  createInfo.instance = m_vulkanData->instance;
+  VK_CHECK(vmaCreateAllocator(&createInfo, &m_allocator));
+
+  m_deletionQueue.initialize(m_vulkanData->device, m_allocator);
+  setDebugName(VK_OBJECT_TYPE_SEMAPHORE, m_deletionQueue.getTimeline(),
+               "Deletion Queue Timeline");
+}
+
+/*
+ */
+void
+VulkanAPI::setDebugNameHandle(VkObjectType type, uint64 handle, const ANSICHAR* name) const
+{
+  if (m_setDebugUtilsObjectName == nullptr || handle == 0) {
+    return;
+  }
+
+  VkDebugUtilsObjectNameInfoEXT nameInfo{.sType =
+                                             VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                                         .pNext = nullptr,
+                                         .objectType = type,
+                                         .objectHandle = handle,
+                                         .pObjectName = name};
+  m_setDebugUtilsObjectName(m_vulkanData->device, &nameInfo);
 }
 
 /*
@@ -733,6 +865,9 @@ VulkanAPI::setupDebugMessenger(const GraphicsAPIInfo& graphicsAPIInfo) {
       .pUserData = nullptr};
 
   VK_CHECK(func(m_vulkanData->instance, &createInfo, nullptr, &m_vulkanData->debugMessenger));
+
+  m_setDebugUtilsObjectName = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+      vkGetInstanceProcAddr(m_vulkanData->instance, "vkSetDebugUtilsObjectNameEXT"));
 }
 
 /*
@@ -822,7 +957,11 @@ VulkanAPI::waitIdle()
   const VkResult result = vkDeviceWaitIdle(m_vulkanData->device);
   if (result != VK_SUCCESS) {
     CH_LOG_ERROR(Vulkan, "vkDeviceWaitIdle failed: {0}", result);
+    return;
   }
+
+  // Nothing is running on the GPU now, so nothing released can still be in use.
+  m_deletionQueue.flush();
 }
 
 /*

@@ -201,6 +201,15 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
 
   createImageViews();
 
+  const VulkanAPI& vulkanAPI = g_vulkanAPI();
+  vulkanAPI.setDebugName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, m_swapChain, "Main SwapChain");
+  for (uint32 i = 0; i < m_imageCount; ++i) {
+    const String imageName = StringUtils::format("Main SwapChain Image {0}", i);
+    vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE, m_images[i], imageName.c_str());
+    const String viewName = StringUtils::format("Main SwapChain View {0}", i);
+    vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageViews[i], viewName.c_str());
+  }
+
   createRenderPass();
   createFramebuffers();
 }
@@ -244,7 +253,6 @@ NODISCARD SPtr<ITexture>
 VulkanSwapChain::getTexture(uint32 index) const {
   CH_ASSERT(index < m_imageCount);
   return chMakeShared<VulkanTexture>(m_device,
-                                     m_physicalDevice,
                                      m_images[index],
                                      m_colorFormat,
                                      m_width, m_height,
@@ -267,8 +275,13 @@ VulkanSwapChain::getTextureView(uint32 index) const {
 */
 void
 VulkanSwapChain::resize(uint32 width, uint32 height) {
-  if (width == 0 || height == 0) {
-    CH_LOG_WARNING(Vulkan, "Intento de resize a 0x0 - ignorado");
+  // A minimized window reports a 0x0 surface before the window system marks it minimized;
+  // a swap chain of that size is invalid, so the current one is kept until it is restored.
+  VkSurfaceCapabilitiesKHR capabilities;
+  VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface,
+                                                     &capabilities));
+  if (width == 0 || height == 0 || capabilities.currentExtent.width == 0 ||
+      capabilities.currentExtent.height == 0) {
     return;
   }
 

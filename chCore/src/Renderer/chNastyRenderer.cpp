@@ -71,7 +71,7 @@ static Vector<String> NodeNames;
 static uint32 NodeIndex = 0;
 static bool bIsModelRotating = false;
 
-static constexpr uint64 MAX_WAIT_TIME = 100000000; // 1 second in nanoseconds
+static constexpr uint64 MAX_WAIT_TIME = 100000000; // 100 ms in nanoseconds
 
 /*
  */

@@ -20,11 +20,16 @@
 
 #include <vulkan/vulkan.h>
 
-#if defined(CH_VULKAN_IMGUI)
+// The same declarations vk_mem_alloc.h makes, so only the files that allocate include it.
+VK_DEFINE_HANDLE(VmaAllocator)
+VK_DEFINE_HANDLE(VmaAllocation)
+
+// CMake defines CH_VULKAN_IMGUI as 1 or 0, so its value matters, not only whether it exists.
+#if defined(CH_VULKAN_IMGUI) && CH_VULKAN_IMGUI
 #define CH_VK_IMGUI IN_USE
 #else
-#define CH_VK_IMGUI IN_NOT_USE
-#endif // defined(CH_VULKAN_IMGUI)
+#define CH_VK_IMGUI NOT_IN_USE
+#endif
 
 #if USING(CH_VK_IMGUI)
 #include <imgui_impl_vulkan.h>

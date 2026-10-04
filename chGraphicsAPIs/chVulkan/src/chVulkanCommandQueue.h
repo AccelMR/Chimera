@@ -17,8 +17,8 @@
 namespace chEngineSDK {
 class VulkanCommandQueue : public ICommandQueue {
  public:
-  VulkanCommandQueue(VkDevice device, uint32 graphicsQueueIndex, QueueType queueType);
-  ~VulkanCommandQueue() override;
+  VulkanCommandQueue(VkQueue queue, QueueType queueType);
+  ~VulkanCommandQueue() override = default;
 
   NODISCARD QueueType
   getQueueType() const override { return m_queueType; }
@@ -33,9 +33,7 @@ class VulkanCommandQueue : public ICommandQueue {
   getHandle() const { return m_queue; }
 
  private:
-  VkDevice m_device = VK_NULL_HANDLE;
   VkQueue m_queue = VK_NULL_HANDLE;
   QueueType m_queueType = QueueType::Graphics;
-  uint32 m_graphicsQueueFamilyIndex = 0;
 };
 } // namespace chEngineSDK

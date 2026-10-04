@@ -9,6 +9,7 @@
 #include "chWindowedApplication.h"
 
 #include <chrono>
+#include <thread>
 
 #include "chCommandLine.h"
 #include "chDisplayEventHandle.h"
@@ -35,7 +36,7 @@ CH_LOG_DECLARE_STATIC(WindowedApp, All);
 namespace chEngineSDK {
 using namespace std::chrono;
 
-constexpr uint64 MAX_WAIT_TIME = 100000000; // 1 seconds in nanoseconds
+constexpr uint64 MAX_WAIT_TIME = 100000000; // 100 ms in nanoseconds
 constexpr uint64 MAX_WAIT_TIME_RESIZE = 1000000000;
 constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -315,6 +316,13 @@ WindowedApplication::destroyRenderer()
 void
 WindowedApplication::render(const float deltaTime)
 {
+  // The surface of a minimized window is 0x0, so there is nothing to draw on and the swap
+  // chain cannot be recreated. Sleeping keeps the loop from spinning until it is restored.
+  if (m_display->isMinimized()) {
+    std::this_thread::sleep_for(milliseconds(10));
+    return;
+  }
+
   auto& currentFrame = m_renderComponents.currentFrame;
   auto& currentFence = m_renderComponents.inFlightFences[currentFrame];
 
@@ -397,6 +405,10 @@ WindowedApplication::render(const float deltaTime)
  */
 void
 WindowedApplication::resize(uint32 width, uint32 height) {
+  if (m_display->isMinimized()) {
+    return;
+  }
+
   CH_LOG_INFO(WindowedApp, "Resizing display and swap chain.");
 
   auto& graphicsAPI = IGraphicsAPI::instance();

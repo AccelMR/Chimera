@@ -89,10 +89,10 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
 
 /*
 */
-VulkanTextureView::~VulkanTextureView() {
-  if (m_ownsTextureView && m_imageView != VK_NULL_HANDLE) {
-    vkDestroyImageView(m_device, m_imageView, nullptr);
-    m_imageView = VK_NULL_HANDLE;
+VulkanTextureView::~VulkanTextureView()
+{
+  if (m_ownsTextureView) {
+    g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageView);
   }
 }
 
