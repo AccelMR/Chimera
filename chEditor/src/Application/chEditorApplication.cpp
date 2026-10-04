@@ -46,18 +46,9 @@
 
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
-#include "chMultiStageRenderer.h"
-#include "chRenderStageIO.h"
-#include "chRenderStageFactory.h"
-#include "Stages/chGBufferStage.h"
-
 namespace chEngineSDK {
 using namespace chEngineSDK::chUIHelpers;
 
-Radian g_FOV(Degree(45.0f));
-float g_farPlane = 10000.0f;
-float g_nearPlane = 0.1f;
-Vector3 initialCameraPos(-5.0f, 0.0f, 0.0f);
 
 /*
  */
@@ -118,15 +109,11 @@ EditorApplication::destroyModules()
   m_textureDescriptorSets.clear();
   m_defaultSampler.reset();
 
-  m_multiStageRenderer.reset();
   m_nastyRenderer.reset();
   m_activeScene.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorSelection::setGameObjectAssetPreview(nullptr);
 
-  if (RenderStageFactory::isStarted()) {
-    RenderStageFactory::shutDown();
-  }
   if (SceneManager::isStarted()) {
     SceneManager::shutDown();
   }
@@ -240,19 +227,6 @@ EditorApplication::initializeEditorComponents() {
   m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
   m_nastyRenderer->bindInputEvents();
 
-  RenderStageFactory::startUp();
-  RenderStageFactory::instance().registerStageType<GBufferStage>();
-
-  m_multiStageRenderer = chMakeShared<MultiStageRenderer>();
-
-  auto gbufferStage = RenderStageFactory::instance().createStage<GBufferStage>();
-  m_gbufferStageId = m_multiStageRenderer->addStage(gbufferStage);
-
-  m_multiStageRenderer->initialize(display->getWidth(), display->getHeight());
-  m_multiStageRenderer->setClearColors({UIHelpers::rendererColor});
-
-  setupSceneData();
-
   initImGui(display);
 
   SamplerCreateInfo samplerInfo{};
@@ -272,7 +246,6 @@ EditorApplication::initializeEditorComponents() {
   m_inspectorUI = chMakeUnique<InspectorUI>();
   m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
-  m_contentAssetUI->setMultiStageRenderer(m_multiStageRenderer);
   m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
   m_outputLogUI->updateAvailableCategories();
 
@@ -370,9 +343,6 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
   m_updateInjection = UIHelpers::bindEventWindow(eventHandler);
   CH_ASSERT(m_updateInjection.isValid() && "Update injection event must be valid.");
-
-  width = display->getWidth();
-  height = display->getHeight();
 }
 
 /*
@@ -472,36 +442,6 @@ EditorApplication::loadCodecs() {
     }
   }
   #endif // USING(CH_CODECS)
-}
-
-/*
-*/
-void
-EditorApplication::setupSceneData() {
-    // Create basic scene data
-  RenderStageIO sceneData;
-
-  // Create a basic camera (you can customize this)
-  auto cameraData = chMakeShared<CameraData>();
-  auto camera = chMakeShared<Camera>(initialCameraPos,
-                                     Vector3::ZERO,
-                                     width,
-                                     height);
-  camera->setProjectionType(CameraProjectionType::Perspective);
-  camera->setFieldOfView(g_FOV);
-  camera->setClipPlanes(g_nearPlane, g_farPlane);
-  camera->updateMatrices();
-  cameraData->camera = camera;
-
-  // Create a basic model (you can customize this)
-  auto modelData = chMakeShared<ModelData>();
-
-  sceneData.setOutput<CameraData>(cameraData);
-  sceneData.setOutput<ModelData>(modelData);
-
-  m_multiStageRenderer->setSceneData(sceneData);
-
-  CH_LOG_INFO(EditorApp, "Scene data configured for multi-stage renderer");
 }
 
 } // namespace chEngineSDK

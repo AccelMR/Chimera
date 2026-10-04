@@ -25,8 +25,6 @@ class SceneGraphUI;
 class InspectorUI;
 class GameObjectAssetUI;
 
-class MultiStageRenderer;
-
 class EditorApplication : public WindowedApplication
 {
  public:
@@ -77,15 +75,9 @@ class EditorApplication : public WindowedApplication
   void
   loadCodecs();
 
-  void
-  setupSceneData();
-
  private:
   SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
   SPtr<Scene> m_activeScene;
-
-  SPtr<MultiStageRenderer> m_multiStageRenderer;
-  UUID m_gbufferStageId;
 
   SPtr<ISampler> m_defaultSampler;
   Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
@@ -101,8 +93,6 @@ class EditorApplication : public WindowedApplication
   UniquePtr<InspectorUI> m_inspectorUI; ///< Inspector UI instance
   UniquePtr<GameObjectAssetUI> m_gameObjectAssetUI; ///< GameObject Asset UI instance
 
-  uint32 width = 0; ///< Width of the editor window
-  uint32 height = 0; ///< Height of the editor window
   HEvent m_updateInjection; ///< Event for updating ImGui with SDL events
 
   HEvent m_onKeyDownEvent; ///< Event for handling key down events

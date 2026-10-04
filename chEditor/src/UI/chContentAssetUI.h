@@ -10,7 +10,6 @@
 
 #include "chPrerequisitesCore.h"
 #include "chUUID.h"
-#include "chMultiStageRenderer.h"
 
 namespace chEngineSDK {
 class NastyRenderer;
@@ -34,13 +33,6 @@ class ContentAssetUI
    */
   void
   refreshAssets();
-
-  // DELETEME
-  void
-  setMultiStageRenderer(SPtr<MultiStageRenderer> renderer)
-  {
-    m_multiStageRenderer = std::move(renderer);
-  }
 
   void
   setNastyRenderer(SPtr<NastyRenderer> renderer)
@@ -157,7 +149,6 @@ class ContentAssetUI
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
   SPtr<NastyRenderer> m_nastyRenderer;
-  SPtr<MultiStageRenderer> m_multiStageRenderer;
   SPtr<ISampler> m_defaultSampler;
 
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.

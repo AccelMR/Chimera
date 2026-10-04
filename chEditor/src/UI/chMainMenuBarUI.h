@@ -10,8 +10,6 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chMultiStageRenderer.h"
-
 namespace chEngineSDK {
 class NastyRenderer;
 
