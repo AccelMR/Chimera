@@ -4,31 +4,35 @@
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Vulkan pipeline implementation.
- * This file contains the implementation of the pipeline interface
- * for Vulkan.
+ * Vulkan implementation of IPipeline.
  */
 /************************************************************************/
 #pragma once
 
 #include "chVulkanPrerequisites.h"
+
 #include "chIPipeline.h"
 
 namespace chEngineSDK {
-class VulkanPipeline : public IPipeline {
+
+/**
+ * Graphics pipeline built for dynamic rendering (attachment formats instead of a render
+ * pass) on the pipeline layout of the bindless heap, which it does not own.
+ */
+class VulkanPipeline : public IPipeline
+{
  public:
-  VulkanPipeline(VkDevice device, const PipelineCreateInfo& createInfo);
+  VulkanPipeline(VkDevice device, VkPipelineLayout layout, const GraphicsPipelineDesc& desc);
   ~VulkanPipeline() override;
 
-  NODISCARD FORCEINLINE virtual VkPipeline
-  getHandle() const { return m_pipeline; }
-
-  NODISCARD virtual SPtr<IPipelineLayout>
-  getLayout() const override;
+  NODISCARD FORCEINLINE VkPipeline
+  getHandle() const
+  {
+    return m_pipeline;
+  }
 
  private:
   VkPipeline m_pipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-  VkDevice m_device = VK_NULL_HANDLE;
 };
+
 } // namespace chEngineSDK

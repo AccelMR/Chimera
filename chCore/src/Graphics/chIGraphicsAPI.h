@@ -56,29 +56,17 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual SPtr<IShader>
   createShader(const ShaderCreateInfo& createInfo) = 0;
 
+  /**
+   * Builds a pipeline every time; use PipelineCache to reuse one with the same description.
+   */
   NODISCARD virtual SPtr<IPipeline>
-  createPipeline(const PipelineCreateInfo& createInfo) = 0;
-
-  NODISCARD virtual SPtr<IRenderPass>
-  createRenderPass(const RenderPassCreateInfo& createInfo) = 0;
-
-  NODISCARD virtual SPtr<IFrameBuffer>
-  createFrameBuffer(const FrameBufferCreateInfo& createInfo) = 0;
+  createGraphicsPipeline(const GraphicsPipelineDesc& desc) = 0;
 
   NODISCARD virtual SPtr<ICommandQueue>
   getQueue(QueueType queueType) = 0;
 
   NODISCARD virtual SPtr<ISampler>
   createSampler(const SamplerCreateInfo& createInfo) = 0;
-
-  NODISCARD virtual SPtr<IDescriptorSetLayout>
-  createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) = 0;
-
-  NODISCARD virtual SPtr<IDescriptorPool>
-  createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) = 0;
-
-  virtual void
-  updateDescriptorSets(const Vector<WriteDescriptorSet>& writeDescriptorSets) = 0;
 
   virtual void
   waitIdle() = 0;

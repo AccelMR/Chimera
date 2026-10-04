@@ -21,7 +21,6 @@
 #include "chLogger.h"
 #include "chIGraphicsAPI.h"
 #include "chEditorSelection.h"
-#include "chIDescriptorSet.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
 #include "chNastyRenderer.h"
@@ -442,13 +441,12 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
 
-  IDescriptorSet* thumbnail =
-      assetIcon.type == AssetType::Texture ? getThumbnail(asset) : nullptr;
+  const uint64 thumbnail = assetIcon.type == AssetType::Texture ? getThumbnail(asset) : 0;
 
   const bool clicked =
-      thumbnail ? ImGui::ImageButton("##asset", reinterpret_cast<ImTextureID>(thumbnail->getRaw()),
-                                     buttonSize)
-                : ImGui::Button("##asset", buttonSize);
+      thumbnail != 0
+          ? ImGui::ImageButton("##asset", static_cast<ImTextureID>(thumbnail), buttonSize)
+          : ImGui::Button("##asset", buttonSize);
   if (clicked) {
     handleAssetSelection(asset);
   }
@@ -580,17 +578,17 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
 
 /*
  */
-IDescriptorSet*
+uint64
 ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
 {
   const UUID& uuid = asset->getUUID();
   auto it = m_assetThumbnails.find(uuid);
   if (it != m_assetThumbnails.end()) {
-    return it->second.second.get();
+    return it->second.second;
   }
 
   // Stored even when it fails, so a broken texture is not loaded again every frame.
-  Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>& thumbnail = m_assetThumbnails[uuid];
+  Pair<SPtr<ITextureView>, uint64>& thumbnail = m_assetThumbnails[uuid];
 
   SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
 
@@ -598,7 +596,7 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
   const bool loadedHere = textureAsset->isUnloaded();
   if (loadedHere && !AssetManager::instance().syncLoadAsset(textureAsset)) {
     CH_LOG_ERROR(ContentAssetUILog, "Failed to load texture asset: {0}", asset->getName());
-    return nullptr;
+    return 0;
   }
 
   SPtr<ITexture> texture = textureAsset->getTexture();
@@ -609,12 +607,12 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
   else {
     SPtr<ITextureView> textureView =
         texture->createView({.format = texture->getFormat(), .viewType = TextureViewType::View2D});
-    SPtr<IDescriptorSet> descriptorSet;
+    uint64 textureId = 0;
     Any result = textureView ? IGraphicsAPI::instance().execute(
                                    "addImGuiTexture", {Any(m_defaultSampler), Any(textureView)})
                              : Any();
-    if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(result, descriptorSet) && descriptorSet) {
-      thumbnail = {std::move(textureView), std::move(descriptorSet)};
+    if (AnyUtils::tryGetValue<uint64>(result, textureId) && textureId != 0) {
+      thumbnail = {std::move(textureView), textureId};
     }
     else {
       CH_LOG_ERROR(ContentAssetUILog, "Failed to create the thumbnail of {0}.",
@@ -625,7 +623,7 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
   if (loadedHere) {
     AssetManager::instance().unloadAsset(asset);
   }
-  return thumbnail.second.get();
+  return thumbnail.second;
 }
 
 /*
@@ -700,10 +698,7 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset)
       SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
       SPtr<ITexture> texture = textureAsset->getTexture();
       if (texture) {
-        m_nastyRenderer->setTextureView(std::move(texture->createView({
-            .format = texture->getFormat(),
-            .viewType = TextureViewType::View2D})));
-        m_nastyRenderer->createNodeDescriptorResources();
+        m_nastyRenderer->setTexture(texture);
         CH_LOG_DEBUG(ContentAssetUILog, "Loaded texture asset: {0}", asset->getName());
       }
     }

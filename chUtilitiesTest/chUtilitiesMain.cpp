@@ -17,6 +17,7 @@
 #include "chEventSystem.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
+#include "chHash.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -2231,3 +2232,31 @@ TEST_CASE("chUtilities - CommandLine") {
 //   (void)argv;
 //   return 0;
 // }
+
+TEST_CASE("chUtilities - HashUtils")
+{
+  // Reference values of 64-bit FNV-1a.
+  REQUIRE(HashUtils::hashBytes(nullptr, 0) == HashUtils::FNV_OFFSET_BASIS);
+  const uint8 letterA = 'a';
+  REQUIRE(HashUtils::hashBytes(&letterA, 1) == 0xAF63DC4C8601EC8Cull);
+
+  const uint64 seed = HashUtils::FNV_OFFSET_BASIS;
+  REQUIRE(HashUtils::combine(seed, 7u) == HashUtils::combine(seed, 7u));
+  REQUIRE(HashUtils::combine(seed, 7u) != HashUtils::combine(seed, 8u));
+
+  // The order of the fields matters.
+  REQUIRE(HashUtils::combine(HashUtils::combine(seed, 1u), 2u) !=
+          HashUtils::combine(HashUtils::combine(seed, 2u), 1u));
+
+  // 0.0 and -0.0 compare equal, so they hash the same.
+  REQUIRE(HashUtils::combine(seed, 0.0f) == HashUtils::combine(seed, -0.0f));
+  REQUIRE(HashUtils::combine(seed, 1.0f) != HashUtils::combine(seed, 2.0f));
+
+  enum class TestEnum : uint8 { First, Second };
+  REQUIRE(HashUtils::combine(seed, TestEnum::First) !=
+          HashUtils::combine(seed, TestEnum::Second));
+
+  int32 first = 0;
+  int32 second = 0;
+  REQUIRE(HashUtils::combine(seed, &first) != HashUtils::combine(seed, &second));
+}

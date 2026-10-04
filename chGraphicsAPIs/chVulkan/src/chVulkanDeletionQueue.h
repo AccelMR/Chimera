@@ -13,6 +13,7 @@
 #include "chSTDThreading.h"
 
 namespace chEngineSDK {
+class VulkanBindlessHeap;
 
 /**
  * Frees Vulkan objects once the GPU has finished every submission that could still use
@@ -31,7 +32,7 @@ class VulkanDeletionQueue
   operator=(const VulkanDeletionQueue&) = delete;
 
   void
-  initialize(VkDevice device, VmaAllocator allocator);
+  initialize(VkDevice device, VmaAllocator allocator, VulkanBindlessHeap* bindlessHeap);
 
   /**
    * Frees everything still pending and the timeline. The device must be idle.
@@ -48,6 +49,12 @@ class VulkanDeletionQueue
   {
     enqueueHandle(type, reinterpret_cast<uint64>(handle), allocation);
   }
+
+  /**
+   * Queues an index of the bindless heap, so it is reused only once nothing reads it.
+   */
+  void
+  enqueueBindlessIndex(uint32 index, bool isSamplerIndex);
 
   /**
    * Value the next graphics submit must signal on the timeline.
@@ -74,13 +81,24 @@ class VulkanDeletionQueue
   flush();
 
  private:
+  enum class PendingKind : uint8
+  {
+    VulkanObject,
+    ResourceIndex,
+    SamplerIndex
+  };
+
   struct PendingObject
   {
     uint64 handle = 0;
     VmaAllocation allocation = nullptr;
     uint64 releaseValue = 0;
     VkObjectType type = VK_OBJECT_TYPE_UNKNOWN;
+    PendingKind kind = PendingKind::VulkanObject;
   };
+
+  void
+  enqueuePending(PendingObject object);
 
   void
   enqueueHandle(VkObjectType type, uint64 handle, VmaAllocation allocation);
@@ -90,6 +108,7 @@ class VulkanDeletionQueue
 
   VkDevice m_device = VK_NULL_HANDLE;
   VmaAllocator m_allocator = nullptr;
+  VulkanBindlessHeap* m_bindlessHeap = nullptr;
   VkSemaphore m_timeline = VK_NULL_HANDLE;
   uint64 m_submittedValue = 0;
   Vector<PendingObject> m_pending;

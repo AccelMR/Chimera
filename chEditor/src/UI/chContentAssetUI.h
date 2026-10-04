@@ -133,10 +133,10 @@ class ContentAssetUI
   renderEmptyAreaContextMenu();
 
   /**
-   * Thumbnail of a texture asset, created the first time it is needed. Returns null if
+   * Thumbnail of a texture asset, created the first time it is needed. Returns 0 if
    * it could not be created; that is only tried once.
    */
-  NODISCARD IDescriptorSet*
+  NODISCARD uint64
   getThumbnail(const SPtr<IAsset>& asset);
 
  private:
@@ -152,7 +152,7 @@ class ContentAssetUI
   SPtr<ISampler> m_defaultSampler;
 
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
-  UnorderedMap<UUID, Pair<SPtr<ITextureView>, SPtr<IDescriptorSet>>> m_assetThumbnails;
+  UnorderedMap<UUID, Pair<SPtr<ITextureView>, uint64>> m_assetThumbnails;
 
   Vector<WeakPtr<IAsset>> m_unsavedAssets;
 

@@ -11,6 +11,8 @@
 
 #include <vk_mem_alloc.h>
 
+#include "chVulkanBindlessHeap.h"
+
 namespace chEngineSDK {
 namespace {
 template<typename HandleType>
@@ -31,10 +33,13 @@ VulkanDeletionQueue::~VulkanDeletionQueue()
 /*
  */
 void
-VulkanDeletionQueue::initialize(VkDevice device, VmaAllocator allocator)
+VulkanDeletionQueue::initialize(VkDevice device,
+                                VmaAllocator allocator,
+                                VulkanBindlessHeap* bindlessHeap)
 {
   m_device = device;
   m_allocator = allocator;
+  m_bindlessHeap = bindlessHeap;
 
   VkSemaphoreTypeCreateInfo typeInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
                                      .pNext = nullptr,
@@ -67,11 +72,31 @@ VulkanDeletionQueue::enqueueHandle(VkObjectType type, uint64 handle, VmaAllocati
     return;
   }
 
+  enqueuePending({.handle = handle, .allocation = allocation, .type = type});
+}
+
+/*
+ */
+void
+VulkanDeletionQueue::enqueueBindlessIndex(uint32 index, bool isSamplerIndex)
+{
+  if (index == GraphicsLimits::INVALID_BINDLESS_INDEX) {
+    return;
+  }
+
+  enqueuePending({.handle = index,
+                  .kind = isSamplerIndex ? PendingKind::SamplerIndex
+                                         : PendingKind::ResourceIndex});
+}
+
+/*
+ */
+void
+VulkanDeletionQueue::enqueuePending(PendingObject object)
+{
   LockGuard<Mutex> lock(m_mutex);
-  m_pending.push_back({.handle = handle,
-                       .allocation = allocation,
-                       .releaseValue = m_submittedValue + 1,
-                       .type = type});
+  object.releaseValue = m_submittedValue + 1;
+  m_pending.push_back(object);
 }
 
 /*
@@ -125,6 +150,15 @@ VulkanDeletionQueue::flush()
 void
 VulkanDeletionQueue::destroyObject(const PendingObject& object) const
 {
+  if (object.kind == PendingKind::ResourceIndex) {
+    m_bindlessHeap->freeResourceIndex(static_cast<uint32>(object.handle));
+    return;
+  }
+  if (object.kind == PendingKind::SamplerIndex) {
+    m_bindlessHeap->freeSamplerIndex(static_cast<uint32>(object.handle));
+    return;
+  }
+
   switch (object.type) {
   case VK_OBJECT_TYPE_BUFFER:
     vmaDestroyBuffer(m_allocator, toHandle<VkBuffer>(object.handle), object.allocation);
@@ -143,6 +177,9 @@ VulkanDeletionQueue::destroyObject(const PendingObject& object) const
     break;
   case VK_OBJECT_TYPE_FENCE:
     vkDestroyFence(m_device, toHandle<VkFence>(object.handle), nullptr);
+    break;
+  case VK_OBJECT_TYPE_PIPELINE:
+    vkDestroyPipeline(m_device, toHandle<VkPipeline>(object.handle), nullptr);
     break;
   default:
     CH_LOG_ERROR(Vulkan, "Deferred destruction does not support object type {0}",

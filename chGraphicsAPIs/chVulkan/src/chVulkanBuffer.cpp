@@ -85,6 +85,19 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, const BufferCreateInfo& creat
                            &m_allocation, &allocationResult));
   m_mappedData = allocationResult.pMappedData;
 
+  // A buffer can hold one descriptor type per index; uniform wins when both are asked for.
+  const bool isUniform = createInfo.usage.isSet(BufferUsage::UniformBuffer);
+  if (isUniform || createInfo.usage.isSet(BufferUsage::StorageBuffer)) {
+    VulkanBindlessHeap& bindlessHeap = g_vulkanAPI().getBindlessHeap();
+    m_bindlessIndex = bindlessHeap.allocateResourceIndex();
+    if (isUniform) {
+      bindlessHeap.writeUniformBuffer(m_bindlessIndex, m_buffer, m_size);
+    }
+    else {
+      bindlessHeap.writeStorageBuffer(m_bindlessIndex, m_buffer, m_size);
+    }
+  }
+
   if (createInfo.initialData) {
     update(createInfo.initialData, createInfo.initialDataSize);
   }
@@ -94,7 +107,9 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, const BufferCreateInfo& creat
  */
 VulkanBuffer::~VulkanBuffer()
 {
-  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_BUFFER, m_buffer, m_allocation);
+  VulkanDeletionQueue& deletionQueue = g_vulkanAPI().getDeletionQueue();
+  deletionQueue.enqueueBindlessIndex(m_bindlessIndex, false);
+  deletionQueue.enqueue(VK_OBJECT_TYPE_BUFFER, m_buffer, m_allocation);
 }
 
 /*

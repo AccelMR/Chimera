@@ -23,6 +23,10 @@ enum class CommandBufferState: uint8{
   Invalid
 };
 
+/**
+ * Records GPU work. Called many times per frame, so it takes references and spans:
+ * recording a command copies no shared pointer and allocates nothing.
+ */
 class ICommandBuffer {
  public:
   ICommandBuffer() = default;
@@ -31,30 +35,51 @@ class ICommandBuffer {
   virtual void*
   getRaw() const = 0;
 
+  /**
+   * Also binds the bindless heap, so every pipeline bound afterwards can read it.
+   */
   virtual void
   begin() = 0;
 
   virtual void
   end() = 0;
 
+  /**
+   * Only for the swap chain until it moves to beginRendering.
+   */
   virtual void
   beginRenderPass(const RenderPassBeginInfo& beginInfo) = 0;
 
   virtual void
   endRenderPass() = 0;
 
+  /**
+   * The targets must already be in the RenderTarget or DepthWrite state.
+   */
   virtual void
-  bindPipeline(SPtr<IPipeline> pipeline) = 0;
+  beginRendering(const RenderingDesc& desc) = 0;
 
   virtual void
-  bindVertexBuffer(SPtr<IBuffer> buffer,
-                   uint32 binding = 0,
-                   uint64 offset = 0) = 0;
+  endRendering() = 0;
 
   virtual void
-  bindIndexBuffer(SPtr<IBuffer> buffer,
-                  IndexType indexType,
-                  uint32 offset = 0) = 0;
+  barrier(Span<const TextureBarrier> textureBarriers) = 0;
+
+  virtual void
+  bindPipeline(const IPipeline& pipeline) = 0;
+
+  /**
+   * Writes the push constants every shader reads (at most
+   * GraphicsLimits::PUSH_CONSTANTS_SIZE bytes, offset included).
+   */
+  virtual void
+  pushConstants(const void* data, uint32 size, uint32 offset = 0) = 0;
+
+  virtual void
+  bindVertexBuffer(const IBuffer& buffer, uint32 binding = 0, uint64 offset = 0) = 0;
+
+  virtual void
+  bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset = 0) = 0;
 
   virtual void
   draw(uint32 vertexCount,
@@ -85,13 +110,6 @@ class ICommandBuffer {
 
   virtual void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) = 0;
-
-  virtual void
-  bindDescriptorSets(PipelineBindPoint bindPoint,
-                     SPtr<IPipelineLayout> layout,
-                     uint32 firstSet,
-                     const Vector<SPtr<IDescriptorSet>>& descriptorSets,
-                     const Vector<uint32>& dynamicOffsets = {}) = 0;
 
   NODISCARD virtual
   CommandBufferState getState() const = 0;

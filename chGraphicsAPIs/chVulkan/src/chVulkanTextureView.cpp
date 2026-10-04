@@ -85,6 +85,16 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
   m_mipLevelCount = viewInfo.subresourceRange.levelCount;
   m_baseArrayLayer = viewInfo.subresourceRange.baseArrayLayer;
   m_arrayLayerCount = viewInfo.subresourceRange.layerCount;
+
+  if (vulkanTexture->getUsage().isSet(TextureUsage::Sampled)) {
+    // Shaders sample it after a barrier to ShaderRead, which uses these layouts.
+    const VkImageLayout layout = createInfo.bIsDepthStencil
+                                     ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VulkanBindlessHeap& bindlessHeap = g_vulkanAPI().getBindlessHeap();
+    m_bindlessIndex = bindlessHeap.allocateResourceIndex();
+    bindlessHeap.writeSampledImage(m_bindlessIndex, m_imageView, layout);
+  }
 }
 
 /*
@@ -92,7 +102,9 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
 VulkanTextureView::~VulkanTextureView()
 {
   if (m_ownsTextureView) {
-    g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageView);
+    VulkanDeletionQueue& deletionQueue = g_vulkanAPI().getDeletionQueue();
+    deletionQueue.enqueueBindlessIndex(m_bindlessIndex, false);
+    deletionQueue.enqueue(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageView);
   }
 }
 

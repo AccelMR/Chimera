@@ -34,6 +34,12 @@ class VulkanBuffer : public IBuffer
   void
   update(const void* data, SIZE_T size, uint32 offset = 0) override;
 
+  NODISCARD uint32
+  getBindlessIndex() const override
+  {
+    return m_bindlessIndex;
+  }
+
   NODISCARD FORCEINLINE VkBuffer
   getHandle() const
   {
@@ -46,6 +52,7 @@ class VulkanBuffer : public IBuffer
   VmaAllocation m_allocation = nullptr;
   void* m_mappedData = nullptr;
   SIZE_T m_size = 0;
+  uint32 m_bindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
 };
 
 } // namespace chEngineSDK

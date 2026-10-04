@@ -16,8 +16,6 @@
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chICommandBuffer.h"
-#include "chIDescriptorPool.h"
-#include "chIDescriptorSet.h"
 #include "chIGraphicsAPI.h"
 #include "chIRenderPass.h"
 #include "chISwapChain.h"
@@ -106,7 +104,7 @@ EditorApplication::destroyModules()
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
   m_contentAssetUI.reset();
-  m_textureDescriptorSets.clear();
+  m_imguiTextures.clear();
   m_defaultSampler.reset();
 
   m_nastyRenderer.reset();
@@ -372,25 +370,24 @@ EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput
   m_viewportHeight = static_cast<uint32>(panelSize.y * framebufferScale.y);
 
   if (rendererOutput.colorTarget) {
-    auto it = m_textureDescriptorSets.find(rendererOutput.colorTarget);
+    auto it = m_imguiTextures.find(rendererOutput.colorTarget);
 
-    SPtr<IDescriptorSet> descriptorSet = nullptr;
-    if (it == m_textureDescriptorSets.end()) {
+    uint64 textureId = 0;
+    if (it == m_imguiTextures.end()) {
       IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
       Any result = graphicAPI.execute(
           "addImGuiTexture", {Any(m_defaultSampler), Any(rendererOutput.colorTarget)});
 
-      if (AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(result, descriptorSet) &&
-          descriptorSet) {
-        m_textureDescriptorSets[rendererOutput.colorTarget] = descriptorSet;
+      if (AnyUtils::tryGetValue<uint64>(result, textureId) && textureId != 0) {
+        m_imguiTextures[rendererOutput.colorTarget] = textureId;
       }
     }
     else {
-      descriptorSet = it->second;
+      textureId = it->second;
     }
 
-    if (descriptorSet) {
-      ImGui::Image(reinterpret_cast<ImTextureID>(descriptorSet->getRaw()), panelSize);
+    if (textureId != 0) {
+      ImGui::Image(static_cast<ImTextureID>(textureId), panelSize);
     }
   }
   ImGui::End();
@@ -406,10 +403,10 @@ EditorApplication::resizeViewport(uint32 viewportWidth, uint32 viewportHeight)
   m_nastyRenderer->resize(viewportWidth, viewportHeight);
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  for (const auto& [textureView, descriptorSet] : m_textureDescriptorSets) {
-    graphicAPI.execute("removeImGuiTexture", {Any(descriptorSet)});
+  for (const auto& [textureView, textureId] : m_imguiTextures) {
+    graphicAPI.execute("removeImGuiTexture", {Any(textureId)});
   }
-  m_textureDescriptorSets.clear();
+  m_imguiTextures.clear();
 }
 
 /*

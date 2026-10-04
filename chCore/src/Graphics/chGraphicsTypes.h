@@ -17,6 +17,21 @@
 namespace chEngineSDK {
 constexpr uint32 SUBPASS_EXTERNAL = ~0u;
 
+/**
+ * Limits shared by every graphics API, so the engine and the shaders agree on them.
+ */
+class GraphicsLimits
+{
+ public:
+  static constexpr uint32 MAX_COLOR_ATTACHMENTS = 8;
+  // The size Vulkan guarantees on every device; DX12 root constants hold it too.
+  static constexpr uint32 PUSH_CONSTANTS_SIZE = 128;
+  static constexpr uint32 MAX_BINDLESS_RESOURCES = 65536;
+  // The size of the DX12 sampler heap.
+  static constexpr uint32 MAX_BINDLESS_SAMPLERS = 2048;
+  static constexpr uint32 INVALID_BINDLESS_INDEX = ~0u;
+};
+
 enum class QueueType : uint32 {
   Graphics = 0,
   Compute,
@@ -77,6 +92,12 @@ enum class Format : uint32 {
 
   COUNT
 };
+
+NODISCARD FORCEINLINE constexpr bool
+isDepthFormat(Format format)
+{
+  return format == Format::D32_SFLOAT || format == Format::D24_UNORM_S8_UINT;
+}
 
 enum class LoadOp : uint32 {
   Load = 0,
@@ -189,10 +210,40 @@ enum class PipelineBindPoint {
   Compute
 };
 
-enum class DescriptorType {
-  UniformBuffer,
-  StorageBuffer,
-  CombinedImageSampler,
+/**
+ * What a texture is used for at a point of the frame. A barrier moves it from one state to
+ * the next; each graphics API turns the pair into its own stages, accesses and layouts.
+ */
+enum class ResourceState : uint32
+{
+  Undefined,      // Contents are not needed (first use, or about to be overwritten).
+  RenderTarget,
+  DepthWrite,
+  DepthRead,
+  ShaderRead,
+  UnorderedAccess,
+  CopySource,
+  CopyDestination,
+  Present
+};
+
+enum class CullMode : uint32
+{
+  None,
+  Front,
+  Back
+};
+
+enum class FrontFace : uint32
+{
+  Clockwise,
+  CounterClockwise
+};
+
+enum class PolygonMode : uint32
+{
+  Fill,
+  Line
 };
 
 enum class PipelineStage : uint32 {
@@ -322,15 +373,6 @@ struct TextureViewCreateInfo {
   bool bIsDepthStencil = false;
 };
 
-struct TextireCreateInfo {
-  TextureType type = TextureType::Texture2D;
-  Format format = Format::Unknown;
-  uint32 width = 0;
-  uint32 height = 0;
-  uint32 depth = 1;
-  uint32 mipLevels = 1;
-};
-
 struct ShaderCreateInfo {
   ShaderStage stage;
   String entryPoint;
@@ -339,30 +381,90 @@ struct ShaderCreateInfo {
   Vector<String> defines; // Preprocessor defines for the shader
 };
 
-struct PipelineCreateInfo {
-  Map<ShaderStage, SPtr<IShader>> shaders;
+struct BlendAttachmentState {
+  bool enable = false;
+  BlendFactor srcColorFactor = BlendFactor::SrcAlpha;
+  BlendFactor dstColorFactor = BlendFactor::OneMinusSrcAlpha;
+  BlendOp colorOp = BlendOp::Add;
+  BlendFactor srcAlphaFactor = BlendFactor::One;
+  BlendFactor dstAlphaFactor = BlendFactor::Zero;
+  BlendOp alphaOp = BlendOp::Add;
+};
+
+struct RasterState {
+  CullMode cullMode = CullMode::Back;
+  // The engine is left-handed and projects like Direct3D, so front faces are clockwise.
+  FrontFace frontFace = FrontFace::Clockwise;
+  PolygonMode polygonMode = PolygonMode::Fill;
+  float depthBiasConstant = 0.0f;
+  float depthBiasSlope = 0.0f;
+};
+
+struct DepthState {
+  bool testEnable = true;
+  bool writeEnable = true;
+  CompareOp compareOp = CompareOp::Less;
+};
+
+/**
+ * Everything a graphics pipeline is built from. Every pipeline shares one layout (the
+ * bindless heap plus push constants), so there is nothing about resources here, and the
+ * attachment formats replace a render pass.
+ */
+struct CH_CORE_EXPORT GraphicsPipelineDesc {
+  SPtr<IShader> vertexShader;
+  SPtr<IShader> fragmentShader;
   VertexLayout vertexLayout;
   PrimitiveTopology topology = PrimitiveTopology::TriangleList;
+  RasterState raster;
+  DepthState depth;
 
-  struct {
-    bool enable = false;
-    bool writeEnable = true;
-    CompareOp compareOp = CompareOp::Less;
-  } depthStencil = {/**/};
+  Array<Format, GraphicsLimits::MAX_COLOR_ATTACHMENTS> colorFormats{};
+  Array<BlendAttachmentState, GraphicsLimits::MAX_COLOR_ATTACHMENTS> blendStates{};
+  uint32 colorAttachmentCount = 0;
+  Format depthFormat = Format::Unknown;
+  SampleCount samples = SampleCount::Count1;
 
-  struct {
-    bool enable = false;
-    BlendFactor srcColorFactor = BlendFactor::SrcAlpha;
-    BlendFactor dstColorFactor = BlendFactor::OneMinusSrcAlpha;
-    // TODO: Add more blend factors
-  } blend = {/**/};
+  /**
+   * Key for the pipeline cache. Shaders count by identity, so two descriptions with the
+   * same shader objects and state give the same key.
+   */
+  NODISCARD uint64
+  getHash() const;
+};
 
-  SPtr<IRenderPass> renderPass;
-  uint32 subpass = 0;
+struct ColorAttachment {
+  const ITextureView* view = nullptr;
+  LoadOp loadOp = LoadOp::Clear;
+  StoreOp storeOp = StoreOp::Store;
+  LinearColor clearColor = LinearColor::Black;
+};
 
-  Vector<SPtr<IDescriptorSetLayout>> setLayouts = {/**/};
+struct DepthAttachment {
+  const ITextureView* view = nullptr;
+  LoadOp loadOp = LoadOp::Clear;
+  StoreOp storeOp = StoreOp::DontCare;
+  float clearDepth = 1.0f;
+};
 
-  //TODO: Add more fields for dynamic states, push constants, etc.
+/**
+ * Targets of one ICommandBuffer::beginRendering. Kept on the stack: no allocation per pass.
+ */
+struct RenderingDesc {
+  Array<ColorAttachment, GraphicsLimits::MAX_COLOR_ATTACHMENTS> colorAttachments{};
+  uint32 colorAttachmentCount = 0;
+  DepthAttachment depthAttachment{};
+  uint32 width = 0;
+  uint32 height = 0;
+};
+
+/**
+ * Moves every mip and layer of a texture from one state to another.
+ */
+struct TextureBarrier {
+  const ITexture* texture = nullptr;
+  ResourceState before = ResourceState::Undefined;
+  ResourceState after = ResourceState::Undefined;
 };
 
 
@@ -410,48 +512,6 @@ struct SubmitInfo {
   Vector<SPtr<ISemaphore>> waitSemaphores;
   Vector<PipelineStageFlags> waitStages;
   Vector<SPtr<ISemaphore>> signalSemaphores;
-};
-
-struct DescriptorSetLayoutBinding {
-  uint32 binding = 0;
-  DescriptorType type = DescriptorType::UniformBuffer;
-  uint32 count = 1;
-  ShaderStageFlags stageFlags = ShaderStage::Vertex;
-};
-
-struct DescriptorSetLayoutCreateInfo {
-  Vector<DescriptorSetLayoutBinding> bindings;
-};
-
-struct DescriptorPoolCreateInfo {
-  uint32 maxSets = 0;
-  Vector<Pair<DescriptorType, uint32>> poolSizes;
-};
-
-struct DescriptorSetAllocateInfo {
-  SPtr<IDescriptorPool> pool;
-  SPtr<IDescriptorSetLayout> layout;
-};
-
-struct DescriptorBufferInfo {
-  SPtr<IBuffer> buffer;
-  uint32 offset = 0;
-  uint32 range = ~0u;
-};
-
-struct DescriptorImageInfo {
-  SPtr<ISampler> sampler;
-  SPtr<ITextureView> imageView;
-  TextureLayout imageLayout = TextureLayout::ShaderReadOnly;
-};
-
-struct WriteDescriptorSet {
-  SPtr<IDescriptorSet> dstSet;
-  uint32 dstBinding = 0;
-  uint32 dstArrayElement = 0;
-  DescriptorType descriptorType = DescriptorType::UniformBuffer;
-  Vector<DescriptorBufferInfo> bufferInfos = {/**/};
-  Vector<DescriptorImageInfo> imageInfos = {/**/};
 };
 
 } // namespace chEngineSDK

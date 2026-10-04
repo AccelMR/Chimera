@@ -27,7 +27,7 @@
 #include "chICommandBuffer.h"
 #include "chICommandPool.h"
 #include "chICommandQueue.h"
-#include "chIDescriptorPool.h"
+#include "chISampler.h"
 #include "chIGraphicsAPI.h"
 #include "chIPipeline.h"
 #include "chIShader.h"
@@ -47,17 +47,27 @@ namespace chEngineSDK {
 
 CH_LOG_DECLARE_STATIC(NastyRendererSystem, CH_NASTY_RENDERER_LOG_LEVEL);
 
-namespace RendererHelpers {
-struct ProjectionViewMatrix {
-  Matrix4 projectionMatrix;
-  Matrix4 viewMatrix;
-  Matrix4 modelMatrix;
+namespace {
+// Must match CameraData in cube.hlsl.
+struct CameraData {
+  Matrix4 view;
+  Matrix4 projection;
 };
 
-} // namespace RendererHelpers
+// Must match PushConstants in cube.hlsl.
+struct DrawPushConstants {
+  Matrix4 model;
+  uint32 cameraIndex;
+  uint32 textureIndex;
+  uint32 samplerIndex;
+  uint32 padding;
+};
+static_assert(sizeof(DrawPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
 
-// Global variables from original renderer
-RendererHelpers::ProjectionViewMatrix projectionViewMatrix;
+constexpr Format kColorFormat = Format::R8G8B8A8_UNORM;
+constexpr Format kDepthFormat = Format::D32_SFLOAT;
+} // namespace
+
 float g_farPlane = 10000.0f;
 float g_nearPlane = 0.1f;
 Radian g_FOV(Degree(45.0f));
@@ -96,7 +106,6 @@ NastyRenderer::initialize(uint32 width, uint32 height) {
   m_renderHeight = height;
 
   createRenderTargets();
-  createRenderPass();
   initializeRenderResources();
 
   CH_LOG_INFO(NastyRendererSystem, "NastyRenderer initialized successfully");
@@ -115,33 +124,53 @@ NastyRenderer::onRender(float deltaTime) {
   }
   m_renderFence->reset();
 
-  // Begin command buffer recording
-  m_commandBuffer->begin();
-
-  // Begin render pass
-  RenderPassBeginInfo renderPassInfo{.renderPass = m_renderPass,
-                                     .framebuffer = m_framebuffer,
-                                     .clearValues = m_clearColors,
-                                     .depthStencilClearValue = {{1.0f, 0}}};
-
-  m_commandBuffer->beginRenderPass(renderPassInfo);
-  m_commandBuffer->setViewport(0, 0, static_cast<float>(m_renderWidth), static_cast<float>(m_renderHeight));
-  m_commandBuffer->setScissor(0, 0, static_cast<float>(m_renderWidth), static_cast<float>(m_renderHeight));
-  m_commandBuffer->bindPipeline(m_pipeline);
-
-  // Update camera matrices
+  // Written after the fence: the previous frame no longer reads the buffer.
   if (m_camera) {
-    projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
-    projectionViewMatrix.projectionMatrix = m_camera->getProjectionMatrix();
-
-    // Render the model
-    if (m_currentModel) {
-      renderModel(m_commandBuffer, deltaTime);
-    }
+    const CameraData cameraData{.view = m_camera->getViewMatrix(),
+                                .projection = m_camera->getProjectionMatrix()};
+    m_cameraBuffer->update(&cameraData, sizeof(cameraData));
   }
 
-  m_commandBuffer->endRenderPass();
-  m_commandBuffer->end();
+  ICommandBuffer& commandBuffer = *m_commandBuffer;
+  commandBuffer.begin();
+
+  // The targets are cleared, so their old contents (and layouts) are not needed.
+  const Array<TextureBarrier, 2> toRendering = {
+      TextureBarrier{.texture = m_colorTarget.get(),
+                     .before = ResourceState::Undefined,
+                     .after = ResourceState::RenderTarget},
+      TextureBarrier{.texture = m_depthTarget.get(),
+                     .before = ResourceState::Undefined,
+                     .after = ResourceState::DepthWrite}};
+  commandBuffer.barrier(toRendering);
+
+  RenderingDesc renderingDesc{.colorAttachmentCount = 1,
+                              .depthAttachment = {.view = m_depthTargetView.get()},
+                              .width = m_renderWidth,
+                              .height = m_renderHeight};
+  renderingDesc.colorAttachments[0] = {
+      .view = m_colorTargetView.get(),
+      .clearColor = m_clearColors.empty() ? LinearColor::Black : m_clearColors[0]};
+
+  commandBuffer.beginRendering(renderingDesc);
+  commandBuffer.setViewport(0, 0, static_cast<float>(m_renderWidth),
+                            static_cast<float>(m_renderHeight));
+  commandBuffer.setScissor(0, 0, m_renderWidth, m_renderHeight);
+
+  if (m_camera && m_currentModel) {
+    renderModel(commandBuffer, deltaTime);
+  }
+
+  commandBuffer.endRendering();
+
+  // The editor samples the target in a later submit on the same queue; this barrier
+  // also orders that read after the writes above.
+  const Array<TextureBarrier, 1> toSampling = {
+      TextureBarrier{.texture = m_colorTarget.get(),
+                     .before = ResourceState::RenderTarget,
+                     .after = ResourceState::ShaderRead}};
+  commandBuffer.barrier(toSampling);
+  commandBuffer.end();
 
   // Submit command buffer
   SubmitInfo submitInfo{.commandBuffers = {m_commandBuffer},
@@ -178,17 +207,7 @@ NastyRenderer::resize(uint32 width, uint32 height) {
   m_renderWidth = width;
   m_renderHeight = height;
 
-  // Recreate render targets with new dimensions
   createRenderTargets();
-  createRenderPass();
-
-  // Recreate framebuffer
-  FrameBufferCreateInfo fbInfo{.renderPass = m_renderPass,
-                               .attachments = {m_colorTargetView, m_depthTargetView},
-                               .width = m_renderWidth,
-                               .height = m_renderHeight,
-                               .layers = 1};
-  m_framebuffer = graphicsAPI.createFrameBuffer(fbInfo);
 
   // Update camera viewport
   if (m_camera) {
@@ -220,22 +239,22 @@ NastyRenderer::cleanup() {
   m_renderFence.reset();
 
   // Reset pipeline resources
-  m_pipeline.reset();
+  m_pipeline = nullptr;
+  m_pipelineCache.clear();
   m_vertexShader.reset();
   m_fragmentShader.reset();
+  m_cameraBuffer.reset();
 
   // Reset render targets
-  m_framebuffer.reset();
-  m_renderPass.reset();
   m_colorTargetView.reset();
   m_colorTarget.reset();
   m_depthTargetView.reset();
   m_depthTarget.reset();
 
   // Reset material resources
+  m_texture.reset();
+  m_defaultTexture.reset();
   m_sampler.reset();
-  m_descriptorSetLayout.reset();
-  m_descriptorPool.reset();
 
   // Reset scene resources
   m_camera.reset();
@@ -252,7 +271,7 @@ NastyRenderer::createRenderTargets() {
 
   // Create color target (RGBA8 for now, can be upgraded to HDR later)
   TextureCreateInfo colorTextureInfo{.type = TextureType::Texture2D,
-                                     .format = Format::R8G8B8A8_UNORM,
+                                     .format = kColorFormat,
                                      .width = m_renderWidth,
                                      .height = m_renderHeight,
                                      .depth = 1,
@@ -261,15 +280,17 @@ NastyRenderer::createRenderTargets() {
                                      .samples = SampleCount::Count1,
                                      .usage = TextureUsage::ColorAttachment
                                               | TextureUsage::Sampled};
+
   m_colorTarget = graphicsAPI.createTexture(colorTextureInfo);
 
-  TextureViewCreateInfo colorViewInfo{.format = Format::R8G8B8A8_UNORM,
+  TextureViewCreateInfo colorViewInfo{.format = kColorFormat,
                                       .viewType = TextureViewType::View2D};
+
   m_colorTargetView = m_colorTarget->createView(colorViewInfo);
 
   // Create depth target
   TextureCreateInfo depthTextureInfo{.type = TextureType::Texture2D,
-                                     .format = Format::D32_SFLOAT,
+                                     .format = kDepthFormat,
                                      .width = m_renderWidth,
                                      .height = m_renderHeight,
                                      .depth = 1,
@@ -277,70 +298,17 @@ NastyRenderer::createRenderTargets() {
                                      .arrayLayers = 1,
                                      .samples = SampleCount::Count1,
                                      .usage = TextureUsage::DepthStencil};
+
   m_depthTarget = graphicsAPI.createTexture(depthTextureInfo);
 
-  TextureViewCreateInfo depthViewInfo{.format = Format::D32_SFLOAT,
+  TextureViewCreateInfo depthViewInfo{.format = kDepthFormat,
                                       .viewType = TextureViewType::View2D,
                                       .bIsDepthStencil = true};
+
   m_depthTargetView = m_depthTarget->createView(depthViewInfo);
 
   CH_LOG_INFO(NastyRendererSystem, "Render targets created: {0}x{1}", m_renderWidth,
               m_renderHeight);
-}
-
-/*
- */
-void
-NastyRenderer::createRenderPass() {
-  auto& graphicsAPI = IGraphicsAPI::instance();
-
-  AttachmentDescription colorAttachment{.format = Format::R8G8B8A8_UNORM,
-                                        .loadOp = LoadOp::Clear,
-                                        .storeOp = StoreOp::Store,
-                                        .stencilLoadOp = LoadOp::DontCare,
-                                        .stencilStoreOp = StoreOp::DontCare,
-                                        .initialLayout = TextureLayout::Undefined,
-                                        .finalLayout = TextureLayout::ShaderReadOnly};
-
-  AttachmentDescription depthAttachment{.format = Format::D32_SFLOAT,
-                                        .loadOp = LoadOp::Clear,
-                                        .storeOp = StoreOp::DontCare,
-                                        .stencilLoadOp = LoadOp::DontCare,
-                                        .stencilStoreOp = StoreOp::DontCare,
-                                        .initialLayout = TextureLayout::Undefined,
-                                        .finalLayout = TextureLayout::DepthStencilAttachment};
-
-  AttachmentReference colorRef{.attachment = 0, .layout = TextureLayout::ColorAttachment};
-
-  AttachmentReference depthRef{.attachment = 1,
-                               .layout = TextureLayout::DepthStencilAttachment};
-
-  SubpassDescription subpass{.pipelineBindPoint = PipelineBindPoint::Graphics,
-                             .colorAttachments = {colorRef},
-                             .depthStencilAttachment = depthRef};
-
-  SubpassDependency dependency{.srcSubpass = SUBPASS_EXTERNAL,
-                               .dstSubpass = 0,
-                               .srcStageMask = PipelineStage::ColorAttachmentOutput,
-                               .dstStageMask = PipelineStage::ColorAttachmentOutput,
-                               .srcAccessMask = Access::NoAccess,
-                               .dstAccessMask = Access::ColorAttachmentWrite};
-
-  RenderPassCreateInfo renderPassInfo{.attachments = {colorAttachment, depthAttachment},
-                                      .subpasses = {subpass},
-                                      .dependencies = {dependency}};
-
-  m_renderPass = graphicsAPI.createRenderPass(renderPassInfo);
-
-  // Create framebuffer
-  FrameBufferCreateInfo fbInfo{.renderPass = m_renderPass,
-                               .attachments = {m_colorTargetView, m_depthTargetView},
-                               .width = m_renderWidth,
-                               .height = m_renderHeight,
-                               .layers = 1};
-  m_framebuffer = graphicsAPI.createFrameBuffer(fbInfo);
-
-  CH_LOG_INFO(NastyRendererSystem, "Render pass and framebuffer created");
 }
 
 /*
@@ -362,18 +330,9 @@ NastyRenderer::initializeRenderResources() {
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);
   m_camera->updateMatrices();
 
-  // Create descriptor set layout
-  Vector<DescriptorSetLayoutBinding> bindings{{.binding = 0,
-                                               .type = DescriptorType::UniformBuffer,
-                                               .count = 1,
-                                               .stageFlags = ShaderStage::Vertex},
-                                              {.binding = 1,
-                                               .type = DescriptorType::CombinedImageSampler,
-                                               .count = 1,
-                                               .stageFlags = ShaderStage::Fragment}};
-
-  DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{.bindings = bindings};
-  m_descriptorSetLayout = graphicsAPI.createDescriptorSetLayout(descriptorSetLayoutCreateInfo);
+  m_cameraBuffer = graphicsAPI.createBuffer({.size = sizeof(CameraData),
+                                             .usage = BufferUsage::UniformBuffer,
+                                             .memoryUsage = MemoryUsage::CpuToGpu});
 
   // Create sampler
   SamplerCreateInfo samplerCreateInfo{.magFilter = SamplerFilter::Linear,
@@ -385,6 +344,11 @@ NastyRenderer::initializeRenderResources() {
                                       .anisotropyEnable = false,
                                       .maxAnisotropy = 16.0f};
   m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
+
+  constexpr uint32 kWhitePixel = 0xFFFFFFFF;
+  m_defaultTexture = graphicsAPI.createTexture({.format = kColorFormat,
+                                                .initialData = &kWhitePixel,
+                                                .initialDataSize = sizeof(kWhitePixel)});
 
   const Path shaderDir = EnginePaths::getShaderBinaryDirectory().join(Path("SPIRV"));
   const Path cubeVertexShader(shaderDir, Path("cube.vs.spv"));
@@ -406,18 +370,22 @@ NastyRenderer::initializeRenderResources() {
   m_vertexShader = graphicsAPI.createShader(shaderCreateInfo);
   m_fragmentShader = graphicsAPI.createShader(fragmentShaderCreateInfo);
 
-  // Create pipeline
-  PipelineCreateInfo pipelineCreateInfo{
-      .shaders = {{ShaderStage::Vertex, m_vertexShader},
-                  {ShaderStage::Fragment, m_fragmentShader}},
-      .vertexLayout = VertexNormalTexCoord::getLayout(),
-      .topology = PrimitiveTopology::TriangleList,
-      .depthStencil = {.enable = true, .writeEnable = true, .compareOp = CompareOp::Less},
-      .renderPass = m_renderPass,
-      .setLayouts = {m_descriptorSetLayout}};
-  m_pipeline = graphicsAPI.createPipeline(pipelineCreateInfo);
+  GraphicsPipelineDesc pipelineDesc{.vertexShader = m_vertexShader,
+                                    .fragmentShader = m_fragmentShader,
+                                    .vertexLayout = VertexNormalTexCoord::getLayout(),
+                                    .colorAttachmentCount = 1,
+                                    .depthFormat = kDepthFormat};
+  pipelineDesc.colorFormats[0] = kColorFormat;
+  m_pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
 
   CH_LOG_INFO(NastyRendererSystem, "Render resources initialized");
+}
+
+/*
+ */
+void
+NastyRenderer::setTexture(const SPtr<ITexture>& texture) {
+  m_texture = texture;
 }
 
 /*
@@ -438,9 +406,7 @@ NastyRenderer::loadModel(const SPtr<Model>& model) {
   cleanupModelResources();
   m_currentModel = model;
 
-  // Create mesh buffers and descriptor resources
   createMeshBuffers();
-  createNodeDescriptorResources();
 
   CH_LOG_INFO(NastyRendererSystem, "Model loaded successfully");
 }
@@ -536,74 +502,6 @@ NastyRenderer::createMeshBuffers() {
 /*
  */
 void
-NastyRenderer::createNodeDescriptorResources() {
-  auto& graphicsAPI = IGraphicsAPI::instance();
-
-  if (!m_currentModel) {
-    return;
-  }
-
-  uint32 nodeCount = static_cast<uint32>(m_currentModel->getAllNodes().size());
-
-  // Create descriptor pool for all nodes
-  DescriptorPoolCreateInfo descriptorPoolCreateInfo{
-      .maxSets = nodeCount,
-      .poolSizes = {{DescriptorType::UniformBuffer, nodeCount},
-                    {DescriptorType::CombinedImageSampler, nodeCount}}};
-  m_descriptorPool = graphicsAPI.createDescriptorPool(descriptorPoolCreateInfo);
-
-  // Create descriptor resources for each node
-  for (ModelNode* node : m_currentModel->getAllNodes()) {
-    if (node->getMeshes().empty()) {
-      continue;
-    }
-
-    // Create uniform buffer for this node
-    BufferCreateInfo bufferCreateInfo{.size = sizeof(RendererHelpers::ProjectionViewMatrix),
-                                      .usage = BufferUsage::UniformBuffer,
-                                      .memoryUsage = MemoryUsage::CpuToGpu};
-    SPtr<IBuffer> nodeBuffer = graphicsAPI.createBuffer(bufferCreateInfo);
-
-    // Allocate descriptor set for this node
-    DescriptorSetAllocateInfo allocInfo{.pool = m_descriptorPool,
-                                        .layout = m_descriptorSetLayout};
-    SPtr<IDescriptorSet> nodeDescriptorSet =
-        m_descriptorPool->allocateDescriptorSet(allocInfo);
-
-    // Setup descriptor writes
-    DescriptorBufferInfo bufferInfo{.buffer = nodeBuffer,
-                                    .offset = 0,
-                                    .range = sizeof(RendererHelpers::ProjectionViewMatrix)};
-
-    DescriptorImageInfo imageInfo{.sampler = m_sampler,
-                                  .imageView = m_textureView,
-                                  .imageLayout = TextureLayout::ShaderReadOnly};
-
-    Vector<WriteDescriptorSet> writeDescriptorSets{
-        {.dstSet = nodeDescriptorSet,
-         .dstBinding = 0,
-         .dstArrayElement = 0,
-         .descriptorType = DescriptorType::UniformBuffer,
-         .bufferInfos = {bufferInfo}},
-        {.dstSet = nodeDescriptorSet,
-         .dstBinding = 1,
-         .dstArrayElement = 0,
-         .descriptorType = DescriptorType::CombinedImageSampler,
-         .imageInfos = {imageInfo}}};
-
-    // Update descriptor sets
-    graphicsAPI.updateDescriptorSets(writeDescriptorSets);
-
-    // Store node resources
-    m_nodeResources[node] = {.uniformBuffer = nodeBuffer, .descriptorSet = nodeDescriptorSet};
-  }
-
-  CH_LOG_INFO(NastyRendererSystem, "Created descriptor resources for {0} nodes", nodeCount);
-}
-
-/*
- */
-void
 NastyRenderer::bindInputEvents() {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
@@ -677,8 +575,6 @@ NastyRenderer::bindInputEvents() {
     default:
       return;
     }
-
-    projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
   });
 
   listenWheel = eventDispatcher.OnMouseWheel.connect([&](const MouseWheelData& wheelData) {
@@ -708,7 +604,6 @@ NastyRenderer::bindInputEvents() {
         m_camera->rotate(std::move(mouseData.deltaY * g_rotationSpeed),
                          std::move(mouseData.deltaX * g_rotationSpeed), 0.0f);
       }
-      projectionViewMatrix.viewMatrix = m_camera->getViewMatrix();
     }
   });
 
@@ -718,7 +613,7 @@ NastyRenderer::bindInputEvents() {
 /*
  */
 void
-NastyRenderer::renderModel(const SPtr<ICommandBuffer>& commandBuffer, float deltaTime) {
+NastyRenderer::renderModel(ICommandBuffer& commandBuffer, float deltaTime) {
   if (!m_currentModel) {
     return;
   }
@@ -735,40 +630,33 @@ NastyRenderer::renderModel(const SPtr<ICommandBuffer>& commandBuffer, float delt
     }
   }
 
-  const Matrix4& projectionMatrix = m_camera->getProjectionMatrix();
-  const Matrix4& viewMatrix = m_camera->getViewMatrix();
+  commandBuffer.bindPipeline(*m_pipeline);
+
+  const ITexture& texture = m_texture ? *m_texture : *m_defaultTexture;
+  DrawPushConstants pushConstants{.cameraIndex = m_cameraBuffer->getBindlessIndex(),
+                                  .textureIndex = texture.getBindlessIndex(),
+                                  .samplerIndex = m_sampler->getBindlessIndex(),
+                                  .padding = 0};
 
   for (ModelNode* node : m_currentModel->getAllNodes()) {
     if (node->getMeshes().empty()) {
       continue;
     }
 
-    auto it = m_nodeResources.find(node);
-    if (it == m_nodeResources.end()) {
-      CH_LOG_ERROR(NastyRendererSystem, "No render resources found for node: {0}",
-                   node->getName());
-      continue;
-    }
-
-    NodeRenderResources& resources = it->second;
-
-    RendererHelpers::ProjectionViewMatrix matrices = {.projectionMatrix = projectionMatrix,
-                                                      .viewMatrix = viewMatrix,
-                                                      .modelMatrix =
-                                                          node->getGlobalTransform()};
-
-    resources.uniformBuffer->update(&matrices, sizeof(matrices));
-
-    commandBuffer->bindDescriptorSets(PipelineBindPoint::Graphics, m_pipeline->getLayout(), 0,
-                                      {resources.descriptorSet});
+    pushConstants.model = node->getGlobalTransform();
+    commandBuffer.pushConstants(&pushConstants, sizeof(pushConstants));
 
     for (const auto& mesh : node->getMeshes()) {
-      uint32 meshIndex = m_meshToIndexMap[mesh];
+      const auto it = m_meshToIndexMap.find(mesh);
+      if (it == m_meshToIndexMap.end()) {
+        continue;
+      }
+      const uint32 meshIndex = it->second;
 
-      commandBuffer->bindVertexBuffer(m_meshVertexBuffers[meshIndex]);
-      commandBuffer->bindIndexBuffer(m_meshIndexBuffers[meshIndex],
-                                     m_meshIndexTypes[meshIndex]);
-      commandBuffer->drawIndexed(m_meshIndexCounts[meshIndex]);
+      commandBuffer.bindVertexBuffer(*m_meshVertexBuffers[meshIndex]);
+      commandBuffer.bindIndexBuffer(*m_meshIndexBuffers[meshIndex],
+                                    m_meshIndexTypes[meshIndex]);
+      commandBuffer.drawIndexed(m_meshIndexCounts[meshIndex]);
     }
   }
 }
@@ -784,21 +672,9 @@ NastyRenderer::cleanupModelResources() {
   m_meshIndexTypes.clear();
   m_meshToIndexMap.clear();
 
-  // Clear node resources
-  for (auto& pair : m_nodeResources) {
-    pair.second.uniformBuffer.reset();
-    pair.second.descriptorSet.reset();
-  }
-  m_nodeResources.clear();
-
   // Clear node names
   NodeNames.clear();
   NodeIndex = 0;
-
-  // Reset descriptor pool
-  if (m_descriptorPool) {
-    m_descriptorPool.reset();
-  }
 
   // Reset current model
   m_currentModel.reset();

@@ -41,7 +41,14 @@ class ITexture {
   NODISCARD virtual uint32 
   getArrayLayers() const = 0;
 
-  NODISCARD virtual SPtr<ITextureView> 
+  /**
+   * Index of a view of the whole texture in the bindless heap, for reading it in shaders;
+   * GraphicsLimits::INVALID_BINDLESS_INDEX when it was not created with Sampled usage.
+   */
+  NODISCARD virtual uint32
+  getBindlessIndex() const = 0;
+
+  NODISCARD virtual SPtr<ITextureView>
   createView(const TextureViewCreateInfo& createInfo = {}) = 0;
 
   virtual void 

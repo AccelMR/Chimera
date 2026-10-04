@@ -143,11 +143,17 @@ VulkanSampler::VulkanSampler(VkDevice device, const SamplerCreateInfo& createInf
   samplerInfo.maxLod = createInfo.maxLod;
   
   VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler));
+
+  VulkanBindlessHeap& bindlessHeap = g_vulkanAPI().getBindlessHeap();
+  m_bindlessIndex = bindlessHeap.allocateSamplerIndex();
+  bindlessHeap.writeSampler(m_bindlessIndex, m_sampler);
 }
 
 VulkanSampler::~VulkanSampler()
 {
-  g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_SAMPLER, m_sampler);
+  VulkanDeletionQueue& deletionQueue = g_vulkanAPI().getDeletionQueue();
+  deletionQueue.enqueueBindlessIndex(m_bindlessIndex, true);
+  deletionQueue.enqueue(VK_OBJECT_TYPE_SAMPLER, m_sampler);
 }
 
 } // namespace chEngineSDK

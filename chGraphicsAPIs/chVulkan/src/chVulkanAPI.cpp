@@ -20,12 +20,8 @@
 #include "chVulkanCommandBuffer.h"
 #include "chVulkanCommandPool.h"
 #include "chVulkanCommandQueue.h"
-#include "chVulkanDescriptorPool.h"
-#include "chVulkanDescriptorSet.h"
-#include "chVulkanDescriptorSetLayout.h"
 #include "chVulkanFrameBuffer.h"
 #include "chVulkanPipeline.h"
-#include "chVulkanPipelineLayout.h"
 #include "chVulkanRenderPass.h"
 #include "chVulkanSampler.h"
 #include "chVulkanShader.h"
@@ -87,6 +83,8 @@ visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
   visit(chain.vulkan12.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
   visit(chain.vulkan12.descriptorBindingUpdateUnusedWhilePending,
         "descriptorBindingUpdateUnusedWhilePending");
+  visit(chain.vulkan12.descriptorBindingUniformBufferUpdateAfterBind,
+        "descriptorBindingUniformBufferUpdateAfterBind");
   visit(chain.vulkan12.descriptorBindingSampledImageUpdateAfterBind,
         "descriptorBindingSampledImageUpdateAfterBind");
   visit(chain.vulkan12.descriptorBindingStorageImageUpdateAfterBind,
@@ -201,7 +199,9 @@ VulkanAPI::~VulkanAPI()
   m_presentQueue.reset();
 
   if (data.device != VK_NULL_HANDLE) {
+    // Frees the pending bindless indexes too, so it runs before the heap is destroyed.
     m_deletionQueue.destroy();
+    m_bindlessHeap.destroy();
   }
 
   if (m_allocator != nullptr) {
@@ -353,8 +353,10 @@ VulkanAPI::createShader(const ShaderCreateInfo& createInfo) {
 /*
  */
 NODISCARD SPtr<IPipeline>
-VulkanAPI::createPipeline(const PipelineCreateInfo& createInfo) {
-  return chMakeShared<VulkanPipeline>(m_vulkanData->device, createInfo);
+VulkanAPI::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
+{
+  return chMakeShared<VulkanPipeline>(m_vulkanData->device, m_bindlessHeap.getPipelineLayout(),
+                                      desc);
 }
 
 /*
@@ -390,104 +392,6 @@ VulkanAPI::getQueue(QueueType queueType) {
 SPtr<ISampler>
 VulkanAPI::createSampler(const SamplerCreateInfo& createInfo) {
   return chMakeShared<VulkanSampler>(m_vulkanData->device, createInfo);
-}
-
-/*
- */
-NODISCARD SPtr<IDescriptorSetLayout>
-VulkanAPI::createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) {
-  return chMakeShared<VulkanDescriptorSetLayout>(m_vulkanData->device, createInfo);
-}
-
-/*
- */
-NODISCARD SPtr<IDescriptorPool>
-VulkanAPI::createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) {
-  return chMakeShared<VulkanDescriptorPool>(m_vulkanData->device, createInfo);
-}
-
-/*
- */
-void
-VulkanAPI::updateDescriptorSets(const Vector<WriteDescriptorSet>& descriptorWrites) {
-  Vector<VkWriteDescriptorSet> writes;
-  writes.reserve(descriptorWrites.size());
-
-  Vector<Vector<VkDescriptorBufferInfo>> bufferInfos;
-  Vector<Vector<VkDescriptorImageInfo>> imageInfos;
-
-  bufferInfos.resize(descriptorWrites.size());
-  imageInfos.resize(descriptorWrites.size());
-
-  for (SIZE_T i = 0; i < descriptorWrites.size(); ++i) {
-    const auto& write = descriptorWrites[i];
-
-    VkWriteDescriptorSet vkWrite{};
-    vkWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    vkWrite.dstSet = std::static_pointer_cast<VulkanDescriptorSet>(write.dstSet)->getHandle();
-    vkWrite.dstBinding = write.dstBinding;
-    vkWrite.dstArrayElement = write.dstArrayElement;
-
-    switch (write.descriptorType) {
-    case DescriptorType::UniformBuffer:
-      vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      break;
-    case DescriptorType::StorageBuffer:
-      vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      break;
-    case DescriptorType::CombinedImageSampler:
-      vkWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      break;
-    }
-
-    if (!write.bufferInfos.empty()) {
-      bufferInfos[i].reserve(write.bufferInfos.size());
-
-      for (const auto& info : write.bufferInfos) {
-        auto vulkanBuffer = std::static_pointer_cast<VulkanBuffer>(info.buffer);
-        if (!vulkanBuffer) {
-          CH_EXCEPT(VulkanErrorException, "Invalid buffer");
-        }
-
-        VkDescriptorBufferInfo bufferInfo{
-            .buffer = vulkanBuffer->getHandle(),
-            .offset = info.offset,
-            .range = info.range,
-        };
-
-        bufferInfos[i].push_back(bufferInfo);
-      }
-
-      vkWrite.descriptorCount = static_cast<uint32>(bufferInfos[i].size());
-      vkWrite.pBufferInfo = bufferInfos[i].data();
-    }
-
-    if (!write.imageInfos.empty()) {
-      imageInfos[i].reserve(write.imageInfos.size());
-
-      for (const auto& info : write.imageInfos) {
-        VkDescriptorImageInfo imageInfo{};
-        if (auto vulkanSampler = std::static_pointer_cast<VulkanSampler>(info.sampler)) {
-          imageInfo.sampler = vulkanSampler->getHandle();
-        }
-        if (auto vulkanTextureView =
-                std::static_pointer_cast<VulkanTextureView>(info.imageView)) {
-          imageInfo.imageView = vulkanTextureView->getHandle();
-        }
-        imageInfo.imageLayout = textureLayoutToVkImageLayout(info.imageLayout);
-
-        imageInfos[i].push_back(imageInfo);
-      }
-
-      vkWrite.descriptorCount = static_cast<uint32>(imageInfos[i].size());
-      vkWrite.pImageInfo = imageInfos[i].data();
-    }
-
-    writes.push_back(vkWrite);
-  }
-
-  vkUpdateDescriptorSets(m_vulkanData->device, static_cast<uint32>(writes.size()),
-                         writes.data(), 0, nullptr);
 }
 
 /*
@@ -813,7 +717,8 @@ VulkanAPI::createAllocator()
   createInfo.instance = m_vulkanData->instance;
   VK_CHECK(vmaCreateAllocator(&createInfo, &m_allocator));
 
-  m_deletionQueue.initialize(m_vulkanData->device, m_allocator);
+  m_bindlessHeap.initialize(m_vulkanData->device);
+  m_deletionQueue.initialize(m_vulkanData->device, m_allocator, &m_bindlessHeap);
   setDebugName(VK_OBJECT_TYPE_SEMAPHORE, m_deletionQueue.getTimeline(),
                "Deletion Queue Timeline");
 }
@@ -1081,19 +986,19 @@ VulkanAPI::initializeFunctionMap() {
     if (args.size() < 2) {
       CH_LOG_ERROR(Vulkan,
                    "addImGuiTexture requires at least 2 arguments: sampler and textureView");
-      return Any(static_cast<void*>(nullptr));
+      return Any(uint64(0));
     }
 
     SPtr<ISampler> sampler;
     if (!AnyUtils::tryGetValue<SPtr<ISampler>>(args[0], sampler)) {
       CH_LOG_ERROR(Vulkan, "Invalid sampler argument");
-      return Any(static_cast<void*>(nullptr));
+      return Any(uint64(0));
     }
 
     SPtr<ITextureView> textureView;
     if (!AnyUtils::tryGetValue<SPtr<ITextureView>>(args[1], textureView)) {
       CH_LOG_ERROR(Vulkan, "Invalid textureView argument");
-      return Any(static_cast<void*>(nullptr));
+      return Any(uint64(0));
     }
 
     // Cast to Vulkan objects
@@ -1102,7 +1007,7 @@ VulkanAPI::initializeFunctionMap() {
 
     if (!vulkanSampler || !vulkanTextureView) {
       CH_LOG_ERROR(Vulkan, "Failed to cast to Vulkan objects");
-      return Any(static_cast<void*>(nullptr));
+      return Any(uint64(0));
     }
 
     // Get Vulkan handles
@@ -1113,22 +1018,20 @@ VulkanAPI::initializeFunctionMap() {
     VkDescriptorSet descriptorSet = ImGui_ImplVulkan_AddTexture(
         vkSampler, vkImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    auto descriptorSetWrapper =
-        chMakeShared<VulkanDescriptorSet>(m_vulkanData->device, descriptorSet);
-    return Any(std::static_pointer_cast<IDescriptorSet>(descriptorSetWrapper));
+    // The ImTextureID of this backend is the descriptor set.
+    return Any(reinterpret_cast<uint64>(descriptorSet));
   };
 
   // The set goes back to ImGui's pool at once, so the caller must make sure no frame in
   // flight still draws it.
   m_functionMap["removeImGuiTexture"] = [](const Vector<Any>& args) -> Any {
-    SPtr<IDescriptorSet> descriptorSet;
-    if (args.empty() || !AnyUtils::tryGetValue<SPtr<IDescriptorSet>>(args[0], descriptorSet) ||
-        !descriptorSet) {
-      CH_LOG_ERROR(Vulkan, "removeImGuiTexture requires the descriptor set to remove");
+    uint64 textureId = 0;
+    if (args.empty() || !AnyUtils::tryGetValue<uint64>(args[0], textureId) || textureId == 0) {
+      CH_LOG_ERROR(Vulkan, "removeImGuiTexture requires the texture id to remove");
       return {};
     }
 
-    ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(descriptorSet->getRaw()));
+    ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(textureId));
     return {};
   };
 

@@ -88,6 +88,9 @@ class VulkanTexture : public ITexture
     return m_arrayLayers;
   }
 
+  NODISCARD uint32
+  getBindlessIndex() const override;
+
   NODISCARD SPtr<ITextureView>
   createView(const TextureViewCreateInfo& createInfo = {}) override;
 
@@ -98,6 +101,12 @@ class VulkanTexture : public ITexture
   getHandle() const
   {
     return m_image;
+  }
+
+  NODISCARD FORCEINLINE TextureUsageFlags
+  getUsage() const
+  {
+    return m_usage;
   }
 
  private:
@@ -112,7 +121,10 @@ class VulkanTexture : public ITexture
   uint32 m_arrayLayers = 0;
   Format m_format = Format::Unknown;
   TextureType m_type = TextureType::Texture2D;
+  TextureUsageFlags m_usage;
   bool m_ownsTexture = true;
+  // The whole texture as shaders read it; it holds the bindless index of the texture.
+  SPtr<ITextureView> m_defaultView;
 };
 
 } // namespace chEngineSDK

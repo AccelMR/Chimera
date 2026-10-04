@@ -2,18 +2,25 @@
 // Matrices come from the engine stored row by row, and the engine uses row vectors,
 // so they are declared row_major and applied as mul(vector, matrix).
 
-struct ProjectionViewModel
+#include "chBindless.hlsli"
+
+struct CameraData
 {
-  row_major float4x4 projection;
   row_major float4x4 view;
-  row_major float4x4 model;
+  row_major float4x4 projection;
 };
 
-[[vk::binding(0)]] ConstantBuffer<ProjectionViewModel> pvm : register(b0);
+// Must match NastyRenderer's push constant struct.
+struct PushConstants
+{
+  row_major float4x4 model;
+  uint cameraIndex;
+  uint textureIndex;
+  uint samplerIndex;
+  uint padding;
+};
 
-// Same binding for both: the Vulkan pipeline uses one combined image sampler here.
-[[vk::combinedImageSampler]] [[vk::binding(1)]] Texture2D albedoTexture : register(t0);
-[[vk::combinedImageSampler]] [[vk::binding(1)]] SamplerState albedoSampler : register(s0);
+[[vk::push_constant]] ConstantBuffer<PushConstants> g_push : register(b0);
 
 struct VSInput
 {
@@ -33,12 +40,13 @@ struct VSOutput
 VSOutput
 VSMain(VSInput input)
 {
-  const float4 worldPosition = mul(float4(input.position, 1.0f), pvm.model);
+  const CameraData camera = loadConstants<CameraData>(g_push.cameraIndex);
+  const float4 worldPosition = mul(float4(input.position, 1.0f), g_push.model);
 
   VSOutput output;
   output.worldPosition = worldPosition.xyz;
-  output.position = mul(mul(worldPosition, pvm.view), pvm.projection);
-  output.normal = mul(input.normal, (float3x3)pvm.model);
+  output.position = mul(mul(worldPosition, camera.view), camera.projection);
+  output.normal = mul(input.normal, (float3x3)g_push.model);
   output.texCoord = input.texCoord;
   return output;
 }
@@ -46,6 +54,9 @@ VSMain(VSInput input)
 float4
 PSMain(VSOutput input) : SV_Target0
 {
+  Texture2D albedoTexture = ResourceDescriptorHeap[g_push.textureIndex];
+  SamplerState albedoSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+
   const float3 lightDirection = normalize(float3(1.0f, 1.0f, 1.0f));
   const float diffuse = max(dot(normalize(input.normal), lightDirection), 0.0f);
   const float3 ambient = float3(0.1f, 0.1f, 0.1f);

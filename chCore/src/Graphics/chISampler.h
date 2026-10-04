@@ -16,5 +16,11 @@ namespace chEngineSDK {
 class ISampler {
  public:
   virtual ~ISampler() = default;
+
+  /**
+   * Index of this sampler in the bindless sampler heap (SamplerDescriptorHeap in HLSL).
+   */
+  NODISCARD virtual uint32
+  getBindlessIndex() const = 0;
 };
 } // namespace chEngineSDK

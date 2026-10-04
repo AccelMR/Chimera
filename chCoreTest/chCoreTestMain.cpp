@@ -11,7 +11,10 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chDegree.h"
+#include "chGraphicsTypes.h"
+#include "chIShader.h"
 #include "chRadian.h"
+#include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
 #include "chVector4.h"
@@ -145,4 +148,81 @@ TEST_CASE("chCore - VertexLayout")
   REQUIRE(custom.getStride(0) == 20);
   REQUIRE(custom.getStride(1) == 16);
   REQUIRE(custom.getBindingCount() == 2);
+}
+
+namespace {
+// The pipeline key only uses shader identity, so a shader needs no GPU code here.
+class TestShader : public IShader
+{
+ public:
+  chEngineSDK::UUID
+  getShaderId() const override
+  {
+    return chEngineSDK::UUID::null();
+  }
+};
+
+GraphicsPipelineDesc
+makeTestPipelineDesc(const SPtr<IShader>& vertexShader, const SPtr<IShader>& fragmentShader)
+{
+  GraphicsPipelineDesc desc{.vertexShader = vertexShader,
+                            .fragmentShader = fragmentShader,
+                            .vertexLayout = VertexLayout::createPositionNormalTexCoordLayout(),
+                            .colorAttachmentCount = 1,
+                            .depthFormat = Format::D32_SFLOAT};
+  desc.colorFormats[0] = Format::R8G8B8A8_UNORM;
+  return desc;
+}
+} // namespace
+
+TEST_CASE("chCore - GraphicsPipelineDesc hash")
+{
+  const SPtr<IShader> vertexShader = chMakeShared<TestShader>();
+  const SPtr<IShader> fragmentShader = chMakeShared<TestShader>();
+  const GraphicsPipelineDesc base = makeTestPipelineDesc(vertexShader, fragmentShader);
+
+  SECTION("Equal descriptions give equal keys")
+  {
+    REQUIRE(base.getHash() == makeTestPipelineDesc(vertexShader, fragmentShader).getHash());
+  }
+
+  SECTION("Every kind of state changes the key")
+  {
+    GraphicsPipelineDesc otherShader = base;
+    otherShader.fragmentShader = chMakeShared<TestShader>();
+    REQUIRE(otherShader.getHash() != base.getHash());
+
+    GraphicsPipelineDesc otherLayout = base;
+    otherLayout.vertexLayout = VertexLayout::createPostionColorLayout();
+    REQUIRE(otherLayout.getHash() != base.getHash());
+
+    GraphicsPipelineDesc otherCull = base;
+    otherCull.raster.cullMode = CullMode::None;
+    REQUIRE(otherCull.getHash() != base.getHash());
+
+    GraphicsPipelineDesc otherDepth = base;
+    otherDepth.depth.writeEnable = false;
+    REQUIRE(otherDepth.getHash() != base.getHash());
+
+    GraphicsPipelineDesc otherBlend = base;
+    otherBlend.blendStates[0].enable = true;
+    REQUIRE(otherBlend.getHash() != base.getHash());
+
+    GraphicsPipelineDesc otherFormat = base;
+    otherFormat.colorFormats[0] = Format::R16G16B16A16_SFLOAT;
+    REQUIRE(otherFormat.getHash() != base.getHash());
+
+    GraphicsPipelineDesc moreTargets = base;
+    moreTargets.colorAttachmentCount = 2;
+    moreTargets.colorFormats[1] = Format::R8G8B8A8_UNORM;
+    REQUIRE(moreTargets.getHash() != base.getHash());
+  }
+
+  SECTION("Unused attachment slots do not change the key")
+  {
+    GraphicsPipelineDesc unusedSlot = base;
+    unusedSlot.colorFormats[3] = Format::R16G16B16A16_SFLOAT;
+    unusedSlot.blendStates[3].enable = true;
+    REQUIRE(unusedSlot.getHash() == base.getHash());
+  }
 }

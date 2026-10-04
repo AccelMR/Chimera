@@ -28,6 +28,7 @@
 #include <optional>
 #include <queue>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -52,6 +53,10 @@ using Array = std::array<T, size>;
 
 template<typename T, typename A = Alloc<T>>
 using Vector = std::vector<T, A>;
+
+// A view over contiguous elements (array, Vector, Array) that owns nothing; pass it by value.
+template<typename T, SIZE_T extent = std::dynamic_extent>
+using Span = std::span<T, extent>;
 
 template<typename T, typename A = Alloc<T>>
 using Deque = std::deque<T, A>;

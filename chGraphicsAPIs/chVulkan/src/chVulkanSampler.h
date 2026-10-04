@@ -22,8 +22,12 @@ class VulkanSampler : public ISampler {
   NODISCARD FORCEINLINE VkSampler
   getHandle() const { return m_sampler; }
 
+  NODISCARD FORCEINLINE uint32
+  getBindlessIndex() const override { return m_bindlessIndex; }
+
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkSampler m_sampler = VK_NULL_HANDLE;
+  uint32 m_bindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
 };
 } // namespace chEngineSDK

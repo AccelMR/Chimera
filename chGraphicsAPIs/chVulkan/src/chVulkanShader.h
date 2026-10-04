@@ -26,7 +26,7 @@ class VulkanShader : public IShader {
     return m_shaderModule;
   }
 
-  NODISCARD FORCEINLINE virtual String
+  NODISCARD FORCEINLINE const String&
   getEntryPoint() const {
     return m_entryPoint;
   }

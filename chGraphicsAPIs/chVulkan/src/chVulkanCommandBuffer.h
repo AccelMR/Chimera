@@ -4,28 +4,36 @@
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Vulkan command buffer implementation.
- * This file contains the implementation of the command buffer interface
+ * Vulkan implementation of ICommandBuffer.
  */
 /************************************************************************/
 #pragma once
 
 #include "chVulkanPrerequisites.h"
+
 #include "chICommandBuffer.h"
 
 namespace chEngineSDK {
-class VulkanCommandBuffer : public ICommandBuffer {
+
+/**
+ * Vulkan command buffer. It keeps the bindless set and the shared pipeline layout, so
+ * begin() binds the heap once and pushConstants() needs no pipeline.
+ */
+class VulkanCommandBuffer : public ICommandBuffer
+{
  public:
   VulkanCommandBuffer(VkDevice device, VkCommandPool commandPool);
   ~VulkanCommandBuffer() override;
 
   NODISCARD void*
-  getRaw() const override {
+  getRaw() const override
+  {
     return static_cast<void*>(m_commandBuffer);
   }
 
   void
   begin() override;
+
   void
   end() override;
 
@@ -36,17 +44,25 @@ class VulkanCommandBuffer : public ICommandBuffer {
   endRenderPass() override;
 
   void
-  bindPipeline(SPtr<IPipeline> pipeline) override;
+  beginRendering(const RenderingDesc& desc) override;
 
   void
-  bindVertexBuffer(SPtr<IBuffer> buffer,
-                   uint32 binding = 0,
-                   uint64 offset = 0) override;
+  endRendering() override;
 
   void
-  bindIndexBuffer(SPtr<IBuffer> buffer,
-                  IndexType indexType,
-                  uint32 offset = 0) override;
+  barrier(Span<const TextureBarrier> textureBarriers) override;
+
+  void
+  bindPipeline(const IPipeline& pipeline) override;
+
+  void
+  pushConstants(const void* data, uint32 size, uint32 offset = 0) override;
+
+  void
+  bindVertexBuffer(const IBuffer& buffer, uint32 binding = 0, uint64 offset = 0) override;
+
+  void
+  bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset = 0) override;
 
   void
   draw(uint32 vertexCount,
@@ -62,35 +78,35 @@ class VulkanCommandBuffer : public ICommandBuffer {
               uint32 firstInstance = 0) override;
 
   void
-  setViewport(float x, float y,
-              float width, float height,
-              float minDepth = 0.0f, float maxDepth = 1.0f) override;
+  setViewport(float x,
+              float y,
+              float width,
+              float height,
+              float minDepth = 0.0f,
+              float maxDepth = 1.0f) override;
 
   void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override;
 
-  void
-  bindDescriptorSets(PipelineBindPoint bindPoint,
-                     SPtr<IPipelineLayout> layout,
-                     uint32 firstSet,
-                     const Vector<SPtr<IDescriptorSet>>& descriptorSets,
-                     const Vector<uint32>& dynamicOffsets = {}) override;
-
-
   NODISCARD CommandBufferState
-  getState() const {
+  getState() const override
+  {
     return m_state;
   }
 
-  NODISCARD VkCommandBuffer
-  getHandle() const {
+  NODISCARD FORCEINLINE VkCommandBuffer
+  getHandle() const
+  {
     return m_commandBuffer;
   }
 
  private:
   VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
   VkDevice m_device = VK_NULL_HANDLE;
-  CommandBufferState m_state = CommandBufferState::Initial;
   VkCommandPool m_commandPool = VK_NULL_HANDLE;
+  VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_bindlessSet = VK_NULL_HANDLE;
+  CommandBufferState m_state = CommandBufferState::Initial;
 };
+
 } // namespace chEngineSDK

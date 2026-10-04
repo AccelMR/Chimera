@@ -80,7 +80,8 @@ class EditorApplication : public WindowedApplication
   SPtr<Scene> m_activeScene;
 
   SPtr<ISampler> m_defaultSampler;
-  Map<SPtr<ITextureView>, SPtr<IDescriptorSet>> m_textureDescriptorSets;
+  // ImGui texture id (ImTextureID) of each renderer target shown in the viewport.
+  Map<SPtr<ITextureView>, uint64> m_imguiTextures;
 
   // Pixel size of the viewport panel in the last UI frame; the renderer follows it.
   uint32 m_viewportWidth = 0;

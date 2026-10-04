@@ -17,6 +17,24 @@
 #include "chVulkanTextureView.h"
 
 namespace chEngineSDK {
+namespace {
+TextureViewType
+toDefaultViewType(TextureType type, uint32 arrayLayers)
+{
+  switch (type) {
+  case TextureType::Texture1D:
+    return arrayLayers > 1 ? TextureViewType::View1DArray : TextureViewType::View1D;
+  case TextureType::Texture3D:
+    return TextureViewType::View3D;
+  case TextureType::TextureCube:
+    return arrayLayers > 6 ? TextureViewType::ViewCubeArray : TextureViewType::ViewCube;
+  case TextureType::Texture2D:
+  default:
+    return arrayLayers > 1 ? TextureViewType::View2DArray : TextureViewType::View2D;
+  }
+}
+} // namespace
+
 /*
  */
 VulkanTexture::VulkanTexture(VkDevice device,
@@ -31,6 +49,7 @@ VulkanTexture::VulkanTexture(VkDevice device,
     m_arrayLayers(createInfo.arrayLayers),
     m_format(createInfo.format),
     m_type(createInfo.type),
+    m_usage(createInfo.usage),
     m_ownsTexture(true)
 {
   const VkImageCreateInfo imageInfo{
@@ -66,6 +85,12 @@ VulkanTexture::VulkanTexture(VkDevice device,
   if (createInfo.initialData && createInfo.initialDataSize > 0) {
     uploadData(createInfo.initialData, createInfo.initialDataSize);
   }
+
+  if (m_usage.isSet(TextureUsage::Sampled)) {
+    m_defaultView = createView({.format = Format::Unknown,
+                                .viewType = toDefaultViewType(m_type, m_arrayLayers),
+                                .bIsDepthStencil = isDepthFormat(m_format)});
+  }
 }
 
 /*
@@ -76,7 +101,17 @@ VulkanTexture::~VulkanTexture()
     return;
   }
 
+  m_defaultView.reset();
   g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_IMAGE, m_image, m_allocation);
+}
+
+/*
+ */
+uint32
+VulkanTexture::getBindlessIndex() const
+{
+  return m_defaultView ? m_defaultView->getBindlessIndex()
+                       : GraphicsLimits::INVALID_BINDLESS_INDEX;
 }
 
 /*

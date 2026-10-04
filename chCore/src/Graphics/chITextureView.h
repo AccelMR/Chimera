@@ -41,6 +41,13 @@ class ITextureView {
   NODISCARD virtual uint32
   getArrayLayerCount() const = 0;
 
+  /**
+   * Index of this view in the bindless heap when its texture can be sampled;
+   * GraphicsLimits::INVALID_BINDLESS_INDEX otherwise.
+   */
+  NODISCARD virtual uint32
+  getBindlessIndex() const = 0;
+
   NODISCARD virtual void*
   getRaw() const = 0;
 };

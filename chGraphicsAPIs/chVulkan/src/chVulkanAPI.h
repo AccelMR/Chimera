@@ -12,6 +12,7 @@
 #include "chVulkanPrerequisites.h"
 
 #include "chIGraphicsAPI.h"
+#include "chVulkanBindlessHeap.h"
 #include "chVulkanDeletionQueue.h"
 
 namespace chEngineSDK {
@@ -60,28 +61,20 @@ class VulkanAPI : public IGraphicsAPI {
   createShader(const ShaderCreateInfo& createInfo) override;
 
   NODISCARD SPtr<IPipeline>
-  createPipeline(const PipelineCreateInfo& createInfo) override;
+  createGraphicsPipeline(const GraphicsPipelineDesc& desc) override;
 
+  // Only the swap chain still uses render passes and framebuffers.
   NODISCARD SPtr<IRenderPass>
-  createRenderPass(const RenderPassCreateInfo& createInfo) override;
+  createRenderPass(const RenderPassCreateInfo& createInfo);
 
   NODISCARD SPtr<IFrameBuffer>
-  createFrameBuffer(const FrameBufferCreateInfo& createInfo) override;
+  createFrameBuffer(const FrameBufferCreateInfo& createInfo);
 
   NODISCARD SPtr<ICommandQueue>
   getQueue(QueueType queueType) override;
 
   NODISCARD virtual SPtr<ISampler>
   createSampler(const SamplerCreateInfo& createInfo) override;
-
-  NODISCARD SPtr<IDescriptorSetLayout>
-  createDescriptorSetLayout(const DescriptorSetLayoutCreateInfo& createInfo) override;
-
-  NODISCARD SPtr<IDescriptorPool>
-  createDescriptorPool(const DescriptorPoolCreateInfo& createInfo) override;
-
-  void
-  updateDescriptorSets(const Vector<WriteDescriptorSet>& writeDescriptorSets) override;
 
   void
   waitIdle() override;
@@ -122,6 +115,12 @@ class VulkanAPI : public IGraphicsAPI {
   getDeletionQueue()
   {
     return m_deletionQueue;
+  }
+
+  NODISCARD FORCEINLINE VulkanBindlessHeap&
+  getBindlessHeap()
+  {
+    return m_bindlessHeap;
   }
 
   /**
@@ -176,6 +175,7 @@ class VulkanAPI : public IGraphicsAPI {
   UniquePtr<VulkanData> m_vulkanData;
 
   VmaAllocator m_allocator = nullptr;
+  VulkanBindlessHeap m_bindlessHeap;
   VulkanDeletionQueue m_deletionQueue;
   PFN_vkSetDebugUtilsObjectNameEXT m_setDebugUtilsObjectName = nullptr;
 

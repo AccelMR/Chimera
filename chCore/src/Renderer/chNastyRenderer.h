@@ -11,6 +11,7 @@
 #include "chEventSystem.h"
 #include "chIRenderer.h"
 #include "chGraphicsTypes.h"
+#include "chPipelineCache.h"
 
 namespace chEngineSDK {
 class ModelNode;
@@ -46,13 +47,11 @@ public:
   void loadModel(const SPtr<Model>& model);
   void bindInputEvents();
 
-  void setTextureView(const SPtr<ITextureView>& textureView) {
-    m_texture.reset();
-    m_textureView = textureView;
-  }
-
+  /**
+   * Texture drawn on the model; null goes back to plain white.
+   */
   void
-  createNodeDescriptorResources();
+  setTexture(const SPtr<ITexture>& texture);
 
  private:
 
@@ -64,13 +63,10 @@ public:
   createRenderTargets();
 
   void
-  createRenderPass();
-
-  void
   initializeRenderResources();
 
   void
-  renderModel(const SPtr<ICommandBuffer>& commandBuffer, float deltaTime);
+  renderModel(ICommandBuffer& commandBuffer, float deltaTime);
 
   void
   cleanupModelResources();
@@ -83,9 +79,6 @@ public:
   SPtr<ITextureView> m_depthTargetView;
 
   Vector<LinearColor> m_clearColors;
-
-  SPtr<IRenderPass> m_renderPass;
-  SPtr<IFrameBuffer> m_framebuffer;
 
   SPtr<ICommandPool> m_commandPool;
   SPtr<ICommandBuffer> m_commandBuffer;
@@ -102,7 +95,11 @@ public:
 
   SPtr<IShader> m_vertexShader;
   SPtr<IShader> m_fragmentShader;
-  SPtr<IPipeline> m_pipeline;
+  PipelineCache m_pipelineCache;
+  // Owned by m_pipelineCache; the targets never change format, so it is looked up once.
+  const IPipeline* m_pipeline = nullptr;
+  // Camera matrices read by the shader through the bindless heap.
+  SPtr<IBuffer> m_cameraBuffer;
 
   Vector<SPtr<IBuffer>> m_meshVertexBuffers;
   Vector<SPtr<IBuffer>> m_meshIndexBuffers;
@@ -111,16 +108,9 @@ public:
   UnorderedMap<SPtr<Mesh>, uint32> m_meshToIndexMap;
 
   SPtr<ITexture> m_texture;
-  SPtr<ITextureView> m_textureView;
+  // 1x1 white, used until a texture is set.
+  SPtr<ITexture> m_defaultTexture;
   SPtr<ISampler> m_sampler;
-  SPtr<IDescriptorSetLayout> m_descriptorSetLayout;
-  SPtr<IDescriptorPool> m_descriptorPool;
-
-  struct NodeRenderResources {
-    SPtr<IBuffer> uniformBuffer;
-    SPtr<IDescriptorSet> descriptorSet;
-  };
-  UnorderedMap<ModelNode*, NodeRenderResources> m_nodeResources;
 
   HEvent listenKeyDown;
   HEvent listenKeys;
