@@ -17,16 +17,10 @@
 #include "chDisplaySurface.h"
 #include "chSTDStreams.h"
 #include "chVulkanBuffer.h"
-#include "chVulkanCommandBuffer.h"
-#include "chVulkanCommandPool.h"
-#include "chVulkanCommandQueue.h"
-#include "chVulkanFrameBuffer.h"
 #include "chVulkanPipeline.h"
-#include "chVulkanRenderPass.h"
 #include "chVulkanSampler.h"
 #include "chVulkanShader.h"
 #include "chVulkanSwapChain.h"
-#include "chVulkanSynchronization.h"
 #include "chVulkanTexture.h"
 #include "chVulkanTextureView.h"
 
@@ -195,10 +189,9 @@ VulkanAPI::~VulkanAPI()
   }
 
   m_functionMap.clear();
-  m_graphicsQueue.reset();
-  m_presentQueue.reset();
 
   if (data.device != VK_NULL_HANDLE) {
+    destroyFrames();
     // Frees the pending bindless indexes too, so it runs before the heap is destroyed.
     m_deletionQueue.destroy();
     m_bindlessHeap.destroy();
@@ -259,6 +252,7 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
 
   createLogicalDevice();
   createAllocator();
+  createFrames();
 
   createSurface(graphicsAPIInfo.weakDisplaySurface);
 
@@ -310,41 +304,6 @@ VulkanAPI::createTexture(const TextureCreateInfo& createInfo) {
 
 /*
  */
-NODISCARD SPtr<ICommandPool>
-VulkanAPI::createCommandPool(QueueType queueType, bool transient) {
-  uint32 queueFamilyIndex = 0;
-
-  switch (queueType) {
-  case QueueType::Graphics:
-    queueFamilyIndex = m_graphicsQueueFamilyIndex;
-    break;
-  case QueueType::Present:
-    queueFamilyIndex = m_presentQueueFamilyIndex;
-    break;
-  default:
-    CH_LOG_WARNING(Vulkan, "Unsupported queue type, falling back to graphics queue");
-    queueFamilyIndex = m_graphicsQueueFamilyIndex;
-  }
-
-  return chMakeShared<VulkanCommandPool>(m_vulkanData->device, queueFamilyIndex, transient);
-}
-
-/*
- */
-NODISCARD SPtr<IFence>
-VulkanAPI::createFence(bool signaled) {
-  return chMakeShared<VulkanFence>(m_vulkanData->device, signaled);
-}
-
-/*
- */
-NODISCARD SPtr<ISemaphore>
-VulkanAPI::createSemaphore() {
-  return chMakeShared<VulkanSemaphore>(m_vulkanData->device);
-}
-
-/*
- */
 NODISCARD SPtr<IShader>
 VulkanAPI::createShader(const ShaderCreateInfo& createInfo) {
   return chMakeShared<VulkanShader>(m_vulkanData->device, createInfo);
@@ -361,37 +320,138 @@ VulkanAPI::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
 
 /*
  */
-NODISCARD SPtr<IRenderPass>
-VulkanAPI::createRenderPass(const RenderPassCreateInfo& createInfo) {
-  return chMakeShared<VulkanRenderPass>(m_vulkanData->device, createInfo);
+SPtr<ISampler>
+VulkanAPI::createSampler(const SamplerCreateInfo& createInfo) {
+  return chMakeShared<VulkanSampler>(m_vulkanData->device, createInfo);
 }
 
 /*
  */
-NODISCARD SPtr<IFrameBuffer>
-VulkanAPI::createFrameBuffer(const FrameBufferCreateInfo& createInfo) {
-  return chMakeShared<VulkanFrameBuffer>(m_vulkanData->device, createInfo);
+ICommandList&
+VulkanAPI::beginFrame()
+{
+  FrameData& frame = m_frames[m_frameIndex];
+
+  const VkSemaphore timeline = m_deletionQueue.getTimeline();
+  const VkSemaphoreWaitInfo waitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+                                     .pNext = nullptr,
+                                     .flags = 0,
+                                     .semaphoreCount = 1,
+                                     .pSemaphores = &timeline,
+                                     .pValues = &frame.submitValue};
+  VK_CHECK(vkWaitSemaphores(m_vulkanData->device, &waitInfo, UINT64_MAX));
+
+  VK_CHECK(vkResetCommandPool(m_vulkanData->device, frame.commandPool, 0));
+  frame.commandList->begin();
+  return *frame.commandList;
 }
 
 /*
  */
-NODISCARD SPtr<ICommandQueue>
-VulkanAPI::getQueue(QueueType queueType) {
-  switch (queueType) {
-  case QueueType::Graphics:
-    return m_graphicsQueue;
-  default:
-    // TODO: Add more queue types
-    CH_EXCEPT(VulkanErrorException, "Invalid queue type");
-    break;
+void
+VulkanAPI::endFrame()
+{
+  FrameData& frame = m_frames[m_frameIndex];
+  frame.commandList->end();
+
+  Array<VkSemaphoreSubmitInfo, MAX_FRAME_SWAP_CHAINS> waits{};
+  // One more slot for the deletion queue timeline.
+  Array<VkSemaphoreSubmitInfo, MAX_FRAME_SWAP_CHAINS + 1> signals{};
+  for (uint32 i = 0; i < m_frameSwapChainCount; ++i) {
+    const VulkanSwapChain& swapChain = *m_frameSwapChains[i];
+    // Only drawing into the image waits for it; the work before runs in the meantime.
+    waits[i] = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .pNext = nullptr,
+                .semaphore = swapChain.getAcquireSemaphore(),
+                .value = 0,
+                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .deviceIndex = 0};
+    signals[i] = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                  .pNext = nullptr,
+                  .semaphore = swapChain.getPresentSemaphore(),
+                  .value = 0,
+                  .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                  .deviceIndex = 0};
+  }
+
+  frame.submitValue = m_deletionQueue.nextSubmitValue();
+  signals[m_frameSwapChainCount] = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                                    .pNext = nullptr,
+                                    .semaphore = m_deletionQueue.getTimeline(),
+                                    .value = frame.submitValue,
+                                    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                    .deviceIndex = 0};
+
+  const VkCommandBufferSubmitInfo commandBufferInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .pNext = nullptr,
+      .commandBuffer = frame.commandList->getHandle(),
+      .deviceMask = 0};
+
+  const VkSubmitInfo2 submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                                 .pNext = nullptr,
+                                 .flags = 0,
+                                 .waitSemaphoreInfoCount = m_frameSwapChainCount,
+                                 .pWaitSemaphoreInfos = waits.data(),
+                                 .commandBufferInfoCount = 1,
+                                 .pCommandBufferInfos = &commandBufferInfo,
+                                 .signalSemaphoreInfoCount = m_frameSwapChainCount + 1,
+                                 .pSignalSemaphoreInfos = signals.data()};
+  VK_CHECK(vkQueueSubmit2(m_graphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE));
+
+  m_frameSwapChainCount = 0;
+  m_frameIndex = (m_frameIndex + 1) % GraphicsLimits::MAX_FRAMES_IN_FLIGHT;
+  m_deletionQueue.collect();
+}
+
+/*
+ */
+void
+VulkanAPI::addFrameSwapChain(const VulkanSwapChain& swapChain)
+{
+  CH_ASSERT(m_frameSwapChainCount < MAX_FRAME_SWAP_CHAINS);
+  m_frameSwapChains[m_frameSwapChainCount++] = &swapChain;
+}
+
+/*
+ */
+void
+VulkanAPI::createFrames()
+{
+  // Each pool is reset whole at the start of its frame, so its buffers are short lived.
+  const VkCommandPoolCreateInfo poolInfo{.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                                         .pNext = nullptr,
+                                         .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                                         .queueFamilyIndex = m_graphicsQueueFamilyIndex};
+
+  for (uint32 i = 0; i < GraphicsLimits::MAX_FRAMES_IN_FLIGHT; ++i) {
+    FrameData& frame = m_frames[i];
+    VK_CHECK(vkCreateCommandPool(m_vulkanData->device, &poolInfo, nullptr,
+                                 &frame.commandPool));
+    frame.commandList = chMakeUnique<VulkanCommandList>(m_vulkanData->device,
+                                                        frame.commandPool);
+
+    const String poolName = StringUtils::format("Frame Command Pool {0}", i);
+    setDebugName(VK_OBJECT_TYPE_COMMAND_POOL, frame.commandPool, poolName.c_str());
+    const String listName = StringUtils::format("Frame Command List {0}", i);
+    setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, frame.commandList->getHandle(),
+                 listName.c_str());
   }
 }
 
 /*
  */
-SPtr<ISampler>
-VulkanAPI::createSampler(const SamplerCreateInfo& createInfo) {
-  return chMakeShared<VulkanSampler>(m_vulkanData->device, createInfo);
+void
+VulkanAPI::destroyFrames()
+{
+  for (FrameData& frame : m_frames) {
+    // The command buffer goes back to its pool, so it is freed first.
+    frame.commandList.reset();
+    if (frame.commandPool != VK_NULL_HANDLE) {
+      vkDestroyCommandPool(m_vulkanData->device, frame.commandPool, nullptr);
+      frame.commandPool = VK_NULL_HANDLE;
+    }
+  }
 }
 
 /*
@@ -700,9 +760,6 @@ VulkanAPI::createLogicalDevice() {
   vkGetDeviceQueue(m_vulkanData->device, m_graphicsQueueFamilyIndex, 0,
                    &m_graphicsQueueHandle);
   setDebugName(VK_OBJECT_TYPE_QUEUE, m_graphicsQueueHandle, "Graphics Queue");
-
-  m_graphicsQueue = chMakeShared<VulkanCommandQueue>(m_graphicsQueueHandle,
-                                                     QueueType::Graphics);
 }
 
 /*
@@ -905,31 +962,30 @@ VulkanAPI::initializeFunctionMap() {
     ImGui_ImplSDL3_InitForVulkan(sdlWindow);
 
     SPtr<ISwapChain> inSwapchain;
-    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[2], inSwapchain)) {
+    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[2], inSwapchain) || !inSwapchain) {
       CH_LOG_ERROR(Vulkan, "SwapChain is expired");
       return Any(false);
     }
-    auto vulkanSwapchain = std::static_pointer_cast<VulkanSwapChain>(inSwapchain);
-    CH_ASSERT(vulkanSwapchain && "VulkanSwapChain is null");
-
-    auto vulkanQueue = std::static_pointer_cast<VulkanCommandQueue>(m_graphicsQueue);
-    CH_ASSERT(vulkanQueue && "VulkanCommandQueue is null");
-    auto vulkanRenderPass =
-        std::static_pointer_cast<VulkanRenderPass>(vulkanSwapchain->getRenderPass());
-    CH_ASSERT(vulkanRenderPass && "VulkanRenderPass is null");
 
     ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.ApiVersion = VK_API_VERSION_1_3;
     init_info.Instance = m_vulkanData->instance;
     init_info.PhysicalDevice = m_vulkanData->physicalDevice;
     init_info.Device = m_vulkanData->device;
     init_info.QueueFamily = m_graphicsQueueFamilyIndex;
-    init_info.Queue = vulkanQueue->getHandle();
-    // TODO: Not sure how this works, but when we try to load a new texture we'll need to fix
-    // this
-    // init_info.DescriptorPool = static_cast<VkDescriptorPool>(descriptorPool->getRaw());
-    init_info.PipelineInfoMain.RenderPass = vulkanRenderPass->getHandle();
-    init_info.PipelineInfoMain.Subpass = 0;
+    init_info.Queue = m_graphicsQueueHandle;
+    // The main window draws with dynamic rendering, like the rest of the engine. ImGui keeps
+    // the pointer to the format, so it points to the surface format that lives with the API.
+    init_info.UseDynamicRendering = true;
     init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext = nullptr,
+        .viewMask = 0,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &m_vulkanData->surfaceFormat,
+        .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED};
     init_info.MinImageCount = 2;
     init_info.ImageCount = inSwapchain->getTextureCount();
 
@@ -943,18 +999,18 @@ VulkanAPI::initializeFunctionMap() {
 #endif // USING(CH_DISPLAY_SDL3)
   };
 
-  m_functionMap["renderImGui"] = [this](const Vector<Any>& args) -> Any {
-    SPtr<ICommandBuffer> inCmdBuffer;
-    if (!AnyUtils::tryGetValue<SPtr<ICommandBuffer>>(args[0], inCmdBuffer)) {
-      CH_LOG_ERROR(Vulkan, "CommandBuffer is expired");
+  // ImGui binds its own pipeline layout and sets, so anything drawn after it in the same
+  // command list must bind the bindless heap again.
+  m_functionMap["renderImGui"] = [](const Vector<Any>& args) -> Any {
+    ICommandList* commandList = nullptr;
+    if (args.empty() || !AnyUtils::tryGetValue<ICommandList*>(args[0], commandList) ||
+        commandList == nullptr) {
+      CH_LOG_ERROR(Vulkan, "renderImGui requires the command list to record into");
       return Any(false);
     }
-    SPtr<VulkanCommandBuffer> cmdBuffer =
-        std::static_pointer_cast<VulkanCommandBuffer>(inCmdBuffer);
-    CH_ASSERT(cmdBuffer && "VulkanCommandBuffer is null");
 
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer->getHandle());
-
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(),
+                                    static_cast<VulkanCommandList*>(commandList)->getHandle());
     return Any(true);
   };
 

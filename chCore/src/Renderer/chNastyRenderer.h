@@ -24,7 +24,7 @@ public:
   initialize(uint32 width, uint32 height) override;
 
   RendererOutput
-  onRender(float deltaTime) override;
+  onRender(ICommandList& commandList, float deltaTime) override;
   void
   resize(uint32 width, uint32 height) override;
 
@@ -66,7 +66,7 @@ public:
   initializeRenderResources();
 
   void
-  renderModel(ICommandBuffer& commandBuffer, float deltaTime);
+  renderModel(ICommandList& commandList, uint32 cameraIndex, float deltaTime);
 
   void
   cleanupModelResources();
@@ -79,11 +79,6 @@ public:
   SPtr<ITextureView> m_depthTargetView;
 
   Vector<LinearColor> m_clearColors;
-
-  SPtr<ICommandPool> m_commandPool;
-  SPtr<ICommandBuffer> m_commandBuffer;
-
-  SPtr<IFence> m_renderFence;
 
   uint32 m_renderWidth = 1280;
   uint32 m_renderHeight = 720;
@@ -98,8 +93,9 @@ public:
   PipelineCache m_pipelineCache;
   // Owned by m_pipelineCache; the targets never change format, so it is looked up once.
   const IPipeline* m_pipeline = nullptr;
-  // Camera matrices read by the shader through the bindless heap.
-  SPtr<IBuffer> m_cameraBuffer;
+  // Camera matrices read by the shader through the bindless heap. One per frame in flight,
+  // because the CPU writes them while the GPU may still read the previous frame's.
+  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_cameraBuffers;
 
   Vector<SPtr<IBuffer>> m_meshVertexBuffers;
   Vector<SPtr<IBuffer>> m_meshIndexBuffers;

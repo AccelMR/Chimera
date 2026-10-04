@@ -22,23 +22,14 @@
 #include "chStringUtils.h"
 
 // Include graphics API
-#include "chICommandBuffer.h"
-#include "chICommandPool.h"
-#include "chICommandQueue.h"
+#include "chICommandList.h"
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
-#include "chISynchronization.h"
-#include "chITexture.h"
-#include "chITextureView.h"
 
 CH_LOG_DECLARE_STATIC(WindowedApp, All);
 
 namespace chEngineSDK {
 using namespace std::chrono;
-
-constexpr uint64 MAX_WAIT_TIME = 100000000; // 100 ms in nanoseconds
-constexpr uint64 MAX_WAIT_TIME_RESIZE = 1000000000;
-constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
 
 /*
  */
@@ -217,58 +208,18 @@ WindowedApplication::initializeGraphics() {
 /*
  */
 void
-WindowedApplication::initializeRenderComponents() {
+WindowedApplication::initializeRenderComponents()
+{
   CH_LOG_INFO(WindowedApp, "Initializing render components.");
 
-  IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
-
-  // Create SwapChain
-  m_renderComponents.swapChain =
-      graphicsAPI.createSwapChain(m_display->getWidth(), m_display->getHeight(),
-                                  false // vsync
-      );
-
-  if (!m_renderComponents.swapChain) {
+  m_swapChain = IGraphicsAPI::instance().createSwapChain(m_display->getWidth(),
+                                                         m_display->getHeight(), false);
+  if (!m_swapChain) {
     CH_EXCEPT(InternalErrorException, "Failed to create SwapChain.");
   }
 
-  // Create command pool for graphics operations
-  m_renderComponents.commandPool = graphicsAPI.createCommandPool(QueueType::Graphics, false);
-
-  if (!m_renderComponents.commandPool) {
-    CH_EXCEPT(InternalErrorException, "Failed to create command pool.");
-  }
-
-  // Get SwapChain image count
-  uint32 imageCount = m_renderComponents.swapChain->getTextureCount();
-
-  // One per frame in flight, not per swap chain image: the frame fence is what proves a
-  // command buffer has finished, and the same image can come back two frames in a row.
-  m_renderComponents.commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_renderComponents.commandBuffers[i] =
-        m_renderComponents.commandPool->allocateCommandBuffer();
-    if (!m_renderComponents.commandBuffers[i]) {
-      CH_EXCEPT(InternalErrorException,
-                StringUtils::format("Failed to create command buffer {0}.", i));
-    }
-  }
-
-  createSyncObjects();
-
-  // Get graphics queue
-  m_renderComponents.graphicsQueue = graphicsAPI.getQueue(QueueType::Graphics);
-
-  if (!m_renderComponents.graphicsQueue) {
-    CH_EXCEPT(InternalErrorException, "Failed to get graphics queue.");
-  }
-
-  // Initialize frame tracking
-  m_renderComponents.currentFrame = 0;
-
-  CH_LOG_INFO(WindowedApp, "Render components initialized successfully.");
-  CH_LOG_INFO(WindowedApp, "SwapChain images: {0}, Frames in flight: {1}", imageCount,
-              MAX_FRAMES_IN_FLIGHT);
+  CH_LOG_INFO(WindowedApp, "SwapChain images: {0}, Frames in flight: {1}",
+              m_swapChain->getTextureCount(), GraphicsLimits::MAX_FRAMES_IN_FLIGHT);
 }
 
 /*
@@ -293,23 +244,10 @@ WindowedApplication::destroyRenderer()
 {
   CH_LOG_INFO(WindowedApp, "Destroying renderer.");
 
-  // An idle device has signaled every fence, so the fences need no wait of their own.
   if (IGraphicsAPI::isStarted()) {
     IGraphicsAPI::instance().waitIdle();
   }
-
-  // Command buffers go back to their pool, so they are released before it.
-  m_renderComponents.commandBuffers.clear();
-  m_renderComponents.commandPool.reset();
-
-  m_renderComponents.inFlightFences.clear();
-  m_renderComponents.renderFinishedSemaphores.clear();
-  m_renderComponents.imageAvailableSemaphores.clear();
-
-  m_renderComponents.depthTextureView.reset();
-  m_renderComponents.depthTexture.reset();
-  m_renderComponents.graphicsQueue.reset();
-  m_renderComponents.swapChain.reset();
+  m_swapChain.reset();
 }
 
 /*
@@ -324,74 +262,53 @@ WindowedApplication::render(const float deltaTime)
     return;
   }
 
-  auto& currentFrame = m_renderComponents.currentFrame;
-  auto& currentFence = m_renderComponents.inFlightFences[currentFrame];
+  IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
+  ISwapChain& swapChain = *m_swapChain;
 
-  // Wait for previous frame
-  if (!currentFence->wait(MAX_WAIT_TIME)) {
-    CH_LOG_WARNING(WindowedApp, "Frame {0} timed out.", currentFrame);
+  ICommandList& commandList = graphicsAPI.beginFrame();
+
+  const SwapChainStatus acquireStatus = swapChain.acquireNextImage();
+  if (acquireStatus == SwapChainStatus::OutOfDate ||
+      acquireStatus == SwapChainStatus::Failed) {
+    graphicsAPI.endFrame();
+    if (acquireStatus == SwapChainStatus::OutOfDate) {
+      resize(m_display->getWidth(), m_display->getHeight());
+    }
     return;
   }
 
-  // === STEP 1: Let derived class render scene ===
-  RendererOutput sceneOutput = onRender(deltaTime);
+  const RendererOutput sceneOutput = onRender(commandList, deltaTime);
 
-  // === STEP 2: Handle swap chain presentation ===
-  auto imageAvailableSem = m_renderComponents.imageAvailableSemaphores[currentFrame];
-  const SwapChainStatus acquireStatus =
-      m_renderComponents.swapChain->acquireNextImage(imageAvailableSem);
-  if (acquireStatus == SwapChainStatus::OutOfDate) {
-    resize(m_display->getWidth(), m_display->getHeight());
-    return;
-  }
-  if (acquireStatus == SwapChainStatus::Failed) {
-    return;
-  }
+  const uint32 width = swapChain.getWidth();
+  const uint32 height = swapChain.getHeight();
+  const ITexture& backBuffer = swapChain.getCurrentTexture();
 
-  // Reset only once an image is acquired; a frame that returns earlier submits nothing,
-  // so the fence would never be signaled and the next wait on it would time out.
-  currentFence->reset();
+  // The whole image is cleared, so its previous contents are not needed.
+  const Array<TextureBarrier, 1> toRendering = {
+      TextureBarrier{.texture = &backBuffer,
+                     .before = ResourceState::Undefined,
+                     .after = ResourceState::RenderTarget}};
+  commandList.barrier(toRendering);
 
-  uint32 imageIndex = m_renderComponents.swapChain->getCurrentImageIndex();
-  auto& commandBuffer = m_renderComponents.commandBuffers[currentFrame];
-  auto renderPass = m_renderComponents.swapChain->getRenderPass();
-  auto framebuffer = m_renderComponents.swapChain->getFramebuffer(imageIndex);
+  RenderingDesc renderingDesc{.colorAttachmentCount = 1, .width = width, .height = height};
+  renderingDesc.colorAttachments[0] = {.view = &swapChain.getCurrentTextureView(),
+                                       .clearColor = getBackgroundColor()};
+  commandList.beginRendering(renderingDesc);
 
-  // Begin command buffer and swap chain render pass
-  commandBuffer->begin();
+  onPresent(sceneOutput, commandList, width, height);
 
-  RenderPassBeginInfo renderPassBegin{
-    .renderPass = renderPass,
-    .framebuffer = framebuffer,
-    .clearValues = { getBackgroundColor() }
-  };
+  commandList.endRendering();
 
-  commandBuffer->beginRenderPass(renderPassBegin);
+  const Array<TextureBarrier, 1> toPresent = {
+      TextureBarrier{.texture = &backBuffer,
+                     .before = ResourceState::RenderTarget,
+                     .after = ResourceState::Present}};
+  commandList.barrier(toPresent);
 
-  // === STEP 3: Let derived class present to swap chain ===
-  onPresent(sceneOutput,
-            commandBuffer,
-            m_renderComponents.swapChain->getWidth(),
-            m_renderComponents.swapChain->getHeight());
+  graphicsAPI.endFrame();
+  const SwapChainStatus presentStatus = swapChain.present();
 
-  // End render pass and command buffer
-  commandBuffer->endRenderPass();
-  commandBuffer->end();
-
-  // Submit and present
-  auto renderFinishedSem = m_renderComponents.renderFinishedSemaphores[imageIndex];
-  SubmitInfo submitInfo{
-    .commandBuffers = {commandBuffer},
-    .waitSemaphores = {imageAvailableSem},
-    .waitStages = {PipelineStage::ColorAttachmentOutput},
-    .signalSemaphores = {renderFinishedSem}
-  };
-
-  m_renderComponents.graphicsQueue->submit({submitInfo}, currentFence);
-  const SwapChainStatus presentStatus =
-      m_renderComponents.swapChain->present({renderFinishedSem});
-
-  currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+  onPostPresent();
 
   // A suboptimal image is still drawn and presented, so the swap chain is only recreated
   // after the frame is done.
@@ -405,83 +322,16 @@ WindowedApplication::render(const float deltaTime)
 /*
  */
 void
-WindowedApplication::resize(uint32 width, uint32 height) {
+WindowedApplication::resize(uint32 width, uint32 height)
+{
   if (m_display->isMinimized()) {
     return;
   }
 
-  CH_LOG_INFO(WindowedApp, "Resizing display and swap chain.");
+  m_swapChain->resize(width, height);
 
-  auto& graphicsAPI = IGraphicsAPI::instance();
-  graphicsAPI.waitIdle();
-
-  for (auto& fence : m_renderComponents.inFlightFences) {
-    if (fence && !fence->wait(MAX_WAIT_TIME_RESIZE)) {
-      CH_LOG_WARNING(WindowedApp, "Fence wait timed out during resize.");
-    }
-    fence->reset();
-  }
-
-  m_renderComponents.imageAvailableSemaphores.clear();
-  m_renderComponents.renderFinishedSemaphores.clear();
-
-  m_renderComponents.swapChain->resize(width, height);
-
-  const uint32 swapChainWidth = m_renderComponents.swapChain->getWidth();
-  const uint32 swapChainHeight = m_renderComponents.swapChain->getHeight();
-
-  TextureCreateInfo depthTextureInfo{.type = TextureType::Texture2D,
-                                     .format = Format::D32_SFLOAT,
-                                     .width = swapChainWidth,
-                                     .height = swapChainHeight,
-                                     .depth = 1,
-                                     .mipLevels = 1,
-                                     .arrayLayers = 1,
-                                     .samples = SampleCount::Count1,
-                                     .usage = TextureUsage::DepthStencil};
-
-  auto newDepthTexture = graphicsAPI.createTexture(depthTextureInfo);
-  TextureViewCreateInfo depthTextureViewInfo{.format = Format::D32_SFLOAT,
-                                             .viewType = TextureViewType::View2D,
-                                             .bIsDepthStencil = true};
-
-  CH_ASSERT(newDepthTexture);
-  m_renderComponents.depthTextureView = newDepthTexture->createView(depthTextureViewInfo);
-  CH_ASSERT(m_renderComponents.depthTextureView);
-
-  createSyncObjects();
-
-  m_renderComponents.commandBuffers.clear();
-  m_renderComponents.commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-  for (auto& commandBuffer : m_renderComponents.commandBuffers) {
-    commandBuffer = m_renderComponents.commandPool->allocateCommandBuffer();
-  }
-
-  CH_LOG_INFO(WindowedApp,
-              "Display and swap chain resized successfully. New size: {0}x{1}",
-              swapChainWidth, swapChainHeight);
-}
-
-/*
-*/
-void
-WindowedApplication::createSyncObjects() {
-  CH_LOG_INFO(WindowedApp, "Creating synchronization objects for rendering.");
-  const uint32 imageCount = m_renderComponents.swapChain->getTextureCount();
-
-  m_renderComponents.imageAvailableSemaphores.resize(imageCount);
-  m_renderComponents.renderFinishedSemaphores.resize(imageCount);
-  m_renderComponents.inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
-  auto& graphicsAPI = IGraphicsAPI::instance();
-  for (uint32 i = 0; i < imageCount; ++i) {
-    m_renderComponents.imageAvailableSemaphores[i] = graphicsAPI.createSemaphore();
-    m_renderComponents.renderFinishedSemaphores[i] = graphicsAPI.createSemaphore();
-  }
-
-  for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_renderComponents.inFlightFences[i] = graphicsAPI.createFence(true);
-  }
+  CH_LOG_INFO(WindowedApp, "Swap chain resized to {0}x{1}.", m_swapChain->getWidth(),
+              m_swapChain->getHeight());
 }
 
 /*

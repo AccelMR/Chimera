@@ -24,14 +24,11 @@
 
 // Graphics-related includes
 #include "chIBuffer.h"
-#include "chICommandBuffer.h"
-#include "chICommandPool.h"
-#include "chICommandQueue.h"
+#include "chICommandList.h"
 #include "chISampler.h"
 #include "chIGraphicsAPI.h"
 #include "chIPipeline.h"
 #include "chIShader.h"
-#include "chISynchronization.h"
 #include "chITexture.h"
 #include "chITextureView.h"
 
@@ -81,8 +78,6 @@ static Vector<String> NodeNames;
 static uint32 NodeIndex = 0;
 static bool bIsModelRotating = false;
 
-static constexpr uint64 MAX_WAIT_TIME = 100000000; // 100 ms in nanoseconds
-
 /*
  */
 NastyRenderer::NastyRenderer() { CH_LOG_INFO(NastyRendererSystem, "NastyRenderer created"); }
@@ -114,25 +109,14 @@ NastyRenderer::initialize(uint32 width, uint32 height) {
 /*
  */
 RendererOutput
-NastyRenderer::onRender(float deltaTime) {
-  auto& graphicsAPI = IGraphicsAPI::instance();
-
-  // Wait for previous frame
-  if (!m_renderFence->wait(MAX_WAIT_TIME)) {
-    CH_LOG_WARNING(NastyRendererSystem, "Render fence timeout");
-    return {}; // Return invalid output
-  }
-  m_renderFence->reset();
-
-  // Written after the fence: the previous frame no longer reads the buffer.
+NastyRenderer::onRender(ICommandList& commandList, float deltaTime)
+{
+  IBuffer& cameraBuffer = *m_cameraBuffers[IGraphicsAPI::instance().getFrameIndex()];
   if (m_camera) {
     const CameraData cameraData{.view = m_camera->getViewMatrix(),
                                 .projection = m_camera->getProjectionMatrix()};
-    m_cameraBuffer->update(&cameraData, sizeof(cameraData));
+    cameraBuffer.update(&cameraData, sizeof(cameraData));
   }
-
-  ICommandBuffer& commandBuffer = *m_commandBuffer;
-  commandBuffer.begin();
 
   // The targets are cleared, so their old contents (and layouts) are not needed.
   const Array<TextureBarrier, 2> toRendering = {
@@ -142,7 +126,7 @@ NastyRenderer::onRender(float deltaTime) {
       TextureBarrier{.texture = m_depthTarget.get(),
                      .before = ResourceState::Undefined,
                      .after = ResourceState::DepthWrite}};
-  commandBuffer.barrier(toRendering);
+  commandList.barrier(toRendering);
 
   RenderingDesc renderingDesc{.colorAttachmentCount = 1,
                               .depthAttachment = {.view = m_depthTargetView.get()},
@@ -152,33 +136,23 @@ NastyRenderer::onRender(float deltaTime) {
       .view = m_colorTargetView.get(),
       .clearColor = m_clearColors.empty() ? LinearColor::Black : m_clearColors[0]};
 
-  commandBuffer.beginRendering(renderingDesc);
-  commandBuffer.setViewport(0, 0, static_cast<float>(m_renderWidth),
-                            static_cast<float>(m_renderHeight));
-  commandBuffer.setScissor(0, 0, m_renderWidth, m_renderHeight);
+  commandList.beginRendering(renderingDesc);
+  commandList.setViewport(0, 0, static_cast<float>(m_renderWidth),
+                          static_cast<float>(m_renderHeight));
+  commandList.setScissor(0, 0, m_renderWidth, m_renderHeight);
 
   if (m_camera && m_currentModel) {
-    renderModel(commandBuffer, deltaTime);
+    renderModel(commandList, cameraBuffer.getBindlessIndex(), deltaTime);
   }
 
-  commandBuffer.endRendering();
+  commandList.endRendering();
 
-  // The editor samples the target in a later submit on the same queue; this barrier
-  // also orders that read after the writes above.
+  // The editor samples the target later in the same frame.
   const Array<TextureBarrier, 1> toSampling = {
       TextureBarrier{.texture = m_colorTarget.get(),
                      .before = ResourceState::RenderTarget,
                      .after = ResourceState::ShaderRead}};
-  commandBuffer.barrier(toSampling);
-  commandBuffer.end();
-
-  // Submit command buffer
-  SubmitInfo submitInfo{.commandBuffers = {m_commandBuffer},
-                        .waitSemaphores = {},
-                        .waitStages = {},
-                        .signalSemaphores = {}};
-
-  graphicsAPI.getQueue(QueueType::Graphics)->submit(submitInfo, m_renderFence);
+  commandList.barrier(toSampling);
 
   // Return output
   RendererOutput output;
@@ -194,15 +168,11 @@ NastyRenderer::onRender(float deltaTime) {
 /*
  */
 void
-NastyRenderer::resize(uint32 width, uint32 height) {
+NastyRenderer::resize(uint32 width, uint32 height)
+{
   CH_LOG_INFO(NastyRendererSystem, "Resizing NastyRenderer to {0}x{1}", width, height);
 
-  auto& graphicsAPI = IGraphicsAPI::instance();
-  graphicsAPI.waitIdle();
-
-  if (m_renderFence) {
-    m_renderFence->wait(MAX_WAIT_TIME);
-  }
+  IGraphicsAPI::instance().waitIdle();
 
   m_renderWidth = width;
   m_renderHeight = height;
@@ -221,29 +191,22 @@ NastyRenderer::resize(uint32 width, uint32 height) {
 /*
  */
 void
-NastyRenderer::cleanup() {
+NastyRenderer::cleanup()
+{
   CH_LOG_INFO(NastyRendererSystem, "Cleaning up NastyRenderer");
 
-  auto& graphicsAPI = IGraphicsAPI::instance();
-  graphicsAPI.waitIdle();
-
-  if (m_renderFence) {
-    m_renderFence->wait();
-  }
+  IGraphicsAPI::instance().waitIdle();
 
   cleanupModelResources();
-
-  // Reset command resources
-  m_commandBuffer.reset();
-  m_commandPool.reset();
-  m_renderFence.reset();
 
   // Reset pipeline resources
   m_pipeline = nullptr;
   m_pipelineCache.clear();
   m_vertexShader.reset();
   m_fragmentShader.reset();
-  m_cameraBuffer.reset();
+  for (SPtr<IBuffer>& cameraBuffer : m_cameraBuffers) {
+    cameraBuffer.reset();
+  }
 
   // Reset render targets
   m_colorTargetView.reset();
@@ -317,11 +280,6 @@ void
 NastyRenderer::initializeRenderResources() {
   auto& graphicsAPI = IGraphicsAPI::instance();
 
-  // Create command pool and buffer
-  m_commandPool = graphicsAPI.createCommandPool(QueueType::Graphics);
-  m_commandBuffer = m_commandPool->allocateCommandBuffer();
-  m_renderFence = graphicsAPI.createFence(true);
-
   // Create camera
   m_camera =
       chMakeUnique<Camera>(initialCameraPos, Vector3::ZERO, m_renderWidth, m_renderHeight);
@@ -330,9 +288,11 @@ NastyRenderer::initializeRenderResources() {
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);
   m_camera->updateMatrices();
 
-  m_cameraBuffer = graphicsAPI.createBuffer({.size = sizeof(CameraData),
+  for (SPtr<IBuffer>& cameraBuffer : m_cameraBuffers) {
+    cameraBuffer = graphicsAPI.createBuffer({.size = sizeof(CameraData),
                                              .usage = BufferUsage::UniformBuffer,
                                              .memoryUsage = MemoryUsage::CpuToGpu});
+  }
 
   // Create sampler
   SamplerCreateInfo samplerCreateInfo{.magFilter = SamplerFilter::Linear,
@@ -613,7 +573,8 @@ NastyRenderer::bindInputEvents() {
 /*
  */
 void
-NastyRenderer::renderModel(ICommandBuffer& commandBuffer, float deltaTime) {
+NastyRenderer::renderModel(ICommandList& commandList, uint32 cameraIndex, float deltaTime)
+{
   if (!m_currentModel) {
     return;
   }
@@ -630,10 +591,10 @@ NastyRenderer::renderModel(ICommandBuffer& commandBuffer, float deltaTime) {
     }
   }
 
-  commandBuffer.bindPipeline(*m_pipeline);
+  commandList.bindPipeline(*m_pipeline);
 
   const ITexture& texture = m_texture ? *m_texture : *m_defaultTexture;
-  DrawPushConstants pushConstants{.cameraIndex = m_cameraBuffer->getBindlessIndex(),
+  DrawPushConstants pushConstants{.cameraIndex = cameraIndex,
                                   .textureIndex = texture.getBindlessIndex(),
                                   .samplerIndex = m_sampler->getBindlessIndex(),
                                   .padding = 0};
@@ -644,7 +605,7 @@ NastyRenderer::renderModel(ICommandBuffer& commandBuffer, float deltaTime) {
     }
 
     pushConstants.model = node->getGlobalTransform();
-    commandBuffer.pushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 
     for (const auto& mesh : node->getMeshes()) {
       const auto it = m_meshToIndexMap.find(mesh);
@@ -653,10 +614,10 @@ NastyRenderer::renderModel(ICommandBuffer& commandBuffer, float deltaTime) {
       }
       const uint32 meshIndex = it->second;
 
-      commandBuffer.bindVertexBuffer(*m_meshVertexBuffers[meshIndex]);
-      commandBuffer.bindIndexBuffer(*m_meshIndexBuffers[meshIndex],
-                                    m_meshIndexTypes[meshIndex]);
-      commandBuffer.drawIndexed(m_meshIndexCounts[meshIndex]);
+      commandList.bindVertexBuffer(*m_meshVertexBuffers[meshIndex]);
+      commandList.bindIndexBuffer(*m_meshIndexBuffers[meshIndex],
+                                  m_meshIndexTypes[meshIndex]);
+      commandList.drawIndexed(m_meshIndexCounts[meshIndex]);
     }
   }
 }

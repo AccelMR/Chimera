@@ -4,10 +4,7 @@
  * @author AccelMR
  * @date 2025/04/07
  * @details
- * SwapChain interface.
- * This interface is used to create and manage the swap chain.
- * It is used to create the swap chain, and to present the swap chain.
- * It is used by the graphics API to create the swap chain.
+ * Interface for the swap chain, the images a window shows.
  */
 /************************************************************************/
 #pragma once
@@ -28,34 +25,36 @@ enum class SwapChainStatus
   Failed      // No image was acquired; skip the frame.
 };
 
-class ISwapChain {
+/**
+ * Images of one window. A frame acquires an image, draws it from Undefined to RenderTarget
+ * and leaves it in Present; the synchronization with the frame stays inside the graphics API.
+ */
+class ISwapChain
+{
  public:
   virtual ~ISwapChain() = default;
 
+  /**
+   * Called between IGraphicsAPI::beginFrame and endFrame; the frame waits for the image
+   * before it draws.
+   */
   NODISCARD virtual SwapChainStatus
-  acquireNextImage(SPtr<ISemaphore> waitSemaphore,
-                   SPtr<IFence> fence = nullptr) = 0;
+  acquireNextImage() = 0;
 
+  /**
+   * Called after IGraphicsAPI::endFrame, for an image acquired in that frame.
+   */
   NODISCARD virtual SwapChainStatus
-  present(const Vector<SPtr<ISemaphore>>& waitSemaphores) = 0;
+  present() = 0;
 
   virtual void
   resize(uint32 width, uint32 height) = 0;
 
-  NODISCARD virtual uint32
-  getCurrentImageIndex() const = 0;
+  NODISCARD virtual const ITexture&
+  getCurrentTexture() const = 0;
 
-  NODISCARD virtual SPtr<ITexture>
-  getTexture(uint32 index) const = 0;
-
-  NODISCARD virtual SPtr<ITextureView>
-  getTextureView(uint32 index) const = 0;
-
-  NODISCARD virtual SPtr<IRenderPass>
-  getRenderPass() const = 0;
-
-  NODISCARD virtual SPtr<IFrameBuffer>
-  getFramebuffer(uint32 index) const = 0;
+  NODISCARD virtual const ITextureView&
+  getCurrentTextureView() const = 0;
 
   NODISCARD virtual uint32
   getTextureCount() const = 0;

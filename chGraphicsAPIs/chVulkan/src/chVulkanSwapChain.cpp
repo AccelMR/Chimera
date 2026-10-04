@@ -5,9 +5,6 @@
  * @date 2025/04/07
  * @details
  * SwapChain implementation for Vulkan.
- * This class is used to create and manage the swap chain.
- * It is used to create the swap chain, and to present the swap chain.
- * It is used by the graphics API to create the swap chain.
  */
 /************************************************************************/
 #include "chVulkanSwapChain.h"
@@ -15,11 +12,6 @@
 #include "chAlgorithm.h"
 #include "chMath.h"
 #include "chVulkanAPI.h"
-#include "chVulkanSynchronization.h"
-#include "chVulkanCommandQueue.h"
-#include "chVulkanTexture.h"
-#include "chVulkanTextureView.h"
-#include "chVulkanRenderPass.h"
 
 namespace chEngineSDK {
 namespace {
@@ -40,32 +32,29 @@ toSwapChainStatus(VkResult result, StringView action)
 /*
 */
 VulkanSwapChain::VulkanSwapChain(VkDevice device,
-                                   VkPhysicalDevice physicalDevice,
-                                   VkSurfaceKHR surface,
-                                   VkFormat colorFormat,
-                                   VkColorSpaceKHR colorSpace,
-                                   uint32 graphicsFamilyQueueIndex,
-                                   uint32 presentFamilyQueueIndex)
+                                 VkPhysicalDevice physicalDevice,
+                                 VkSurfaceKHR surface,
+                                 VkFormat colorFormat,
+                                 VkColorSpaceKHR colorSpace,
+                                 uint32 graphicsFamilyQueueIndex,
+                                 uint32 presentFamilyQueueIndex)
   : m_device(device),
     m_physicalDevice(physicalDevice),
-    m_swapChain(VK_NULL_HANDLE),
     m_surface(surface),
     m_graphicsFamilyQueueIndex(graphicsFamilyQueueIndex),
     m_presentFamilyQueueIndex(presentFamilyQueueIndex),
-    m_presentMode(VK_PRESENT_MODE_FIFO_KHR),
-    m_renderPass(nullptr),
     m_colorFormat(colorFormat),
-    m_colorSpace(colorSpace),
-    m_width(0),
-    m_height(0),
-    m_imageCount(0),
-    m_currentImageIndex(0) {
+    m_colorSpace(colorSpace)
+{
   CH_ASSERT(m_device != VK_NULL_HANDLE);
   CH_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
   CH_ASSERT(m_surface != VK_NULL_HANDLE);
-  m_imageViews.clear();
-  m_images.clear();
-  m_framebuffers.clear();
+
+  // They do not depend on the images, so they survive every resize.
+  for (uint32 i = 0; i < GraphicsLimits::MAX_FRAMES_IN_FLIGHT; ++i) {
+    const String name = StringUtils::format("Main SwapChain Acquire {0}", i);
+    m_acquireSemaphores[i] = createSemaphore(name.c_str());
+  }
 }
 
 /*
@@ -74,36 +63,61 @@ VulkanSwapChain::~VulkanSwapChain()
 {
   // The surface is not destroyed here: VulkanAPI made it and owns it.
   cleanUpSwapChain();
+  for (VkSemaphore& semaphore : m_acquireSemaphores) {
+    vkDestroySemaphore(m_device, semaphore, nullptr);
+    semaphore = VK_NULL_HANDLE;
+  }
 }
 
 /*
 */
 SwapChainStatus
-VulkanSwapChain::acquireNextImage(SPtr<ISemaphore> signalSemaphore, SPtr<IFence> fence)
+VulkanSwapChain::acquireNextImage()
 {
-  auto vulkanSemaphore = std::static_pointer_cast<VulkanSemaphore>(signalSemaphore);
+  VulkanAPI& vulkanAPI = g_vulkanAPI();
+  m_acquireSlot = vulkanAPI.getFrameIndex();
 
-  VkFence vkFence = VK_NULL_HANDLE;
-  if (fence) {
-      auto vulkanFence = std::static_pointer_cast<VulkanFence>(fence);
-      vkFence = vulkanFence->getHandle();
+  const VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX,
+                                                m_acquireSemaphores[m_acquireSlot],
+                                                VK_NULL_HANDLE, &m_currentImageIndex);
+  const SwapChainStatus status = toSwapChainStatus(result, "acquire");
+
+  // Only an acquired image signals the semaphore, so only then may the frame wait on it.
+  if (status == SwapChainStatus::Ready || status == SwapChainStatus::Suboptimal) {
+    vulkanAPI.addFrameSwapChain(*this);
   }
+  return status;
+}
 
-  VkResult result = vkAcquireNextImageKHR(m_device,
-                                          m_swapChain,
-                                          UINT64_MAX,
-                                          vulkanSemaphore->getHandle(),
-                                          vkFence,
-                                          &m_currentImageIndex);
-  return toSwapChainStatus(result, "acquire");
+/*
+*/
+SwapChainStatus
+VulkanSwapChain::present()
+{
+  const VkSemaphore waitSemaphore = m_presentSemaphores[m_currentImageIndex];
+  const VkPresentInfoKHR presentInfo{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                                     .pNext = nullptr,
+                                     .waitSemaphoreCount = 1,
+                                     .pWaitSemaphores = &waitSemaphore,
+                                     .swapchainCount = 1,
+                                     .pSwapchains = &m_swapChain,
+                                     .pImageIndices = &m_currentImageIndex,
+                                     .pResults = nullptr};
+
+  // The swap chain is not recreated here: the caller also owns resources sized to it and
+  // decides when to rebuild them.
+  const VkResult result = vkQueuePresentKHR(g_vulkanAPI().getGraphicsQueueHandle(),
+                                            &presentInfo);
+  return toSwapChainStatus(result, "present");
 }
 
 /*
 */
 void
-VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
-  //VkSwapchainKHR oldSwapChain = m_swapChain;
+VulkanSwapChain::create(uint32 width, uint32 height, bool vsync)
+{
   cleanUpSwapChain();
+  m_vsync = vsync;
 
   VkSurfaceCapabilitiesKHR capabilities;
   VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice,
@@ -183,98 +197,47 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync) {
     .oldSwapchain = VK_NULL_HANDLE
   };
 
+  uint32 queueFamilyIndices[] = {m_graphicsFamilyQueueIndex, m_presentFamilyQueueIndex};
   if (m_graphicsFamilyQueueIndex != m_presentFamilyQueueIndex) {
-    uint32 queueFamilyIndices[] = { m_graphicsFamilyQueueIndex, m_presentFamilyQueueIndex };
     createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     createInfo.queueFamilyIndexCount = 2;
     createInfo.pQueueFamilyIndices = queueFamilyIndices;
-  }
-  else {
-    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   }
 
   VK_CHECK(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain));
   VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_swapChain, &m_imageCount, nullptr));
   m_images.resize(m_imageCount);
   VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_swapChain, &m_imageCount, m_images.data()));
-  m_imageViews.resize(m_imageCount);
 
   createImageViews();
 
   const VulkanAPI& vulkanAPI = g_vulkanAPI();
   vulkanAPI.setDebugName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, m_swapChain, "Main SwapChain");
+
+  m_textures.reserve(m_imageCount);
+  m_textureViews.reserve(m_imageCount);
+  m_presentSemaphores.reserve(m_imageCount);
   for (uint32 i = 0; i < m_imageCount; ++i) {
+    m_textures.push_back(chMakeUnique<VulkanTexture>(m_device, m_images[i], m_colorFormat,
+                                                     m_width, m_height, 1, 1));
+    m_textureViews.push_back(chMakeUnique<VulkanTextureView>(
+        m_device, m_imageViews[i], m_colorFormat, 0, 1, 0, 1, TextureViewType::View2D));
+
     const String imageName = StringUtils::format("Main SwapChain Image {0}", i);
     vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE, m_images[i], imageName.c_str());
     const String viewName = StringUtils::format("Main SwapChain View {0}", i);
     vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageViews[i], viewName.c_str());
+    const String semaphoreName = StringUtils::format("Main SwapChain Present {0}", i);
+    m_presentSemaphores.push_back(createSemaphore(semaphoreName.c_str()));
   }
-
-  createRenderPass();
-  createFramebuffers();
-}
-
-/*
-*/
-SwapChainStatus
-VulkanSwapChain::present(const Vector<SPtr<ISemaphore>>& waitSemaphores)
-{
-  Vector<VkSemaphore> vkSemaphores;
-  for (const auto& sem : waitSemaphores) {
-    auto vulkanSem = std::static_pointer_cast<VulkanSemaphore>(sem);
-    vkSemaphores.push_back(vulkanSem->getHandle());
-  }
-
-  VkPresentInfoKHR presentInfo{
-    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-    .pNext = nullptr,
-    .waitSemaphoreCount = static_cast<uint32>(vkSemaphores.size()),
-    .pWaitSemaphores = vkSemaphores.data(),
-    .swapchainCount = 1,
-    .pSwapchains = &m_swapChain,
-    .pImageIndices = &m_currentImageIndex,
-    .pResults = nullptr
-  };
-
-  auto vulkanCommandQueue =
-    std::static_pointer_cast<VulkanCommandQueue>(g_vulkanAPI().getQueue(QueueType::Graphics));
-  CH_ASSERT(vulkanCommandQueue != nullptr);
-  VkQueue presentQueue = vulkanCommandQueue->getHandle();
-  VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
-
-  // The swap chain is not recreated here: the caller also owns resources sized to it
-  // (semaphores, command buffers, depth buffer) and must rebuild them together.
-  return toSwapChainStatus(result, "present");
-}
-
-/*
-*/
-NODISCARD SPtr<ITexture>
-VulkanSwapChain::getTexture(uint32 index) const {
-  CH_ASSERT(index < m_imageCount);
-  return chMakeShared<VulkanTexture>(m_device,
-                                     m_images[index],
-                                     m_colorFormat,
-                                     m_width, m_height,
-                                     1, 1, 1);
-}
-
-/*
-*/
-NODISCARD SPtr<ITextureView>
-VulkanSwapChain::getTextureView(uint32 index) const {
-  CH_ASSERT(index < m_imageCount);
-  return chMakeShared<VulkanTextureView>(m_device,
-                                         m_imageViews[index],
-                                         m_colorFormat,
-                                         0, 1, 0, 1,
-                                         TextureViewType::View2D);
+  m_currentImageIndex = 0;
 }
 
 /*
 */
 void
-VulkanSwapChain::resize(uint32 width, uint32 height) {
+VulkanSwapChain::resize(uint32 width, uint32 height)
+{
   // A minimized window reports a 0x0 surface before the window system marks it minimized;
   // a swap chain of that size is invalid, so the current one is kept until it is restored.
   VkSurfaceCapabilitiesKHR capabilities;
@@ -285,43 +248,42 @@ VulkanSwapChain::resize(uint32 width, uint32 height) {
     return;
   }
 
-  vkDeviceWaitIdle(m_device);
-
-  create(width, height, (m_presentMode != VK_PRESENT_MODE_FIFO_KHR));
+  create(width, height, m_vsync);
 }
-
 
 /*
 */
 void
-VulkanSwapChain::cleanUpSwapChain() {
+VulkanSwapChain::cleanUpSwapChain()
+{
+  // The images, views and semaphores may still be used by frames in flight.
   vkDeviceWaitIdle(m_device);
 
-  m_framebuffers.clear();
+  m_textureViews.clear();
+  m_textures.clear();
 
-  if (m_renderPass) {
-    m_renderPass.reset();
+  for (VkSemaphore semaphore : m_presentSemaphores) {
+    vkDestroySemaphore(m_device, semaphore, nullptr);
   }
+  m_presentSemaphores.clear();
 
-  for (auto& imageView : m_imageViews) {
-    if (imageView != VK_NULL_HANDLE){
-      vkDestroyImageView(m_device, imageView, nullptr);
-      imageView = VK_NULL_HANDLE;
-    }
+  for (VkImageView imageView : m_imageViews) {
+    vkDestroyImageView(m_device, imageView, nullptr);
   }
   m_imageViews.clear();
+  m_images.clear();
 
   if (m_swapChain != VK_NULL_HANDLE) {
     vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
     m_swapChain = VK_NULL_HANDLE;
   }
-
 }
 
 /*
 */
 void
-VulkanSwapChain::createImageViews() {
+VulkanSwapChain::createImageViews()
+{
   m_imageViews.resize(m_imageCount);
   for (uint32 i = 0; i < m_imageCount; i++) {
     VkImageViewCreateInfo createInfo = {
@@ -351,62 +313,15 @@ VulkanSwapChain::createImageViews() {
 
 /*
 */
-void
-VulkanSwapChain::createRenderPass() {
-  AttachmentDescription colorAttachment{
-      .format = vkFormatToChFormat(m_colorFormat),
-      .loadOp = LoadOp::Clear,
-      .storeOp = StoreOp::Store,
-      .initialLayout = TextureLayout::Undefined,
-      .finalLayout = TextureLayout::PresentSrc
-  };
-
-  AttachmentReference colorRef{
-      .attachment = 0,
-      .layout = TextureLayout::ColorAttachment
-  };
-
-  SubpassDescription subpass{
-      .pipelineBindPoint = PipelineBindPoint::Graphics,
-      .colorAttachments = {colorRef}
-  };
-
-  SubpassDependency dependency{
-      .srcSubpass = SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
-      .srcStageMask = PipelineStage::ColorAttachmentOutput,
-      .dstStageMask = PipelineStage::ColorAttachmentOutput,
-      .srcAccessMask = Access::NoAccess,
-      .dstAccessMask = Access::ColorAttachmentWrite
-  };
-
-  RenderPassCreateInfo renderPassInfo{
-      .attachments = {colorAttachment},
-      .subpasses = {subpass},
-      .dependencies = {dependency}
-  };
-
-  m_renderPass = g_vulkanAPI().createRenderPass(renderPassInfo);
-}
-
-/*
-*/
-void
-VulkanSwapChain::createFramebuffers() {
-  m_framebuffers.resize(m_imageCount);
-
-  for (uint32 i = 0; i < m_imageCount; i++) {
-    auto textureView = getTextureView(i);
-
-    FrameBufferCreateInfo framebufferInfo{
-      .renderPass = m_renderPass,
-      .attachments = {textureView},
-      .width = m_width,
-      .height = m_height,
-      .layers = 1
-    };
-
-    m_framebuffers[i] = g_vulkanAPI().createFrameBuffer(framebufferInfo);
-  }
+VkSemaphore
+VulkanSwapChain::createSemaphore(const ANSICHAR* name) const
+{
+  const VkSemaphoreCreateInfo createInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                                         .pNext = nullptr,
+                                         .flags = 0};
+  VkSemaphore semaphore = VK_NULL_HANDLE;
+  VK_CHECK(vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore));
+  g_vulkanAPI().setDebugName(VK_OBJECT_TYPE_SEMAPHORE, semaphore, name);
+  return semaphore;
 }
 } // namespace chEngineSDK

@@ -15,8 +15,6 @@
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
-constexpr uint32 SUBPASS_EXTERNAL = ~0u;
-
 /**
  * Limits shared by every graphics API, so the engine and the shaders agree on them.
  */
@@ -30,15 +28,8 @@ class GraphicsLimits
   // The size of the DX12 sampler heap.
   static constexpr uint32 MAX_BINDLESS_SAMPLERS = 2048;
   static constexpr uint32 INVALID_BINDLESS_INDEX = ~0u;
-};
-
-enum class QueueType : uint32 {
-  Graphics = 0,
-  Compute,
-  Transfer,
-  Present,
-
-  Count
+  // The CPU records one frame while the GPU runs the one before it.
+  static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
 };
 
 enum class CompareOp {
@@ -192,24 +183,6 @@ enum class MemoryUsage {
   GpuToCpu
 };
 
-enum class TextureLayout {
-  Undefined,
-  General,
-  ColorAttachment,
-  DepthStencilAttachment,
-  DepthStencilReadOnly,
-  ShaderReadOnly,
-  TransferSrc,
-  TransferDst,
-  PresentSrc,
-  // Otros layouts específicos...
-};
-
-enum class PipelineBindPoint {
-  Graphics,
-  Compute
-};
-
 /**
  * What a texture is used for at a point of the frame. A barrier moves it from one state to
  * the next; each graphics API turns the pair into its own stages, accesses and layouts.
@@ -246,41 +219,6 @@ enum class PolygonMode : uint32
   Line
 };
 
-enum class PipelineStage : uint32 {
-  None                    = 0,
-  TopOfPipe               = 1 << 0,
-  DrawIndirect            = 1 << 1,
-  VertexInput             = 1 << 2,
-  VertexShader            = 1 << 3,
-  FragmentShader          = 1 << 4,
-  ColorAttachmentOutput   = 1 << 5,
-  ComputeShader           = 1 << 6,
-  Transfer                = 1 << 7,
-  BottomOfPipe            = 1 << 8,
-  AllGraphics             = 1 << 9,
-  AllCommands             = 1 << 10
-};
-CH_FLAGS_OPERATORS_EXT(PipelineStage, uint32);
-using PipelineStageFlags = Flags<PipelineStage, uint32>;
-
-enum class Access : uint32 {
-  NoAccess                      = 0,
-  ShaderRead                = 1 << 0,
-  ShaderWrite               = 1 << 1,
-  ColorAttachmentRead       = 1 << 2,
-  ColorAttachmentWrite      = 1 << 3,
-  DepthStencilAttachmentRead = 1 << 4,
-  DepthStencilAttachmentWrite = 1 << 5,
-  TransferRead              = 1 << 6,
-  TransferWrite             = 1 << 7,
-  HostRead                  = 1 << 8,
-  HostWrite                 = 1 << 9,
-  MemoryRead                = 1 << 10,
-  MemoryWrite               = 1 << 11
-};
-CH_FLAGS_OPERATORS_EXT(Access, uint32);
-using AccessFlags = Flags<Access, uint32>;
-
 enum class SamplerAddressMode {
   Repeat,
   MirroredRepeat,
@@ -315,30 +253,6 @@ struct SamplerCreateInfo {
   float maxLod = 1000.0f;
   LinearColor borderColor = LinearColor::Black;
   bool unnormalizedCoordinates = false;
-};
-
-struct AttachmentReference {
-  uint32 attachment = ~0u;
-  TextureLayout layout = TextureLayout::Undefined;
-};
-
-struct SubpassDescription {
-  PipelineBindPoint pipelineBindPoint = PipelineBindPoint::Graphics;
-  Vector<AttachmentReference> inputAttachments = {/**/};
-  Vector<AttachmentReference> colorAttachments = {/**/};
-  Vector<AttachmentReference> resolveAttachments = {/**/};
-  Optional<AttachmentReference> depthStencilAttachment = NullOpt;
-  Vector<uint32> preserveAttachments = {/**/};
-};
-
-struct SubpassDependency {
-  uint32 srcSubpass = ~0u;
-  uint32 dstSubpass = ~0u;
-  PipelineStage srcStageMask = PipelineStage::ColorAttachmentOutput;
-  PipelineStage dstStageMask = PipelineStage::ColorAttachmentOutput;
-  AccessFlags srcAccessMask = Access::ColorAttachmentWrite;
-  AccessFlags dstAccessMask = Access::ColorAttachmentWrite;
-  bool byRegion = false;
 };
 
 struct TextureCreateInfo {
@@ -448,7 +362,7 @@ struct DepthAttachment {
 };
 
 /**
- * Targets of one ICommandBuffer::beginRendering. Kept on the stack: no allocation per pass.
+ * Targets of one ICommandList::beginRendering. Kept on the stack: no allocation per pass.
  */
 struct RenderingDesc {
   Array<ColorAttachment, GraphicsLimits::MAX_COLOR_ATTACHMENTS> colorAttachments{};
@@ -474,44 +388,6 @@ struct BufferCreateInfo {
   MemoryUsage memoryUsage = MemoryUsage::GpuOnly;
   const void* initialData = nullptr;
   SIZE_T initialDataSize = 0;
-};
-
-struct AttachmentDescription {
-  Format format = Format::Unknown;
-  LoadOp loadOp = LoadOp::DontCare;
-  StoreOp storeOp = StoreOp::DontCare;
-  LoadOp stencilLoadOp = LoadOp::DontCare;
-  StoreOp stencilStoreOp = StoreOp::DontCare;
-  TextureLayout initialLayout = TextureLayout::Undefined;
-  TextureLayout finalLayout = TextureLayout::Undefined;
-};
-
-struct RenderPassCreateInfo {
-  Vector<AttachmentDescription> attachments;
-  Vector<SubpassDescription> subpasses;
-  Vector<SubpassDependency> dependencies;
-};
-
-struct FrameBufferCreateInfo {
-  SPtr<IRenderPass> renderPass;
-  Vector<SPtr<ITextureView>> attachments;
-  uint32 width;
-  uint32 height;
-  uint32 layers = 1;
-};
-
-struct RenderPassBeginInfo {
-  SPtr<IRenderPass> renderPass;
-  SPtr<IFrameBuffer> framebuffer;
-  Vector<LinearColor> clearValues;
-  Optional<std::pair<float, uint32>> depthStencilClearValue = NullOpt;
-};
-
-struct SubmitInfo {
-  Vector<SPtr<ICommandBuffer>> commandBuffers;
-  Vector<SPtr<ISemaphore>> waitSemaphores;
-  Vector<PipelineStageFlags> waitStages;
-  Vector<SPtr<ISemaphore>> signalSemaphores;
 };
 
 } // namespace chEngineSDK

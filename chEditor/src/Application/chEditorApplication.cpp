@@ -15,9 +15,8 @@
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
-#include "chICommandBuffer.h"
+#include "chICommandList.h"
 #include "chIGraphicsAPI.h"
-#include "chIRenderPass.h"
 #include "chISwapChain.h"
 #include "chITextureView.h"
 #include "chLogger.h"
@@ -133,7 +132,8 @@ EditorApplication::destroyModules()
 /*
  */
 RendererOutput
-EditorApplication::onRender(float deltaTime) {
+EditorApplication::onRender(ICommandList& commandList, float deltaTime)
+{
   // Resized before the frame is recorded, so this frame's UI only uses the new target.
   if (m_viewportWidth > 0 && m_viewportHeight > 0 &&
       (m_viewportWidth != m_nastyRenderer->getWidth() ||
@@ -141,17 +141,17 @@ EditorApplication::onRender(float deltaTime) {
     resizeViewport(m_viewportWidth, m_viewportHeight);
   }
 
-  RendererOutput renderOut = m_nastyRenderer->onRender(deltaTime);
-  //RendererOutput renderOut = m_multiStageRenderer->onRender(deltaTime);
-  return renderOut;
+  return m_nastyRenderer->onRender(commandList, deltaTime);
 }
 
 /*
  */
 void
 EditorApplication::onPresent(const RendererOutput& rendererOutput,
-                             const SPtr<ICommandBuffer>& commandBuffer, uint32 swapChainWidth,
-                             uint32 swapChainHeight) {
+                             ICommandList& commandList,
+                             uint32 swapChainWidth,
+                             uint32 swapChainHeight)
+{
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
   CH_PARAMETER_UNUSED(swapChainWidth);
@@ -172,7 +172,19 @@ EditorApplication::onPresent(const RendererOutput& rendererOutput,
   m_inspectorUI->renderInspectorUI();
   m_gameObjectAssetUI->renderGameObjectAssetUI();
 
-  UIHelpers::render(graphicAPI, commandBuffer);
+  UIHelpers::render(graphicAPI, commandList);
+}
+
+/*
+ */
+void
+EditorApplication::onPostPresent()
+{
+  // The floating ImGui windows acquire, submit and present their own swap chains, so they
+  // go after the main frame instead of in the middle of its recording.
+  if (UIHelpers::bRenderImGui) {
+    UIHelpers::renderPlatformWindows();
+  }
 }
 
 /*
@@ -335,7 +347,7 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   UIHelpers::initFontConfig();
 
   IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  graphicAPI.execute("initImGui", {ImGui::GetCurrentContext(), display, getRenderComponents().swapChain});
+  graphicAPI.execute("initImGui", {ImGui::GetCurrentContext(), display, getSwapChain()});
 
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");

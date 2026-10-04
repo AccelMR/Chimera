@@ -16,25 +16,6 @@
 
 namespace chEngineSDK {
 
-/**
- * @brief Render components structure containing all rendering resources
- */
-struct ApplicationRenderContext {
-  SPtr<ISwapChain> swapChain;
-  SPtr<ITexture> depthTexture;
-  SPtr<ITextureView> depthTextureView;
-  SPtr<ICommandPool> commandPool;
-  Vector<SPtr<ICommandBuffer>> commandBuffers;       // One per frame in flight
-  SPtr<ICommandQueue> graphicsQueue;
-
-  Vector<SPtr<ISemaphore>> imageAvailableSemaphores; // One per SwapChain image
-  Vector<SPtr<ISemaphore>> renderFinishedSemaphores; // One per SwapChain image
-  Vector<SPtr<IFence>> inFlightFences;               // One per frame in flight
-
-  // Frame tracking
-  uint32 currentFrame = 0;
-};
-
 class CH_CORE_EXPORT WindowedApplication : public BaseApplication
 {
  public:
@@ -60,9 +41,10 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
     return LinearColor::Black;
   }
 
-  NODISCARD FORCEINLINE virtual const ApplicationRenderContext&
-  getRenderComponents() const {
-    return m_renderComponents;
+  NODISCARD FORCEINLINE const SPtr<ISwapChain>&
+  getSwapChain() const
+  {
+    return m_swapChain;
   }
 
   NODISCARD virtual SPtr<DisplayEventHandle>
@@ -97,29 +79,25 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   destroyRenderer();
 
   /**
-   * @brief  This happens BEFORE any swap chain operations
-   * @param deltaTime Time since last frame
-   * @return Your rendered output (textures, etc.)
+   * Records the scene into the frame command list, before the swap chain image is drawn.
    */
   virtual RendererOutput
-  onRender(float deltaTime) = 0;
+  onRender(ICommandList& commandList, float deltaTime) = 0;
 
   /**
-   * @brief STEP 2: Composite/present to the final swap chain
-   * This happens AFTER scene rendering, with swap chain already set up
-   * @param rendererOutput Your scene output from onRender()
-   * @param commandBuffer Command buffer with swap chain render pass ALREADY BEGUN
-   * @param swapChainWidth Width of the swap chain
-   * @param swapChainHeight Height of the swap chain
+   * Draws into the swap chain image; rendering to it has already begun.
    */
   virtual void
   onPresent(const RendererOutput& rendererOutput,
-            const SPtr<ICommandBuffer>& commandBuffer,
+            ICommandList& commandList,
             uint32 swapChainWidth,
             uint32 swapChainHeight) = 0;
 
-  void
-  renderFrame(const float deltaTime);
+  /**
+   * Runs after the frame was submitted and presented, for work that submits on its own.
+   */
+  virtual void
+  onPostPresent() {}
 
  private:
   void
@@ -129,9 +107,6 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   resize(uint32 width, uint32 height);
 
   void
-  createSyncObjects();
-
-  void
   bindEvents();
 
  private:
@@ -139,7 +114,7 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   SPtr<DisplayEventHandle> m_eventhandler;
   SPtr<DisplaySurface> m_display;
 
-  ApplicationRenderContext m_renderComponents;
+  SPtr<ISwapChain> m_swapChain;
 
   HEvent m_resizeEvent; ///< Event for handling display resize
   HEvent m_closeEvent;  ///< Event for handling application close

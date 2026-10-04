@@ -27,16 +27,10 @@ class Model;
 
 // Forward of any graphics stuff
 class IBuffer;
-class ICommandBuffer;
-class ICommandPool;
-class ICommandQueue;
-class IFence;
-class IFrameBuffer;
+class ICommandList;
 class IGraphicsAPI;
 class IPipeline;
-class IRenderPass;
 class ISampler;
-class ISemaphore;
 class IShader;
 class ISwapChain;
 class ITexture;

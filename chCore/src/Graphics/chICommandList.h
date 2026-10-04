@@ -1,12 +1,10 @@
 /************************************************************************/
 /**
- * @file chICommandBuffer.h
+ * @file chICommandList.h
  * @author AccelMR
  * @date 2025/04/08
  * @brief
- * Interface for the command buffer. This is the base class for all command
- * buffers. It is used to record commands and submit them to the command queue.
- * It is also used to reset the command buffer and free it.
+ * Interface for the command list that records the GPU work of a frame.
  */
 /************************************************************************/
 #pragma once
@@ -15,43 +13,18 @@
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
-enum class CommandBufferState: uint8{
-  Initial,
-  Recording,
-  Executable,
-  Pending,
-  Invalid
-};
 
 /**
- * Records GPU work. Called many times per frame, so it takes references and spans:
- * recording a command copies no shared pointer and allocates nothing.
+ * Records GPU work. IGraphicsAPI::beginFrame hands out the list of the frame already open,
+ * with the bindless heap bound, and endFrame submits it. Called many times per frame, so it
+ * takes references and spans: recording a command copies no shared pointer and allocates
+ * nothing.
  */
-class ICommandBuffer {
+class ICommandList
+{
  public:
-  ICommandBuffer() = default;
-  virtual ~ICommandBuffer() = default;
-
-  virtual void*
-  getRaw() const = 0;
-
-  /**
-   * Also binds the bindless heap, so every pipeline bound afterwards can read it.
-   */
-  virtual void
-  begin() = 0;
-
-  virtual void
-  end() = 0;
-
-  /**
-   * Only for the swap chain until it moves to beginRendering.
-   */
-  virtual void
-  beginRenderPass(const RenderPassBeginInfo& beginInfo) = 0;
-
-  virtual void
-  endRenderPass() = 0;
+  ICommandList() = default;
+  virtual ~ICommandList() = default;
 
   /**
    * The targets must already be in the RenderTarget or DepthWrite state.
@@ -87,15 +60,6 @@ class ICommandBuffer {
        uint32 firstVertex = 0,
        uint32 firstInstance = 0) = 0;
 
-  /**
-   * @brief Issues a draw call using an index buffer.
-   *
-   * @param indexCount The number of indices to draw.
-   * @param instanceCount The number of instances to draw. Defaults to 1.
-   * @param firstIndex The starting index in the index buffer. Defaults to 0.
-   * @param vertexOffset The value added to the vertex index before indexing into the vertex buffer. Defaults to 0.
-   * @param firstInstance The starting instance ID. Defaults to 0.
-   */
   virtual void
   drawIndexed(uint32 indexCount,
               uint32 instanceCount = 1,
@@ -110,8 +74,5 @@ class ICommandBuffer {
 
   virtual void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) = 0;
-
-  NODISCARD virtual
-  CommandBufferState getState() const = 0;
 };
 } // namespace chEngineSDK

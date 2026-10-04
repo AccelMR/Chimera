@@ -13,9 +13,11 @@
 
 #include "chIGraphicsAPI.h"
 #include "chVulkanBindlessHeap.h"
+#include "chVulkanCommandList.h"
 #include "chVulkanDeletionQueue.h"
 
 namespace chEngineSDK {
+class VulkanSwapChain;
 
 struct VulkanData {
   VkInstance instance = VK_NULL_HANDLE;
@@ -48,33 +50,33 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD SPtr<ITexture>
   createTexture(const TextureCreateInfo& createInfo) override;
 
-  NODISCARD SPtr<ICommandPool>
-  createCommandPool(QueueType queueType, bool transient = false) override;
-
-  NODISCARD SPtr<IFence>
-  createFence(bool signaled = false) override;
-
-  NODISCARD SPtr<ISemaphore>
-  createSemaphore() override;
-
   NODISCARD SPtr<IShader>
   createShader(const ShaderCreateInfo& createInfo) override;
 
   NODISCARD SPtr<IPipeline>
   createGraphicsPipeline(const GraphicsPipelineDesc& desc) override;
 
-  // Only the swap chain still uses render passes and framebuffers.
-  NODISCARD SPtr<IRenderPass>
-  createRenderPass(const RenderPassCreateInfo& createInfo);
-
-  NODISCARD SPtr<IFrameBuffer>
-  createFrameBuffer(const FrameBufferCreateInfo& createInfo);
-
-  NODISCARD SPtr<ICommandQueue>
-  getQueue(QueueType queueType) override;
-
-  NODISCARD virtual SPtr<ISampler>
+  NODISCARD SPtr<ISampler>
   createSampler(const SamplerCreateInfo& createInfo) override;
+
+  NODISCARD ICommandList&
+  beginFrame() override;
+
+  void
+  endFrame() override;
+
+  NODISCARD uint32
+  getFrameIndex() const override
+  {
+    return m_frameIndex;
+  }
+
+  /**
+   * Called by a swap chain that acquired an image in the current frame, so endFrame waits
+   * for the image and signals the semaphore its present waits on.
+   */
+  void
+  addFrameSwapChain(const VulkanSwapChain& swapChain);
 
   void
   waitIdle() override;
@@ -170,7 +172,24 @@ class VulkanAPI : public IGraphicsAPI {
   createAllocator();
 
   void
+  createFrames();
+
+  void
+  destroyFrames();
+
+  void
   setDebugNameHandle(VkObjectType type, uint64 handle, const ANSICHAR* name) const;
+
+  struct FrameData
+  {
+    VkCommandPool commandPool = VK_NULL_HANDLE;
+    UniquePtr<VulkanCommandList> commandList;
+    // Value of the deletion queue timeline once the GPU finishes the last frame of the slot.
+    uint64 submitValue = 0;
+  };
+
+  // The main window plus the editor's floating windows.
+  static constexpr uint32 MAX_FRAME_SWAP_CHAINS = 8;
 
   UniquePtr<VulkanData> m_vulkanData;
 
@@ -179,12 +198,15 @@ class VulkanAPI : public IGraphicsAPI {
   VulkanDeletionQueue m_deletionQueue;
   PFN_vkSetDebugUtilsObjectNameEXT m_setDebugUtilsObjectName = nullptr;
 
-  SPtr<ICommandQueue> m_graphicsQueue;
   VkQueue m_graphicsQueueHandle = VK_NULL_HANDLE;
   uint32 m_graphicsQueueFamilyIndex = 0;
-
-  SPtr<ICommandQueue> m_presentQueue;
   uint32 m_presentQueueFamilyIndex = 0;
+
+  Array<FrameData, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_frames;
+  uint32 m_frameIndex = 0;
+  // Swap chains that acquired an image in the current frame.
+  Array<const VulkanSwapChain*, MAX_FRAME_SWAP_CHAINS> m_frameSwapChains{};
+  uint32 m_frameSwapChainCount = 0;
 
   Map<String, Function<Any(const Vector<Any>&)>> m_functionMap;
 };

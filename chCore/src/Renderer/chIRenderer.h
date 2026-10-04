@@ -39,12 +39,11 @@ class CH_CORE_EXPORT IRenderer
   initialize(uint32 width, uint32 height) = 0;
 
   /**
-   * @brief Render to internal targets
-   * @param deltaTime Time since last frame
-   * @return RendererOutput containing the rendered result
+   * Records into the command list of the frame. The color target is left in the
+   * ShaderRead state, so later work in the same frame can sample it.
    */
   virtual RendererOutput
-  onRender(float deltaTime) = 0;
+  onRender(ICommandList& commandList, float deltaTime) = 0;
 
   /**
    * @brief Resize renderer targets

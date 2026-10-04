@@ -1,47 +1,42 @@
 /************************************************************************/
 /**
- * @file chVulkanCommandBuffer.h
+ * @file chVulkanCommandList.h
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Vulkan implementation of ICommandBuffer.
+ * Vulkan implementation of ICommandList.
  */
 /************************************************************************/
 #pragma once
 
 #include "chVulkanPrerequisites.h"
 
-#include "chICommandBuffer.h"
+#include "chICommandList.h"
 
 namespace chEngineSDK {
 
 /**
- * Vulkan command buffer. It keeps the bindless set and the shared pipeline layout, so
+ * Vulkan command list. It keeps the bindless set and the shared pipeline layout, so
  * begin() binds the heap once and pushConstants() needs no pipeline.
  */
-class VulkanCommandBuffer : public ICommandBuffer
+class VulkanCommandList : public ICommandList
 {
  public:
-  VulkanCommandBuffer(VkDevice device, VkCommandPool commandPool);
-  ~VulkanCommandBuffer() override;
+  VulkanCommandList(VkDevice device, VkCommandPool commandPool);
+  ~VulkanCommandList() override;
 
-  NODISCARD void*
-  getRaw() const override
-  {
-    return static_cast<void*>(m_commandBuffer);
-  }
+  VulkanCommandList(const VulkanCommandList&) = delete;
+  VulkanCommandList&
+  operator=(const VulkanCommandList&) = delete;
+
+  /**
+   * Also binds the bindless heap, so every pipeline bound afterwards can read it.
+   */
+  void
+  begin();
 
   void
-  begin() override;
-
-  void
-  end() override;
-
-  void
-  beginRenderPass(const RenderPassBeginInfo& beginInfo) override;
-
-  void
-  endRenderPass() override;
+  end();
 
   void
   beginRendering(const RenderingDesc& desc) override;
@@ -88,12 +83,6 @@ class VulkanCommandBuffer : public ICommandBuffer
   void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override;
 
-  NODISCARD CommandBufferState
-  getState() const override
-  {
-    return m_state;
-  }
-
   NODISCARD FORCEINLINE VkCommandBuffer
   getHandle() const
   {
@@ -106,7 +95,6 @@ class VulkanCommandBuffer : public ICommandBuffer
   VkCommandPool m_commandPool = VK_NULL_HANDLE;
   VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
   VkDescriptorSet m_bindlessSet = VK_NULL_HANDLE;
-  CommandBufferState m_state = CommandBufferState::Initial;
 };
 
 } // namespace chEngineSDK

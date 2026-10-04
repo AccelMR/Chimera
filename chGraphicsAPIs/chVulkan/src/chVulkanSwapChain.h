@@ -5,18 +5,24 @@
  * @date 2025/04/07
  * @details
  * SwapChain implementation for Vulkan.
- * This class is used to create and manage the swap chain.
- * It is used to create the swap chain, and to present the swap chain.
- * It is used by the graphics API to create the swap chain.
  */
 /************************************************************************/
 #pragma once
 #include "chVulkanPrerequisites.h"
 
 #include "chISwapChain.h"
+#include "chVulkanTexture.h"
+#include "chVulkanTextureView.h"
 
 namespace chEngineSDK {
-class VulkanSwapChain : public ISwapChain {
+
+/**
+ * Vulkan swap chain. It owns the semaphores that tie its images to the frame: one per frame
+ * in flight that the acquire signals and the frame submit waits on, and one per image that
+ * the submit signals and the present waits on.
+ */
+class VulkanSwapChain : public ISwapChain
+{
  public:
   VulkanSwapChain(VkDevice device,
                   VkPhysicalDevice physicalDevice,
@@ -28,66 +34,80 @@ class VulkanSwapChain : public ISwapChain {
 
   ~VulkanSwapChain() override;
 
-  NODISCARD SwapChainStatus
-  acquireNextImage(SPtr<ISemaphore> waitSemaphore,
-                   SPtr<IFence> fence = nullptr) override;
+  VulkanSwapChain(const VulkanSwapChain&) = delete;
+  VulkanSwapChain&
+  operator=(const VulkanSwapChain&) = delete;
 
   NODISCARD SwapChainStatus
-  present(const Vector<SPtr<ISemaphore>>& waitSemaphores) override;
+  acquireNextImage() override;
 
-  virtual void
+  NODISCARD SwapChainStatus
+  present() override;
+
+  void
   resize(uint32 width, uint32 height) override;
 
-  NODISCARD FORCEINLINE virtual uint32
-  getCurrentImageIndex() const override { return m_currentImageIndex; }
-
-  NODISCARD virtual SPtr<ITexture>
-  getTexture(uint32 index) const override;
-
-  NODISCARD virtual SPtr<ITextureView>
-  getTextureView(uint32 index) const override;
-
-  NODISCARD FORCEINLINE virtual SPtr<IRenderPass>
-  getRenderPass() const override { return m_renderPass; }
-
-  NODISCARD FORCEINLINE virtual SPtr<IFrameBuffer>
-  getFramebuffer(uint32 index) const override {
-    CH_ASSERT(index < m_framebuffers.size());
-    return m_framebuffers[index];
+  NODISCARD const ITexture&
+  getCurrentTexture() const override
+  {
+    return *m_textures[m_currentImageIndex];
   }
 
-  NODISCARD FORCEINLINE virtual uint32
-  getTextureCount() const override { return m_imageCount; }
+  NODISCARD const ITextureView&
+  getCurrentTextureView() const override
+  {
+    return *m_textureViews[m_currentImageIndex];
+  }
 
-  NODISCARD FORCEINLINE virtual Format
-  getFormat() const override { return vkFormatToChFormat(m_colorFormat); }
+  NODISCARD uint32
+  getTextureCount() const override
+  {
+    return m_imageCount;
+  }
 
-  NODISCARD FORCEINLINE virtual uint32
-  getWidth() const override { return m_width; }
+  NODISCARD Format
+  getFormat() const override
+  {
+    return vkFormatToChFormat(m_colorFormat);
+  }
 
-  NODISCARD FORCEINLINE virtual uint32
-  getHeight() const override { return m_height; }
+  NODISCARD uint32
+  getWidth() const override
+  {
+    return m_width;
+  }
 
-  NODISCARD FORCEINLINE virtual VkSwapchainKHR
-  getHandle() const { return m_swapChain; }
+  NODISCARD uint32
+  getHeight() const override
+  {
+    return m_height;
+  }
 
- public:
+  NODISCARD FORCEINLINE VkSemaphore
+  getAcquireSemaphore() const
+  {
+    return m_acquireSemaphores[m_acquireSlot];
+  }
+
+  NODISCARD FORCEINLINE VkSemaphore
+  getPresentSemaphore() const
+  {
+    return m_presentSemaphores[m_currentImageIndex];
+  }
+
   void
-  create(uint32 width, uint32 height, bool vsync = false);
+  create(uint32 width, uint32 height, bool vsync);
 
+ private:
   void
   cleanUpSwapChain();
 
   void
   createImageViews();
 
-  void
-  createRenderPass();
+  NODISCARD VkSemaphore
+  createSemaphore(const ANSICHAR* name) const;
 
-  void
-  createFramebuffers();
-
- private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
   VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
@@ -95,18 +115,22 @@ class VulkanSwapChain : public ISwapChain {
   uint32 m_graphicsFamilyQueueIndex = UINT32_MAX;
   uint32 m_presentFamilyQueueIndex = UINT32_MAX;
   VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
-  SPtr<IRenderPass> m_renderPass;
-  VkFormat m_colorFormat;
-  VkColorSpaceKHR m_colorSpace;
+  bool m_vsync = false;
+  VkFormat m_colorFormat = VK_FORMAT_UNDEFINED;
+  VkColorSpaceKHR m_colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
   uint32 m_width = 0;
   uint32 m_height = 0;
   uint32 m_imageCount = 0;
   uint32 m_currentImageIndex = 0;
-  VkPresentInfoKHR m_presentInfo = {};
+  // Frame slot of the last acquire, which picks its semaphore.
+  uint32 m_acquireSlot = 0;
 
   Vector<VkImage> m_images;
   Vector<VkImageView> m_imageViews;
-  Vector<SPtr<IFrameBuffer>> m_framebuffers;
-
+  // Made once per image, so a frame hands them out by reference without allocating.
+  Vector<UniquePtr<VulkanTexture>> m_textures;
+  Vector<UniquePtr<VulkanTextureView>> m_textureViews;
+  Vector<VkSemaphore> m_presentSemaphores;
+  Array<VkSemaphore, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_acquireSemaphores{};
 };
-} // namespace chEngineSDKs
+} // namespace chEngineSDK

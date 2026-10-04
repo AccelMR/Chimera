@@ -1,19 +1,17 @@
 /************************************************************************/
 /**
- * @file chVulkanCommandBuffer.cpp
+ * @file chVulkanCommandList.cpp
  * @author AccelMR
  * @date 2025/04/09
  * @brief
- * Vulkan implementation of ICommandBuffer.
+ * Vulkan implementation of ICommandList.
  */
 /************************************************************************/
-#include "chVulkanCommandBuffer.h"
+#include "chVulkanCommandList.h"
 
 #include "chVulkanAPI.h"
 #include "chVulkanBuffer.h"
-#include "chVulkanFrameBuffer.h"
 #include "chVulkanPipeline.h"
-#include "chVulkanRenderPass.h"
 #include "chVulkanTexture.h"
 #include "chVulkanTextureView.h"
 
@@ -100,7 +98,7 @@ toVkStoreOp(StoreOp storeOp)
 
 /*
  */
-VulkanCommandBuffer::VulkanCommandBuffer(VkDevice device, VkCommandPool commandPool)
+VulkanCommandList::VulkanCommandList(VkDevice device, VkCommandPool commandPool)
   : m_device(device),
     m_commandPool(commandPool)
 {
@@ -119,7 +117,7 @@ VulkanCommandBuffer::VulkanCommandBuffer(VkDevice device, VkCommandPool commandP
 
 /*
  */
-VulkanCommandBuffer::~VulkanCommandBuffer()
+VulkanCommandList::~VulkanCommandList()
 {
   if (m_commandBuffer != VK_NULL_HANDLE) {
     vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
@@ -130,7 +128,7 @@ VulkanCommandBuffer::~VulkanCommandBuffer()
 /*
  */
 void
-VulkanCommandBuffer::begin()
+VulkanCommandList::begin()
 {
   const VkCommandBufferBeginInfo beginInfo{.sType =
                                                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -138,7 +136,6 @@ VulkanCommandBuffer::begin()
                                            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                                            .pInheritanceInfo = nullptr};
   VK_CHECK(vkBeginCommandBuffer(m_commandBuffer, &beginInfo));
-  m_state = CommandBufferState::Recording;
 
   // Every pipeline uses the same layout, so the heap stays bound for the whole buffer.
   vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
@@ -150,55 +147,15 @@ VulkanCommandBuffer::begin()
 /*
  */
 void
-VulkanCommandBuffer::end()
+VulkanCommandList::end()
 {
   VK_CHECK(vkEndCommandBuffer(m_commandBuffer));
-  m_state = CommandBufferState::Executable;
 }
 
 /*
  */
 void
-VulkanCommandBuffer::beginRenderPass(const RenderPassBeginInfo& beginInfo)
-{
-  const auto* renderPass = static_cast<const VulkanRenderPass*>(beginInfo.renderPass.get());
-  const auto* framebuffer = static_cast<const VulkanFrameBuffer*>(beginInfo.framebuffer.get());
-
-  Array<VkClearValue, GraphicsLimits::MAX_COLOR_ATTACHMENTS + 1> clearValues{};
-  uint32 clearCount = 0;
-  for (const LinearColor& color : beginInfo.clearValues) {
-    CH_ASSERT(clearCount < GraphicsLimits::MAX_COLOR_ATTACHMENTS);
-    clearValues[clearCount++].color = {{color.r, color.g, color.b, color.a}};
-  }
-  if (beginInfo.depthStencilClearValue.has_value()) {
-    clearValues[clearCount++].depthStencil = {beginInfo.depthStencilClearValue->first,
-                                              beginInfo.depthStencilClearValue->second};
-  }
-
-  const VkRenderPassBeginInfo renderPassInfo{
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .pNext = nullptr,
-      .renderPass = renderPass->getHandle(),
-      .framebuffer = framebuffer->getHandle(),
-      .renderArea = {.offset = {0, 0},
-                     .extent = {framebuffer->getWidth(), framebuffer->getHeight()}},
-      .clearValueCount = clearCount,
-      .pClearValues = clearValues.data()};
-  vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-/*
- */
-void
-VulkanCommandBuffer::endRenderPass()
-{
-  vkCmdEndRenderPass(m_commandBuffer);
-}
-
-/*
- */
-void
-VulkanCommandBuffer::beginRendering(const RenderingDesc& desc)
+VulkanCommandList::beginRendering(const RenderingDesc& desc)
 {
   CH_ASSERT(desc.colorAttachmentCount <= GraphicsLimits::MAX_COLOR_ATTACHMENTS);
 
@@ -254,7 +211,7 @@ VulkanCommandBuffer::beginRendering(const RenderingDesc& desc)
 /*
  */
 void
-VulkanCommandBuffer::endRendering()
+VulkanCommandList::endRendering()
 {
   vkCmdEndRendering(m_commandBuffer);
 }
@@ -262,7 +219,7 @@ VulkanCommandBuffer::endRendering()
 /*
  */
 void
-VulkanCommandBuffer::barrier(Span<const TextureBarrier> textureBarriers)
+VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
 {
   Array<VkImageMemoryBarrier2, kMaxBarriersPerCall> imageBarriers{};
   uint32 count = 0;
@@ -288,8 +245,14 @@ VulkanCommandBuffer::barrier(Span<const TextureBarrier> textureBarriers)
     const auto* texture = static_cast<const VulkanTexture*>(textureBarrier.texture);
     CH_ASSERT(texture);
     const bool isDepth = isDepthFormat(texture->getFormat());
-    const VulkanResourceState before = toVulkanState(textureBarrier.before, isDepth);
+    VulkanResourceState before = toVulkanState(textureBarrier.before, isDepth);
     const VulkanResourceState after = toVulkanState(textureBarrier.after, isDepth);
+    // Contents are dropped, but the layout change must still run after earlier work in the
+    // destination stages: the last frame's use of the same target, or the wait for a swap
+    // chain image, which happens at the color output stage.
+    if (textureBarrier.before == ResourceState::Undefined) {
+      before.stages = after.stages;
+    }
 
     imageBarriers[count++] = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -320,7 +283,7 @@ VulkanCommandBuffer::barrier(Span<const TextureBarrier> textureBarriers)
 /*
  */
 void
-VulkanCommandBuffer::bindPipeline(const IPipeline& pipeline)
+VulkanCommandList::bindPipeline(const IPipeline& pipeline)
 {
   vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     static_cast<const VulkanPipeline&>(pipeline).getHandle());
@@ -329,7 +292,7 @@ VulkanCommandBuffer::bindPipeline(const IPipeline& pipeline)
 /*
  */
 void
-VulkanCommandBuffer::pushConstants(const void* data, uint32 size, uint32 offset)
+VulkanCommandList::pushConstants(const void* data, uint32 size, uint32 offset)
 {
   CH_ASSERT(offset + size <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
   vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_ALL, offset, size,
@@ -339,7 +302,7 @@ VulkanCommandBuffer::pushConstants(const void* data, uint32 size, uint32 offset)
 /*
  */
 void
-VulkanCommandBuffer::bindVertexBuffer(const IBuffer& buffer, uint32 binding, uint64 offset)
+VulkanCommandList::bindVertexBuffer(const IBuffer& buffer, uint32 binding, uint64 offset)
 {
   const VkBuffer vkBuffer = static_cast<const VulkanBuffer&>(buffer).getHandle();
   vkCmdBindVertexBuffers(m_commandBuffer, binding, 1, &vkBuffer, &offset);
@@ -348,7 +311,7 @@ VulkanCommandBuffer::bindVertexBuffer(const IBuffer& buffer, uint32 binding, uin
 /*
  */
 void
-VulkanCommandBuffer::bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset)
+VulkanCommandList::bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset)
 {
   const VkIndexType vkIndexType =
       indexType == IndexType::UInt16 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
@@ -359,7 +322,7 @@ VulkanCommandBuffer::bindIndexBuffer(const IBuffer& buffer, IndexType indexType,
 /*
  */
 void
-VulkanCommandBuffer::draw(uint32 vertexCount,
+VulkanCommandList::draw(uint32 vertexCount,
                           uint32 instanceCount,
                           uint32 firstVertex,
                           uint32 firstInstance)
@@ -370,7 +333,7 @@ VulkanCommandBuffer::draw(uint32 vertexCount,
 /*
  */
 void
-VulkanCommandBuffer::drawIndexed(uint32 indexCount,
+VulkanCommandList::drawIndexed(uint32 indexCount,
                                  uint32 instanceCount,
                                  uint32 firstIndex,
                                  int32 vertexOffset,
@@ -383,7 +346,7 @@ VulkanCommandBuffer::drawIndexed(uint32 indexCount,
 /*
  */
 void
-VulkanCommandBuffer::setViewport(float x,
+VulkanCommandList::setViewport(float x,
                                  float y,
                                  float width,
                                  float height,
@@ -404,7 +367,7 @@ VulkanCommandBuffer::setViewport(float x,
 /*
  */
 void
-VulkanCommandBuffer::setScissor(uint32 x, uint32 y, uint32 width, uint32 height)
+VulkanCommandList::setScissor(uint32 x, uint32 y, uint32 width, uint32 height)
 {
   const VkRect2D scissor{.offset = {static_cast<int32>(x), static_cast<int32>(y)},
                          .extent = {width, height}};

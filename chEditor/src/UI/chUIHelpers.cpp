@@ -57,16 +57,21 @@ UIHelpers::newFrame(IGraphicsAPI& graphicAPI) {
 /*
  */
 void
-UIHelpers::render(IGraphicsAPI& graphicAPI, const SPtr<ICommandBuffer>& commandBuffer) {
+UIHelpers::render(IGraphicsAPI& graphicAPI, ICommandList& commandList)
+{
   ImGui::Render();
-  ImGuiIO& io = ImGui::GetIO();
-  // Update and Render additional Platform Windows
-  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+  graphicAPI.execute("renderImGui", {Any(&commandList)});
+}
+
+/*
+ */
+void
+UIHelpers::renderPlatformWindows()
+{
+  if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
   }
-
-  graphicAPI.execute("renderImGui", {commandBuffer});
 }
 
 AssetIcon

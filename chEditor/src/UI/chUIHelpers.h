@@ -31,7 +31,14 @@ class UIHelpers {
   newFrame(IGraphicsAPI& graphicAPI);
 
   static void
-  render(IGraphicsAPI& graphicAPI, const SPtr<ICommandBuffer>& commandBuffer);
+  render(IGraphicsAPI& graphicAPI, ICommandList& commandList);
+
+  /**
+   * Draws the ImGui windows dragged outside the main window. Runs after the main frame
+   * is presented, because each of them submits and presents on its own.
+   */
+  static void
+  renderPlatformWindows();
 
   NODISCARD static AssetIcon
   getIconFromAssetType(const SPtr<IAsset>& asset);

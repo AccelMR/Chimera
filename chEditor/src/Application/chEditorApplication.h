@@ -49,12 +49,16 @@ class EditorApplication : public WindowedApplication
   destroyModules() override;
 
   virtual RendererOutput
-  onRender(float deltaTime);
+  onRender(ICommandList& commandList, float deltaTime) override;
 
   virtual void
   onPresent(const RendererOutput& rendererOutput,
-            const SPtr<ICommandBuffer>& commandBuffer,
-            uint32 swapChainWidth, uint32 swapChainHeight);
+            ICommandList& commandList,
+            uint32 swapChainWidth,
+            uint32 swapChainHeight) override;
+
+  virtual void
+  onPostPresent() override;
 
  private:
   void
