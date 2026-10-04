@@ -76,9 +76,7 @@ OutputLogUI::OutputLogUI()
  */
 OutputLogUI::~OutputLogUI()
 {
-  if (Logger::isStarted()) {
-    Logger::instance().disconnectLogListener(m_logWrittenEvent);
-  }
+  Logger::disconnectLogListener(m_logWrittenEvent);
 }
 
 /*

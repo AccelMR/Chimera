@@ -59,6 +59,9 @@ struct LogCategoryConfig {
 
 /**
  * @brief Represents a log category in the Chimera Engine
+ *
+ * Every category adds itself to a list while it exists, so the Logger can change the
+ * verbosity of all of them. The list keeps its address, so a category cannot be copied.
  */
 class CH_UTILITY_EXPORT LogCategory
 {
@@ -70,6 +73,13 @@ class CH_UTILITY_EXPORT LogCategory
    */
   explicit LogCategory(const String& name,
                        const LogCategoryConfig& config = LogCategoryConfig());
+
+  ~LogCategory();
+
+  LogCategory(const LogCategory&) = delete;
+
+  LogCategory&
+  operator=(const LogCategory&) = delete;
 
   /**
    * @brief Gets the name of this log category
@@ -132,6 +142,11 @@ class CH_UTILITY_EXPORT LogCategory
  *
  * Singleton class that manages log categories and output destinations. Its state lives
  * in chLogger.cpp so this header does not need <mutex>.
+ *
+ * CH_LOG can be used at any time. Before startUp messages go to the console and are kept,
+ * then added to the buffer when the Logger starts; after shutDown they only go to the
+ * console. Buffering is on by default, so the log file also gets the messages written
+ * before it was opened.
  */
 class CH_UTILITY_EXPORT Logger : public Module<Logger>
 {
@@ -139,32 +154,25 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   friend class Module<Logger>;
 
   /**
-   * @brief Register a log category with the logger
-   * @param category Category to register
-   */
-  void
-  registerCategory(LogCategory& category);
-
-  /**
    * @brief Find a log category by name
    * @param name Category name
    * @return Pointer to category or nullptr if not found
    */
-  NODISCARD LogCategory*
+  NODISCARD static LogCategory*
   findCategory(const String& name);
 
   /**
-   * @brief Get all registered categories
-   * @return Copy of the registered categories
+   * @brief Get all existing categories
+   * @return Copy of the category list
    */
-  NODISCARD Vector<LogCategory*>
-  getCategories() const;
+  NODISCARD static Vector<LogCategory*>
+  getCategories();
 
   /**
    * @brief Set global verbosity level for all categories
    * @param verbosity New verbosity level
    */
-  void
+  static void
   setGlobalVerbosity(LogVerbosity verbosity);
 
   /**
@@ -230,9 +238,9 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
    * @brief Disconnects a handle returned by onLogWritten
    *
    * When this returns the callback is not running on any thread and will not be called
-   * again, so the object it uses can be destroyed.
+   * again, so the object it uses can be destroyed. It can also be called after shutDown.
    */
-  void
+  static void
   disconnectLogListener(HEvent& handle);
 
  protected:

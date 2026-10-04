@@ -20,11 +20,35 @@
 namespace chEngineSDK {
 /*
  * Description:
+ *     What each executable sets before the application exists.
+ */
+struct LaunchInfo
+{
+  // File name inside EnginePaths::getLogDirectory().
+  String logFileName = "Chimera.log";
+  // Log entries kept in memory for listeners such as the editor's output log. 0 turns
+  // the buffer off, and then the log file misses what was logged before it was opened.
+  uint32 logBufferSize = 500;
+};
+
+/*
+ * Description:
  *     Base class for the application.
  */
 class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
  public:
-
+  /*
+   * Description:
+   *     Runs the whole program: starts the Logger, reads the command line, finds the
+   *     engine and project folders, then starts, runs and shuts down an application of
+   *     type T, also when its start up fails. Returns the process exit code.
+   */
+  template<class T>
+  static int32
+  launch(int32 argc, ANSICHAR* argv[], const LaunchInfo& info = LaunchInfo())
+  {
+    return launch(argc, argv, info, [] { startUp<T>(); });
+  }
 
   /*
    * Description:
@@ -72,6 +96,10 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
 
   virtual void
   update(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }
+
+ private:
+  static int32
+  launch(int32 argc, ANSICHAR* argv[], const LaunchInfo& info, void (*startUpApplication)());
 
  private:
   bool m_running = true; ///< Flag to indicate if the application is running.

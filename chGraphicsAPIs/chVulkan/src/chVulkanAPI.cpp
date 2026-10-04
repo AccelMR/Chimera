@@ -10,7 +10,6 @@
 #include "chVulkanAPI.h"
 
 #include <cstring>
-#include <iostream>
 
 #include "chAlgorithm.h"
 #include "chDisplaySurface.h"
@@ -818,10 +817,11 @@ VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
 /*
  */
 void
-VulkanAPI::waitIdle() {
-  VkResult res = vkDeviceWaitIdle(m_vulkanData->device);
-  if (res != VK_SUCCESS) {
-    std::cout << res << std::endl;
+VulkanAPI::waitIdle()
+{
+  const VkResult result = vkDeviceWaitIdle(m_vulkanData->device);
+  if (result != VK_SUCCESS) {
+    CH_LOG_ERROR(Vulkan, "vkDeviceWaitIdle failed: {0}", result);
   }
 }
 

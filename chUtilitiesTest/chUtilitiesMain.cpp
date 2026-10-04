@@ -1533,9 +1533,15 @@ TEST_CASE("chUtilities - EventSystem") {
 
 TEST_CASE("chUtilities - Logger") {
   CH_LOG_DECLARE_STATIC(LoggerTestLog, All);
+  REQUIRE(Logger::findCategory("LoggerTestLog") == &LoggerTestLog);
+
+  // Logged before the Logger starts, and added to its buffer when it starts.
+  CH_LOG_INFO(LoggerTestLog, "Early");
 
   Logger::startUp();
   Logger& logger = Logger::instance();
+  REQUIRE(logger.getBufferedLogs().back()->message == "Early");
+
   logger.setConsoleOutput(false);
   logger.setBufferingEnabled(true, 3);
 
@@ -1573,7 +1579,7 @@ TEST_CASE("chUtilities - Logger") {
   CH_LOG_WARNING(LoggerTestLog, "Shared");
   REQUIRE(received.size() == 4);
   REQUIRE(received.back() == logger.getBufferedLogs().back());
-  logger.disconnectLogListener(listener);
+  Logger::disconnectLogListener(listener);
 
   // Shrinking the buffer keeps the newest entries.
   logger.setBufferingEnabled(true, 2);
@@ -1582,7 +1588,17 @@ TEST_CASE("chUtilities - Logger") {
   REQUIRE(buffered[0]->message == "Message 4");
   REQUIRE(buffered[1]->message == "Shared");
 
+  int32 lateCalls = 0;
+  HEvent lateListener = logger.onLogWritten(
+      [&lateCalls](const SPtr<const LogBufferEntry>&) { ++lateCalls; });
+
   Logger::shutDown();
+
+  // After shutDown logging only reaches the console, and a listener can still be released.
+  CH_LOG_INFO(LoggerTestLog, "After shut down");
+  REQUIRE(lateCalls == 0);
+  Logger::disconnectLogListener(lateListener);
+  REQUIRE_FALSE(lateListener.isValid());
 }
 
 TEST_CASE("chUtilities - ContainsIgnoreCase") {

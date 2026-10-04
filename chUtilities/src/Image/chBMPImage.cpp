@@ -16,7 +16,6 @@
 #include "chBMPImage.h"
 
 #include <cstring>
-#include <iostream>
 
 #include "chBox2D.h"
 #include "chColor.h"
@@ -25,6 +24,8 @@
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
+CH_LOG_DECLARE_STATIC(BMPImageLog, All);
+
 namespace ImageHelpers {
 /*
  */
@@ -49,8 +50,7 @@ writePixel(uint8* buffer, const Color& color, const BPP m_bpp) {
     buffer[3] = color.a;
     break;
   default:
-    std::cerr << "BMPImage::writePixel() " << "Error: Unsupported BPP format in writePixel."
-              << std::endl;
+    CH_LOG_ERROR(BMPImageLog, "Unsupported BPP format: {0}", m_bpp);
     break;
   }
 }

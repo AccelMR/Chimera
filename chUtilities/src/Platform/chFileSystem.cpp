@@ -16,7 +16,6 @@
 #include "chFileSystem.h"
 
 #include <filesystem>
-#include <iostream>
 #include <system_error>
 
 #include "chLogger.h"
@@ -58,17 +57,10 @@ struct VirtualPath
   String storage;
 };
 
-// The Logger opens its own file through FileSystem, and FileSystem can run before
-// the Logger starts, so errors fall back to std::cerr when there is no Logger.
 void
 logError(const String& message)
 {
-  if (Logger::isStarted()) {
-    CH_LOG_ERROR(FileSystemLog, "{0}", message);
-  }
-  else {
-    std::cerr << message << std::endl;
-  }
+  CH_LOG_ERROR(FileSystemLog, "{0}", message);
 }
 
 void
