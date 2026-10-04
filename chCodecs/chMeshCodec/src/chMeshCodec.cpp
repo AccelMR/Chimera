@@ -29,8 +29,10 @@
 namespace chEngineSDK {
 namespace MeshManagerHelpers {
 // With aiProcess_MakeLeftHanded assimp gives X right, Y up, Z forward; the engine uses
-// X forward, Y right, Z up. Engine axis i reads assimp axis kAssimpAxis[i]. It is a
-// rotation, not a mirror, so triangle winding stays the same.
+// X forward, Y right, Z up. Engine axis i reads assimp axis kAssimpAxis[i]. This step is
+// a rotation and keeps the winding, but MakeLeftHanded itself mirrors Z, which turns the
+// front faces of the source (counter-clockwise) into back faces of the engine (clockwise,
+// as in Direct3D); aiProcess_FlipWindingOrder turns them back.
 constexpr uint32 kAssimpAxis[4] = {2, 0, 1, 3};
 
 /*
@@ -176,7 +178,8 @@ MeshCodec::loadModel(const Path& filePath) {
 
   const aiScene* scene = importer.ReadFile(filePath.toString(),
                                            aiProcessPreset_TargetRealtime_MaxQuality |
-                                               aiProcess_FlipUVs | aiProcess_MakeLeftHanded //|
+                                               aiProcess_FlipUVs | aiProcess_MakeLeftHanded |
+                                               aiProcess_FlipWindingOrder //|
                                            // aiProcess_PreTransformVertices
   );
 

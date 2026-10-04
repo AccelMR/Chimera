@@ -119,10 +119,6 @@ ContentAssetUI::refreshAssets()
 void
 ContentAssetUI::renderContentAssetUI()
 {
-  static bool tempTestLoaded = false; // TEMPTEST
-  if (!tempTestLoaded) { tempTestLoaded = true;
-    for (const auto& a : AssetManager::instance().getAllAssets()) { if (a->isTypeOf<ModelAsset>()) { handleAssetSelection(a); break; } }
-    for (const auto& a : AssetManager::instance().getAllAssets()) { if (a->isTypeOf<TextureAsset>()) { handleAssetSelection(a); break; } } }
   renderDeleteConfirmationPopup();
 
   if (!ImGui::Begin("Content Browser", &bShowContentWindow)) {

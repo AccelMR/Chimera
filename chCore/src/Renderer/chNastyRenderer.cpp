@@ -21,7 +21,6 @@
 #include "chMatrixHelpers.h"
 #include "chRadian.h"
 #include "chVector3.h"
-#include "chSphereBoxBounds.h" // TEMPTEST
 
 // Graphics-related includes
 #include "chIBuffer.h"
@@ -377,10 +376,6 @@ NastyRenderer::initializeRenderResources() {
                                     .colorAttachmentCount = 1,
                                     .depthFormat = kDepthFormat};
   pipelineDesc.colorFormats[0] = kColorFormat;
-  { const char* v = std::getenv("CH_TEMP_VARIANT"); int n = v ? v[0] - 0x30 : 0; // TEMPTEST
-    if (n == 1) pipelineDesc.raster.cullMode = CullMode::None;
-    if (n == 2) pipelineDesc.raster.frontFace = FrontFace::CounterClockwise;
-    if (n == 3) pipelineDesc.depth.compareOp = CompareOp::Greater; }
   m_pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
 
   CH_LOG_INFO(NastyRendererSystem, "Render resources initialized");
@@ -412,8 +407,6 @@ NastyRenderer::loadModel(const SPtr<Model>& model) {
   m_currentModel = model;
 
   createMeshBuffers();
-  if (m_camera) { const SphereBoxBounds b = model->calculateBounds(); // TEMPTEST
-    m_camera->setPosition(b.center + Vector3(-b.sphereRadius * 2.2f, 0.0f, 0.0f)); m_camera->lookAt(b.center); m_camera->updateMatrices(); }
 
   CH_LOG_INFO(NastyRendererSystem, "Model loaded successfully");
 }
