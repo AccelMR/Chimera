@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.19)
+﻿cmake_minimum_required(VERSION 3.20)
 
 project ("Chimera")
 
@@ -135,6 +135,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chUtilitiesTest")
   message("Directory exists.")
   add_subdirectory(chUtilitiesTest)
 endif()
+
+include(cmake/chShaders.cmake)
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/chCore")
   message("Directory exists.")

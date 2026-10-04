@@ -429,7 +429,7 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
                             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
                             .pEngineName = "chEngine",
                             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-                            .apiVersion = VK_API_VERSION_1_2};
+                            .apiVersion = VK_API_VERSION_1_3};
 
   Vector<const ANSICHAR*> extensions = {
       VK_KHR_SURFACE_EXTENSION_NAME,
@@ -832,7 +832,7 @@ VulkanAPI::initializeFunctionMap() {
 #if USING(CH_VK_IMGUI)
   m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
     bool bSuccedLoadingFunctions = ImGui_ImplVulkan_LoadFunctions(
-        VK_API_VERSION_1_2,
+        VK_API_VERSION_1_3,
         [](const ANSICHAR* function_name, void* user_data) -> PFN_vkVoidFunction {
           VkInstance* instance = static_cast<VkInstance*>(user_data);
           return vkGetInstanceProcAddr(*instance, function_name);

@@ -386,19 +386,19 @@ NastyRenderer::initializeRenderResources() {
                                       .maxAnisotropy = 16.0f};
   m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
 
-  const Path& shaderDir = EnginePaths::getEngineShaderDirectory();
-  const Path cubeVertexShader(shaderDir, Path("cubeVertex.spv"));
-  const Path cubeFragmentShader(shaderDir, Path("cubeFragment.spv"));
+  const Path shaderDir = EnginePaths::getShaderBinaryDirectory().join(Path("SPIRV"));
+  const Path cubeVertexShader(shaderDir, Path("cube.vs.spv"));
+  const Path cubeFragmentShader(shaderDir, Path("cube.ps.spv"));
 
   // Load shaders
   ShaderCreateInfo shaderCreateInfo{.stage = ShaderStage::Vertex,
-                                    .entryPoint = "main",
+                                    .entryPoint = "VSMain",
                                     .sourceCode = FileSystem::fastRead(cubeVertexShader),
                                     .filePath = cubeVertexShader.toString(),
                                     .defines = {}};
 
   ShaderCreateInfo fragmentShaderCreateInfo{.stage = ShaderStage::Fragment,
-                                            .entryPoint = "main",
+                                            .entryPoint = "PSMain",
                                             .sourceCode = FileSystem::fastRead(cubeFragmentShader),
                                             .filePath = cubeFragmentShader.toString(),
                                             .defines = {}};

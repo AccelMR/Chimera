@@ -75,8 +75,12 @@ class CH_CORE_EXPORT EnginePaths
   NODISCARD static const Path&
   getEngineAssetDirectory();
 
+  /**
+   * Real folder of the compiled shaders, <exe folder>/Shaders, with one subfolder per format
+   * (SPIRV, DXIL). The build writes them there from chCore/Content/Shaders.
+   */
   NODISCARD static const Path&
-  getEngineShaderDirectory();
+  getShaderBinaryDirectory();
 
   NODISCARD static const Path&
   getEditorContentDirectory();

@@ -36,7 +36,7 @@ struct PathState
   Path absoluteGameAssetDirectory;
   Path gameAssetDirectory;
   Path engineAssetDirectory;
-  Path engineShaderDirectory;
+  Path shaderBinaryDirectory;
   Path editorContentDirectory;
   Path savedDirectory;
   Path logDirectory;
@@ -151,7 +151,7 @@ EnginePaths::initialize()
   state.absoluteGameAssetDirectory = state.projectRoot.join(Path("Assets"));
   state.gameAssetDirectory = Path("/Game");
   state.engineAssetDirectory = Path("/Engine");
-  state.engineShaderDirectory = state.engineAssetDirectory.join(Path("Shaders"));
+  state.shaderBinaryDirectory = state.executableDirectory.join(Path("Shaders"));
   state.editorContentDirectory = Path("/Editor");
   state.savedDirectory = Path("/Saved");
   state.logDirectory = state.savedDirectory.join(Path("Logs"));
@@ -225,10 +225,10 @@ EnginePaths::getEngineAssetDirectory()
 }
 
 const Path&
-EnginePaths::getEngineShaderDirectory()
+EnginePaths::getShaderBinaryDirectory()
 {
   initialize();
-  return pathState().engineShaderDirectory;
+  return pathState().shaderBinaryDirectory;
 }
 
 const Path&

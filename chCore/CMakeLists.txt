@@ -95,3 +95,6 @@ list(APPEND COMPILE_DEFS
 )
 
 target_compile_definitions(chCore PRIVATE ${COMPILE_DEFS})
+
+ch_add_shaders(chCoreShaders ${CMAKE_CURRENT_SOURCE_DIR}/Content/Shaders)
+add_dependencies(chCore chCoreShaders)
