@@ -192,6 +192,7 @@ VulkanAPI::~VulkanAPI()
 
   if (data.device != VK_NULL_HANDLE) {
     destroyFrames();
+    m_uploader.destroy();
     // Frees the pending bindless indexes too, so it runs before the heap is destroyed.
     m_deletionQueue.destroy();
     m_bindlessHeap.destroy();
@@ -382,7 +383,18 @@ VulkanAPI::endFrame()
                                     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                     .deviceIndex = 0};
 
-  const VkCommandBufferSubmitInfo commandBufferInfo{
+  // Copies recorded since the last frame run first, so this frame already sees their data.
+  Array<VkCommandBufferSubmitInfo, 2> commandBufferInfos{};
+  uint32 commandBufferCount = 0;
+  const VkCommandBuffer uploadCommands = m_uploader.endRecording(frame.submitValue);
+  if (uploadCommands != VK_NULL_HANDLE) {
+    commandBufferInfos[commandBufferCount++] = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext = nullptr,
+        .commandBuffer = uploadCommands,
+        .deviceMask = 0};
+  }
+  commandBufferInfos[commandBufferCount++] = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
       .pNext = nullptr,
       .commandBuffer = frame.commandList->getHandle(),
@@ -393,8 +405,8 @@ VulkanAPI::endFrame()
                                  .flags = 0,
                                  .waitSemaphoreInfoCount = m_frameSwapChainCount,
                                  .pWaitSemaphoreInfos = waits.data(),
-                                 .commandBufferInfoCount = 1,
-                                 .pCommandBufferInfos = &commandBufferInfo,
+                                 .commandBufferInfoCount = commandBufferCount,
+                                 .pCommandBufferInfos = commandBufferInfos.data(),
                                  .signalSemaphoreInfoCount = m_frameSwapChainCount + 1,
                                  .pSignalSemaphoreInfos = signals.data()};
   VK_CHECK(vkQueueSubmit2(m_graphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE));
@@ -778,6 +790,8 @@ VulkanAPI::createAllocator()
   m_deletionQueue.initialize(m_vulkanData->device, m_allocator, &m_bindlessHeap);
   setDebugName(VK_OBJECT_TYPE_SEMAPHORE, m_deletionQueue.getTimeline(),
                "Deletion Queue Timeline");
+  m_uploader.initialize(m_vulkanData->device, m_allocator, m_graphicsQueueFamilyIndex,
+                        &m_deletionQueue);
 }
 
 /*
@@ -922,8 +936,10 @@ VulkanAPI::waitIdle()
     return;
   }
 
-  // Nothing is running on the GPU now, so nothing released can still be in use.
-  m_deletionQueue.flush();
+  // Every submit has finished, but objects released after the last one may still be used
+  // by commands recorded and not submitted yet (staging buffers of pending uploads, the
+  // open frame), so they wait for the next submit like always.
+  m_deletionQueue.collect();
 }
 
 /*

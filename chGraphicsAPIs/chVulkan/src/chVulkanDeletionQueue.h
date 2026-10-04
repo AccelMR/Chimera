@@ -74,12 +74,6 @@ class VulkanDeletionQueue
   void
   collect();
 
-  /**
-   * Frees every pending object. The device must be idle.
-   */
-  void
-  flush();
-
  private:
   enum class PendingKind : uint8
   {
@@ -99,6 +93,12 @@ class VulkanDeletionQueue
 
   void
   enqueuePending(PendingObject object);
+
+  /**
+   * Frees every pending object. The device must be idle.
+   */
+  void
+  flush();
 
   void
   enqueueHandle(VkObjectType type, uint64 handle, VmaAllocation allocation);

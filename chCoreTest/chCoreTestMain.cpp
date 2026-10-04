@@ -226,3 +226,35 @@ TEST_CASE("chCore - GraphicsPipelineDesc hash")
     REQUIRE(unusedSlot.getHash() == base.getHash());
   }
 }
+
+TEST_CASE("chCore - FormatUtils")
+{
+  // Texture assets store these values, so they must never move.
+  STATIC_REQUIRE(static_cast<uint32>(Format::R8G8B8A8_UNORM) == 1);
+  STATIC_REQUIRE(static_cast<uint32>(Format::D24_UNORM_S8_UINT) == 6);
+
+  SECTION("Every format but Unknown has a size")
+  {
+    REQUIRE(FormatUtils::getInfo(Format::Unknown).bytesPerBlock == 0);
+    for (uint32 i = 1; i < static_cast<uint32>(Format::COUNT); ++i) {
+      REQUIRE(FormatUtils::getInfo(static_cast<Format>(i)).bytesPerBlock > 0);
+    }
+  }
+
+  SECTION("Depth and stencil")
+  {
+    REQUIRE(FormatUtils::isDepth(Format::D32_SFLOAT));
+    REQUIRE_FALSE(FormatUtils::getInfo(Format::D32_SFLOAT).hasStencil);
+    REQUIRE(FormatUtils::getInfo(Format::D24_UNORM_S8_UINT).hasStencil);
+    REQUIRE(FormatUtils::getInfo(Format::D32_SFLOAT_S8_UINT).hasStencil);
+    REQUIRE_FALSE(FormatUtils::isDepth(Format::R8G8B8A8_SRGB));
+    REQUIRE(FormatUtils::getInfo(Format::R8G8B8A8_SRGB).isSrgb);
+  }
+
+  SECTION("Mip size")
+  {
+    REQUIRE(FormatUtils::getMipSize(Format::R8G8B8A8_UNORM, 4, 2) == 32);
+    REQUIRE(FormatUtils::getMipSize(Format::R8_UNORM, 3, 3) == 9);
+    REQUIRE(FormatUtils::getMipSize(Format::R32G32B32A32_SFLOAT, 1, 1, 2) == 32);
+  }
+}

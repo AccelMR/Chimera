@@ -85,44 +85,61 @@ chTextureTypeToVkImageType(TextureType type) {
   }
 }
 
-FORCEINLINE static Format
-vkFormatToChFormat(VkFormat format) {
-  switch (format) {
-    case VK_FORMAT_R8G8B8A8_UNORM:
-    return Format::R8G8B8A8_UNORM;
-    case VK_FORMAT_R16G16B16A16_SFLOAT:
-    return Format::R16G16B16A16_SFLOAT;
-    case VK_FORMAT_D32_SFLOAT:
-    return Format::D32_SFLOAT;
-    case VK_FORMAT_D24_UNORM_S8_UINT:
-    return Format::D24_UNORM_S8_UINT;
-    case VK_FORMAT_B8G8R8A8_SRGB:
-      return Format::B8G8R8A8_SRGB;
-    case VK_FORMAT_B8G8R8A8_UNORM:
-      return Format::B8G8R8A8_UNORM;
-    default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan format: {0}", format));
-  }
+NODISCARD FORCEINLINE VkFormat
+chFormatToVkFormat(Format format)
+{
+  // In the order of the Format values, so a conversion is one array read.
+  static constexpr VkFormat VULKAN_FORMATS[] = {
+      VK_FORMAT_UNDEFINED,                // Unknown
+      VK_FORMAT_R8G8B8A8_UNORM,           // R8G8B8A8_UNORM
+      VK_FORMAT_B8G8R8A8_UNORM,           // B8G8R8A8_UNORM
+      VK_FORMAT_B8G8R8A8_SRGB,            // B8G8R8A8_SRGB
+      VK_FORMAT_R16G16B16A16_SFLOAT,      // R16G16B16A16_SFLOAT
+      VK_FORMAT_D32_SFLOAT,               // D32_SFLOAT
+      VK_FORMAT_D24_UNORM_S8_UINT,        // D24_UNORM_S8_UINT
+      VK_FORMAT_R8_UNORM,                 // R8_UNORM
+      VK_FORMAT_R8G8_UNORM,               // R8G8_UNORM
+      VK_FORMAT_R8G8B8A8_SRGB,            // R8G8B8A8_SRGB
+      VK_FORMAT_A2B10G10R10_UNORM_PACK32, // A2B10G10R10_UNORM
+      VK_FORMAT_B10G11R11_UFLOAT_PACK32,  // B10G11R11_UFLOAT
+      VK_FORMAT_R16_SFLOAT,               // R16_SFLOAT
+      VK_FORMAT_R16G16_SFLOAT,            // R16G16_SFLOAT
+      VK_FORMAT_R32_SFLOAT,               // R32_SFLOAT
+      VK_FORMAT_R32G32B32A32_SFLOAT,      // R32G32B32A32_SFLOAT
+      VK_FORMAT_R32_UINT,                 // R32_UINT
+      VK_FORMAT_D32_SFLOAT_S8_UINT,       // D32_SFLOAT_S8_UINT
+  };
+  static_assert(std::size(VULKAN_FORMATS) == static_cast<SIZE_T>(Format::COUNT),
+                "Every Format needs its Vulkan format.");
+  return VULKAN_FORMATS[static_cast<SIZE_T>(format)];
 }
 
-FORCEINLINE static VkFormat
-chFormatToVkFormat(Format format) {
-  switch (format) {
-    case Format::R8G8B8A8_UNORM:
-      return VK_FORMAT_R8G8B8A8_UNORM;
-    case Format::R16G16B16A16_SFLOAT:
-      return VK_FORMAT_R16G16B16A16_SFLOAT;
-    case Format::D32_SFLOAT:
-      return VK_FORMAT_D32_SFLOAT;
-    case Format::D24_UNORM_S8_UINT:
-    return VK_FORMAT_D24_UNORM_S8_UINT;
-    case Format::B8G8R8A8_SRGB:
-      return VK_FORMAT_B8G8R8A8_SRGB;
-    case Format::B8G8R8A8_UNORM:
-      return VK_FORMAT_B8G8R8A8_UNORM;
-    default:
-      CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan format: {0}", static_cast<uint32>(format)));
+/**
+ * Unknown for a Vulkan format the engine has no value for (a surface may report one).
+ */
+NODISCARD FORCEINLINE Format
+vkFormatToChFormat(VkFormat format)
+{
+  for (uint32 i = 0; i < static_cast<uint32>(Format::COUNT); ++i) {
+    if (chFormatToVkFormat(static_cast<Format>(i)) == format) {
+      return static_cast<Format>(i);
+    }
   }
+  return Format::Unknown;
+}
+
+/**
+ * Aspects a barrier or a copy covers for the whole texture.
+ */
+NODISCARD FORCEINLINE VkImageAspectFlags
+getImageAspects(Format format)
+{
+  const FormatInfo& info = FormatUtils::getInfo(format);
+  if (!info.isDepth) {
+    return VK_IMAGE_ASPECT_COLOR_BIT;
+  }
+  return info.hasStencil ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+                         : VK_IMAGE_ASPECT_DEPTH_BIT;
 }
 
 FORCEINLINE static TextureViewType

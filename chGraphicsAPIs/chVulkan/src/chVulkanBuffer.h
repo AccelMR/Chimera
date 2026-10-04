@@ -17,7 +17,8 @@ namespace chEngineSDK {
 
 /**
  * Vulkan buffer whose memory comes from VMA. Buffers the CPU writes stay mapped for their
- * whole life; the buffer and its memory are freed through the deletion queue.
+ * whole life; GpuOnly buffers are filled through the uploader. The buffer and its memory
+ * are freed through the deletion queue.
  */
 class VulkanBuffer : public IBuffer
 {

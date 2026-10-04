@@ -15,6 +15,7 @@
 #include "chVulkanBindlessHeap.h"
 #include "chVulkanCommandList.h"
 #include "chVulkanDeletionQueue.h"
+#include "chVulkanUploader.h"
 
 namespace chEngineSDK {
 class VulkanSwapChain;
@@ -119,6 +120,12 @@ class VulkanAPI : public IGraphicsAPI {
     return m_deletionQueue;
   }
 
+  NODISCARD FORCEINLINE VulkanUploader&
+  getUploader()
+  {
+    return m_uploader;
+  }
+
   NODISCARD FORCEINLINE VulkanBindlessHeap&
   getBindlessHeap()
   {
@@ -196,6 +203,7 @@ class VulkanAPI : public IGraphicsAPI {
   VmaAllocator m_allocator = nullptr;
   VulkanBindlessHeap m_bindlessHeap;
   VulkanDeletionQueue m_deletionQueue;
+  VulkanUploader m_uploader;
   PFN_vkSetDebugUtilsObjectNameEXT m_setDebugUtilsObjectName = nullptr;
 
   VkQueue m_graphicsQueueHandle = VK_NULL_HANDLE;

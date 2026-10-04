@@ -244,7 +244,8 @@ VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
   for (const TextureBarrier& textureBarrier : textureBarriers) {
     const auto* texture = static_cast<const VulkanTexture*>(textureBarrier.texture);
     CH_ASSERT(texture);
-    const bool isDepth = isDepthFormat(texture->getFormat());
+    const Format format = texture->getFormat();
+    const bool isDepth = FormatUtils::isDepth(format);
     VulkanResourceState before = toVulkanState(textureBarrier.before, isDepth);
     const VulkanResourceState after = toVulkanState(textureBarrier.after, isDepth);
     // Contents are dropped, but the layout change must still run after earlier work in the
@@ -266,8 +267,7 @@ VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = texture->getHandle(),
-        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(
-                                 isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT),
+        .subresourceRange = {.aspectMask = getImageAspects(format),
                              .baseMipLevel = 0,
                              .levelCount = VK_REMAINING_MIP_LEVELS,
                              .baseArrayLayer = 0,

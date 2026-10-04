@@ -65,11 +65,17 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, const BufferCreateInfo& creat
   : m_allocator(allocator),
     m_size(createInfo.size)
 {
+  VkBufferUsageFlags usage = toVkBufferUsage(createInfo.usage);
+  // The CPU cannot write it, so update() fills it with a copy.
+  if (createInfo.memoryUsage == MemoryUsage::GpuOnly) {
+    usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  }
+
   const VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                       .pNext = nullptr,
                                       .flags = 0,
                                       .size = m_size,
-                                      .usage = toVkBufferUsage(createInfo.usage),
+                                      .usage = usage,
                                       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                       .queueFamilyIndexCount = 0,
                                       .pQueueFamilyIndices = nullptr};
@@ -117,12 +123,12 @@ VulkanBuffer::~VulkanBuffer()
 void
 VulkanBuffer::update(const void* data, SIZE_T size, uint32 offset)
 {
+  CH_ASSERT(offset + size <= m_size);
   if (m_mappedData == nullptr) {
-    CH_LOG_ERROR(Vulkan, "Buffer is not mappable");
+    g_vulkanAPI().getUploader().uploadBuffer(m_buffer, offset, data, size);
     return;
   }
 
-  CH_ASSERT(offset + size <= m_size);
   memcpy(static_cast<uint8*>(m_mappedData) + offset, data, size);
   // Does nothing on host coherent memory, which VMA may not have picked.
   VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));

@@ -19,7 +19,11 @@ class IBuffer {
  public:
   virtual ~IBuffer() = default;
 
-  virtual void 
+  /**
+   * A buffer the CPU can write (CpuToGpu, CpuOnly) is written at once. A GpuOnly buffer is
+   * copied at the start of the next frame submit, before anything that frame records.
+   */
+  virtual void
   update(const void* data, SIZE_T size, uint32 offset = 0) = 0;
 
   NODISCARD virtual SIZE_T

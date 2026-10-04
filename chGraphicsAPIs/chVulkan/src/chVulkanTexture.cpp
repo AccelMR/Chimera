@@ -9,8 +9,6 @@
 /************************************************************************/
 #include "chVulkanTexture.h"
 
-#include <cstring>
-
 #include <vk_mem_alloc.h>
 
 #include "chVulkanAPI.h"
@@ -52,6 +50,11 @@ VulkanTexture::VulkanTexture(VkDevice device,
     m_usage(createInfo.usage),
     m_ownsTexture(true)
 {
+  // The initial data reaches the image through a copy.
+  if (createInfo.initialData) {
+    m_usage |= TextureUsage::TransferDst;
+  }
+
   const VkImageCreateInfo imageInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = nullptr,
@@ -65,7 +68,7 @@ VulkanTexture::VulkanTexture(VkDevice device,
       .arrayLayers = createInfo.arrayLayers,
       .samples = chSampleCountToVkSampleCount(createInfo.samples),
       .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .usage = chTextureUsageToVkImageUsage(createInfo.usage),
+      .usage = chTextureUsageToVkImageUsage(m_usage),
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 0,
       .pQueueFamilyIndices = nullptr,
@@ -89,7 +92,7 @@ VulkanTexture::VulkanTexture(VkDevice device,
   if (m_usage.isSet(TextureUsage::Sampled)) {
     m_defaultView = createView({.format = Format::Unknown,
                                 .viewType = toDefaultViewType(m_type, m_arrayLayers),
-                                .bIsDepthStencil = isDepthFormat(m_format)});
+                                .bIsDepthStencil = FormatUtils::isDepth(m_format)});
   }
 }
 
@@ -127,121 +130,8 @@ VulkanTexture::createView(const TextureViewCreateInfo& createInfo)
 void
 VulkanTexture::uploadData(const void* data, SIZE_T size)
 {
-  CH_ASSERT(data != nullptr);
-  CH_ASSERT(size > 0);
-
-  VulkanAPI& vulkanAPI = g_vulkanAPI();
-
-  const VkBufferCreateInfo stagingInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                                       .pNext = nullptr,
-                                       .flags = 0,
-                                       .size = size,
-                                       .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                                       .queueFamilyIndexCount = 0,
-                                       .pQueueFamilyIndices = nullptr};
-
-  VmaAllocationCreateInfo stagingAllocationInfo{};
-  stagingAllocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-  stagingAllocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-  VkBuffer stagingBuffer = VK_NULL_HANDLE;
-  VmaAllocation stagingAllocation = nullptr;
-  VmaAllocationInfo stagingResult{};
-  VK_CHECK(vmaCreateBuffer(m_allocator, &stagingInfo, &stagingAllocationInfo, &stagingBuffer,
-                           &stagingAllocation, &stagingResult));
-
-  memcpy(stagingResult.pMappedData, data, size);
-  VK_CHECK(vmaFlushAllocation(m_allocator, stagingAllocation, 0, size));
-
-  const VkCommandPoolCreateInfo poolInfo{
-      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      .queueFamilyIndex = vulkanAPI.getGraphicsQueueFamilyIndex()};
-
-  VkCommandPool commandPool = VK_NULL_HANDLE;
-  VK_CHECK(vkCreateCommandPool(m_device, &poolInfo, nullptr, &commandPool));
-
-  const VkCommandBufferAllocateInfo commandBufferAllocInfo{
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .pNext = nullptr,
-      .commandPool = commandPool,
-      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1};
-
-  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-  VK_CHECK(vkAllocateCommandBuffers(m_device, &commandBufferAllocInfo, &commandBuffer));
-
-  const VkCommandBufferBeginInfo beginInfo{
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .pNext = nullptr,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-      .pInheritanceInfo = nullptr};
-  VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-
-  VkImageMemoryBarrier barrier{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .pNext = nullptr,
-      .srcAccessMask = 0,
-      .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = m_image,
-      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                           .baseMipLevel = 0,
-                           .levelCount = m_mipLevels,
-                           .baseArrayLayer = 0,
-                           .layerCount = m_arrayLayers}};
-
-  vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                       VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                       &barrier);
-
-  const VkBufferImageCopy region{.bufferOffset = 0,
-                                 .bufferRowLength = 0,
-                                 .bufferImageHeight = 0,
-                                 .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                      .mipLevel = 0,
-                                                      .baseArrayLayer = 0,
-                                                      .layerCount = 1},
-                                 .imageOffset = {0, 0, 0},
-                                 .imageExtent = {m_width, m_height, 1}};
-
-  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, m_image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-  vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                       &barrier);
-
-  VK_CHECK(vkEndCommandBuffer(commandBuffer));
-
-  const VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                .pNext = nullptr,
-                                .waitSemaphoreCount = 0,
-                                .pWaitSemaphores = nullptr,
-                                .pWaitDstStageMask = nullptr,
-                                .commandBufferCount = 1,
-                                .pCommandBuffers = &commandBuffer,
-                                .signalSemaphoreCount = 0,
-                                .pSignalSemaphores = nullptr};
-
-  // Waiting here keeps the staging buffer simple; a staging ring will remove the stall.
-  const VkQueue graphicsQueue = vulkanAPI.getGraphicsQueueHandle();
-  VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-  VK_CHECK(vkQueueWaitIdle(graphicsQueue));
-
-  vkDestroyCommandPool(m_device, commandPool, nullptr);
-  vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+  CH_ASSERT(m_usage.isSet(TextureUsage::TransferDst));
+  g_vulkanAPI().getUploader().uploadTexture(*this, data, size);
 }
 
 } // namespace chEngineSDK

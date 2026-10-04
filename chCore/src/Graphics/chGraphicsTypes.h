@@ -72,23 +72,103 @@ enum class IndexType : uint32 {
   COUNT
 };
 
-enum class Format : uint32 {
+/**
+ * Texture formats. Texture assets store the value, so every value is fixed: new formats go
+ * at the end and none is ever reordered.
+ */
+enum class Format : uint32
+{
   Unknown = 0,
-  R8G8B8A8_UNORM,
-  B8G8R8A8_UNORM,
-  B8G8R8A8_SRGB,
-  R16G16B16A16_SFLOAT,
-  D32_SFLOAT,
-  D24_UNORM_S8_UINT,
+  R8G8B8A8_UNORM = 1,
+  B8G8R8A8_UNORM = 2,
+  B8G8R8A8_SRGB = 3,
+  R16G16B16A16_SFLOAT = 4,
+  D32_SFLOAT = 5,
+  D24_UNORM_S8_UINT = 6,
+  R8_UNORM = 7,
+  R8G8_UNORM = 8,
+  R8G8B8A8_SRGB = 9,
+  A2B10G10R10_UNORM = 10,
+  B10G11R11_UFLOAT = 11,
+  R16_SFLOAT = 12,
+  R16G16_SFLOAT = 13,
+  R32_SFLOAT = 14,
+  R32G32B32A32_SFLOAT = 15,
+  R32_UINT = 16,
+  D32_SFLOAT_S8_UINT = 17,
 
   COUNT
 };
 
-NODISCARD FORCEINLINE constexpr bool
-isDepthFormat(Format format)
+/**
+ * What the engine needs to know about a format to size, copy and bind it. Block sizes are
+ * there for compressed formats; every format today is one pixel per block.
+ */
+struct FormatInfo
 {
-  return format == Format::D32_SFLOAT || format == Format::D24_UNORM_S8_UINT;
-}
+  uint8 bytesPerBlock = 0;
+  uint8 blockWidth = 1;
+  uint8 blockHeight = 1;
+  bool isDepth = false;
+  bool hasStencil = false;
+  bool isSrgb = false;
+};
+
+/**
+ * Looks up FormatInfo by format. The table is constexpr, so a lookup is one array read.
+ */
+class FormatUtils
+{
+ public:
+  NODISCARD static constexpr const FormatInfo&
+  getInfo(Format format)
+  {
+    return FORMAT_INFOS[static_cast<uint32>(format)];
+  }
+
+  NODISCARD static constexpr bool
+  isDepth(Format format)
+  {
+    return getInfo(format).isDepth;
+  }
+
+  /**
+   * Bytes of one mip level of one layer, rounded up to whole blocks.
+   */
+  NODISCARD static constexpr SIZE_T
+  getMipSize(Format format, uint32 width, uint32 height, uint32 depth = 1)
+  {
+    const FormatInfo& info = getInfo(format);
+    const SIZE_T blocksWide = (width + info.blockWidth - 1) / info.blockWidth;
+    const SIZE_T blocksHigh = (height + info.blockHeight - 1) / info.blockHeight;
+    return blocksWide * blocksHigh * depth * info.bytesPerBlock;
+  }
+
+ private:
+  // In the order of the Format values.
+  static constexpr FormatInfo FORMAT_INFOS[] = {
+      {},                                                  // Unknown
+      {.bytesPerBlock = 4},                                // R8G8B8A8_UNORM
+      {.bytesPerBlock = 4},                                // B8G8R8A8_UNORM
+      {.bytesPerBlock = 4, .isSrgb = true},                // B8G8R8A8_SRGB
+      {.bytesPerBlock = 8},                                // R16G16B16A16_SFLOAT
+      {.bytesPerBlock = 4, .isDepth = true},               // D32_SFLOAT
+      {.bytesPerBlock = 4, .isDepth = true, .hasStencil = true}, // D24_UNORM_S8_UINT
+      {.bytesPerBlock = 1},                                // R8_UNORM
+      {.bytesPerBlock = 2},                                // R8G8_UNORM
+      {.bytesPerBlock = 4, .isSrgb = true},                // R8G8B8A8_SRGB
+      {.bytesPerBlock = 4},                                // A2B10G10R10_UNORM
+      {.bytesPerBlock = 4},                                // B10G11R11_UFLOAT
+      {.bytesPerBlock = 2},                                // R16_SFLOAT
+      {.bytesPerBlock = 4},                                // R16G16_SFLOAT
+      {.bytesPerBlock = 4},                                // R32_SFLOAT
+      {.bytesPerBlock = 16},                               // R32G32B32A32_SFLOAT
+      {.bytesPerBlock = 4},                                // R32_UINT
+      {.bytesPerBlock = 8, .isDepth = true, .hasStencil = true}, // D32_SFLOAT_S8_UINT
+  };
+  static_assert(std::size(FORMAT_INFOS) == static_cast<SIZE_T>(Format::COUNT),
+                "Every Format needs its FormatInfo.");
+};
 
 enum class LoadOp : uint32 {
   Load = 0,

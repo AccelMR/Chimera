@@ -72,11 +72,6 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
                                           vulkanTexture->getArrayLayers() :
                                           createInfo.arrayLayerCount;
 
-  viewInfo.subresourceRange.baseArrayLayer = createInfo.baseArrayLayer;
-  viewInfo.subresourceRange.layerCount = createInfo.arrayLayerCount == ~0u ?
-                                          vulkanTexture->getArrayLayers() :
-                                          createInfo.arrayLayerCount;
-
   VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_imageView));
 
   m_format = viewInfo.format;

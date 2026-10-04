@@ -51,7 +51,13 @@ class ITexture {
   NODISCARD virtual SPtr<ITextureView>
   createView(const TextureViewCreateInfo& createInfo = {}) = 0;
 
-  virtual void 
+  /**
+   * Copies pixels into the texture and leaves it in the ShaderRead state. The data holds the
+   * mip levels one after the other, each with all its layers; mips past the end of the data
+   * keep undefined contents. The copy runs at the start of the next frame submit, before
+   * anything that frame records, so the CPU never waits for it.
+   */
+  virtual void
   uploadData(const void* data, SIZE_T size) = 0;
 };
 } // namespace chEngineSDK

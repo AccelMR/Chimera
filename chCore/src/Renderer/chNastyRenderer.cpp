@@ -413,7 +413,7 @@ NastyRenderer::createMeshBuffers() {
     BufferCreateInfo vertexBufferCreateInfo{
         .size = vertexDataSize,
         .usage = BufferUsage::VertexBuffer,
-        .memoryUsage = MemoryUsage::CpuToGpu,
+        .memoryUsage = MemoryUsage::GpuOnly,
         .initialData = const_cast<void*>(static_cast<const void*>(vertexData.data())),
         .initialDataSize = vertexDataSize,
     };
@@ -431,7 +431,7 @@ NastyRenderer::createMeshBuffers() {
       BufferCreateInfo indexBufferCreateInfo{
           .size = indexDataSize,
           .usage = BufferUsage::IndexBuffer,
-          .memoryUsage = MemoryUsage::CpuToGpu,
+          .memoryUsage = MemoryUsage::GpuOnly,
           .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
           .initialDataSize = indexDataSize,
       };
@@ -444,7 +444,7 @@ NastyRenderer::createMeshBuffers() {
       BufferCreateInfo indexBufferCreateInfo{
           .size = indexDataSize,
           .usage = BufferUsage::IndexBuffer,
-          .memoryUsage = MemoryUsage::CpuToGpu,
+          .memoryUsage = MemoryUsage::GpuOnly,
           .initialData = const_cast<void*>(static_cast<const void*>(indexData.data())),
           .initialDataSize = indexDataSize,
       };

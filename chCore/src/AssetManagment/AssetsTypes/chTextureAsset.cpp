@@ -13,30 +13,6 @@
 #include "chLogger.h"
 
 namespace chEngineSDK {
-  namespace FormatUtils {
-/** * @brief Get the size of the format in bytes
- * @param format The format to check
- * @return The size of the format in bytes
- */
-NODISCARD FORCEINLINE uint32
-getFormatSize(Format format) {
-  switch (format) {
-    case Format::R8G8B8A8_UNORM:
-      return 4;
-    case Format::B8G8R8A8_SRGB:
-      return 4;
-    case Format::R16G16B16A16_SFLOAT:
-      return 8;
-    case Format::D32_SFLOAT:
-      return 4;
-    case Format::D24_UNORM_S8_UINT:
-      return 4; // 24 bits for depth, 8 bits for stencil
-    default:
-      return 0; // Unknown format size
-  }
-}
-} // namespace FormatUtils
-
 CH_LOG_DECLARE_STATIC(TextureAssetLog, All);
 
 /*
@@ -81,8 +57,13 @@ TextureAsset::deserialize(SPtr<DataStream> stream) {
   stream >> metadata;
   m_width = metadata.width;
   m_height = metadata.height;
-  m_textureData.resize(m_width * m_height *
-                       FormatUtils::getFormatSize(metadata.format));
+  // The value comes from the file, so it is checked before it indexes the format table.
+  if (static_cast<uint32>(metadata.format) >= static_cast<uint32>(Format::COUNT)) {
+    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: unknown format {0}",
+                 metadata.format);
+    return false;
+  }
+  m_textureData.resize(FormatUtils::getMipSize(metadata.format, m_width, m_height));
   if (m_textureData.empty()) {
     CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: texture data is empty");
     return false;
