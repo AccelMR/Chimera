@@ -45,11 +45,6 @@ VK_DEFINE_HANDLE(VmaAllocation)
 # include <SDL3/SDL_vulkan.h>
 #endif // USING(CH_DISPLAY_SDL3)
 
-#if USING(CH_PLATFORM_WIN32)
-# include <vulkan/vulkan_win32.h>
-#elif USING(CH_PLATFORM_LINUX)
-#endif // USING(CH_PLATFORM_LINUX)
-
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_EXTERN(, Vulkan);

@@ -480,30 +480,24 @@ VulkanAPI::createInstance(const GraphicsAPIInfo& graphicsAPIInfo) {
                             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
                             .apiVersion = VK_API_VERSION_1_3};
 
-  Vector<const ANSICHAR*> extensions = {
-      VK_KHR_SURFACE_EXTENSION_NAME,
-#if USING(CH_PLATFORM_WIN32)
-      VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#elif USING(CH_DISPLAY_SDL3) && USING(CH_PLATFORM_LINUX)
-      // VK_KHR_XCB_SURFACE_EXTENSION_NAME
-      VK_KHR_XLIB_SURFACE_EXTENSION_NAME
-#endif
-  };
+  Vector<const ANSICHAR*> extensions;
 
-  if (graphicsAPIInfo.enableValidationLayer) {
-    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-  }
-
-#if USING(CH_PLATFORM_WIN32)
+  // SDL creates the surface, so it knows which surface extensions the window system needs
+  // (Win32, X11, Wayland...), and no platform header has to reach this module.
+#if USING(CH_DISPLAY_SDL3)
   uint32 count = 0;
   const ANSICHAR* const* exts = SDL_Vulkan_GetInstanceExtensions(&count);
   if (!exts) {
     CH_EXCEPT(VulkanErrorException, "Failed to get Vulkan instance extensions from SDL");
   }
-  else {
-    extensions.insert(extensions.end(), exts, exts + count);
+  extensions.assign(exts, exts + count);
+#else
+  extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+#endif // USING(CH_DISPLAY_SDL3)
+
+  if (graphicsAPIInfo.enableValidationLayer) {
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
-#endif // USING(CH_PLATFORM_WIN32)
 
   VkInstanceCreateInfo createInfo{
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,

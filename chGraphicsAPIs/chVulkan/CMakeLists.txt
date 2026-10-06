@@ -75,41 +75,8 @@ target_link_libraries(chVulkan PRIVATE Vulkan::Vulkan chImgui)
 target_include_directories(chVulkan SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Externals/VulkanMemoryAllocator/include)
 
-# ---------- Plataforma: Windows ----------
-if(WIN32)
-    # Define para surface Win32
-    target_compile_definitions(chVulkan PRIVATE VK_USE_PLATFORM_WIN32_KHR)
-
-    # Si tu c�digo crea ventanas Win32 o usa funciones del SDK, enlaza estas (seguras/no-controversiales)
-    target_link_libraries(chVulkan PRIVATE user32 gdi32 shell32)
-
-# ---------- Plataforma: Linux (X11/XCB) ----------
-elseif(UNIX AND NOT APPLE)
-    # XCB v�a pkg-config (m�s robusto que rutas hardcodeadas)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(XCB REQUIRED xcb)
-
-    if(XCB_FOUND)
-        message(STATUS "Found XCB: ${XCB_LINK_LIBRARIES}")
-        target_include_directories(chVulkan PRIVATE ${XCB_INCLUDE_DIRS})
-        target_link_libraries(chVulkan PRIVATE ${XCB_LINK_LIBRARIES})
-    else()
-        message(FATAL_ERROR "XCB not found. En Arch: sudo pacman -S libxcb")
-    endif()
-
-    # X11 (si lo usas junto con XCB)
-    find_package(X11 REQUIRED)  # m�dulo cl�sico de CMake
-    if(X11_FOUND)
-        target_include_directories(chVulkan PRIVATE ${X11_INCLUDE_DIR})
-        target_link_libraries(chVulkan PRIVATE ${X11_LIBRARIES})
-    endif()
-
-    # Defines de plataformas Vulkan que ya usabas
-    target_compile_definitions(chVulkan PRIVATE
-        VK_USE_PLATFORM_XCB_KHR
-        VK_USE_PLATFORM_XLIB_KHR
-    )
-endif()
+# No VK_USE_PLATFORM_* define: SDL creates the surface and lists its extensions, and those
+# defines would pull <windows.h> or <X11/Xlib.h> into every file (X11 defines None, Always...).
 
 # ---------- Enlaces comunes ----------
 target_link_libraries(chVulkan PRIVATE chCore chUtilities)

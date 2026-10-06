@@ -310,29 +310,29 @@ getVerbosityName(LogVerbosity verbosity) noexcept;
 
 // Actual logging macros
 #if USING(CH_LOG_VERBOSE)
-#define CH_LOG(Category, Verbosity, Format, ...)                                              \
+#define CH_LOG(Category, Verbosity, ...)                                                      \
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__),                 \
+                     chEngineSDK::StringUtils::format(__VA_ARGS__),                           \
                      __FILE__, __LINE__, CH_FUNCTION_SIGNATURE);                              \
     }                                                                                         \
   } while (0)
 #else
-#define CH_LOG(Category, Verbosity, Format, ...)                                              \
+#define CH_LOG(Category, Verbosity, ...)                                                      \
   do {                                                                                        \
     if ((Category).isEnabled(chEngineSDK::LogVerbosity::Verbosity)) {                         \
       (Category).log(chEngineSDK::LogVerbosity::Verbosity,                                    \
-                     chEngineSDK::StringUtils::format(Format, ##__VA_ARGS__),                 \
+                     chEngineSDK::StringUtils::format(__VA_ARGS__),                           \
                      nullptr, 0, nullptr);                                                    \
     }                                                                                         \
   } while (0)
 #endif
 
 // Common logging helpers
-#define CH_LOG_FATAL(Category, Format, ...) CH_LOG(Category, Fatal, Format, ##__VA_ARGS__)
-#define CH_LOG_ERROR(Category, Format, ...) CH_LOG(Category, Error, Format, ##__VA_ARGS__)
-#define CH_LOG_WARNING(Category, Format, ...) CH_LOG(Category, Warning, Format, ##__VA_ARGS__)
-#define CH_LOG_INFO(Category, Format, ...) CH_LOG(Category, Info, Format, ##__VA_ARGS__)
-#define CH_LOG_DEBUG(Category, Format, ...) CH_LOG(Category, Debug, Format, ##__VA_ARGS__)
-#define CH_LOG_TRACE(Category, Format, ...) CH_LOG(Category, Trace, Format, ##__VA_ARGS__)
+#define CH_LOG_FATAL(Category, ...) CH_LOG(Category, Fatal, __VA_ARGS__)
+#define CH_LOG_ERROR(Category, ...) CH_LOG(Category, Error, __VA_ARGS__)
+#define CH_LOG_WARNING(Category, ...) CH_LOG(Category, Warning, __VA_ARGS__)
+#define CH_LOG_INFO(Category, ...) CH_LOG(Category, Info, __VA_ARGS__)
+#define CH_LOG_DEBUG(Category, ...) CH_LOG(Category, Debug, __VA_ARGS__)
+#define CH_LOG_TRACE(Category, ...) CH_LOG(Category, Trace, __VA_ARGS__)
