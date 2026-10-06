@@ -297,7 +297,7 @@ BMPImage::bitBlt(const BMPImage& src, const Box2D& srcRect, const Box2D& dstRect
         continue;
       }
 
-      setPixel(static_cast<uint32>(dstRectClamped.minPoint.x) + x, 
+      setPixel(static_cast<uint32>(dstRectClamped.minPoint.x) + x,
                static_cast<uint32>(dstRectClamped.minPoint.y) + y, color);
     }
   }
@@ -306,21 +306,19 @@ BMPImage::bitBlt(const BMPImage& src, const Box2D& srcRect, const Box2D& dstRect
 /*
  */
 bool
-BMPImage::calculateSourceCoordinates(int32 x, int32 y, 
+BMPImage::calculateSourceCoordinates(int32 x, int32 y,
                                      const Box2D& srcRect,
-                                     const Box2D& dstRect, 
-                                     BMP_TEXTURE_MODE mode, 
+                                     const Box2D& dstRect,
+                                     BMP_TEXTURE_MODE mode,
                                      int32& srcX,
                                      int32& srcY) {
-  Vector2 dstWidthHeight = dstRect.getSize();
-  Vector2 srcWidthHeight = srcRect.getSize();
   switch (mode) {
   case BMP_TEXTURE_MODE::NONE:
     srcX = static_cast<int32>(srcRect.minPoint.x) + x;
     srcY = static_cast<int32>(srcRect.minPoint.y) + y;
 
-    return srcX >= 0 && 
-           srcX < static_cast<int32>(srcWidthHeight.x) && 
+    return srcX >= 0 &&
+           srcX < static_cast<int32>(srcWidthHeight.x) &&
            srcY >= 0 &&
            srcY < static_cast<int32>(srcWidthHeight.y);
 
@@ -344,8 +342,8 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y,
 /*
  */
 bool
-BMPImage::calculateRepeatCoordinates(int32 x, int32 y, 
-                                     const Box2D& srcRect, 
+BMPImage::calculateRepeatCoordinates(int32 x, int32 y,
+                                     const Box2D& srcRect,
                                      int32& srcX, int32& srcY) {
   Vector2 widthHeight = srcRect.getSize();
   srcX = static_cast<int32>(srcRect.minPoint.x) + x % static_cast<int32>(widthHeight.x);

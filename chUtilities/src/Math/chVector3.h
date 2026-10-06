@@ -438,7 +438,7 @@ Vector3::Vector3(const Vector3& copyVector)
 FORCEINLINE float
 Vector3::dot(const Vector3& vector3) const
 {
-  return {x * vector3.x + y * vector3.y + z * vector3.z};
+  return x * vector3.x + y * vector3.y + z * vector3.z;
 }
 
 /*

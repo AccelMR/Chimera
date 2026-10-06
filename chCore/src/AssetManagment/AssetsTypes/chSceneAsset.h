@@ -34,14 +34,16 @@ class CH_CORE_EXPORT SceneAsset : public IAsset {
 
   bool
   serialize(SPtr<DataStream> stream) override {
+    CH_PARAMETER_UNUSED(stream);
     // Implement scene serialization logic here
-    return true;
+    return false;
   }
 
   bool
   deserialize(SPtr<DataStream> stream) override {
+    CH_PARAMETER_UNUSED(stream);
     // Implement scene deserialization logic here
-    return true;
+    return false;
   }
 
  private:

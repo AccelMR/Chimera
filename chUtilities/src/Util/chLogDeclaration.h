@@ -13,7 +13,7 @@
 namespace chEngineSDK {
   // Declaración forward de LogCategory
   class LogCategory;
-  
+
   // Enumeración de niveles de verbosidad (copia mínima de la definición en chLogger.h)
   enum class LogVerbosity : uint8 {
     NoLogging = 0,
@@ -25,7 +25,7 @@ namespace chEngineSDK {
     All = Debug
   };
 }
- 
+
 /**
  * Declares a category defined with CH_LOG_DEFINE_CATEGORY_SHARED in another file.
  * ModuleExport is the export macro of the module that defines it (e.g. CH_CORE_EXPORT),
