@@ -157,7 +157,16 @@ EditorApplication::onRender(ICommandList& commandList,
   if (UIHelpers::bRenderImGui) {
     m_imguiRenderer->render(commandList, *ImGui::GetDrawData(), backBuffer,
                             swapChain.getFormat(), width, height);
+    m_imguiRenderer->renderFloatingWindows(commandList);
   }
+}
+
+/*
+ */
+void
+EditorApplication::onPostPresent()
+{
+  m_imguiRenderer->presentFloatingWindows();
 }
 
 /*
@@ -340,6 +349,10 @@ EditorApplication::renderUI()
   m_gameObjectAssetUI->renderGameObjectAssetUI();
 
   ImGui::Render();
+  // Opens, closes and resizes the windows outside the main one before they are drawn.
+  if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+  }
 }
 
 /*

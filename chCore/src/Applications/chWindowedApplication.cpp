@@ -127,7 +127,7 @@ WindowedApplication::destroyModules()
     IGraphicsAPI::shutDown();
   }
 
-  // The window goes after the graphics API, which destroys the surface made on it.
+  // The window goes after every swap chain, so no surface made on it outlives it.
   destroyDisplay();
 
   if (EventDispatcherManager::isStarted()) {
@@ -194,13 +194,7 @@ WindowedApplication::initializeGraphics() {
     CH_EXCEPT(InternalErrorException, "Graphics API instance is null after initialization.");
   }
 
-  CH_ASSERT(m_display && "Display must be initialized before graphics.");
-  graphicsAPI->initialize({.weakDisplaySurface = m_display,
-                           // TODO: probably want to change this or make the display return
-                           // sidth of the drawable area
-                           .width = m_display->getWidth(),
-                           .height = m_display->getHeight(),
-                           .enableValidationLayer = true});
+  graphicsAPI->initialize({.enableValidationLayer = true});
 
   CH_LOG_INFO(WindowedApp, "Graphics subsystem initialized successfully.");
 }
@@ -212,8 +206,13 @@ WindowedApplication::initializeRenderComponents()
 {
   CH_LOG_INFO(WindowedApp, "Initializing render components.");
 
-  m_swapChain = IGraphicsAPI::instance().createSwapChain(m_display->getWidth(),
-                                                         m_display->getHeight(), false);
+  CH_ASSERT(m_display && "Display must be initialized before the swap chain.");
+  m_swapChain = IGraphicsAPI::instance().createSwapChain(
+      {.window = m_display->getPlatformHandler(),
+       .width = m_display->getWidth(),
+       .height = m_display->getHeight(),
+       .vsync = false,
+       .debugName = "Main SwapChain"});
   if (!m_swapChain) {
     CH_EXCEPT(InternalErrorException, "Failed to create SwapChain.");
   }

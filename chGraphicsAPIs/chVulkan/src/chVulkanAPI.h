@@ -25,10 +25,6 @@ struct VulkanData {
   VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
   VkDevice device = VK_NULL_HANDLE;
   VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-
-  VkSurfaceKHR surface = VK_NULL_HANDLE;
-  VkFormat surfaceFormat = VK_FORMAT_B8G8R8A8_UNORM;
-  VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 };
 
 class VulkanAPI : public IGraphicsAPI {
@@ -43,7 +39,7 @@ class VulkanAPI : public IGraphicsAPI {
   getAdapterName() const override;
 
   NODISCARD SPtr<ISwapChain>
-  createSwapChain(uint32 width, uint32 height, bool vsync = false) override;
+  createSwapChain(const SwapChainDesc& desc) override;
 
   NODISCARD SPtr<IBuffer>
   createBuffer(const BufferCreateInfo& createInfo) override;
@@ -165,9 +161,6 @@ class VulkanAPI : public IGraphicsAPI {
 
   bool
   checkValidationLayerSupport() const;
-
-  bool
-  createSurface(WeakPtr<DisplaySurface> display);
 
   void
   createAllocator();

@@ -78,7 +78,8 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) = 0;
 
   /**
-   * Runs after the frame was submitted and presented, for work that submits on its own.
+   * Runs after the frame was submitted and the main swap chain presented; other swap chains
+   * acquired during the frame are presented here.
    */
   virtual void
   onPostPresent() {}

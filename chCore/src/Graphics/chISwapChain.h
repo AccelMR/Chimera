@@ -10,9 +10,19 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+#include "chDisplaySurface.h"
 #include "chGraphicsTypes.h"
 
 namespace chEngineSDK {
+struct SwapChainDesc {
+  PlatformDisplay window = nullptr;
+  uint32 width = 0;
+  uint32 height = 0;
+  bool vsync = false;
+  // Prefix of the debug names of the swap chain and its images.
+  const ANSICHAR* debugName = "SwapChain";
+};
+
 /**
  * Result of acquiring or presenting a swap chain image, so the caller knows whether it can
  * draw and whether the swap chain has to be recreated.

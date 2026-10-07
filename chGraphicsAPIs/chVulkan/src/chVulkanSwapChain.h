@@ -17,20 +17,20 @@
 namespace chEngineSDK {
 
 /**
- * Vulkan swap chain. It owns the semaphores that tie its images to the frame: one per frame
- * in flight that the acquire signals and the frame submit waits on, and one per image that
- * the submit signals and the present waits on.
+ * Vulkan swap chain of one window. It owns the surface made on the window and the
+ * semaphores that tie its images to the frame: one per frame in flight that the acquire
+ * signals and the frame submit waits on, and one per image that the submit signals and the
+ * present waits on.
  */
 class VulkanSwapChain : public ISwapChain
 {
  public:
-  VulkanSwapChain(VkDevice device,
+  VulkanSwapChain(VkInstance instance,
+                  VkDevice device,
                   VkPhysicalDevice physicalDevice,
-                  VkSurfaceKHR surface,
-                  VkFormat colorFormat,
-                  VkColorSpaceKHR colorSpace,
                   uint32 graphicsFamilyQueueIndex,
-                  uint32 presentFamilyQueueIndex);
+                  uint32 presentFamilyQueueIndex,
+                  const SwapChainDesc& desc);
 
   ~VulkanSwapChain() override;
 
@@ -95,10 +95,13 @@ class VulkanSwapChain : public ISwapChain
     return m_presentSemaphores[m_currentImageIndex];
   }
 
+ private:
   void
   create(uint32 width, uint32 height, bool vsync);
 
- private:
+  void
+  createSurface(PlatformDisplay window);
+
   void
   cleanUpSwapChain();
 
@@ -108,6 +111,7 @@ class VulkanSwapChain : public ISwapChain
   NODISCARD VkSemaphore
   createSemaphore(const ANSICHAR* name) const;
 
+  VkInstance m_instance = VK_NULL_HANDLE;
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
   VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
@@ -124,6 +128,7 @@ class VulkanSwapChain : public ISwapChain
   uint32 m_currentImageIndex = 0;
   // Frame slot of the last acquire, which picks its semaphore.
   uint32 m_acquireSlot = 0;
+  String m_debugName;
 
   Vector<VkImage> m_images;
   Vector<VkImageView> m_imageViews;

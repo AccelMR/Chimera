@@ -16,11 +16,9 @@
 
 
 namespace chEngineSDK {
+struct SwapChainDesc;
 
 struct GraphicsAPIInfo {
-  WeakPtr<DisplaySurface> weakDisplaySurface;
-  uint32 width = 1920;
-  uint32 height = 1080;
   bool enableValidationLayer = true;
 };
 
@@ -35,8 +33,11 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual String
   getAdapterName() const = 0;
 
+  /**
+   * The swap chain makes its own surface on desc.window, so every window can have one.
+   */
   NODISCARD virtual SPtr<ISwapChain>
-  createSwapChain(uint32 width, uint32 height, bool vsync = false) = 0;
+  createSwapChain(const SwapChainDesc& desc) = 0;
 
   NODISCARD virtual SPtr<IBuffer>
   createBuffer(const BufferCreateInfo& createInfo) = 0;

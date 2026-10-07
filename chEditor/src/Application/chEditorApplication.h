@@ -49,6 +49,9 @@ class EditorApplication : public WindowedApplication
   virtual void
   onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) override;
 
+  virtual void
+  onPostPresent() override;
+
  private:
   void
   initializeEditorComponents();

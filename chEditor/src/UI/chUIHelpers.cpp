@@ -9,6 +9,7 @@
 #include "chUIHelpers.h"
 
 #include "chAssetCodec.h"
+#include "chCommandLine.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chDisplayEventHandle.h"
@@ -311,6 +312,11 @@ UIHelpers::initFontConfig() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
+  // Off by default: windows outside the main one cost a swap chain each, and Wayland does
+  // not let applications place their windows.
+  if (CommandLine::hasFlag("FloatingWindows")) {
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  }
 
   io.Fonts->AddFontDefault();
 

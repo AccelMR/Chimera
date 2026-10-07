@@ -17,6 +17,8 @@
 
 struct ImDrawData;
 struct ImTextureData;
+struct ImGuiViewport;
+struct ImVec2;
 
 namespace chEngineSDK {
 
@@ -24,7 +26,8 @@ namespace chEngineSDK {
  * ImGui renderer backend written on the engine graphics interfaces, so the editor UI works
  * with every graphics API and needs no ImGui code inside the graphics plugins. Textures are
  * read through the bindless heap: an ImTextureID is a bindless index plus one, because ImGui
- * reserves 0 as the invalid id.
+ * reserves 0 as the invalid id. ImGui windows dragged outside the main one get a swap chain
+ * each, drawn in the same frame and presented after the main window.
  */
 class ImGuiRenderer
 {
@@ -40,8 +43,8 @@ class ImGuiRenderer
   operator=(const ImGuiRenderer&) = delete;
 
   /**
-   * Draws the UI over the target, which must be in the RenderTarget state. Begins and ends
-   * its own rendering and keeps what is already in the target.
+   * Draws the main window UI over the target, which must be in the RenderTarget state.
+   * Begins and ends its own rendering and keeps what is already in the target.
    */
   void
   render(ICommandList& commandList,
@@ -50,6 +53,19 @@ class ImGuiRenderer
          Format targetFormat,
          uint32 targetWidth,
          uint32 targetHeight);
+
+  /**
+   * Acquires and draws the swap chain of every ImGui window outside the main one. Called
+   * between IGraphicsAPI::beginFrame and endFrame, after ImGui::UpdatePlatformWindows.
+   */
+  void
+  renderFloatingWindows(ICommandList& commandList);
+
+  /**
+   * Presents what renderFloatingWindows drew; called after IGraphicsAPI::endFrame.
+   */
+  void
+  presentFloatingWindows();
 
   /**
    * ImTextureID that shows the texture with this bindless index; 0 (ImGui's invalid id)
@@ -68,18 +84,56 @@ class ImGuiRenderer
   {
     SPtr<IBuffer> vertexBuffer;
     SPtr<IBuffer> indexBuffer;
+    // Bytes already written in the ImGui frame imguiFrame; every window of a frame writes
+    // after the previous one.
+    uint32 vertexCursor = 0;
+    uint32 indexCursor = 0;
+    int32 imguiFrame = -1;
   };
+
+  struct GeometryRange
+  {
+    uint64 vertexOffset = 0;
+    uint64 indexOffset = 0;
+  };
+
+  struct WindowData
+  {
+    SPtr<ISwapChain> swapChain;
+    bool acquired = false;
+    bool needsResize = false;
+  };
+
+  static void
+  createWindow(ImGuiViewport* viewport);
+
+  static void
+  destroyWindow(ImGuiViewport* viewport);
+
+  static void
+  setWindowSize(ImGuiViewport* viewport, ImVec2 size);
+
+  void
+  recordDrawData(ICommandList& commandList,
+                 ImDrawData& drawData,
+                 const ITextureView& target,
+                 Format targetFormat,
+                 uint32 targetWidth,
+                 uint32 targetHeight,
+                 LoadOp loadOp);
 
   void
   updateTexture(ImTextureData& texture);
 
-  void
-  uploadGeometry(ImDrawData& drawData, FrameBuffers& frameBuffers);
+  NODISCARD GeometryRange
+  uploadGeometry(const ImDrawData& drawData, FrameBuffers& frameBuffers);
 
   void
   setupRenderState(ICommandList& commandList,
                    const ImDrawData& drawData,
                    const FrameBuffers& frameBuffers,
+                   const GeometryRange& geometry,
+                   const IPipeline& pipeline,
                    uint32 targetWidth,
                    uint32 targetHeight);
 
@@ -92,9 +146,8 @@ class ImGuiRenderer
   SPtr<ISampler> m_sampler;
 
   PipelineCache m_pipelineCache;
-  // Owned by m_pipelineCache; looked up again only when the target format changes.
-  const IPipeline* m_pipeline = nullptr;
-  Format m_pipelineFormat = Format::Unknown;
+  // Owned by m_pipelineCache, one per target format, so a frame never builds a description.
+  Vector<Pair<Format, const IPipeline*>> m_pipelines;
 
   // One copy per frame in flight, because the CPU writes them while the GPU may still read
   // the previous frame's. They only grow; the old buffer goes through the deferred deletion.
@@ -102,6 +155,10 @@ class ImGuiRenderer
 
   // Textures ImGui asked for (the font atlas), by ImTextureData::UniqueID.
   UnorderedMap<int32, SPtr<ITexture>> m_textures;
+
+  // Windows outside the main one, by ImGuiViewport::ID. Nodes do not move, so each
+  // viewport keeps a pointer to its entry.
+  UnorderedMap<uint32, WindowData> m_windows;
 };
 
 } // namespace chEngineSDK

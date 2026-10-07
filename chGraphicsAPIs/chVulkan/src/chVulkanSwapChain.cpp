@@ -31,42 +31,45 @@ toSwapChainStatus(VkResult result, StringView action)
 
 /*
 */
-VulkanSwapChain::VulkanSwapChain(VkDevice device,
+VulkanSwapChain::VulkanSwapChain(VkInstance instance,
+                                 VkDevice device,
                                  VkPhysicalDevice physicalDevice,
-                                 VkSurfaceKHR surface,
-                                 VkFormat colorFormat,
-                                 VkColorSpaceKHR colorSpace,
                                  uint32 graphicsFamilyQueueIndex,
-                                 uint32 presentFamilyQueueIndex)
-  : m_device(device),
+                                 uint32 presentFamilyQueueIndex,
+                                 const SwapChainDesc& desc)
+  : m_instance(instance),
+    m_device(device),
     m_physicalDevice(physicalDevice),
-    m_surface(surface),
     m_graphicsFamilyQueueIndex(graphicsFamilyQueueIndex),
     m_presentFamilyQueueIndex(presentFamilyQueueIndex),
-    m_colorFormat(colorFormat),
-    m_colorSpace(colorSpace)
+    m_debugName(desc.debugName)
 {
+  CH_ASSERT(m_instance != VK_NULL_HANDLE);
   CH_ASSERT(m_device != VK_NULL_HANDLE);
   CH_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
-  CH_ASSERT(m_surface != VK_NULL_HANDLE);
+
+  createSurface(desc.window);
 
   // They do not depend on the images, so they survive every resize.
   for (uint32 i = 0; i < GraphicsLimits::MAX_FRAMES_IN_FLIGHT; ++i) {
-    const String name = StringUtils::format("Main SwapChain Acquire {0}", i);
+    const String name = StringUtils::format("{0} Acquire {1}", m_debugName, i);
     m_acquireSemaphores[i] = createSemaphore(name.c_str());
   }
+
+  create(desc.width, desc.height, desc.vsync);
 }
 
 /*
 */
 VulkanSwapChain::~VulkanSwapChain()
 {
-  // The surface is not destroyed here: VulkanAPI made it and owns it.
   cleanUpSwapChain();
   for (VkSemaphore& semaphore : m_acquireSemaphores) {
     vkDestroySemaphore(m_device, semaphore, nullptr);
     semaphore = VK_NULL_HANDLE;
   }
+  // After the swap chain, which was made on it.
+  vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 }
 
 /*
@@ -212,7 +215,7 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync)
   createImageViews();
 
   const VulkanAPI& vulkanAPI = g_vulkanAPI();
-  vulkanAPI.setDebugName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, m_swapChain, "Main SwapChain");
+  vulkanAPI.setDebugName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, m_swapChain, m_debugName.c_str());
 
   m_textures.reserve(m_imageCount);
   m_textureViews.reserve(m_imageCount);
@@ -223,11 +226,11 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync)
     m_textureViews.push_back(chMakeUnique<VulkanTextureView>(
         m_device, m_imageViews[i], m_colorFormat, 0, 1, 0, 1, TextureViewType::View2D));
 
-    const String imageName = StringUtils::format("Main SwapChain Image {0}", i);
+    const String imageName = StringUtils::format("{0} Image {1}", m_debugName, i);
     vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE, m_images[i], imageName.c_str());
-    const String viewName = StringUtils::format("Main SwapChain View {0}", i);
+    const String viewName = StringUtils::format("{0} View {1}", m_debugName, i);
     vulkanAPI.setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageViews[i], viewName.c_str());
-    const String semaphoreName = StringUtils::format("Main SwapChain Present {0}", i);
+    const String semaphoreName = StringUtils::format("{0} Present {1}", m_debugName, i);
     m_presentSemaphores.push_back(createSemaphore(semaphoreName.c_str()));
   }
   m_currentImageIndex = 0;
@@ -249,6 +252,54 @@ VulkanSwapChain::resize(uint32 width, uint32 height)
   }
 
   create(width, height, m_vsync);
+}
+
+/*
+*/
+void
+VulkanSwapChain::createSurface(PlatformDisplay window)
+{
+  CH_ASSERT(window != nullptr);
+#if USING(CH_DISPLAY_SDL3)
+  if (!SDL_Vulkan_CreateSurface(window, m_instance, nullptr, &m_surface)) {
+    CH_EXCEPT(VulkanErrorException,
+              StringUtils::format("Failed to create the surface of {0}: {1}", m_debugName,
+                                  SDL_GetError()));
+  }
+#else
+  CH_EXCEPT(VulkanErrorException, "Vulkan surfaces are only made through SDL3.");
+#endif // USING(CH_DISPLAY_SDL3)
+
+  // The swap chain presents on the graphics queue.
+  VkBool32 presentSupported = VK_FALSE;
+  VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, m_graphicsFamilyQueueIndex,
+                                                m_surface, &presentSupported));
+  if (presentSupported != VK_TRUE) {
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    CH_EXCEPT(VulkanErrorException,
+              StringUtils::format("The GPU cannot present to {0}", m_debugName));
+  }
+
+  uint32 formatCount = 0;
+  VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount,
+                                                nullptr));
+  Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+  VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount,
+                                                surfaceFormats.data()));
+  CH_ASSERT(!surfaceFormats.empty());
+
+  // Every window takes the same format when its surface offers it, so the UI draws all of
+  // them with one pipeline.
+  VkSurfaceFormatKHR chosen = surfaceFormats[0];
+  for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats) {
+    if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
+        surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      chosen = surfaceFormat;
+      break;
+    }
+  }
+  m_colorFormat = chosen.format;
+  m_colorSpace = chosen.colorSpace;
 }
 
 /*

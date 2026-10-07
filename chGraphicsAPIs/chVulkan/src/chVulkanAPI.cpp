@@ -14,7 +14,6 @@
 #include <vk_mem_alloc.h>
 
 #include "chAlgorithm.h"
-#include "chDisplaySurface.h"
 #include "chSTDStreams.h"
 #include "chVulkanBuffer.h"
 #include "chVulkanPipeline.h"
@@ -207,11 +206,6 @@ VulkanAPI::~VulkanAPI()
     return;
   }
 
-  if (data.surface != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(data.instance, data.surface, nullptr);
-    data.surface = VK_NULL_HANDLE;
-  }
-
   // Destroyed after the device, so the validation layers can still report the objects
   // that were never released.
   if (data.debugMessenger != VK_NULL_HANDLE) {
@@ -250,11 +244,8 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
   createAllocator();
   createFrames();
 
-  createSurface(graphicsAPIInfo.weakDisplaySurface);
-
   CH_LOG_DEBUG(Vulkan, "Vulkan API initialized successfully");
   CH_LOG_DEBUG(Vulkan, "Using Adapter : " + getAdapterName());
-
 }
 
 /*
@@ -274,13 +265,12 @@ VulkanAPI::getAdapterName() const {
 /*
  */
 NODISCARD SPtr<ISwapChain>
-VulkanAPI::createSwapChain(uint32 width, uint32 height, bool vsync) {
-  SPtr<VulkanSwapChain> swapChain = chMakeShared<VulkanSwapChain>(
-      m_vulkanData->device, m_vulkanData->physicalDevice, m_vulkanData->surface,
-      m_vulkanData->surfaceFormat, m_vulkanData->colorSpace, m_graphicsQueueFamilyIndex,
-      m_presentQueueFamilyIndex);
-  swapChain->create(width, height, vsync);
-  return swapChain;
+VulkanAPI::createSwapChain(const SwapChainDesc& desc)
+{
+  return chMakeShared<VulkanSwapChain>(m_vulkanData->instance, m_vulkanData->device,
+                                       m_vulkanData->physicalDevice,
+                                       m_graphicsQueueFamilyIndex, m_presentQueueFamilyIndex,
+                                       desc);
 }
 
 /*
@@ -858,57 +848,6 @@ VulkanAPI::checkValidationLayerSupport() const {
       return false;
     }
   }
-
-  return true;
-}
-
-/*
- */
-bool
-VulkanAPI::createSurface(WeakPtr<DisplaySurface> display) {
-  if (m_vulkanData->surface != VK_NULL_HANDLE) {
-    CH_LOG_WARNING(Vulkan, "Vulkan surface already created");
-    return false;
-  }
-
-  CH_LOG_DEBUG(Vulkan, "Creating Vulkan surface for SDL3");
-  if (display.expired()) {
-    CH_EXCEPT(InternalErrorException, "DisplaySurface is expired");
-  }
-  SPtr<DisplaySurface> displayPtr = display.lock();
-
-#if USING(CH_DISPLAY_SDL3)
-  SDL_Window* sdlWindow = displayPtr->getPlatformHandler();
-  SDL_Vulkan_CreateSurface(sdlWindow, m_vulkanData->instance, nullptr, &m_vulkanData->surface);
-  if (VK_NULL_HANDLE == m_vulkanData->surface) {
-    CH_LOG_ERROR(Vulkan, "Failed to create Vulkan surface for SDL3: {0}", SDL_GetError());
-    CH_EXCEPT(VulkanErrorException, "Failed to create Vulkan surface for SDL3");
-    return false;
-  }
-#else
-  CH_LOG_FATAL(Vulkan, "Vulkan surface creation is not supported on this platform. "
-                       "Please use SDL3 for Vulkan surface creation.");
-#endif // USING(CH_PLATFORM_WIN32)
-
-  VkBool32 presentSupported = VK_FALSE;
-  VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(m_vulkanData->physicalDevice,
-                                                m_graphicsQueueFamilyIndex,
-                                                m_vulkanData->surface, &presentSupported));
-  if (presentSupported != VK_TRUE) {
-    CH_EXCEPT(VulkanErrorException, "Failed to create Vulkan surface");
-  }
-
-  uint32 formatCount = 0;
-  VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanData->physicalDevice,
-                                                m_vulkanData->surface, &formatCount, nullptr));
-
-  Vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
-  VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanData->physicalDevice,
-                                                m_vulkanData->surface, &formatCount,
-                                                surfaceFormats.data()));
-
-  m_vulkanData->surfaceFormat = surfaceFormats[0].format;
-  m_vulkanData->colorSpace = surfaceFormats[0].colorSpace;
 
   return true;
 }
