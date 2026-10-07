@@ -9,7 +9,14 @@
 /************************************************************************/
 #include "chDX12API.h"
 
+#include <D3D12MemAlloc.h>
+
+#include "chDX12Buffer.h"
+#include "chDX12Pipeline.h"
+#include "chDX12Sampler.h"
+#include "chDX12Shader.h"
 #include "chDX12SwapChain.h"
+#include "chDX12Texture.h"
 #include "chUnicode.h"
 
 namespace chEngineSDK {
@@ -50,7 +57,14 @@ DX12API::~DX12API()
     frame.commandList.reset();
     frame.allocator.Reset();
   }
+  m_uploader.destroy();
+  // Releases the pending descriptors too, so it runs before the heaps are destroyed, and
+  // the pending allocations, so it runs before the allocator.
   m_deletionQueue.destroy();
+  if (m_allocator != nullptr) {
+    m_allocator->Release();
+    m_allocator = nullptr;
+  }
   m_depthTargetHeap.destroy();
   m_renderTargetHeap.destroy();
   m_samplerHeap.destroy();
@@ -127,6 +141,8 @@ DX12API::initialize(const GraphicsAPIInfo& graphicsAPIInfo)
   m_depthTargetHeap.initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                                DEPTH_TARGET_HEAP_SIZE, false, "Depth Target Heap");
 
+  createAllocator();
+  m_uploader.initialize(m_device.Get(), m_allocator, &m_deletionQueue);
   createRootSignature();
   createFrames();
 
@@ -147,8 +163,7 @@ DX12API::createSwapChain(const SwapChainDesc& desc)
 SPtr<IBuffer>
 DX12API::createBuffer(const BufferCreateInfo& createInfo)
 {
-  CH_PARAMETER_UNUSED(createInfo);
-  CH_EXCEPT(DX12ErrorException, "Buffers are not implemented yet.");
+  return chMakeShared<DX12Buffer>(m_allocator, createInfo);
 }
 
 /*
@@ -156,8 +171,7 @@ DX12API::createBuffer(const BufferCreateInfo& createInfo)
 SPtr<ITexture>
 DX12API::createTexture(const TextureCreateInfo& createInfo)
 {
-  CH_PARAMETER_UNUSED(createInfo);
-  CH_EXCEPT(DX12ErrorException, "Textures are not implemented yet.");
+  return chMakeShared<DX12Texture>(m_allocator, createInfo);
 }
 
 /*
@@ -165,8 +179,7 @@ DX12API::createTexture(const TextureCreateInfo& createInfo)
 SPtr<IShader>
 DX12API::createShader(const ShaderCreateInfo& createInfo)
 {
-  CH_PARAMETER_UNUSED(createInfo);
-  CH_EXCEPT(DX12ErrorException, "Shaders are not implemented yet.");
+  return chMakeShared<DX12Shader>(createInfo);
 }
 
 /*
@@ -174,8 +187,7 @@ DX12API::createShader(const ShaderCreateInfo& createInfo)
 SPtr<IPipeline>
 DX12API::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
 {
-  CH_PARAMETER_UNUSED(desc);
-  CH_EXCEPT(DX12ErrorException, "Pipelines are not implemented yet.");
+  return chMakeShared<DX12Pipeline>(m_device.Get(), m_rootSignature.Get(), desc);
 }
 
 /*
@@ -183,8 +195,7 @@ DX12API::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
 SPtr<ISampler>
 DX12API::createSampler(const SamplerCreateInfo& createInfo)
 {
-  CH_PARAMETER_UNUSED(createInfo);
-  CH_EXCEPT(DX12ErrorException, "Samplers are not implemented yet.");
+  return chMakeShared<DX12Sampler>(createInfo);
 }
 
 /*
@@ -207,11 +218,18 @@ DX12API::endFrame()
 {
   FrameData& frame = m_frames[m_frameIndex];
   frame.commandList->end();
-
-  const Array<ID3D12CommandList*, 1> commandLists = {frame.commandList->getHandle()};
-  m_queue->ExecuteCommandLists(static_cast<UINT>(commandLists.size()), commandLists.data());
-
   frame.submitValue = m_deletionQueue.nextSubmitValue();
+
+  // Copies recorded since the last frame run first, so this frame already sees their data.
+  Array<ID3D12CommandList*, 2> commandLists{};
+  uint32 commandListCount = 0;
+  ID3D12CommandList* uploadCommands = m_uploader.endRecording(frame.submitValue);
+  if (uploadCommands != nullptr) {
+    commandLists[commandListCount++] = uploadCommands;
+  }
+  commandLists[commandListCount++] = frame.commandList->getHandle();
+  m_queue->ExecuteCommandLists(commandListCount, commandLists.data());
+
   DX12_CHECK(m_queue->Signal(m_deletionQueue.getFence(), frame.submitValue));
 
   m_frameIndex = (m_frameIndex + 1) % GraphicsLimits::MAX_FRAMES_IN_FLIGHT;
@@ -368,6 +386,20 @@ DX12API::registerMessageCallback()
   DX12_CHECK(infoQueue->RegisterMessageCallback(&onDebugMessage,
                                                 D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr,
                                                 &m_messageCallbackCookie));
+}
+
+/*
+ */
+void
+DX12API::createAllocator()
+{
+  const D3D12MA::ALLOCATOR_DESC desc{
+      .Flags = static_cast<D3D12MA::ALLOCATOR_FLAGS>(D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS),
+      .pDevice = m_device.Get(),
+      .PreferredBlockSize = 0,
+      .pAllocationCallbacks = nullptr,
+      .pAdapter = m_adapter.Get()};
+  DX12_CHECK(D3D12MA::CreateAllocator(&desc, &m_allocator));
 }
 
 /*

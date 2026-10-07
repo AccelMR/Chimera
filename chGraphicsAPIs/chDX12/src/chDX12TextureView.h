@@ -19,7 +19,7 @@ class DX12Texture;
 /**
  * Part of a texture as the GPU sees it. Direct3D 12 has no view objects, so it holds the
  * descriptors its texture usage needs: a render target or depth target descriptor in the
- * CPU heaps of the API.
+ * CPU heaps of the API, and a shader resource descriptor in the bindless heap.
  */
 class DX12TextureView : public ITextureView
 {
@@ -85,6 +85,9 @@ class DX12TextureView : public ITextureView
 
   void
   createDepthTarget(ID3D12Resource* resource);
+
+  void
+  createShaderResource(ID3D12Resource* resource);
 
   Format m_format = Format::Unknown;
   TextureViewType m_viewType = TextureViewType::View2D;

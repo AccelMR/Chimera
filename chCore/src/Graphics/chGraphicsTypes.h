@@ -332,7 +332,6 @@ struct SamplerCreateInfo {
   float minLod = 0.0f;
   float maxLod = 1000.0f;
   LinearColor borderColor = LinearColor::Black;
-  bool unnormalizedCoordinates = false;
 };
 
 struct TextureCreateInfo {

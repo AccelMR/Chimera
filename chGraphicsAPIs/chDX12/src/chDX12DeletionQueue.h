@@ -51,6 +51,12 @@ class DX12DeletionQueue
   }
 
   /**
+   * Takes over one reference of the object, such as a D3D12MA allocation.
+   */
+  void
+  enqueueObject(IUnknown* object);
+
+  /**
    * Queues a descriptor, so it is reused only once nothing reads it.
    */
   void
@@ -85,9 +91,6 @@ class DX12DeletionQueue
     uint32 descriptorIndex = 0;
     uint64 releaseValue = 0;
   };
-
-  void
-  enqueueObject(IUnknown* object);
 
   void
   enqueuePending(PendingObject object);

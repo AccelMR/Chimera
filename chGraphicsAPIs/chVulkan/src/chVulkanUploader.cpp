@@ -23,12 +23,6 @@ namespace {
 // A 16K texture has 15 mip levels.
 constexpr uint32 kMaxMipLevels = 16;
 
-NODISCARD uint64
-alignUp(uint64 value, uint64 alignment)
-{
-  return (value + alignment - 1) / alignment * alignment;
-}
-
 void
 recordBarrier(VkCommandBuffer commandBuffer,
               const VkMemoryBarrier2* memoryBarrier,
@@ -273,10 +267,10 @@ VulkanUploader::allocateStaging(SIZE_T size)
   if (size <= RING_SIZE) {
     releaseFinishedSpans();
 
-    uint64 offset = alignUp(m_ringHead, STAGING_ALIGNMENT);
+    uint64 offset = Math::alignUp(m_ringHead, STAGING_ALIGNMENT);
     // A region never wraps around the end of the ring, so it skips to the start instead.
     if (offset % RING_SIZE + size > RING_SIZE) {
-      offset = alignUp(offset, RING_SIZE);
+      offset = Math::alignUp(offset, RING_SIZE);
     }
     if (offset + size - m_ringTail <= RING_SIZE) {
       m_ringHead = offset + size;

@@ -14,6 +14,7 @@
 #include "chICommandList.h"
 
 namespace chEngineSDK {
+class DX12Pipeline;
 
 /**
  * Direct3D 12 graphics command list. Every pipeline shares one root signature and the two
@@ -94,9 +95,18 @@ class DX12CommandList : public ICommandList
   }
 
  private:
+  // Matches DX12Pipeline::MAX_VERTEX_BINDINGS.
+  static constexpr uint32 MAX_VERTEX_BINDINGS = 8;
+
   ComPtr<ID3D12GraphicsCommandList7> m_commandList;
   ID3D12RootSignature* m_rootSignature = nullptr;
   Array<ID3D12DescriptorHeap*, 2> m_descriptorHeaps{};
+
+  // Direct3D 12 takes the vertex stride with the buffer, but the engine keeps it in the
+  // pipeline, so the bound buffers are set again when a pipeline changes their stride.
+  const DX12Pipeline* m_pipeline = nullptr;
+  Array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BINDINGS> m_vertexBuffers{};
+  uint32 m_boundVertexBuffers = 0;
 };
 
 } // namespace chEngineSDK

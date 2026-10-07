@@ -36,15 +36,20 @@ DX12TextureView::DX12TextureView(const DX12Texture& texture,
   if (usage.isSet(TextureUsage::DepthStencil)) {
     createDepthTarget(texture.getHandle());
   }
+  if (usage.isSet(TextureUsage::Sampled)) {
+    createShaderResource(texture.getHandle());
+  }
 }
 
 /*
  */
 DX12TextureView::~DX12TextureView()
 {
+  DX12API& dx12API = g_dx12API();
+  dx12API.getDeletionQueue().enqueueDescriptor(dx12API.getResourceHeap(), m_bindlessIndex);
+
   // Render and depth target descriptors are copied into the command list when it records
   // them, so they can be reused at once.
-  DX12API& dx12API = g_dx12API();
   if (m_renderTargetIndex != GraphicsLimits::INVALID_BINDLESS_INDEX) {
     dx12API.getRenderTargetHeap().free(m_renderTargetIndex);
   }
@@ -121,6 +126,76 @@ DX12TextureView::createDepthTarget(ID3D12Resource* resource)
   m_depthTargetIndex = heap.allocate();
   dx12API.getDevice()->CreateDepthStencilView(resource, &desc,
                                               heap.getCpuHandle(m_depthTargetIndex));
+}
+
+/*
+ */
+void
+DX12TextureView::createShaderResource(ID3D12Resource* resource)
+{
+  D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+  desc.Format = FormatUtils::isDepth(m_format) ? getDepthShaderFormat(m_format)
+                                               : chFormatToDxgiFormat(m_format);
+  desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  switch (m_viewType) {
+  case TextureViewType::View1D:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+    desc.Texture1D = {.MostDetailedMip = m_baseMipLevel,
+                      .MipLevels = m_mipLevelCount,
+                      .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::View1DArray:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+    desc.Texture1DArray = {.MostDetailedMip = m_baseMipLevel,
+                           .MipLevels = m_mipLevelCount,
+                           .FirstArraySlice = m_baseArrayLayer,
+                           .ArraySize = m_arrayLayerCount,
+                           .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::View2DArray:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+    desc.Texture2DArray = {.MostDetailedMip = m_baseMipLevel,
+                           .MipLevels = m_mipLevelCount,
+                           .FirstArraySlice = m_baseArrayLayer,
+                           .ArraySize = m_arrayLayerCount,
+                           .PlaneSlice = 0,
+                           .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::View3D:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+    desc.Texture3D = {.MostDetailedMip = m_baseMipLevel,
+                      .MipLevels = m_mipLevelCount,
+                      .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::ViewCube:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    desc.TextureCube = {.MostDetailedMip = m_baseMipLevel,
+                        .MipLevels = m_mipLevelCount,
+                        .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::ViewCubeArray:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+    desc.TextureCubeArray = {.MostDetailedMip = m_baseMipLevel,
+                             .MipLevels = m_mipLevelCount,
+                             .First2DArrayFace = m_baseArrayLayer,
+                             .NumCubes = m_arrayLayerCount / 6,
+                             .ResourceMinLODClamp = 0.0f};
+    break;
+  case TextureViewType::View2D:
+  default:
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    desc.Texture2D = {.MostDetailedMip = m_baseMipLevel,
+                      .MipLevels = m_mipLevelCount,
+                      .PlaneSlice = 0,
+                      .ResourceMinLODClamp = 0.0f};
+    break;
+  }
+
+  DX12API& dx12API = g_dx12API();
+  DX12DescriptorHeap& heap = dx12API.getResourceHeap();
+  m_bindlessIndex = heap.allocate();
+  dx12API.getDevice()->CreateShaderResourceView(resource, &desc,
+                                                heap.getCpuHandle(m_bindlessIndex));
 }
 
 } // namespace chEngineSDK

@@ -14,3 +14,6 @@
 [submodule "chGraphicsAPIs/chVulkan/Externals/VulkanMemoryAllocator"]
 	path = chGraphicsAPIs/chVulkan/Externals/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "chGraphicsAPIs/chDX12/Externals/D3D12MemoryAllocator"]
+	path = chGraphicsAPIs/chDX12/Externals/D3D12MemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git

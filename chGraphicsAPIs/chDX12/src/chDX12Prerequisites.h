@@ -19,6 +19,12 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
+// Only the files that allocate include D3D12MemAlloc.h.
+namespace D3D12MA {
+class Allocator;
+class Allocation;
+} // namespace D3D12MA
+
 namespace chEngineSDK {
 CH_LOG_DECLARE_EXTERN(, DX12);
 
@@ -84,6 +90,96 @@ chFormatToDxgiFormat(Format format)
   static_assert(std::size(DXGI_FORMATS) == static_cast<SIZE_T>(Format::COUNT),
                 "Every Format needs its DXGI format.");
   return DXGI_FORMATS[static_cast<uint32>(format)];
+}
+
+/**
+ * Format of the resource of a depth texture that shaders also read: typeless, so it takes
+ * both a depth target view and a shader view.
+ */
+NODISCARD FORCEINLINE DXGI_FORMAT
+getTypelessDepthFormat(Format format)
+{
+  switch (format) {
+  case Format::D24_UNORM_S8_UINT:
+    return DXGI_FORMAT_R24G8_TYPELESS;
+  case Format::D32_SFLOAT_S8_UINT:
+    return DXGI_FORMAT_R32G8X24_TYPELESS;
+  case Format::D32_SFLOAT:
+  default:
+    return DXGI_FORMAT_R32_TYPELESS;
+  }
+}
+
+/**
+ * Format shaders read the depth of a depth texture with.
+ */
+NODISCARD FORCEINLINE DXGI_FORMAT
+getDepthShaderFormat(Format format)
+{
+  switch (format) {
+  case Format::D24_UNORM_S8_UINT:
+    return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+  case Format::D32_SFLOAT_S8_UINT:
+    return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+  case Format::D32_SFLOAT:
+  default:
+    return DXGI_FORMAT_R32_FLOAT;
+  }
+}
+
+NODISCARD FORCEINLINE DXGI_FORMAT
+chVertexFormatToDxgiFormat(VertexFormat format)
+{
+  // In the order of the VertexFormat values.
+  static constexpr DXGI_FORMAT VERTEX_FORMATS[] = {
+      DXGI_FORMAT_R32_FLOAT,          // Float
+      DXGI_FORMAT_R32G32_FLOAT,       // Float2
+      DXGI_FORMAT_R32G32B32_FLOAT,    // Float3
+      DXGI_FORMAT_R32G32B32A32_FLOAT, // Float4
+      DXGI_FORMAT_R32_SINT,           // Int
+      DXGI_FORMAT_R32G32_SINT,        // Int2
+      DXGI_FORMAT_R32G32B32_SINT,     // Int3
+      DXGI_FORMAT_R32G32B32A32_SINT,  // Int4
+      DXGI_FORMAT_R32_UINT,           // UInt
+      DXGI_FORMAT_R32G32_UINT,        // UInt2
+      DXGI_FORMAT_R32G32B32_UINT,     // UInt3
+      DXGI_FORMAT_R32G32B32A32_UINT,  // UInt4
+      DXGI_FORMAT_R8G8B8A8_SINT,      // Byte4
+      DXGI_FORMAT_R8G8B8A8_SNORM,     // Byte4Normalized
+      DXGI_FORMAT_R8G8B8A8_UINT,      // UByte4
+      DXGI_FORMAT_R8G8B8A8_UNORM,     // UByte4Normalized
+      DXGI_FORMAT_R16G16_SINT,        // Short2
+      DXGI_FORMAT_R16G16_SNORM,       // Short2Normalized
+      DXGI_FORMAT_R16G16B16A16_SINT,  // Short4
+      DXGI_FORMAT_R16G16B16A16_SNORM, // Short4Normalized
+  };
+  static_assert(std::size(VERTEX_FORMATS) == static_cast<SIZE_T>(VertexFormat::COUNT),
+                "Every VertexFormat needs its DXGI format.");
+  return VERTEX_FORMATS[static_cast<uint32>(format)];
+}
+
+NODISCARD FORCEINLINE D3D12_COMPARISON_FUNC
+chCompareOpToD3D12(CompareOp compareOp)
+{
+  switch (compareOp) {
+  case CompareOp::Never:
+    return D3D12_COMPARISON_FUNC_NEVER;
+  case CompareOp::Less:
+    return D3D12_COMPARISON_FUNC_LESS;
+  case CompareOp::Equal:
+    return D3D12_COMPARISON_FUNC_EQUAL;
+  case CompareOp::LessOrEqual:
+    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+  case CompareOp::Greater:
+    return D3D12_COMPARISON_FUNC_GREATER;
+  case CompareOp::NotEqual:
+    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+  case CompareOp::GreaterOrEqual:
+    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+  case CompareOp::AlwaysOp:
+  default:
+    return D3D12_COMPARISON_FUNC_ALWAYS;
+  }
 }
 
 } // namespace chEngineSDK

@@ -15,6 +15,7 @@
 #include "chDX12CommandList.h"
 #include "chDX12DeletionQueue.h"
 #include "chDX12DescriptorHeap.h"
+#include "chDX12Uploader.h"
 
 namespace chEngineSDK {
 
@@ -101,6 +102,12 @@ class DX12API : public IGraphicsAPI
     return m_device.Get();
   }
 
+  NODISCARD FORCEINLINE DX12Uploader&
+  getUploader()
+  {
+    return m_uploader;
+  }
+
   NODISCARD FORCEINLINE DX12DeletionQueue&
   getDeletionQueue()
   {
@@ -145,6 +152,9 @@ class DX12API : public IGraphicsAPI
   registerMessageCallback();
 
   void
+  createAllocator();
+
+  void
   createRootSignature();
 
   void
@@ -173,7 +183,9 @@ class DX12API : public IGraphicsAPI
   bool m_debugLayerEnabled = false;
   DWORD m_messageCallbackCookie = 0;
 
+  D3D12MA::Allocator* m_allocator = nullptr;
   DX12DeletionQueue m_deletionQueue;
+  DX12Uploader m_uploader;
   // Shader visible: ResourceDescriptorHeap and SamplerDescriptorHeap in HLSL.
   DX12DescriptorHeap m_resourceHeap;
   DX12DescriptorHeap m_samplerHeap;

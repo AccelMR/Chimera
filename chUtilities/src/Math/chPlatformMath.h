@@ -116,6 +116,15 @@ public:
   }
 
   /**
+   * Rounds value up to the next multiple of alignment, which must be above 0.
+   */
+  NODISCARD static constexpr uint64
+  alignUp(uint64 value, uint64 alignment)
+  {
+    return (value + alignment - 1) / alignment * alignment;
+  }
+
+  /**
    *   Computes the inverse interpolation between val1 and val2 with given time.
    *
    * @param val1

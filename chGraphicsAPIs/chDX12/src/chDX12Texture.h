@@ -16,12 +16,15 @@
 namespace chEngineSDK {
 
 /**
- * Direct3D 12 texture resource. Swap chain buffers are wrapped too: the swap chain makes
- * them and must take every reference back before it resizes them.
+ * Direct3D 12 texture whose memory comes from D3D12MA, released through the deletion
+ * queue. Swap chain buffers are wrapped too: the swap chain makes them and must take every
+ * reference back before it resizes them.
  */
 class DX12Texture : public ITexture
 {
  public:
+  DX12Texture(D3D12MA::Allocator* allocator, const TextureCreateInfo& createInfo);
+
   /**
    * Wraps a swap chain buffer.
    */
@@ -98,6 +101,7 @@ class DX12Texture : public ITexture
 
  private:
   ComPtr<ID3D12Resource> m_resource;
+  D3D12MA::Allocation* m_allocation = nullptr;
   uint32 m_width = 0;
   uint32 m_height = 0;
   uint32 m_depth = 1;
@@ -107,6 +111,8 @@ class DX12Texture : public ITexture
   TextureType m_type = TextureType::Texture2D;
   TextureUsageFlags m_usage;
   bool m_ownsTexture = true;
+  // The whole texture as shaders read it; it holds the bindless index of the texture.
+  SPtr<ITextureView> m_defaultView;
 };
 
 } // namespace chEngineSDK

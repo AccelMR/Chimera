@@ -10,6 +10,8 @@
 #include "chDX12CommandList.h"
 
 #include "chDX12API.h"
+#include "chDX12Buffer.h"
+#include "chDX12Pipeline.h"
 #include "chDX12Texture.h"
 #include "chDX12TextureView.h"
 
@@ -110,6 +112,8 @@ DX12CommandList::begin(ID3D12CommandAllocator* allocator)
   m_commandList->SetDescriptorHeaps(static_cast<UINT>(m_descriptorHeaps.size()),
                                     m_descriptorHeaps.data());
   m_commandList->SetGraphicsRootSignature(m_rootSignature);
+  m_pipeline = nullptr;
+  m_boundVertexBuffers = 0;
 }
 
 /*
@@ -235,8 +239,19 @@ DX12CommandList::barrier(Span<const TextureBarrier> textureBarriers)
 void
 DX12CommandList::bindPipeline(const IPipeline& pipeline)
 {
-  CH_PARAMETER_UNUSED(pipeline);
-  CH_ASSERT(false && "Pipelines are not implemented yet.");
+  const auto& dx12Pipeline = static_cast<const DX12Pipeline&>(pipeline);
+  m_commandList->SetPipelineState(dx12Pipeline.getHandle());
+  m_commandList->IASetPrimitiveTopology(dx12Pipeline.getTopology());
+  m_pipeline = &dx12Pipeline;
+
+  for (uint32 binding = 0; binding < MAX_VERTEX_BINDINGS; ++binding) {
+    D3D12_VERTEX_BUFFER_VIEW& view = m_vertexBuffers[binding];
+    const uint32 stride = dx12Pipeline.getStride(binding);
+    if ((m_boundVertexBuffers & (1u << binding)) != 0 && view.StrideInBytes != stride) {
+      view.StrideInBytes = stride;
+      m_commandList->IASetVertexBuffers(binding, 1, &view);
+    }
+  }
 }
 
 /*
@@ -254,10 +269,14 @@ DX12CommandList::pushConstants(const void* data, uint32 size, uint32 offset)
 void
 DX12CommandList::bindVertexBuffer(const IBuffer& buffer, uint32 binding, uint64 offset)
 {
-  CH_PARAMETER_UNUSED(buffer);
-  CH_PARAMETER_UNUSED(binding);
-  CH_PARAMETER_UNUSED(offset);
-  CH_ASSERT(false && "Buffers are not implemented yet.");
+  CH_ASSERT(binding < MAX_VERTEX_BINDINGS);
+  const auto& dx12Buffer = static_cast<const DX12Buffer&>(buffer);
+  D3D12_VERTEX_BUFFER_VIEW& view = m_vertexBuffers[binding];
+  view = {.BufferLocation = dx12Buffer.getGpuAddress() + offset,
+          .SizeInBytes = static_cast<UINT>(dx12Buffer.getSize() - offset),
+          .StrideInBytes = m_pipeline ? m_pipeline->getStride(binding) : 0};
+  m_boundVertexBuffers |= 1u << binding;
+  m_commandList->IASetVertexBuffers(binding, 1, &view);
 }
 
 /*
@@ -265,10 +284,12 @@ DX12CommandList::bindVertexBuffer(const IBuffer& buffer, uint32 binding, uint64 
 void
 DX12CommandList::bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset)
 {
-  CH_PARAMETER_UNUSED(buffer);
-  CH_PARAMETER_UNUSED(indexType);
-  CH_PARAMETER_UNUSED(offset);
-  CH_ASSERT(false && "Buffers are not implemented yet.");
+  const auto& dx12Buffer = static_cast<const DX12Buffer&>(buffer);
+  const D3D12_INDEX_BUFFER_VIEW view{
+      .BufferLocation = dx12Buffer.getGpuAddress() + offset,
+      .SizeInBytes = static_cast<UINT>(dx12Buffer.getSize() - offset),
+      .Format = indexType == IndexType::UInt16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT};
+  m_commandList->IASetIndexBuffer(&view);
 }
 
 /*

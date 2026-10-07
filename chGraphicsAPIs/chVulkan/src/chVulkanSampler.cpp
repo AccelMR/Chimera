@@ -97,7 +97,7 @@ VulkanSampler::VulkanSampler(VkDevice device, const SamplerCreateInfo& createInf
   samplerInfo.anisotropyEnable = createInfo.anisotropyEnable ? VK_TRUE : VK_FALSE;
   samplerInfo.maxAnisotropy = createInfo.maxAnisotropy;
   samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK; // Simplificado por ahora
-  samplerInfo.unnormalizedCoordinates = createInfo.unnormalizedCoordinates ? VK_TRUE : VK_FALSE;
+  samplerInfo.unnormalizedCoordinates = VK_FALSE;
   samplerInfo.compareEnable = createInfo.compareEnable ? VK_TRUE : VK_FALSE;
   
   // Convertir operación de comparación
