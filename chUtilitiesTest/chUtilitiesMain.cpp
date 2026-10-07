@@ -10,27 +10,32 @@
 /************************************************************************/
 // #ifdef RUN_UNIT_TESTS
 #include "chAlgorithm.h"
+#include "chAngle.h"
 #include "chBox2D.h"
+#include "chCapsule.h"
 #include "chCommandLine.h"
 #include "chConfigFile.h"
 #include "chConsoleVariable.h"
-#include "chAngle.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
+#include "chFrustum.h"
 #include "chHash.h"
-#include "chShapeOverlap.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chMatrix4.h"
 #include "chMatrixHelpers.h"
 #include "chModule.h"
+#include "chOrientedBox.h"
 #include "chPath.h"
 #include "chPlane.h"
 #include "chQuaternion.h"
 #include "chRandom.h"
+#include "chRay.h"
+#include "chRayCast.h"
 #include "chRotator.h"
+#include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
@@ -1195,6 +1200,234 @@ TEST_CASE("chUtilities - SphereBoxBounds") {
   const SphereBoxBounds Apart(Vector3(4.0f, 0.0f, 0.0f), Vector3::UNIT, 2.0f);
   REQUIRE(ShapeOverlap::sphereSphere(Touching1, Touching2));
   REQUIRE_FALSE(ShapeOverlap::sphereSphere(Touching1, Apart));
+}
+
+TEST_CASE("chUtilities - AABox getTransformed") {
+  const AABox unitBox(-Vector3::UNIT, Vector3::UNIT);
+
+  // Turning 45 degrees around Z makes the box sqrt(2) wide in X and Y.
+  const AABox turned =
+      unitBox.getTransformed(RotationTranslationMatrix(Rotator(0.0f, 45.0f, 0.0f),
+                                                       Vector3(10.0f, 0.0f, 0.0f)));
+  const float halfDiagonal = Math::sqrt(2.0f);
+  REQUIRE(turned.getCenter().nearEqual(Vector3(10.0f, 0.0f, 0.0f), 1e-5f));
+  REQUIRE(turned.getExtent().nearEqual(Vector3(halfDiagonal, halfDiagonal, 1.0f), 1e-5f));
+
+  const AABox scaled = AABox(Vector3(1.0f, 1.0f, 1.0f), Vector3(2.0f, 3.0f, 4.0f))
+                           .getTransformed(ScaleRotationTranslationMatrix(
+                               Vector3(2.0f, 1.0f, 1.0f), Rotator::ZERO, Vector3::ZERO));
+  REQUIRE(scaled.minPoint.nearEqual(Vector3(2.0f, 1.0f, 1.0f)));
+  REQUIRE(scaled.maxPoint.nearEqual(Vector3(4.0f, 3.0f, 4.0f)));
+}
+
+TEST_CASE("chUtilities - RayCast") {
+  float distance = -1.0f;
+  const Ray alongX(Vector3(-5.0f, 0.5f, 0.5f), Vector3::FORWARD);
+
+  // Axis-aligned box.
+  const AABox unitBox(Vector3::ZERO, Vector3::UNIT);
+  REQUIRE(RayCast::box(alongX, unitBox, distance));
+  REQUIRE(distance == Approx(5.0f));
+  REQUIRE(alongX.getPoint(distance).nearEqual(Vector3(0.0f, 0.5f, 0.5f), 1e-5f));
+  REQUIRE_FALSE(RayCast::box(Ray(alongX.origin, Vector3::BACKWARD), unitBox, distance));
+  REQUIRE_FALSE(RayCast::box(Ray(Vector3(-5.0f, 2.0f, 0.5f), Vector3::FORWARD), unitBox,
+                             distance));
+  REQUIRE(RayCast::box(Ray(Vector3(0.5f, 0.5f, 0.5f), Vector3::UP), unitBox, distance));
+  REQUIRE(distance == 0.0f);
+
+  // Oriented box: turned 90 degrees around Z, its local Y now runs along world X.
+  const OrientedBox turnedBox(Vector3(10.0f, 0.0f, 0.0f), Vector3(1.0f, 2.0f, 3.0f),
+                              Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  REQUIRE(RayCast::orientedBox(Ray(Vector3::ZERO, Vector3::FORWARD), turnedBox, distance));
+  REQUIRE(distance == Approx(8.0f));
+  REQUIRE_FALSE(RayCast::orientedBox(Ray(Vector3(0.0f, 1.5f, 0.0f), Vector3::FORWARD),
+                                     turnedBox, distance));
+
+  // Sphere.
+  const Sphere ball(Vector3(10.0f, 0.0f, 0.0f), 2.0f);
+  REQUIRE(RayCast::sphere(Ray(Vector3::ZERO, Vector3::FORWARD), ball, distance));
+  REQUIRE(distance == Approx(8.0f));
+  REQUIRE(RayCast::sphere(Ray(Vector3(10.0f, 0.5f, 0.0f), Vector3::UP), ball, distance));
+  REQUIRE(distance == 0.0f);
+  REQUIRE_FALSE(RayCast::sphere(Ray(Vector3(0.0f, 3.0f, 0.0f), Vector3::FORWARD), ball,
+                                distance));
+  REQUIRE_FALSE(RayCast::sphere(Ray(Vector3::ZERO, Vector3::BACKWARD), ball, distance));
+
+  // Plane at height 2 facing up, hit from either side.
+  const Plane floor(Vector3::UP, 2.0f);
+  REQUIRE(RayCast::plane(Ray(Vector3::ZERO, Vector3::UP), floor, distance));
+  REQUIRE(distance == Approx(2.0f));
+  REQUIRE(RayCast::plane(Ray(Vector3(0.0f, 0.0f, 5.0f), Vector3::DOWN), floor, distance));
+  REQUIRE(distance == Approx(3.0f));
+  REQUIRE_FALSE(RayCast::plane(Ray(Vector3(0.0f, 0.0f, 5.0f), Vector3::UP), floor, distance));
+  REQUIRE_FALSE(RayCast::plane(Ray(Vector3::ZERO, Vector3::FORWARD), floor, distance));
+
+  // Triangle in the plane x = 5, hit from either side.
+  const Vector3 a(5.0f, -1.0f, -1.0f);
+  const Vector3 b(5.0f, 1.0f, -1.0f);
+  const Vector3 c(5.0f, 0.0f, 1.0f);
+  REQUIRE(RayCast::triangle(Ray(Vector3::ZERO, Vector3::FORWARD), a, b, c, distance));
+  REQUIRE(distance == Approx(5.0f));
+  REQUIRE(RayCast::triangle(Ray(Vector3::ZERO, Vector3::FORWARD), a, c, b, distance));
+  REQUIRE(RayCast::triangle(Ray(Vector3(10.0f, 0.0f, 0.0f), Vector3::BACKWARD), a, b, c,
+                            distance));
+  REQUIRE(distance == Approx(5.0f));
+  REQUIRE_FALSE(RayCast::triangle(Ray(Vector3(0.0f, 5.0f, 0.0f), Vector3::FORWARD), a, b, c,
+                                  distance));
+  REQUIRE_FALSE(RayCast::triangle(Ray(Vector3::ZERO, Vector3::BACKWARD), a, b, c, distance));
+}
+
+TEST_CASE("chUtilities - OrientedBox") {
+  REQUIRE(sizeof(OrientedBox) == 40);
+
+  // 2 long in X, turned 90 degrees around Z, so it spans y in [-2, 2] and x in [-1, 1].
+  const OrientedBox turned(Vector3::ZERO, Vector3(2.0f, 1.0f, 1.0f),
+                           Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  REQUIRE(turned.getAxis(0).nearEqual(Vector3::RIGHT, 1e-6f));
+  REQUIRE(ShapeOverlap::pointOrientedBox(Vector3(0.0f, 1.5f, 0.0f), turned));
+  REQUIRE_FALSE(ShapeOverlap::pointOrientedBox(Vector3(1.5f, 0.0f, 0.0f), turned));
+  REQUIRE(turned.getClosestPoint(Vector3(0.0f, 5.0f, 0.0f))
+              .nearEqual(Vector3(0.0f, 2.0f, 0.0f), 1e-5f));
+
+  REQUIRE(ShapeOverlap::sphereOrientedBox(Sphere(Vector3(0.0f, 3.0f, 0.0f), 1.1f), turned));
+  REQUIRE_FALSE(
+      ShapeOverlap::sphereOrientedBox(Sphere(Vector3(0.0f, 3.0f, 0.0f), 0.9f), turned));
+
+  // A cube turned 45 degrees reaches sqrt(2) from its center along X, where its AABox
+  // would also reach; at 2.5 from a unit cube the corner falls short, at 2.3 it enters.
+  const Quaternion yaw45(Rotator(0.0f, 45.0f, 0.0f));
+  const OrientedBox cube(Vector3::ZERO, Vector3::UNIT, Quaternion::IDENTITY);
+  const OrientedBox farDiamond(Vector3(2.5f, 0.0f, 0.0f), Vector3::UNIT, yaw45);
+  const OrientedBox nearDiamond(Vector3(2.3f, 0.0f, 0.0f), Vector3::UNIT, yaw45);
+  REQUIRE_FALSE(ShapeOverlap::orientedBoxOrientedBox(cube, farDiamond));
+  REQUIRE(ShapeOverlap::orientedBoxOrientedBox(cube, nearDiamond));
+  REQUIRE(ShapeOverlap::orientedBoxOrientedBox(nearDiamond, cube));
+
+  const AABox unitCube(-Vector3::UNIT, Vector3::UNIT);
+  REQUIRE_FALSE(ShapeOverlap::boxOrientedBox(unitCube, farDiamond));
+  REQUIRE(ShapeOverlap::boxOrientedBox(unitCube, nearDiamond));
+
+  // Two long bars crossed in an X, one above the other: apart when their heights do not
+  // meet, touching when they do.
+  const OrientedBox barA(Vector3::ZERO, Vector3(5.0f, 0.2f, 0.2f), yaw45);
+  const OrientedBox barB(Vector3(0.0f, 0.0f, 0.5f), Vector3(5.0f, 0.2f, 0.2f),
+                         Quaternion(Rotator(0.0f, -45.0f, 0.0f)));
+  const OrientedBox barC(Vector3(0.0f, 0.0f, 0.3f), Vector3(5.0f, 0.2f, 0.2f),
+                         Quaternion(Rotator(0.0f, -45.0f, 0.0f)));
+  REQUIRE_FALSE(ShapeOverlap::orientedBoxOrientedBox(barA, barB));
+  REQUIRE(ShapeOverlap::orientedBoxOrientedBox(barA, barC));
+
+  // Random pairs: the test must be symmetric, must say true when a corner of one box is
+  // inside the other, and false when their bounding spheres do not touch.
+  uint32 seed = 12345u;
+  const auto random = [&seed](float low, float high) {
+    seed = seed * 1664525u + 1013904223u;
+    return low + (high - low) * static_cast<float>(seed >> 8) / 16777216.0f;
+  };
+  const auto randomBox = [&random]() {
+    return OrientedBox(
+        Vector3(random(-3.0f, 3.0f), random(-3.0f, 3.0f), random(-3.0f, 3.0f)),
+        Vector3(random(0.2f, 2.0f), random(0.2f, 2.0f), random(0.2f, 2.0f)),
+        Quaternion(Rotator(random(-180.0f, 180.0f), random(-180.0f, 180.0f),
+                           random(-180.0f, 180.0f))));
+  };
+  const auto cornerInside = [](const OrientedBox& corners, const OrientedBox& target) {
+    for (int32 corner = 0; corner < 8; ++corner) {
+      const Vector3 point = corners.center +
+                            corners.getAxis(0) * (corner & 1 ? 1.0f : -1.0f) *
+                                corners.extent.x +
+                            corners.getAxis(1) * (corner & 2 ? 1.0f : -1.0f) *
+                                corners.extent.y +
+                            corners.getAxis(2) * (corner & 4 ? 1.0f : -1.0f) *
+                                corners.extent.z;
+      if (ShapeOverlap::pointOrientedBox(point, target)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (int32 pair = 0; pair < 2000; ++pair) {
+    const OrientedBox first = randomBox();
+    const OrientedBox second = randomBox();
+    const bool overlaps = ShapeOverlap::orientedBoxOrientedBox(first, second);
+    REQUIRE(overlaps == ShapeOverlap::orientedBoxOrientedBox(second, first));
+    if (cornerInside(first, second) || cornerInside(second, first)) {
+      REQUIRE(overlaps);
+    }
+    if (!ShapeOverlap::sphereSphere(Sphere(first.center, first.extent.magnitude()),
+                                    Sphere(second.center, second.extent.magnitude()))) {
+      REQUIRE_FALSE(overlaps);
+    }
+  }
+}
+
+TEST_CASE("chUtilities - Capsule") {
+  REQUIRE(sizeof(Capsule) == 28);
+
+  const Capsule standing(Vector3::ZERO, Vector3(0.0f, 0.0f, 10.0f), 1.0f);
+  REQUIRE(standing.getClosestAxisPoint(Vector3(3.0f, 0.0f, 5.0f)) ==
+          Vector3(0.0f, 0.0f, 5.0f));
+  REQUIRE(standing.getClosestAxisPoint(Vector3(0.0f, 0.0f, 20.0f)) == standing.end);
+
+  REQUIRE(ShapeOverlap::pointCapsule(Vector3(0.5f, 0.0f, 5.0f), standing));
+  REQUIRE_FALSE(ShapeOverlap::pointCapsule(Vector3(2.0f, 0.0f, 5.0f), standing));
+  REQUIRE(ShapeOverlap::pointCapsule(Vector3(0.0f, 0.0f, 10.9f), standing));
+  REQUIRE_FALSE(ShapeOverlap::pointCapsule(Vector3(0.0f, 0.0f, 11.1f), standing));
+
+  REQUIRE(ShapeOverlap::sphereCapsule(Sphere(Vector3(3.0f, 0.0f, 5.0f), 2.0f), standing));
+  REQUIRE_FALSE(
+      ShapeOverlap::sphereCapsule(Sphere(Vector3(3.0f, 0.0f, 5.0f), 1.9f), standing));
+
+  // Side by side, crossed and end to end.
+  const Capsule beside(Vector3(1.5f, 0.0f, 0.0f), Vector3(1.5f, 0.0f, 10.0f), 1.0f);
+  const Capsule apart(Vector3(2.5f, 0.0f, 0.0f), Vector3(2.5f, 0.0f, 10.0f), 1.0f);
+  const Capsule crossing(Vector3(-5.0f, 1.5f, 5.0f), Vector3(5.0f, 1.5f, 5.0f), 1.0f);
+  const Capsule aboveFar(Vector3(0.0f, 0.0f, 12.5f), Vector3(0.0f, 0.0f, 20.0f), 1.0f);
+  const Capsule aboveNear(Vector3(0.0f, 0.0f, 11.5f), Vector3(0.0f, 0.0f, 20.0f), 1.0f);
+  REQUIRE(ShapeOverlap::capsuleCapsule(standing, beside));
+  REQUIRE_FALSE(ShapeOverlap::capsuleCapsule(standing, apart));
+  REQUIRE(ShapeOverlap::capsuleCapsule(standing, crossing));
+  REQUIRE_FALSE(ShapeOverlap::capsuleCapsule(standing, aboveFar));
+  REQUIRE(ShapeOverlap::capsuleCapsule(standing, aboveNear));
+
+  // A capsule of zero length is a sphere.
+  const Capsule point(Vector3(0.0f, 0.0f, 12.0f), Vector3(0.0f, 0.0f, 12.0f), 1.0f);
+  REQUIRE(ShapeOverlap::capsuleCapsule(standing, point));
+
+  const Plane atFive(Vector3::UP, 5.0f);
+  REQUIRE(ShapeOverlap::capsulePlane(standing, atFive));
+  REQUIRE_FALSE(ShapeOverlap::capsulePlane(
+      Capsule(Vector3(0.0f, 0.0f, 6.5f), Vector3(0.0f, 0.0f, 10.0f), 1.0f), atFive));
+  REQUIRE(ShapeOverlap::capsulePlane(
+      Capsule(Vector3(0.0f, 0.0f, 6.5f), Vector3(0.0f, 0.0f, 10.0f), 2.0f), atFive));
+
+  REQUIRE(ShapeOverlap::spherePlane(Sphere(Vector3(0.0f, 0.0f, 6.0f), 1.0f), atFive));
+  REQUIRE_FALSE(ShapeOverlap::spherePlane(Sphere(Vector3(0.0f, 0.0f, 6.0f), 0.5f), atFive));
+}
+
+TEST_CASE("chUtilities - Frustum") {
+  REQUIRE(sizeof(Frustum) == 96);
+
+  // Orthographic with no view: x and y in [-10, 10], z (view forward) in [1, 100].
+  const Frustum box(OrthographicMatrix(10.0f, 10.0f, 1.0f, 100.0f));
+  for (const Plane& plane : box.planes) {
+    REQUIRE(plane.normal.magnitude() == Approx(1.0f));
+  }
+  REQUIRE(box.getPlane(FrustumSide::Near).normal.nearEqual(Vector3(0.0f, 0.0f, 1.0f)));
+
+  REQUIRE(ShapeOverlap::frustumPoint(box, Vector3(0.0f, 0.0f, 50.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(box, Vector3(0.0f, 0.0f, 0.5f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(box, Vector3(0.0f, 0.0f, 101.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(box, Vector3(11.0f, 0.0f, 50.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(box, Vector3(0.0f, -11.0f, 50.0f)));
+
+  REQUIRE(ShapeOverlap::frustumSphere(box, Sphere(Vector3(11.0f, 0.0f, 50.0f), 2.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumSphere(box, Sphere(Vector3(13.0f, 0.0f, 50.0f), 2.0f)));
+
+  REQUIRE(ShapeOverlap::frustumBox(
+      box, AABox(Vector3(9.0f, 0.0f, 50.0f), Vector3(12.0f, 1.0f, 51.0f))));
+  REQUIRE_FALSE(ShapeOverlap::frustumBox(
+      box, AABox(Vector3(12.0f, 0.0f, 50.0f), Vector3(14.0f, 1.0f, 51.0f))));
 }
 
 TEST_CASE("chUtilities - Utilities") {

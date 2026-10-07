@@ -54,6 +54,14 @@ class AABox
   NODISCARD FORCEINLINE constexpr Vector3
   getExtent() const noexcept;
 
+  /**
+   * Smallest box aligned with the world axes that holds this box after the matrix
+   * (scale, rotation and translation, no projection) moves it. Used to take local bounds
+   * to world space.
+   */
+  NODISCARD CH_UTILITY_EXPORT AABox
+  getTransformed(const Matrix4& matrix) const noexcept;
+
   FORCEINLINE constexpr void
   moveTo(const Vector3& center) noexcept;
 

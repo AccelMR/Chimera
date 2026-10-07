@@ -11,7 +11,7 @@
 #include "chBox.h"
 #include "chMath.h"
 #include "chMatrixHelpers.h"
-#include "chPlane.h"
+#include "chShapeOverlap.h"
 #include "chVector2.h"
 
 namespace chEngineSDK {
@@ -27,19 +27,6 @@ rotationFromView(const Matrix4& view)
                  view[0][1], view[1][1], view[2][1], 0.0f,
                  0.0f, 0.0f, 0.0f, 1.0f)
       .toQuaternion();
-}
-
-// With row vectors a point is inside when clip.w + sign * clip[column] >= 0, which reads
-// the columns of the view-projection matrix. Plane stores n . p = w, so d goes in negated.
-Plane
-frustumPlane(const Matrix4& viewProj, int32 column, float sign)
-{
-  const float a = viewProj[0][3] + sign * viewProj[0][column];
-  const float b = viewProj[1][3] + sign * viewProj[1][column];
-  const float c = viewProj[2][3] + sign * viewProj[2][column];
-  const float d = viewProj[3][3] + sign * viewProj[3][column];
-  const float invLength = 1.0f / Math::sqrt(a * a + b * b + c * c);
-  return Plane(a * invLength, b * invLength, c * invLength, -d * invLength);
 }
 
 } // namespace
@@ -310,80 +297,31 @@ Camera::calculateOrthographicMatrix()
 void
 Camera::extractFrustumPlanes()
 {
-  const Matrix4 viewProj = getViewProjectionMatrix();
-
-  m_frustumPlanes[0] = frustumPlane(viewProj, 0, 1.0f);  // Left
-  m_frustumPlanes[1] = frustumPlane(viewProj, 0, -1.0f); // Right
-  m_frustumPlanes[2] = frustumPlane(viewProj, 1, 1.0f);  // Bottom
-  m_frustumPlanes[3] = frustumPlane(viewProj, 1, -1.0f); // Top
-  m_frustumPlanes[5] = frustumPlane(viewProj, 2, -1.0f); // Far
-
-  // Depth starts at 0, not -w, so the near plane is clip.z >= 0 alone.
-  const float a = viewProj[0][2];
-  const float b = viewProj[1][2];
-  const float c = viewProj[2][2];
-  const float invLength = 1.0f / Math::sqrt(a * a + b * b + c * c);
-  m_frustumPlanes[4] =
-      Plane(a * invLength, b * invLength, c * invLength, -viewProj[3][2] * invLength);
+  m_frustum = Frustum(getViewProjectionMatrix());
 }
 
 /*
 */
 bool
-Camera::isPointInFrustum(const Vector3& point) const {
-  // Test against all 6 frustum planes
-  for (uint32 i = 0; i < 6; ++i) {
-    if (m_frustumPlanes[i].planeDot(point) < 0) {
-      return false;
-    }
-  }
-
-  return true;
+Camera::isPointInFrustum(const Vector3& point) const
+{
+  return ShapeOverlap::frustumPoint(m_frustum, point);
 }
 
 /*
 */
 bool
-Camera::isSphereInFrustum(const Vector3& center, float radius) const {
-  // Test against all 6 frustum planes
-  for (uint32 i = 0; i < 6; ++i) {
-    float distance = m_frustumPlanes[i].planeDot(center);
-    if (distance < -radius) {
-      return false;
-    }
-  }
-
-  return true;
+Camera::isSphereInFrustum(const Vector3& center, float radius) const
+{
+  return ShapeOverlap::frustumSphere(m_frustum, Sphere(center, radius));
 }
 
 /*
 */
 bool
-Camera::isBoxInFrustum(const AABox& box) const {
-  // For each plane
-  for (uint32 i = 0; i < 6; ++i) {
-    // Calculate the box's positive vertex (the vertex furthest in the direction of the normal)
-    Vector3 positiveVertex = box.minPoint;
-
-    if (m_frustumPlanes[i].normal.x >= 0) {
-      positiveVertex.x = box.maxPoint.x;
-    }
-
-    if (m_frustumPlanes[i].normal.y >= 0) {
-      positiveVertex.y = box.maxPoint.y;
-    }
-
-    if (m_frustumPlanes[i].normal.z >= 0) {
-      positiveVertex.z = box.maxPoint.z;
-    }
-
-    // If the positive vertex is outside the plane, the box is outside the frustum
-    if (m_frustumPlanes[i].planeDot(positiveVertex) < 0) {
-      return false;
-    }
-  }
-
-  return true;
+Camera::isBoxInFrustum(const AABox& box) const
+{
+  return ShapeOverlap::frustumBox(m_frustum, box);
 }
 
 /*

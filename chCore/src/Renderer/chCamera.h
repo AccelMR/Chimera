@@ -13,7 +13,7 @@
 #include "chVector3.h"
 #include "chQuaternion.h"
 #include "chMatrix4.h"
-#include "chPlane.h"
+#include "chFrustum.h"
 #include "chAngle.h"
 #include "chRotator.h"
 
@@ -316,6 +316,12 @@ public:
   NODISCARD bool
   isPointInFrustum(const Vector3& point) const;
 
+  NODISCARD FORCEINLINE const Frustum&
+  getFrustum() const noexcept
+  {
+    return m_frustum;
+  }
+
   /**
    * Check if a sphere is in the camera's view frustum
    *
@@ -399,7 +405,7 @@ private:
   Matrix4 m_viewMatrix;
   Matrix4 m_projectionMatrix;
 
-  // Frustum planes (left, right, top, bottom, near, far)
-  Array<Plane, 6> m_frustumPlanes;
+  // Planes of view * projection, rebuilt whenever either changes.
+  Frustum m_frustum;
 };
 } // namespace chEngineSDK
