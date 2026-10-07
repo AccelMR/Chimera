@@ -365,15 +365,15 @@ Camera::isBoxInFrustum(const AABox& box) const {
     // Calculate the box's positive vertex (the vertex furthest in the direction of the normal)
     Vector3 positiveVertex = box.minPoint;
 
-    if (m_frustumPlanes[i].x >= 0) {
+    if (m_frustumPlanes[i].normal.x >= 0) {
       positiveVertex.x = box.maxPoint.x;
     }
 
-    if (m_frustumPlanes[i].y >= 0) {
+    if (m_frustumPlanes[i].normal.y >= 0) {
       positiveVertex.y = box.maxPoint.y;
     }
 
-    if (m_frustumPlanes[i].z >= 0) {
+    if (m_frustumPlanes[i].normal.z >= 0) {
       positiveVertex.z = box.maxPoint.z;
     }
 

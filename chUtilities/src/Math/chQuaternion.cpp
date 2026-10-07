@@ -3,130 +3,46 @@
  * @file chQuaternion.cpp
  * @author AccelMR
  * @date 2022/03/29
- *   Quaternion file hold implementation of Quaternion externals.
+ * @brief Quaternion conversions from and to other rotation types.
  */
 /************************************************************************/
 
+/************************************************************************/
+/*
+ * Includes
+ */
+/************************************************************************/
 #include "chQuaternion.h"
 
-#include "chMatrix4.h"
 #include "chAngle.h"
+#include "chMatrix4.h"
 #include "chRotator.h"
-#include "chVector3.h"
-#include "chVector4.h"
 
 namespace chEngineSDK {
 
-// Static identity quaternion definition
-const Quaternion Quaternion::IDENTITY = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
-
 /*
- * Construct a quaternion from an axis and angle
  */
-Quaternion::Quaternion(const Vector3& axis, const Degree& angle) {
-  const float halfRad = 0.5f * angle.valueRadian();
-  float sinVal, cosVal;
-  Math::sinCos(halfRad, sinVal, cosVal);
-
-  // Use normalized axis to ensure proper quaternion creation
-  Vector3 normAxis = axis;
-  if (axis.sqrMagnitude() > Math::SMALL_NUMBER) {
-    normAxis = axis.getNormalized();
-  }
-
-  x = sinVal * normAxis.x;
-  y = sinVal * normAxis.y;
-  z = sinVal * normAxis.z;
-  w = cosVal;
-
-  diagnosticCheckNaN();
-}
-
-/*
- * Construct quaternion from Vector4
- */
-Quaternion::Quaternion(const Vector4& v4) : x(v4.x), y(v4.y), z(v4.z), w(v4.w) {
-  diagnosticCheckNaN();
-}
-
-/*
- * Convert quaternion to Rotator (Euler angles)
- */
-Rotator
-Quaternion::toRotator() const
+Quaternion::Quaternion(const Vector3& axis, const Degree& angle) noexcept
 {
-  diagnosticCheckNaN();
-
-  // Half the sine of the pitch. Close to +-0.5 the nose points straight up or down, where
-  // yaw and roll turn around the same axis and only their difference can be recovered.
-  const float pitchTest = z * x - w * y;
-  const float yawY = 2.0f * (w * z + x * y);
-  const float yawX = 1.0f - 2.0f * (y * y + z * z);
-
-  const float yaw = Math::atan2(yawY, yawX).valueDegree();
-
-  constexpr float kSingularityThreshold = 0.4999995f;
-  if (pitchTest < -kSingularityThreshold) {
-    const float roll = -yaw - 2.0f * Math::atan2(x, w).valueDegree();
-    return Rotator(-90.0f, yaw, Math::unwindDegrees(roll));
+  const float squareLength = axis.sqrMagnitude();
+  if (squareLength <= Math::SMALL_NUMBER) {
+    *this = IDENTITY;
+    return;
   }
 
-  if (pitchTest > kSingularityThreshold) {
-    const float roll = yaw - 2.0f * Math::atan2(x, w).valueDegree();
-    return Rotator(90.0f, yaw, Math::unwindDegrees(roll));
-  }
-
-  const float pitch = Math::asin(2.0f * pitchTest).valueDegree();
-  const float roll =
-      Math::atan2(-2.0f * (w * x + y * z), 1.0f - 2.0f * (x * x + y * y)).valueDegree();
-  return Rotator(pitch, yaw, roll);
+  float sinHalf;
+  float cosHalf;
+  Math::sinCos(0.5f * angle.valueRadian(), sinHalf, cosHalf);
+  const float scale = sinHalf * Math::invSqrt(squareLength);
+  x = axis.x * scale;
+  y = axis.y * scale;
+  z = axis.z * scale;
+  w = cosHalf;
 }
 
 /*
- * Rotate a vector by this quaternion
  */
-Vector3
-Quaternion::rotateVector(const Vector3& v) const {
-  const Vector3 q(x, y, z);
-  const Vector3 qCrossV(q.y * v.z - q.z * v.y,
-                        q.z * v.x - q.x * v.z,
-                        q.x * v.y - q.y * v.x);
-
-  const Vector3 qCrossQCrossV(q.y * qCrossV.z - q.z * qCrossV.y,
-                              q.z * qCrossV.x - q.x * qCrossV.z,
-                              q.x * qCrossV.y - q.y * qCrossV.x);
-
-  return Vector3(v.x + 2.0f * (w * qCrossV.x + qCrossQCrossV.x),
-                 v.y + 2.0f * (w * qCrossV.y + qCrossQCrossV.y),
-                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z)
-  );
-}
-
-/*
- * Rotate a vector by the inverse of this quaternion
- */
-Vector3
-Quaternion::unrotateVector(const Vector3& v) const {
-  // Apply rotation with conjugate quaternion (inverse for unit quaternions)
-  const Vector3 q(-x, -y, -z);
-
-  // Same algorithm as rotateVector but with negated x,y,z
-  const Vector3 qCrossV =
-      Vector3(q.y * v.z - q.z * v.y, q.z * v.x - q.x * v.z, q.x * v.y - q.y * v.x);
-
-  const Vector3 qCrossQCrossV =
-      Vector3(q.y * qCrossV.z - q.z * qCrossV.y, q.z * qCrossV.x - q.x * qCrossV.z,
-              q.x * qCrossV.y - q.y * qCrossV.x);
-
-  return Vector3(v.x + 2.0f * (w * qCrossV.x + qCrossQCrossV.x),
-                 v.y + 2.0f * (w * qCrossV.y + qCrossQCrossV.y),
-                 v.z + 2.0f * (w * qCrossV.z + qCrossQCrossV.z));
-}
-
-/*
- * Construct a quaternion from a rotator (Euler angles)
- */
-Quaternion::Quaternion(const Rotator& rotator)
+Quaternion::Quaternion(const Rotator& rotator) noexcept
 {
   float sp, cp, sy, cy, sr, cr;
   Math::sinCos(rotator.pitch.valueRadian() * 0.5f, sp, cp);
@@ -138,14 +54,11 @@ Quaternion::Quaternion(const Rotator& rotator)
   y = -cr * sp * cy - sr * cp * sy;
   z = cr * cp * sy - sr * sp * cy;
   w = cr * cp * cy + sr * sp * sy;
-
-  diagnosticCheckNaN();
 }
 
 /*
- * Construct a quaternion from a rotation matrix
  */
-Quaternion::Quaternion(const Matrix4& m)
+Quaternion::Quaternion(const Matrix4& m) noexcept
 {
   const float trace = m[0][0] + m[1][1] + m[2][2];
 
@@ -183,5 +96,33 @@ Quaternion::Quaternion(const Matrix4& m)
     y = (m[1][2] + m[2][1]) * invS;
     z = 0.25f * s;
   }
+}
+
+/*
+ */
+Rotator
+Quaternion::toRotator() const noexcept
+{
+  // Half the sine of the pitch. Close to +-0.5 the nose points straight up or down, where
+  // yaw and roll turn around the same axis and only their difference can be recovered.
+  const float pitchTest = z * x - w * y;
+  const float yawY = 2.0f * (w * z + x * y);
+  const float yawX = 1.0f - 2.0f * (y * y + z * z);
+  const float yaw = Math::atan2(yawY, yawX).valueDegree();
+
+  constexpr float kSingularityThreshold = 0.4999995f;
+  if (pitchTest < -kSingularityThreshold) {
+    const float roll = -yaw - 2.0f * Math::atan2(x, w).valueDegree();
+    return Rotator(-90.0f, yaw, Math::unwindDegrees(roll));
+  }
+  if (pitchTest > kSingularityThreshold) {
+    const float roll = yaw - 2.0f * Math::atan2(x, w).valueDegree();
+    return Rotator(90.0f, yaw, Math::unwindDegrees(roll));
+  }
+
+  const float pitch = Math::asin(2.0f * pitchTest).valueDegree();
+  const float roll =
+      Math::atan2(-2.0f * (w * x + y * z), 1.0f - 2.0f * (x * x + y * y)).valueDegree();
+  return Rotator(pitch, yaw, roll);
 }
 } // namespace chEngineSDK

@@ -3,32 +3,26 @@
  * @file chRotator.cpp
  * @author AccelMR
  * @date 2022/03/17
- *   Rotator Implementation file.
- * 
- * 
- * Coordinate system: X = forward, Y = right, Z = up, left-handed.
+ * @brief Rotator conversion to Quaternion.
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chRotator.h"
 
 #include "chQuaternion.h"
 
-
-
-namespace chEngineSDK{
-const Rotator Rotator::ZERO(0.0f, 0.0f, 0.0f);
+namespace chEngineSDK {
 
 /*
-*/
+ */
 Quaternion
-Rotator::toQuaternion() const
+Rotator::toQuaternion() const noexcept
 {
   return Quaternion(*this);
 }
-}
+} // namespace chEngineSDK

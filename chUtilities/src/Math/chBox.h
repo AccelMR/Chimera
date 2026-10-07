@@ -3,213 +3,162 @@
  * @file chBox.h
  * @author AccelMR
  * @date 2022/06/03
- *
- *   Box classes along the engine.
+ * @brief Axis-aligned box in 3D space.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
- /************************************************************************/
- /*
-  * Includes
-  */
- /************************************************************************/
- #include "chPrerequisitesUtilities.h"
-
-#include "chVector3.h"
-#include "chVector4.h"
-#include "chMatrix4.h"
-
-namespace chEngineSDK{
+/************************************************************************/
 /*
- * Description:
- *     Axis aligned box used to determine whether two entities are overlapping.
- *
- * Sample usage:
- *  AABox aabox(Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f));
- *
+ * Includes
+ */
+/************************************************************************/
+#include "chPrerequisitesUtilities.h"
+
+#include <type_traits>
+
+#include "chMath.h"
+#include "chVector3.h"
+
+namespace chEngineSDK {
+/**
+ * Holds a box aligned with the world axes, the cheapest bounds to build and to test.
  */
 class AABox
 {
  public:
- /*
-  *  Default constructor
-  */
+  /**
+   * Leaves the values uninitialized.
+   */
   AABox() = default;
 
-  /**
-   *    AABox constructor from min and max points.
-   *
-   * @param _min
-   *   Minimum point of this box.
-   *
-   * @param _max
-   *   Maximum point of this box;
-   *
-   * @return
-   **/
-  FORCEINLINE AABox(const Vector3& _min, const Vector3& _max);
+  FORCEINLINE constexpr
+  AABox(const Vector3& inMin, const Vector3& inMax) noexcept;
 
   /**
-   *   Creates and initializes a new box from an array of points.
-   *
-   * @param points
-   *    Vector of points to take in count to construct this Box.
-   **/
-  FORCEINLINE AABox(const Vector<Vector3>& points);
-
- /*
-  *  Default destructor
-  */
-  ~AABox() = default;
-
-  /**
-   *   Returns center point of this box.
-   **/
-  FORCEINLINE Vector3
-  getCenter() const;
-
-  /**
-   *   Returns the size of this box in each axis.
-   **/
-  FORCEINLINE Vector3
-  getSize() const;
-
-  /**
-   *   Returns the x, y, z distance from the center of the box
-   **/
-  FORCEINLINE Vector3
-  getExtent() const;
-
-  /**
-   *   Moves this box to a certain location.
-   *
-   * @param destination
-   *    Where to move this box.
-   **/
-  FORCEINLINE void
-  moveTo(const Vector3& destination);
-
-  /**
-   *   Shifts the bounding box position.
-   *
-   * @param offset
-   *   The offset to move this box.
-   **/
-  FORCEINLINE void
-  shiftBy(const Vector3& offset);
-
-  /**
-   *   Adds to this bounding box to include a given point.
-   *
-   * @param v
-   *    The point to increase the bounding volume to.
-   *
-   * @return
-   *   Reference to this bounding box after resizing to include the other point.
+   * Smallest box that holds every point. No points gives a box of size zero at the
+   * origin.
    */
-  FORCEINLINE AABox&
-  operator+=(const Vector3& v);
+  FORCEINLINE explicit
+  AABox(const Vector<Vector3>& points) noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector3
+  getCenter() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector3
+  getSize() const noexcept;
+
+  /**
+   * Half the size: the distance from the center to each face.
+   */
+  NODISCARD FORCEINLINE constexpr Vector3
+  getExtent() const noexcept;
+
+  FORCEINLINE constexpr void
+  moveTo(const Vector3& center) noexcept;
+
+  FORCEINLINE constexpr void
+  shiftBy(const Vector3& offset) noexcept;
+
+  /**
+   * Grows the box to hold point.
+   */
+  FORCEINLINE constexpr AABox&
+  operator+=(const Vector3& point) noexcept;
 
  public:
-
-  /*
-  * Holds the box's minimum point.
-  */
   Vector3 minPoint;
-
-  /*
-  * Holds the box's maximum point.
-  */
   Vector3 maxPoint;
-
 };
-}
+
+static_assert(std::is_trivially_copyable_v<AABox>);
+static_assert(sizeof(AABox) == 24);
 
 /************************************************************************/
 /*
- * Implementation.
+ * Implementation
  */
 /************************************************************************/
-namespace chEngineSDK{
 
 /*
-*/
-FORCEINLINE
-AABox::AABox(const Vector3& _min, const Vector3& _max)
-  : minPoint(_min),
-    maxPoint(_max)
+ */
+FORCEINLINE constexpr
+AABox::AABox(const Vector3& inMin, const Vector3& inMax) noexcept
+ : minPoint(inMin),
+   maxPoint(inMax)
 {}
 
 /*
-*/
+ */
 FORCEINLINE
-AABox::AABox(const Vector<Vector3>& points)
-  : minPoint(0.0f, 0.0f, 0.0f),
-    maxPoint(0.0f, 0.0f, 0.0f)
+AABox::AABox(const Vector<Vector3>& points) noexcept
+ : minPoint(Vector3::ZERO),
+   maxPoint(Vector3::ZERO)
 {
-  for (auto& Point: points) {
-    *this += Point;
+  if (points.empty()) {
+    return;
+  }
+
+  // Starting at the first point, not at zero, so the box does not reach the origin.
+  minPoint = points[0];
+  maxPoint = points[0];
+  for (const Vector3& point : points) {
+    *this += point;
   }
 }
 
 /*
-*/
-FORCEINLINE Vector3
-AABox::getCenter() const
+ */
+FORCEINLINE constexpr Vector3
+AABox::getCenter() const noexcept
 {
-  return Vector3((minPoint+maxPoint) * 0.5f);
+  return (minPoint + maxPoint) * 0.5f;
 }
 
 /*
-*/
-FORCEINLINE Vector3
-AABox::getSize() const
+ */
+FORCEINLINE constexpr Vector3
+AABox::getSize() const noexcept
 {
-  return (maxPoint - minPoint);
+  return maxPoint - minPoint;
 }
 
 /*
-*/
-FORCEINLINE Vector3
-AABox::getExtent() const
+ */
+FORCEINLINE constexpr Vector3
+AABox::getExtent() const noexcept
 {
-  return getSize() *.5f;
+  return getSize() * 0.5f;
 }
 
 /*
-*/
-FORCEINLINE void
-AABox::shiftBy(const Vector3& offset)
+ */
+FORCEINLINE constexpr void
+AABox::moveTo(const Vector3& center) noexcept
+{
+  shiftBy(center - getCenter());
+}
+
+/*
+ */
+FORCEINLINE constexpr void
+AABox::shiftBy(const Vector3& offset) noexcept
 {
   minPoint += offset;
   maxPoint += offset;
 }
 
 /*
-*/
-FORCEINLINE void
-AABox::moveTo(const Vector3& destination)
+ */
+FORCEINLINE constexpr AABox&
+AABox::operator+=(const Vector3& point) noexcept
 {
-  const Vector3 Offset = destination - getCenter();
-  minPoint += Offset;
-  maxPoint += Offset;
-}
-
-/*
-*/
-FORCEINLINE AABox&
-AABox::operator+=(const Vector3& v)
-{
-  minPoint.x = Math::min(minPoint.x, v.x);
-  minPoint.y = Math::min(minPoint.y, v.y);
-  minPoint.z = Math::min(minPoint.z, v.z);
-
-  maxPoint.x = Math::max(maxPoint.x, v.x);
-  maxPoint.y = Math::max(maxPoint.y, v.y);
-  maxPoint.z = Math::max(maxPoint.z, v.z);
-
+  minPoint.x = Math::min(minPoint.x, point.x);
+  minPoint.y = Math::min(minPoint.y, point.y);
+  minPoint.z = Math::min(minPoint.z, point.z);
+  maxPoint.x = Math::max(maxPoint.x, point.x);
+  maxPoint.y = Math::max(maxPoint.y, point.y);
+  maxPoint.z = Math::max(maxPoint.z, point.z);
   return *this;
 }
-
 } // namespace chEngineSDK

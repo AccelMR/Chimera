@@ -77,10 +77,10 @@ buildLookAt(const Vector3& eyePosition, const Vector3& lookAtPosition,
  */
 Matrix4::Matrix4(const Plane& row0, const Plane& row1, const Plane& row2,
                  const Plane& row3) noexcept
- : m_data{{row0.x, row0.y, row0.z, row0.w},
-          {row1.x, row1.y, row1.z, row1.w},
-          {row2.x, row2.y, row2.z, row2.w},
-          {row3.x, row3.y, row3.z, row3.w}}
+ : m_data{{row0.normal.x, row0.normal.y, row0.normal.z, row0.w},
+          {row1.normal.x, row1.normal.y, row1.normal.z, row1.w},
+          {row2.normal.x, row2.normal.y, row2.normal.z, row2.w},
+          {row3.normal.x, row3.normal.y, row3.normal.z, row3.w}}
 {}
 
 /*

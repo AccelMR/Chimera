@@ -3,427 +3,251 @@
  * @file chRotator.h
  * @author AccelMR
  * @date 2022/03/17
- *   Rotator Declaration file.
- * 
+ * @brief Rotation stored as pitch, yaw and roll in degrees.
  *
- * Coordinate system being X = front, Z = up, Y = right
+ * Coordinate system: X = forward, Y = right, Z = up, left-handed.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
-
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
+
+#include <type_traits>
 
 #include "chAngle.h"
 #include "chMath.h"
 
-namespace chEngineSDK{
-/*
- * Description: 
- *     Implements a container for 3 Degree values as rotation. 
+namespace chEngineSDK {
+/**
+ * Holds a rotation as Euler angles, the form people read and type in an editor. Positive
+ * pitch turns forward up, positive yaw turns it right, positive roll turns right down.
+ * Use Quaternion to compose rotations.
  *
- * Sample usage:
- *  Rotator r(90,90,90);
- *  r.normalize();
- *  Rotator r2 = r.getNormalized();
- *
+ * The class is not exported, only its functions that live in the .cpp, so ZERO is inline
+ * constexpr.
  */
-class CH_UTILITY_EXPORT Rotator
+class Rotator
 {
  public:
- /*
-  * @brief Default constructor
-  */
-  FORCEINLINE Rotator() = default;
+  /**
+   * Leaves the values uninitialized. Use Rotator::ZERO for no rotation.
+   */
+  Rotator() = default;
 
-  /** 
-   *   Constructor from degrees.
-   **/
-  FORCEINLINE Rotator(const Degree& _pitch, const Degree& _yaw, const Degree& _roll);
+  FORCEINLINE constexpr
+  Rotator(const Degree& inPitch, const Degree& inYaw, const Degree& inRoll) noexcept;
+
+  FORCEINLINE constexpr
+  Rotator(float inPitch, float inYaw, float inRoll) noexcept;
+
+  NODISCARD CH_UTILITY_EXPORT Quaternion
+  toQuaternion() const noexcept;
 
   /**
-   *   Constructor from floats as degree.
-   **/
-  FORCEINLINE Rotator(float _pitch, float _yaw, float _roll);
-
- /*
-  * @brief Default destructor
-  */
-  ~Rotator() = default;
-
-  /************************************************************************/
-  /*
-   * Methods.
-   */                                                                     
-  /************************************************************************/
-
-  /** 
-   *   Makes a diagnostic for this rotator. If any element in the rotator is 
-   *  NaN or non finite number then it'll throw a warning IF is in debug mode.
-   * 
-   * NOTE:  This checker executes ONLY in Debug mode. 
-   * 
-   * @param 
-   * 
-   * @return
-   **/
-  FORCEINLINE void 
-  diagnosticNaN() const;
-
-  /** 
-   *   Normalizes this Rotator.Removes all winding and creates the shortest 
-   *      route rotation.
-   *
-   **/
+   * Wraps every angle into [-180, 180].
+   */
   FORCEINLINE void
-  normalize();
+  normalize() noexcept;
 
-  /** 
-   *   Creates a new Rotator normalized from this one.
-   * 
-   * @return Rotator
-   *   The new rotator created from this.
-   **/
-  FORCEINLINE Rotator
-  getNormalized() const;
-
-  /** 
-   *   Modifies this rotator clamping each axis to 0 - 360.
-   **/
-  FORCEINLINE void 
-  denormalize();
-
-  /** 
-   *   Creates a new copy Rotator from this, and clamped the axis to 0 -360.
-   * 
-   * @return Rotator
-   *   A new rotator clamped from this rotator.
-   **/
-  FORCEINLINE Rotator
-  getDenormalized() const;
-
-  /** 
-   *   Compares Rotator against another rotator taking in count a threshold to be accepted.
-   * 
-   * @param r
-   *   The rotator to be compared against.
-   * 
-   * @param threshold
-   *   The number to be used in the comparative.
-   * 
-   * @return
-   **/
-  FORCEINLINE bool
-  nearEqual(const Rotator& r, const float threshold = Math::KINDA_SMALL_NUMBER) const;
-
-  /** 
-   *   Creates a new quaternion taking this rotator as in parameter.
-   * 
-   * @return Quaternion
-   *  New quaternion generated from this.
-   **/
-  Quaternion 
-  toQuaternion() const;
-
-  /************************************************************************/
-  /*
-   * Operator overloads.
-   */                                                                     
-  /************************************************************************/
-  
-  /** 
-   *   Comparator operator.
-   * 
-   * @param other
-   *  The other rotator to compare to.
-   * 
-   * @return bool
-   *  TRue if both Rotators are exactly the same.
-   **/
-  FORCEINLINE bool
-  operator==(const Rotator& other) const;
+  NODISCARD FORCEINLINE Rotator
+  getNormalized() const noexcept;
 
   /**
-   *   Get the result of adding a rotator to this.
-   * 
-   * @param R 
-   *  The other rotator.
-   * 
-   * @return
-   *  The result of adding a rotator to this.
+   * Wraps every angle into [0, 360).
    */
-  FORCEINLINE Rotator
-  operator+(const Rotator & R) const;
+  FORCEINLINE void
+  denormalize() noexcept;
+
+  NODISCARD FORCEINLINE Rotator
+  getDenormalized() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr bool
+  containsNaN() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr bool
+  nearEqual(const Rotator& other,
+            float tolerance = Math::KINDA_SMALL_NUMBER) const noexcept;
+
+  NODISCARD constexpr bool
+  operator==(const Rotator& other) const noexcept = default;
+
+  NODISCARD FORCEINLINE constexpr Rotator
+  operator+(const Rotator& other) const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Rotator
+  operator-(const Rotator& other) const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Rotator
+  operator*(float scalar) const noexcept;
+
+  FORCEINLINE constexpr Rotator&
+  operator*=(float scalar) noexcept;
 
   /**
-   * @brief Get the result of subtracting a rotator from this.
-   * 
-   * @param R 
-   *  The other rotator.
-   * 
-   * @return The result of subtracting a rotator from this.
+   * Wraps the angle into [0, 360).
    */
-  FORCEINLINE Rotator
-  operator-(const Rotator & R) const;
+  NODISCARD static FORCEINLINE Degree
+  clampAxis(const Degree& angle) noexcept;
 
   /**
-   * @brief Get the result of scaling this rotator.
-   * 
-   * @param Scale 
-   *  The scaling factor.
-   * 
-   * @return The result of scaling.
+   * Wraps the angle into [-180, 180].
    */
-  FORCEINLINE Rotator
-  operator*(float Scale) const;
-
-  /**
-   * @brief Multiply this rotator by a scaling factor.
-   * 
-   * @param Scale 
-   *  The scaling factor.
-   * 
-   * @return Copy of the rotator after scaling.
-   */
-  FORCEINLINE Rotator&
-  operator*=(float Scale);
-
-  /************************************************************************/
-  /*
-   * Static methods.
-   */                                                                     
-  /************************************************************************/
-
-  /** 
-   *   Clamps an angle to the range of [0, 360).
-   * 
-   * @param Angle
-   * Angle as degree.
-   * 
-   * @return Degree
-   *  The new generated Degree.
-   **/
-  static FORCEINLINE Degree
-  clampAxis(const Degree& angle);
-
-  /** 
-   *   Clamps an angle to the range of (-180, 180].
-   * 
-   * @param Angle
-   *  The angle to be clamped.
-   * 
-   * @return Degree
-   *  The new degree generated.
-   **/
-  static FORCEINLINE Degree
-  normalizeAxis(const Degree& angle);
-
- /** 
-  *   Checks if this rotator contains NaN.
-  * 
-  * @return bool
-  *    True if it does not contains NaN.
-  **/
-  FORCEINLINE bool 
-  checkIfNaN() const;
+  NODISCARD static FORCEINLINE Degree
+  normalizeAxis(const Degree& angle) noexcept;
 
  public:
- /**
-  * Rotation around the right axis (Y). Positive turns forward up.
-  */
-  Degree pitch;
-
- /**
-  * Rotation around the up axis (Z). Positive turns forward to the right.
-  */
-  Degree yaw;
-
- /**
-  * Rotation around the forward axis (X). Positive turns right down, clockwise when
-  * looking forward.
-  */
-  Degree roll;
-
-
- /**
-  * @brief A rotator of zero degrees on each axis.
-  */
   static const Rotator ZERO;
- 
+
+  Degree pitch;
+  Degree yaw;
+  Degree roll;
 };
-}
+
+static_assert(std::is_trivially_copyable_v<Rotator>);
+static_assert(sizeof(Rotator) == 12);
 
 /************************************************************************/
 /*
- * Implementation.
- */                                                                     
+ * Implementation
+ */
 /************************************************************************/
-namespace chEngineSDK{
 
 /*
-*/
-FORCEINLINE
-Rotator::Rotator(const Degree& _pitch, const Degree& _yaw, const Degree& _roll)
-  : pitch(_pitch), yaw(_yaw), roll(_roll)
-{
-  diagnosticNaN();
-}
+ */
+FORCEINLINE constexpr
+Rotator::Rotator(const Degree& inPitch, const Degree& inYaw, const Degree& inRoll) noexcept
+ : pitch(inPitch),
+   yaw(inYaw),
+   roll(inRoll)
+{}
 
 /*
-*/
-FORCEINLINE
-Rotator::Rotator(float _pitch, float _yaw, float _roll)
-  : pitch(_pitch), yaw(_yaw), roll(_roll)
-{
-  diagnosticNaN();
-}
+ */
+FORCEINLINE constexpr
+Rotator::Rotator(float inPitch, float inYaw, float inRoll) noexcept
+ : pitch(inPitch),
+   yaw(inYaw),
+   roll(inRoll)
+{}
+
+inline constexpr Rotator Rotator::ZERO{0.0f, 0.0f, 0.0f};
 
 /*
-*/
+ */
 FORCEINLINE void
-Rotator::diagnosticNaN() const
-{
-#if USING(CH_DEBUG_MODE)
-  if (checkIfNaN()) {
-    //Reset this Rotator
-    *const_cast<Rotator*>(this) = Rotator::ZERO;
-  }
-#endif // CH_DEBUG_MODE
-}
-
-/*
-*/
-FORCEINLINE bool
-Rotator::checkIfNaN() const
-{
-  return !Math::isFinite(pitch.valueDegree()) || 
-         !Math::isFinite(yaw.  valueDegree()) || 
-         !Math::isFinite(roll. valueDegree());
-}
-
-/*
-*/
-FORCEINLINE void
-Rotator::normalize()
+Rotator::normalize() noexcept
 {
   pitch = normalizeAxis(pitch);
   yaw = normalizeAxis(yaw);
   roll = normalizeAxis(roll);
-  diagnosticNaN();
 }
 
 /*
-*/
+ */
 FORCEINLINE Rotator
-Rotator::getNormalized() const
+Rotator::getNormalized() const noexcept
 {
-  Rotator ret = *this;
-  ret.normalize();
-  return ret;
+  return {normalizeAxis(pitch), normalizeAxis(yaw), normalizeAxis(roll)};
 }
 
 /*
-*/
+ */
 FORCEINLINE void
-Rotator::denormalize()
+Rotator::denormalize() noexcept
 {
   pitch = clampAxis(pitch);
   yaw = clampAxis(yaw);
   roll = clampAxis(roll);
-  diagnosticNaN();
 }
 
 /*
-*/
+ */
 FORCEINLINE Rotator
-Rotator::getDenormalized() const
+Rotator::getDenormalized() const noexcept
 {
-  Rotator ret = *this;
-  ret.denormalize();
-  return ret;
+  return {clampAxis(pitch), clampAxis(yaw), clampAxis(roll)};
 }
 
 /*
-*/
-FORCEINLINE bool
-Rotator::nearEqual( const Rotator &r, const float threshold /*= Math::KINDA_SMALL_NUMBER*/ ) const
+ */
+FORCEINLINE constexpr bool
+Rotator::containsNaN() const noexcept
 {
-  return (Math::abs(r.roll.valueDegree() - roll.valueDegree()) <= threshold)   &&
-         (Math::abs(r.pitch.valueDegree() - pitch.valueDegree()) <= threshold) &&
-         (Math::abs(r.yaw.valueDegree() - yaw.valueDegree()) <= threshold);
-}
-
-
-/*
-*/
-FORCEINLINE bool
-Rotator::operator==(const Rotator& other) const
-{
-  return nearEqual(other, 0.0f);
+  return !Math::isFinite(pitch.valueDegree()) || !Math::isFinite(yaw.valueDegree()) ||
+         !Math::isFinite(roll.valueDegree());
 }
 
 /*
-*/
-FORCEINLINE Rotator
-Rotator::operator+(const Rotator& R) const
+ */
+FORCEINLINE constexpr bool
+Rotator::nearEqual(const Rotator& other, float tolerance) const noexcept
 {
-  return Rotator(pitch + R.pitch, yaw + R.yaw, roll + R.roll);
+  return Math::abs(other.pitch.valueDegree() - pitch.valueDegree()) <= tolerance &&
+         Math::abs(other.yaw.valueDegree() - yaw.valueDegree()) <= tolerance &&
+         Math::abs(other.roll.valueDegree() - roll.valueDegree()) <= tolerance;
 }
 
 /*
-*/
-FORCEINLINE Rotator
-Rotator::operator-(const Rotator& R) const
+ */
+FORCEINLINE constexpr Rotator
+Rotator::operator+(const Rotator& other) const noexcept
 {
-  return Rotator(pitch - R.pitch, yaw - R.yaw, roll - R.roll);
+  return {pitch + other.pitch, yaw + other.yaw, roll + other.roll};
 }
 
 /*
-*/
-FORCEINLINE Rotator
-Rotator::operator*(float Scale) const
+ */
+FORCEINLINE constexpr Rotator
+Rotator::operator-(const Rotator& other) const noexcept
 {
-  return Rotator(pitch * Scale, yaw * Scale, roll * Scale);
+  return {pitch - other.pitch, yaw - other.yaw, roll - other.roll};
 }
 
 /*
-*/
-FORCEINLINE Rotator&
-Rotator::operator*=(float Scale)
+ */
+FORCEINLINE constexpr Rotator
+Rotator::operator*(float scalar) const noexcept
 {
-  pitch = pitch * Scale; 
-  yaw = yaw * Scale; 
-  roll = roll * Scale;
-  diagnosticNaN();
+  return {pitch * scalar, yaw * scalar, roll * scalar};
+}
+
+/*
+ */
+FORCEINLINE constexpr Rotator&
+Rotator::operator*=(float scalar) noexcept
+{
+  pitch *= scalar;
+  yaw *= scalar;
+  roll *= scalar;
   return *this;
 }
 
 /*
-*/
+ */
 FORCEINLINE Degree
-Rotator::clampAxis(const Degree& angle)
+Rotator::clampAxis(const Degree& angle) noexcept
 {
-  float ret = Math::fmod(angle.valueDegree(), 360.f);
-
-  if (0.f > ret) {
-    //shift to [0, 360) range
-    ret += 360.f;
+  float degrees = Math::fmod(angle.valueDegree(), 360.0f);
+  if (degrees < 0.0f) {
+    degrees += 360.0f;
+    // A tiny negative angle plus 360 rounds to exactly 360.
+    if (degrees >= 360.0f) {
+      degrees = 0.0f;
+    }
   }
-
-  return Degree(ret);
+  return Degree(degrees);
 }
 
 /*
-*/
+ */
 FORCEINLINE Degree
-Rotator::normalizeAxis(const Degree& angle)
+Rotator::normalizeAxis(const Degree& angle) noexcept
 {
   return Degree(Math::unwindDegrees(angle.valueDegree()));
 }
-
-}
+} // namespace chEngineSDK

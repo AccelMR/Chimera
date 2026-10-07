@@ -1,192 +1,152 @@
 /************************************************************************/
 /**
- * @file chSphereBox.h
+ * @file chSphereBoxBounds.h
  * @author AccelMR
  * @date 2022/06/10
- * @brief Sphere Box combination that will cover basic culling part.
- * 
- * NOTE: This file includes Box and Sphere, there's not need to include them again.
- * This could even end up bringing issues.
+ * @brief Bounds made of a box and a sphere that share a center.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <type_traits>
+
 #include "chBox.h"
+#include "chMath.h"
 #include "chSphere.h"
 
-namespace chEngineSDK{
-/*
- * Description: 
- *     SphereBoxBonds class is a mix of Sphere and Box that will handle the bondings
- * of an object.
- *
- * Sample usage:
- *
- * const SphereBoxBounds FromSphereBox(Vector3::UNIT, Vector3::UNIT * 5, 6.f);
- *
+namespace chEngineSDK {
+/**
+ * Holds a box and a sphere with the same center, so culling can run the cheap sphere
+ * test first and the tighter box test only when the sphere passes.
  */
 class SphereBoxBounds
 {
  public:
- /*
-  *  Default constructor
-  */
+  /**
+   * Leaves the values uninitialized.
+   */
   SphereBoxBounds() = default;
 
-  /** 
-   *   Constructor from a center, extent and radius.
-   * 
-   * @param _center
-   *   Center where both box and 3D box are.
-   * 
-   * @param _extent
-   *   Extent of the 3D box, which is the x, y, z size from center to each side.
-   * 
-   * @param _radius
-   *   Radius of the inner sphere.
-   **/
-  FORCEINLINE SphereBoxBounds(const Vector3& _center, const Vector3& _extent, float _radius);
-
-  /** 
-   *   Creates a Sphere-box from a set of points. This will cover all of them.
-   * 
-   * @param points
-   *   Dynamic array of points.
-   * 
-   * @return
-   **/
-  FORCEINLINE SphereBoxBounds(const Vector<Vector3>& points);
-
-  /** 
-   *   Constructor from a aabox and sphere.
-   **/
-  FORCEINLINE SphereBoxBounds(const AABox& aabox, const Sphere& sphere);
-
-  /** 
-   *   Constructs a Sphere-box from a 3DBox and sets radius as extent of the box.
-   * 
-   * @param aabox
-   * The Aabox to be taken.
-   **/
-  FORCEINLINE SphereBoxBounds(const AABox& aabox);
-
-  /** 
-   *   Constructor from a sphere.
-   */
-  FORCEINLINE SphereBoxBounds(const Sphere& sphere);
+  FORCEINLINE constexpr
+  SphereBoxBounds(const Vector3& inCenter, const Vector3& inBoxExtent,
+                  float inSphereRadius) noexcept;
 
   /**
-   *   Gets the bounding box.
-   * 
-   * @return 
-   *  The bounding box.
+   * Box around the points and the smallest sphere with the same center that holds them.
    */
-  FORCEINLINE AABox
-  getBox() const;
-  
+  FORCEINLINE explicit
+  SphereBoxBounds(const Vector<Vector3>& points) noexcept;
+
   /**
-   *    Gets the bounding sphere.
-   * @return 
-   *   The bounding sphere.
+   * Takes the center and extent of the box; the radius is the smaller of the box's
+   * half diagonal and what the sphere needs to reach from that center.
    */
-  FORCEINLINE Sphere
-  getSphere() const;
+  FORCEINLINE
+  SphereBoxBounds(const AABox& box, const Sphere& sphere) noexcept;
 
- /*
-  * @brief Default destructor
-  */
-  ~SphereBoxBounds() = default;
+  FORCEINLINE explicit
+  SphereBoxBounds(const AABox& box) noexcept;
 
+  FORCEINLINE explicit constexpr
+  SphereBoxBounds(const Sphere& sphere) noexcept;
+
+  NODISCARD FORCEINLINE constexpr AABox
+  getBox() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Sphere
+  getSphere() const noexcept;
 
  public:
   Vector3 center;
   Vector3 boxExtent;
   float sphereRadius;
- 
 };
 
+static_assert(std::is_trivially_copyable_v<SphereBoxBounds>);
+static_assert(sizeof(SphereBoxBounds) == 28);
+
+/************************************************************************/
 /*
-*/
-FORCEINLINE
-SphereBoxBounds::SphereBoxBounds(const Vector3& _center, const Vector3& _extent, float _radius)
-  : center(_center),
-    boxExtent(_extent),
-    sphereRadius(_radius)
+ * Implementation
+ */
+/************************************************************************/
+
+/*
+ */
+FORCEINLINE constexpr
+SphereBoxBounds::SphereBoxBounds(const Vector3& inCenter, const Vector3& inBoxExtent,
+                                 float inSphereRadius) noexcept
+ : center(inCenter),
+   boxExtent(inBoxExtent),
+   sphereRadius(inSphereRadius)
 {}
 
 /*
-*/
+ */
 FORCEINLINE
-SphereBoxBounds::SphereBoxBounds(const Vector<Vector3>& points)
+SphereBoxBounds::SphereBoxBounds(const Vector<Vector3>& points) noexcept
 {
-  AABox BoundingBox(Vector3::ZERO, Vector3::UNIT);
+  const AABox box(points);
+  center = box.getCenter();
+  boxExtent = box.getExtent();
 
-  for (const auto &point : points) {
-    BoundingBox += point;
+  float maxSquareDistance = 0.0f;
+  for (const Vector3& point : points) {
+    maxSquareDistance = Math::max(maxSquareDistance, point.sqrDistance(center));
   }
-
-  center = BoundingBox.getCenter();
-  boxExtent = BoundingBox.getExtent();
-  sphereRadius = 0.f;
-
-  for (const auto& point : points) {
-    sphereRadius = Math::max(sphereRadius, (point - center).magnitude());
-  }
+  sphereRadius = Math::sqrt(maxSquareDistance);
 }
 
 /*
-*/
+ */
 FORCEINLINE
-SphereBoxBounds::SphereBoxBounds(const AABox& aabox, const Sphere& sphere)
+SphereBoxBounds::SphereBoxBounds(const AABox& box, const Sphere& sphere) noexcept
+ : center(box.getCenter()),
+   boxExtent(box.getExtent())
 {
-  center = aabox.getCenter();
-  boxExtent = aabox.getExtent();
-  sphereRadius = Math::min(boxExtent.magnitude(),
-                           (sphere.center - center).magnitude() + sphere.radius);
+  sphereRadius =
+      Math::min(boxExtent.magnitude(), sphere.center.distance(center) + sphere.radius);
 }
 
 /*
-*/
+ */
 FORCEINLINE
-SphereBoxBounds::SphereBoxBounds(const AABox& aabox)
+SphereBoxBounds::SphereBoxBounds(const AABox& box) noexcept
+ : center(box.getCenter()),
+   boxExtent(box.getExtent())
 {
-  center = aabox.getCenter();
-  boxExtent = aabox.getExtent();
   sphereRadius = boxExtent.magnitude();
 }
 
 /*
-*/
-FORCEINLINE
-SphereBoxBounds::SphereBoxBounds(const Sphere& sphere) 
-  : center(sphere.center),
-    boxExtent(Vector3(sphere.radius, sphere.radius, sphere.radius)),
-    sphereRadius(sphere.radius)
+ */
+FORCEINLINE constexpr
+SphereBoxBounds::SphereBoxBounds(const Sphere& sphere) noexcept
+ : center(sphere.center),
+   boxExtent(sphere.radius, sphere.radius, sphere.radius),
+   sphereRadius(sphere.radius)
+{}
+
+/*
+ */
+FORCEINLINE constexpr AABox
+SphereBoxBounds::getBox() const noexcept
 {
+  return {center - boxExtent, center + boxExtent};
 }
 
 /*
-*/
-FORCEINLINE AABox
-SphereBoxBounds::getBox() const
+ */
+FORCEINLINE constexpr Sphere
+SphereBoxBounds::getSphere() const noexcept
 {
-  return AABox(center - boxExtent, center + boxExtent);
+  return {center, sphereRadius};
 }
-
-/*
-*/
-FORCEINLINE Sphere
-SphereBoxBounds::getSphere() const
-{
-  return Sphere(center, sphereRadius);
-}
-
-}
-
+} // namespace chEngineSDK

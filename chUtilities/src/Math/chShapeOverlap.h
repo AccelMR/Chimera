@@ -60,8 +60,9 @@ class ShapeOverlap
     const Vector3 extent = box.maxPoint - center;
 
     // Half the size of the box projected on the plane normal.
-    const float radius = extent.x * Math::abs(plane.x) + extent.y * Math::abs(plane.y) +
-                         extent.z * Math::abs(plane.z);
+    const float radius = extent.x * Math::abs(plane.normal.x) +
+                         extent.y * Math::abs(plane.normal.y) +
+                         extent.z * Math::abs(plane.normal.z);
 
     return Math::abs(plane.planeDot(center)) <= radius;
   }

@@ -3,11 +3,9 @@
  * @file chPlane.h
  * @author AccelMR
  * @date 2022/06/09
- * @brief   Way to represent three dimensional planes.
- *
- *  Three dimensional plane.
+ * @brief Infinite plane in 3D space.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
@@ -17,131 +15,103 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <type_traits>
+
 #include "chVector3.h"
 
-namespace chEngineSDK{
-/*
- * Description:
- *     This class stores the coefficients as Xx+Yy+Zz=W.
- * NOTE: This is different from many other Plane classes that use Xx+Yy+Zz+W=0.
+namespace chEngineSDK {
+/**
+ * Holds a plane as the points p where normal . p = w. This differs from the common
+ * normal . p + d = 0: w is -d. With a unit normal, w is the distance from the origin
+ * along the normal.
  *
- * Sample usage:
- *
+ * The normal is a member, not a base class, so a plane is never taken for a point.
  */
-class Plane : public Vector3
+class Plane
 {
  public:
- /*
-  * @brief Default constructor
-  */
-  FORCEINLINE Plane() = default;
-
   /**
-   *   Constructor from a vector 4.
-   *
-   * @param v
-   *  Vector to construct this plane
-   **/
-  Plane(const Vector4& v);
-
-  /**
-   *   Constructor from 4 components.
-   *
-   * @param _x
-   *   X component.
-   *
-   * @param _y
-   *   Y component.
-   *
-   * @param _z
-   *   Z component.
-   *
-   * @param _w
-   *   W component.
-   **/
-  FORCEINLINE Plane(float _x, float _y, float _z, float _w);
-
-  /**
-   *   Construct from a normal and a point
-   *
-   * @param  point
-   *   Any point inside the plane.
-   *
-   * @param normal
-   *   Normal direction of the plane.
-   **/
-  FORCEINLINE Plane(const Vector3& point, const Vector3& normal);
-
-  /**
-   *   Constructor from three points that will create a plane.
-   *
-   * @param p1
-   *   First point to take in count.
-   *
-   * @param p2
-   *   Second point to take in count.
-   *
-   * @param p3
-   *   Third point to take in count.
-   *
-   * @return
-   **/
-  FORCEINLINE Plane(const Vector3& p1, const Vector3& p2, const Vector3& p3);
-
- /*
-  * @brief Default destructor
-  */
-  ~Plane() = default;
-
-
-  /**
-   *     Calculates distance between plane and a point.
-   *
-   * @param P
-   *   The other point.
-   * @return
-   *   >0: point is in front of the plane, <0: behind, =0: on the plane.
+   * Leaves the values uninitialized.
    */
-  FORCEINLINE float
-  planeDot(const Vector3& p) const;
+  Plane() = default;
+
+  FORCEINLINE constexpr
+  Plane(const Vector3& inNormal, float inW) noexcept;
+
+  FORCEINLINE constexpr
+  Plane(float normalX, float normalY, float normalZ, float inW) noexcept;
+
+  /**
+   * Plane through point with the given normal, which should be unit length.
+   */
+  FORCEINLINE constexpr
+  Plane(const Vector3& point, const Vector3& inNormal) noexcept;
+
+  /**
+   * Plane through three points; the normal is (p2 - p1) x (p3 - p1), made unit length.
+   * Points on one line give a zero normal.
+   */
+  FORCEINLINE
+  Plane(const Vector3& p1, const Vector3& p2, const Vector3& p3) noexcept;
+
+  /**
+   * Signed distance from point to the plane when the normal is unit length: positive on
+   * the side the normal points to.
+   */
+  NODISCARD FORCEINLINE constexpr float
+  planeDot(const Vector3& point) const noexcept;
 
  public:
-
- float w;
-
+  Vector3 normal;
+  float w;
 };
 
+static_assert(std::is_trivially_copyable_v<Plane>);
+static_assert(sizeof(Plane) == 16);
+
+/************************************************************************/
 /*
-*/
-FORCEINLINE
-Plane::Plane(float _x, float _y, float _z, float _w)
-  : Vector3(_x, _y, _z),
-    w(_w)
+ * Implementation
+ */
+/************************************************************************/
+
+/*
+ */
+FORCEINLINE constexpr
+Plane::Plane(const Vector3& inNormal, float inW) noexcept
+ : normal(inNormal),
+   w(inW)
 {}
 
 /*
-*/
-FORCEINLINE
-Plane::Plane(const Vector3& point, const Vector3& normal)
-  : Vector3(normal),
-    w(point.dot(normal))
+ */
+FORCEINLINE constexpr
+Plane::Plane(float normalX, float normalY, float normalZ, float inW) noexcept
+ : normal(normalX, normalY, normalZ),
+   w(inW)
 {}
 
 /*
-*/
-FORCEINLINE
-Plane::Plane(const Vector3& p1, const Vector3& p2, const Vector3& p3)
-  :   Vector3((p2 - p1).cross((p3 - p1)).getNormalized())
-{
-  w = p1.dot(Vector3(*this));
-}
+ */
+FORCEINLINE constexpr
+Plane::Plane(const Vector3& point, const Vector3& inNormal) noexcept
+ : normal(inNormal),
+   w(point.dot(inNormal))
+{}
 
 /*
-*/
-FORCEINLINE float
-Plane::planeDot(const Vector3& p) const
-{
-  return x * p.x + y * p.y + z * p.z - w;
-}
+ */
+FORCEINLINE
+Plane::Plane(const Vector3& p1, const Vector3& p2, const Vector3& p3) noexcept
+ : normal((p2 - p1).cross(p3 - p1).getNormalized()),
+   w(p1.dot(normal))
+{}
 
+/*
+ */
+FORCEINLINE constexpr float
+Plane::planeDot(const Vector3& point) const noexcept
+{
+  return normal.dot(point) - w;
 }
+} // namespace chEngineSDK

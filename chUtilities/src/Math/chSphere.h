@@ -3,9 +3,9 @@
  * @file chSphere.h
  * @author AccelMR
  * @date 2022/06/10
- * @brief This is the geometry representation of a 3D sphere.
+ * @brief Sphere in 3D space.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
@@ -15,86 +15,86 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <type_traits>
+
+#include "chMath.h"
 #include "chVector3.h"
 
-namespace chEngineSDK{
-/*
- * Description:
- *     3D Sphere representation.
- * For overlap tests see ShapeOverlap.
- *
- * Sample usage:
- *
- *  const Vector<Vector3> ArrayPoints = {
- *    {-100.0f, -1.0f, 1.0f}, {7.0f, 8.0f, -2.0f}, {1.0f, 1.1f, 1.6f},
- *    {7.0f, 10.0f, 22.0f}, {4.0f, 2.0f, 1.0f}, {6.0f, 3.1f, 22.6f},
- *    {-99.0f, -1.0f, 1.0f}, {7.0f, 8.0f, -2.0f}, {1.0f, 1.1f, 1.6f},
- *    {7.0f, 10.0f, 22.0f}, {4.0f, 2.0f, 1.0f}, {6.0f, 3.1f, 22.6f}
- *  };
- *
- *  const Sphere FromPoints(ArrayPoints);
+namespace chEngineSDK {
+/**
+ * Holds a sphere, the bounds whose overlap tests cost one squared distance and that
+ * stay the same when the object rotates. For overlap tests see ShapeOverlap.
  */
 class Sphere
 {
  public:
- /*
-  * @brief Default constructor
-  */
+  /**
+   * Leaves the values uninitialized.
+   */
   Sphere() = default;
 
-  /**
-   *   Constructor that takes a center and a radius.
-   *
-   * @param center
-   *    The center point where this sphere is in a 3D world.
-   *
-   * @param _radius
-   *    The radius of this sphere.
-   **/
-  FORCEINLINE Sphere(const Vector3& _center, float _radius);
+  FORCEINLINE constexpr
+  Sphere(const Vector3& inCenter, float inRadius) noexcept;
 
   /**
-   *   Constructor from a radius. Center of the sphere will be (0, 0, 0).
-   *
-   * @param _radius
-   *   The radius of this sphere.
-   **/
-  FORCEINLINE explicit Sphere(float _radius);
-
-  /**
-   *   Constructs a Sphere around a given array of 3D points.
-   *
-   * @param points
-   *    Vector array of Vector3 points.
-   **/
-  CH_UTILITY_EXPORT Sphere(const Vector<Vector3>& points);
-
- /*
-  * @brief Default destructor
-  */
-  ~Sphere() = default;
-
+   * Sphere centered on the box around the points that holds every point. Not the
+   * smallest possible sphere, but close and cheap. No points gives radius zero at the
+   * origin.
+   */
+  FORCEINLINE explicit
+  Sphere(const Vector<Vector3>& points) noexcept;
 
  public:
   Vector3 center;
   float radius;
 };
 
+static_assert(std::is_trivially_copyable_v<Sphere>);
+static_assert(sizeof(Sphere) == 16);
+
+/************************************************************************/
 /*
-*/
-FORCEINLINE
-Sphere::Sphere(const Vector3& _center, float _radius)
-  : center(_center),
-    radius(_radius)
+ * Implementation
+ */
+/************************************************************************/
+
+/*
+ */
+FORCEINLINE constexpr
+Sphere::Sphere(const Vector3& inCenter, float inRadius) noexcept
+ : center(inCenter),
+   radius(inRadius)
 {}
 
 /*
-*/
+ */
 FORCEINLINE
-Sphere::Sphere(float _radius)
-  : center(Vector3::ZERO),
-    radius(_radius)
-{}
+Sphere::Sphere(const Vector<Vector3>& points) noexcept
+ : center(Vector3::ZERO),
+   radius(0.0f)
+{
+  if (points.empty()) {
+    return;
+  }
 
+  Vector3 minPoint = points[0];
+  Vector3 maxPoint = points[0];
+  for (const Vector3& point : points) {
+    minPoint.x = Math::min(minPoint.x, point.x);
+    minPoint.y = Math::min(minPoint.y, point.y);
+    minPoint.z = Math::min(minPoint.z, point.z);
+    maxPoint.x = Math::max(maxPoint.x, point.x);
+    maxPoint.y = Math::max(maxPoint.y, point.y);
+    maxPoint.z = Math::max(maxPoint.z, point.z);
+  }
+  center = (minPoint + maxPoint) * 0.5f;
 
+  float maxSquareDistance = 0.0f;
+  for (const Vector3& point : points) {
+    maxSquareDistance = Math::max(maxSquareDistance, point.sqrDistance(center));
+  }
+
+  // A little larger, so the farthest point stays inside after the rounding of sqrt.
+  radius = Math::sqrt(maxSquareDistance) * 1.001f;
 }
+} // namespace chEngineSDK

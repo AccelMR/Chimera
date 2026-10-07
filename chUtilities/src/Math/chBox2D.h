@@ -3,152 +3,154 @@
  * @file chBox2D.h
  * @author AccelMR
  * @date 2022/06/10
- * @brief Holds any 2D Box representation.
+ * @brief Axis-aligned rectangle in 2D space.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
+#include <type_traits>
+
+#include "chMath.h"
 #include "chVector2.h"
 
-namespace chEngineSDK{
-/*
- * Description: 
- *     2D Box representation.
- *
- * Sample usage:
- *
- *  const Box2D UnityBox(Vector2::ZERO, Vector2::UNIT);
+namespace chEngineSDK {
+/**
+ * Holds a rectangle aligned with the axes, for screen areas and 2D bounds.
  */
 class Box2D
 {
  public:
- /*
-  * @brief Default constructor
-  */
+  /**
+   * Leaves the values uninitialized.
+   */
   Box2D() = default;
 
-  /** 
-   *   Constructs Box2D by a minimum and maximum point.
-   * 
-   * @param _minPoint
-   *   Minimum point.
-   * 
-   * @param _maxPoint
-   *   Maximum point.
-   **/
-  FORCEINLINE Box2D(const Vector2& _minPoint, const Vector2& _maxPoint);
-
-  /** 
-   *    Constructs a Box2D that will cover a set of given points.
-   * 
-   * @param points
-   *   Dynamic array of points.
-   **/
-  CH_UTILITY_EXPORT Box2D(const Vector<Vector2>& points);
-
- /*
-  * @brief Default destructor
-  */
-  ~Box2D() = default;
-
-  /** 
-   *   Returns the center point of this 2D Box.
-   **/
-  FORCEINLINE Vector2
-  getCenter() const;
-
-  /** 
-   *   Returns a Vector2 with the X, Y sizeof this 2D Box.
-   **/
-  FORCEINLINE Vector2
-  getSize() const;
-
-  /** 
-   *   Returns the extent of this box around the center.
-   * 
-   **/
-  FORCEINLINE Vector2
-  getExtent() const;
+  FORCEINLINE constexpr
+  Box2D(const Vector2& inMin, const Vector2& inMax) noexcept;
 
   /**
-   *    Adds to this bounding box to include a given point.
-   * 
-   * @param Other 
-   *   The point to increase the bounding volume to.
-   * 
-   * @return 
-   *   Reference to this bounding box after resizing to include the other point.
+   * Smallest rectangle that holds every point. No points gives a rectangle of size zero
+   * at the origin.
    */
-  FORCEINLINE Box2D&
-  operator+=(const Vector2 &Other);
+  FORCEINLINE explicit
+  Box2D(const Vector<Vector2>& points) noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector2
+  getCenter() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector2
+  getSize() const noexcept;
 
   /**
-   *   Clamps a Box2D to another Box2D.
-   *  If the Box2D is outside the other Box2D, it will be resized to fit within.
-   * 
-   * @param other
-   *  Box2D to clamp to.
+   * Half the size: the distance from the center to each edge.
    */
-  void
-  clamp(const Box2D& other);
+  NODISCARD FORCEINLINE constexpr Vector2
+  getExtent() const noexcept;
+
+  /**
+   * Moves both corners inside other, so this rectangle ends up within it.
+   */
+  FORCEINLINE constexpr void
+  clamp(const Box2D& other) noexcept;
+
+  /**
+   * Grows the rectangle to hold point.
+   */
+  FORCEINLINE constexpr Box2D&
+  operator+=(const Vector2& point) noexcept;
 
  public:
-
   Vector2 minPoint;
   Vector2 maxPoint;
- 
 };
 
+static_assert(std::is_trivially_copyable_v<Box2D>);
+static_assert(sizeof(Box2D) == 16);
+
+/************************************************************************/
 /*
-*/
-FORCEINLINE
-Box2D::Box2D(const Vector2& _minPoint, const Vector2& _maxPoint)
-  : minPoint(_minPoint),
-    maxPoint(_maxPoint)
+ * Implementation
+ */
+/************************************************************************/
+
+/*
+ */
+FORCEINLINE constexpr
+Box2D::Box2D(const Vector2& inMin, const Vector2& inMax) noexcept
+ : minPoint(inMin),
+   maxPoint(inMax)
 {}
 
 /*
-*/
-FORCEINLINE Box2D &
-Box2D::operator+=(const Vector2& Other)
+ */
+FORCEINLINE
+Box2D::Box2D(const Vector<Vector2>& points) noexcept
+ : minPoint(Vector2::ZERO),
+   maxPoint(Vector2::ZERO)
 {
-  minPoint.x = Math::min(minPoint.x, Other.x);
-  minPoint.y = Math::min(minPoint.y, Other.y);
-  maxPoint.x = Math::max(maxPoint.x, Other.x);
-  maxPoint.y = Math::max(maxPoint.y, Other.y);
+  if (points.empty()) {
+    return;
+  }
+
+  // Starting at the first point, not at zero, so the rectangle does not reach the origin.
+  minPoint = points[0];
+  maxPoint = points[0];
+  for (const Vector2& point : points) {
+    *this += point;
+  }
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Box2D::getCenter() const noexcept
+{
+  return (minPoint + maxPoint) * 0.5f;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Box2D::getSize() const noexcept
+{
+  return maxPoint - minPoint;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Box2D::getExtent() const noexcept
+{
+  return getSize() * 0.5f;
+}
+
+/*
+ */
+FORCEINLINE constexpr void
+Box2D::clamp(const Box2D& other) noexcept
+{
+  minPoint.x = Math::clamp(minPoint.x, other.minPoint.x, other.maxPoint.x);
+  minPoint.y = Math::clamp(minPoint.y, other.minPoint.y, other.maxPoint.y);
+  maxPoint.x = Math::clamp(maxPoint.x, other.minPoint.x, other.maxPoint.x);
+  maxPoint.y = Math::clamp(maxPoint.y, other.minPoint.y, other.maxPoint.y);
+}
+
+/*
+ */
+FORCEINLINE constexpr Box2D&
+Box2D::operator+=(const Vector2& point) noexcept
+{
+  minPoint.x = Math::min(minPoint.x, point.x);
+  minPoint.y = Math::min(minPoint.y, point.y);
+  maxPoint.x = Math::max(maxPoint.x, point.x);
+  maxPoint.y = Math::max(maxPoint.y, point.y);
   return *this;
 }
-
-/*
-*/
-FORCEINLINE Vector2
-Box2D::getCenter() const
-{
-  return Vector2((minPoint + maxPoint) * 0.5f);
-}
-
-/*
-*/
-FORCEINLINE Vector2
-Box2D::getSize() const
-{
-  return (maxPoint - minPoint);
-}
-
-/*
-*/
-FORCEINLINE Vector2
-Box2D::getExtent() const
-{
-  return getSize() * .5f;
-}
-
-}
-
+} // namespace chEngineSDK

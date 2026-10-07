@@ -592,10 +592,17 @@ TEST_CASE("chUtilities - Vector4") {
  */
 /************************************************************************/
 TEST_CASE("chUtilities - Rotator") {
-  REQUIRE(sizeof(Rotator) == Approx(12.0f));
+  REQUIRE(sizeof(Rotator) == 12);
+  static_assert(Rotator::ZERO == Rotator(0.0f, 0.0f, 0.0f));
 
-  Rotator ShouldTriggerWarning((float)NAN, (float)NAN, (float)NAN);
-  // REQUIRE(ShouldTriggerWarning.checkIfNaN()); //Rotator fixes itself when running as debug.
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(Rotator(nan, 0.0f, 0.0f).containsNaN());
+  REQUIRE(Rotator(0.0f, 0.0f, nan).containsNaN());
+  REQUIRE_FALSE(Rotator(10.0f, 20.0f, 30.0f).containsNaN());
+
+  // A tiny negative angle plus 360 rounds to exactly 360, which is outside [0, 360).
+  REQUIRE(Rotator::clampAxis(Degree(-1.0e-8f)).valueDegree() == 0.0f);
+  REQUIRE(Rotator::clampAxis(Degree(-90.0f)).valueDegree() == 270.0f);
 
   REQUIRE(Rotator::normalizeAxis(Degree(545.0f)).valueDegree() == Approx(-175.0f));
   REQUIRE(Rotator::normalizeAxis(Degree(720.0f)).valueDegree() == Approx(0.0f));
@@ -893,12 +900,9 @@ TEST_CASE("chUtilities - Matrix4") {
 TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(sizeof(Quaternion) == 4 * 4);
 
-  Quaternion quaternionDefault;
-  REQUIRE(quaternionDefault.x == 0.0f);
-  REQUIRE(quaternionDefault.y == 0.0f);
-  REQUIRE(quaternionDefault.z == 0.0f);
-  REQUIRE(quaternionDefault.w == 1.0f);
-  REQUIRE(quaternionDefault == Quaternion::IDENTITY);
+  // The default constructor leaves the values uninitialized on purpose; no rotation is
+  // IDENTITY.
+  static_assert(Quaternion::IDENTITY == Quaternion(0.0f, 0.0f, 0.0f, 1.0f));
 
   // Positive pitch turns forward up, positive yaw turns it right, positive roll turns
   // right down, the same as RotationMatrix.
@@ -952,23 +956,26 @@ TEST_CASE("chUtilities - Quaternion") {
   REQUIRE(nonUnit.nearEqual(normalized));
   REQUIRE(normalized.length() == Approx(1.0f));
 
-  // Debug builds turn a NaN quaternion back into IDENTITY.
-  Quaternion Qnan((float)NAN, 0.0f, 0.0f, (float)NAN);
+  // Too short to normalize: normalize refuses, getNormalized gives IDENTITY.
+  Quaternion tiny(1.0e-4f, 0.0f, 0.0f, 0.0f);
+  REQUIRE_FALSE(tiny.normalize());
+  REQUIRE(tiny == Quaternion(1.0e-4f, 0.0f, 0.0f, 0.0f));
+  REQUIRE(tiny.getNormalized() == Quaternion::IDENTITY);
+
+  // An axis of length zero has no direction to turn around.
+  REQUIRE(Quaternion(Vector3::ZERO, Degree(90.0f)) == Quaternion::IDENTITY);
+  // The axis does not need to be unit length.
+  REQUIRE(Quaternion(Vector3::RIGHT * 5.0f, Degree(90.0f)).nearEqual(axisAngleQuat, 1e-6f));
+
+  REQUIRE(Quaternion(std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 1.0f).containsNaN());
+  REQUIRE_FALSE(Quaternion::IDENTITY.containsNaN());
+
+  static_assert(Quaternion::IDENTITY.rotateVector(Vector3::FORWARD) == Vector3::FORWARD);
 
   const Vector3 Right = quatYaw90.rotateVector(Vector3::FORWARD);
   const Vector3 Backwards = quatYaw90.rotateVector(Right);
+  REQUIRE(Right.nearEqual(Vector3::RIGHT, Math::KINDA_SMALL_NUMBER));
   REQUIRE(Backwards.nearEqual(-Vector3::FORWARD, Math::KINDA_SMALL_NUMBER));
-
-  Quaternion testQuat(1.0f, 2.0f, 3.0f, 4.0f);
-  REQUIRE(testQuat[0] == 1.0f);
-  REQUIRE(testQuat[1] == 2.0f);
-  REQUIRE(testQuat[2] == 3.0f);
-  REQUIRE(testQuat[3] == 4.0f);
-
-  testQuat[0] = 5.0f;
-  testQuat[1] = 6.0f;
-  REQUIRE(testQuat.x == 5.0f);
-  REQUIRE(testQuat.y == 6.0f);
 
   Quaternion unitQuat = Quaternion::IDENTITY;
   REQUIRE(unitQuat.squaredLength() == Approx(1.0f));
@@ -1016,8 +1023,10 @@ TEST_CASE("chUtilities - Quaternion") {
   Vector3 unrotated = arbitrary.unrotateVector(arbitrary.rotateVector(originalVec));
   REQUIRE(unrotated.nearEqual(originalVec, Math::SMALL_NUMBER));
 
-  Quaternion fromVec4(Vector4(0.0f, 0.0f, 0.707106769f, 0.707106769f));
-  REQUIRE(fromVec4.nearEqual(quatYaw90, 1e-6f));
+  // rotateVector must match the rotation matrix of the same quaternion.
+  const Matrix4 arbitraryMatrix = RotationMatrix(arbitrary.toRotator());
+  REQUIRE(xyzOf(arbitraryMatrix.transformVector(originalVec))
+              .nearEqual(arbitrary.rotateVector(originalVec), 1e-4f));
 }
 
 /**********************************************************************/
@@ -1055,6 +1064,30 @@ TEST_CASE("chUtilities - AABox") {
   const AABox FromPoints(ArrayPoints);
   REQUIRE(FromPoints.minPoint == Vector3(-1.0f, -1.0f, -2.0f));
   REQUIRE(FromPoints.maxPoint == Vector3(7.0f, 12.0f, 22.6f));
+
+  // Points away from the origin: the box used to start at zero and always reach it.
+  const Vector<Vector3> FarPoints = {{100.0f, 200.0f, 300.0f}, {110.0f, 205.0f, 301.0f}};
+  const AABox FarBox2(FarPoints);
+  REQUIRE(FarBox2.minPoint == Vector3(100.0f, 200.0f, 300.0f));
+  REQUIRE(FarBox2.maxPoint == Vector3(110.0f, 205.0f, 301.0f));
+
+  const AABox EmptyBox(Vector<Vector3>{});
+  REQUIRE(EmptyBox.minPoint == Vector3::ZERO);
+  REQUIRE(EmptyBox.maxPoint == Vector3::ZERO);
+
+  const SphereBoxBounds FarBounds(FarPoints);
+  REQUIRE(FarBounds.center == Vector3(105.0f, 202.5f, 300.5f));
+  REQUIRE(FarBounds.boxExtent == Vector3(5.0f, 2.5f, 0.5f));
+  REQUIRE(FarBounds.sphereRadius == Approx(Vector3(5.0f, 2.5f, 0.5f).magnitude()));
+
+  const Sphere FarSphere(FarPoints);
+  REQUIRE(FarSphere.center == Vector3(105.0f, 202.5f, 300.5f));
+  REQUIRE(ShapeOverlap::pointSphere(FarPoints[0], FarSphere));
+  REQUIRE(ShapeOverlap::pointSphere(FarPoints[1], FarSphere));
+
+  const Box2D FarRect(Vector<Vector2>{{100.0f, 200.0f}, {110.0f, 205.0f}});
+  REQUIRE(FarRect.minPoint == Vector2(100.0f, 200.0f));
+  REQUIRE(FarRect.maxPoint == Vector2(110.0f, 205.0f));
 }
 
 TEST_CASE("chUtilities - Plane") {
@@ -1066,6 +1099,18 @@ TEST_CASE("chUtilities - Plane") {
 
   REQUIRE(DistanceToZero < 0);
   REQUIRE(DistanceToThree > 0);
+
+  // Plane stores normal . p = w, so a plane at height 1 facing up has w = 1.
+  REQUIRE(plane1.normal == Vector3::UP);
+  REQUIRE(plane1.w == 1.0f);
+  REQUIRE(plane1.planeDot(Vector3(5.0f, -3.0f, 4.0f)) == 3.0f);
+  static_assert(Plane(Vector3::UP, 2.0f).planeDot(Vector3::ZERO) == -2.0f);
+
+  // Three points: the normal is (p2 - p1) x (p3 - p1), made unit length.
+  const Plane fromPoints(Vector3(0.0f, 0.0f, 2.0f), Vector3(1.0f, 0.0f, 2.0f),
+                         Vector3(0.0f, 1.0f, 2.0f));
+  REQUIRE(fromPoints.normal == Vector3::UP);
+  REQUIRE(fromPoints.w == 2.0f);
 
   const AABox Aabox(Vector3::ZERO, Vector3::UNIT);
   const Plane Plane2AABoxTrue(Vector3::UNIT * .5f, Vector3::RIGHT);
