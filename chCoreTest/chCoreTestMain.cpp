@@ -13,12 +13,15 @@
 #include "chAngle.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
+#include "chITexture.h"
+#include "chITextureView.h"
 #include "chMath.h"
 #include "chMesh.h"
 #include "chModel.h"
 #include "chModelComponent.h"
 #include "chQuaternion.h"
 #include "chRay.h"
+#include "chRenderGraph.h"
 #include "chRotator.h"
 #include "chScene.h"
 #include "chShapeOverlap.h"
@@ -441,5 +444,283 @@ TEST_CASE("chCore - Scene render items")
     const SPtr<GameObject> other = scene.createGameObject("Other");
     other->addComponent<ModelComponent>(createTriangleModel());
     REQUIRE(scene.getRenderItemCount() == 1);
+  }
+}
+
+namespace {
+
+// Stands in for a swap chain image: the graph only reads its description.
+class FakeTexture : public ITexture
+{
+ public:
+  FakeTexture(Format format, uint32 width, uint32 height)
+    : m_format(format),
+      m_width(width),
+      m_height(height)
+  {}
+
+  NODISCARD TextureType
+  getType() const override { return TextureType::Texture2D; }
+
+  NODISCARD Format
+  getFormat() const override { return m_format; }
+
+  NODISCARD uint32
+  getWidth() const override { return m_width; }
+
+  NODISCARD uint32
+  getHeight() const override { return m_height; }
+
+  NODISCARD uint32
+  getDepth() const override { return 1; }
+
+  NODISCARD uint32
+  getMipLevels() const override { return 1; }
+
+  NODISCARD uint32
+  getArrayLayers() const override { return 1; }
+
+  NODISCARD uint32
+  getBindlessIndex() const override { return GraphicsLimits::INVALID_BINDLESS_INDEX; }
+
+  NODISCARD SPtr<ITextureView>
+  createView(const TextureViewCreateInfo& createInfo) override
+  {
+    CH_PARAMETER_UNUSED(createInfo);
+    return nullptr;
+  }
+
+  void
+  uploadData(const void* data, SIZE_T size) override
+  {
+    CH_PARAMETER_UNUSED(data);
+    CH_PARAMETER_UNUSED(size);
+  }
+
+ private:
+  Format m_format;
+  uint32 m_width;
+  uint32 m_height;
+};
+
+class FakeTextureView : public ITextureView
+{
+ public:
+  NODISCARD Format
+  getFormat() const override { return Format::Unknown; }
+
+  NODISCARD TextureViewType
+  getViewType() const override { return TextureViewType::View2D; }
+
+  NODISCARD uint32
+  getBaseMipLevel() const override { return 0; }
+
+  NODISCARD uint32
+  getMipLevelCount() const override { return 1; }
+
+  NODISCARD uint32
+  getBaseArrayLayer() const override { return 0; }
+
+  NODISCARD uint32
+  getArrayLayerCount() const override { return 1; }
+
+  NODISCARD uint32
+  getBindlessIndex() const override { return GraphicsLimits::INVALID_BINDLESS_INDEX; }
+};
+
+bool
+hasBarrier(Span<const RGBarrier> barriers,
+           RGTextureHandle texture,
+           ResourceState before,
+           ResourceState after)
+{
+  for (const RGBarrier& barrier : barriers) {
+    if (barrier.texture == texture && barrier.before == before && barrier.after == after) {
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
+TEST_CASE("chCore - RenderGraph")
+{
+  const FakeTexture backBuffer(Format::B8G8R8A8_UNORM, 64, 32);
+  const FakeTextureView backBufferView;
+  const RGTextureDesc colorDesc{
+      .format = Format::R16G16B16A16_SFLOAT, .width = 64, .height = 32};
+  const RGTextureDesc depthDesc{.format = Format::D32_SFLOAT, .width = 64, .height = 32};
+
+  RenderGraph graph;
+  const auto importBackBuffer = [&]() {
+    return graph.importTexture("BackBuffer", backBuffer, backBufferView,
+                               ResourceState::Undefined, ResourceState::Present);
+  };
+
+  SECTION("Forward pass and UI over it")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    REQUIRE(graph.getTextureDesc(output).width == 64);
+    const RGTextureHandle depth = graph.createTexture("Depth", depthDesc);
+    graph.addPass("Forward").writeColor(output).writeDepth(depth);
+    graph.addPass("UI").writeColor(output, LoadOp::Load);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 2);
+    REQUIRE(graph.getCompiledPassName(0) == "Forward");
+    REQUIRE(graph.getCompiledPassName(1) == "UI");
+
+    const Span<const RGBarrier> forward = graph.getCompiledPassBarriers(0);
+    REQUIRE(forward.size() == 2);
+    REQUIRE(
+        hasBarrier(forward, output, ResourceState::Undefined, ResourceState::RenderTarget));
+    REQUIRE(hasBarrier(forward, depth, ResourceState::Undefined, ResourceState::DepthWrite));
+
+    // Writing again in the same state still waits for the first pass.
+    const Span<const RGBarrier> ui = graph.getCompiledPassBarriers(1);
+    REQUIRE(ui.size() == 1);
+    REQUIRE(hasBarrier(ui, output, ResourceState::RenderTarget, ResourceState::RenderTarget));
+
+    const Span<const RGBarrier> finalBarriers = graph.getFinalBarriers();
+    REQUIRE(finalBarriers.size() == 1);
+    REQUIRE(hasBarrier(finalBarriers, output, ResourceState::RenderTarget,
+                       ResourceState::Present));
+
+    REQUIRE(graph.getTextureSlot(output) == RenderGraph::INVALID_INDEX);
+    REQUIRE(graph.getTextureSlot(depth) == 0);
+    REQUIRE(graph.getTextureUsage(depth) == TextureUsage::DepthStencil);
+    REQUIRE(graph.getTransientSlotCount() == 1);
+  }
+
+  SECTION("Passes nobody needs are dropped")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle unused = graph.createTexture("Unused", colorDesc);
+    graph.addPass("Unused").writeColor(unused);
+    graph.addPass("Overwritten").writeColor(output);
+    graph.addPass("Final").writeColor(output, LoadOp::Clear);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 1);
+    REQUIRE(graph.getCompiledPassName(0) == "Final");
+    REQUIRE(graph.getTextureSlot(unused) == RenderGraph::INVALID_INDEX);
+    REQUIRE(graph.getTransientSlotCount() == 0);
+  }
+
+  SECTION("Side effects and loads keep passes")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle capture = graph.createTexture("Capture", colorDesc);
+    graph.addPass("Capture").writeColor(capture).setSideEffect();
+    graph.addPass("Base").writeColor(output);
+    graph.addPass("Overlay").writeColor(output, LoadOp::Load);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 3);
+  }
+
+  SECTION("A texture read by a later pass")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle color = graph.createTexture("Color", colorDesc);
+    const RGTextureHandle depth = graph.createTexture("Depth", depthDesc);
+    graph.addPass("Scene").writeColor(color).writeDepth(depth);
+    graph.addPass("Resolve").read(color).read(depth).writeColor(output);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 2);
+    const Span<const RGBarrier> resolve = graph.getCompiledPassBarriers(1);
+    REQUIRE(
+        hasBarrier(resolve, color, ResourceState::RenderTarget, ResourceState::ShaderRead));
+    REQUIRE(hasBarrier(resolve, depth, ResourceState::DepthWrite, ResourceState::DepthRead));
+    REQUIRE(graph.getTextureUsage(color) ==
+            (TextureUsageFlags(TextureUsage::ColorAttachment) | TextureUsage::Sampled));
+  }
+
+  SECTION("Dead textures give their slot to new ones")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle first = graph.createTexture("First", colorDesc);
+    const RGTextureHandle second = graph.createTexture("Second", colorDesc);
+    const RGTextureHandle third = graph.createTexture("Third", colorDesc);
+    const RGTextureHandle half = graph.createTexture(
+        "Half", {.format = colorDesc.format, .width = 32, .height = 16});
+    graph.addPass("A").writeColor(first);
+    graph.addPass("B").read(first).writeColor(second);
+    graph.addPass("C").read(second).writeColor(third);
+    graph.addPass("D").read(third).writeColor(half);
+    graph.addPass("E").read(half).writeColor(output);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 5);
+    REQUIRE(graph.getTextureSlot(first) == 0);
+    REQUIRE(graph.getTextureSlot(second) == 1);
+    // First died in B, so Third (same description and usage) takes its slot in C.
+    REQUIRE(graph.getTextureSlot(third) == 0);
+    // Another size never shares.
+    REQUIRE(graph.getTextureSlot(half) == 2);
+    REQUIRE(graph.getTransientSlotCount() == 3);
+
+    // The slot keeps the state First left it in.
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(2), third, ResourceState::ShaderRead,
+                       ResourceState::RenderTarget));
+  }
+
+  SECTION("Imported textures")
+  {
+    const FakeTexture history(Format::R16G16B16A16_SFLOAT, 64, 32);
+    const FakeTextureView historyView;
+
+    SECTION("Without a final state, passes that only write it are dropped")
+    {
+      const RGTextureHandle scratch =
+          graph.importTexture("Scratch", history, historyView, ResourceState::ShaderRead,
+                              ResourceState::Undefined);
+      graph.addPass("Write").writeColor(scratch);
+      graph.compile();
+      REQUIRE(graph.getCompiledPassCount() == 0);
+      REQUIRE(graph.getFinalBarriers().empty());
+    }
+
+    SECTION("Untouched, it still reaches its final state")
+    {
+      const RGTextureHandle output = importBackBuffer();
+      graph.compile();
+      REQUIRE(graph.getCompiledPassCount() == 0);
+      REQUIRE(hasBarrier(graph.getFinalBarriers(), output, ResourceState::Undefined,
+                         ResourceState::Present));
+    }
+
+    SECTION("Already in its final state, no barrier")
+    {
+      const RGTextureHandle kept =
+          graph.importTexture("History", history, historyView, ResourceState::ShaderRead,
+                              ResourceState::ShaderRead);
+      const RGTextureHandle output = importBackBuffer();
+      graph.addPass("Use").read(kept).writeColor(output);
+      graph.compile();
+      REQUIRE(graph.getCompiledPassBarriers(0).size() == 1);
+      REQUIRE(graph.getFinalBarriers().size() == 1);
+    }
+  }
+
+  SECTION("Reset frees the pass code and the graph builds again")
+  {
+    const SPtr<int32> counter = chMakeShared<int32>(0);
+    for (int32 frame = 0; frame < 3; ++frame) {
+      graph.reset();
+      const RGTextureHandle output = importBackBuffer();
+      graph.addPass("Forward").writeColor(output).setExecute(
+          [counter](RenderPassContext& context) {
+            CH_PARAMETER_UNUSED(context);
+            ++*counter;
+          });
+      REQUIRE(counter.use_count() == 2);
+      graph.compile();
+      REQUIRE(graph.getCompiledPassCount() == 1);
+    }
+    graph.reset();
+    REQUIRE(counter.use_count() == 1);
   }
 }

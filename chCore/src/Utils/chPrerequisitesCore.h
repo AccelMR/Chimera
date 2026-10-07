@@ -17,9 +17,6 @@
 
 #include "chFwdDeclCore.h"
 
-#define INVALID_INDEX -1
-#define INVALID_UNSIGNED_INDEX 0xFFFFFFFF
-
 #ifdef CH_EDITOR_ENABLED
 # define CH_EDITOR IN_USE
 #else

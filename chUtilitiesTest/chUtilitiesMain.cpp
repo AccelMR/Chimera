@@ -22,6 +22,7 @@
 #include "chFileSystem.h"
 #include "chFrustum.h"
 #include "chHash.h"
+#include "chLinearAllocator.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -2569,4 +2570,61 @@ TEST_CASE("chUtilities - HashUtils")
   int32 first = 0;
   int32 second = 0;
   REQUIRE(HashUtils::combine(seed, &first) != HashUtils::combine(seed, &second));
+}
+
+TEST_CASE("chUtilities - LinearAllocator")
+{
+  LinearAllocator allocator(256);
+
+  SECTION("Alignment and order")
+  {
+    void* first = allocator.allocate(3, 1);
+    void* aligned = allocator.allocate(8, 64);
+    REQUIRE(reinterpret_cast<SIZE_T>(aligned) % 64 == 0);
+    REQUIRE(aligned > first);
+    REQUIRE(allocator.getBlockCount() == 1);
+  }
+
+  SECTION("Big requests get their own block and blocks are kept by reset")
+  {
+    REQUIRE(allocator.allocate(100) != nullptr);
+    void* big = allocator.allocate(1000, 16);
+    REQUIRE(reinterpret_cast<SIZE_T>(big) % 16 == 0);
+    REQUIRE(allocator.getBlockCount() == 2);
+    const SIZE_T capacity = allocator.getCapacity();
+    REQUIRE(capacity >= 256 + 1000);
+
+    for (int32 frame = 0; frame < 3; ++frame) {
+      allocator.reset();
+      REQUIRE(allocator.allocate(100) != nullptr);
+      REQUIRE(allocator.allocate(1000, 16) != nullptr);
+    }
+    REQUIRE(allocator.getBlockCount() == 2);
+    REQUIRE(allocator.getCapacity() == capacity);
+  }
+
+  SECTION("Reset destroys objects, newest first")
+  {
+    Vector<int32> destroyed;
+    struct Tracked
+    {
+      Tracked(Vector<int32>& log, int32 id) : m_log(log), m_id(id) {}
+      ~Tracked() { m_log.push_back(m_id); }
+      Vector<int32>& m_log;
+      int32 m_id;
+    };
+
+    const Tracked* first = allocator.create<Tracked>(destroyed, 1);
+    const Tracked* second = allocator.create<Tracked>(destroyed, 2);
+    const int32* plain = allocator.create<int32>(7);
+    REQUIRE(first->m_id == 1);
+    REQUIRE(second->m_id == 2);
+    REQUIRE(*plain == 7);
+
+    allocator.reset();
+    REQUIRE(destroyed == Vector<int32>{2, 1});
+
+    allocator.reset();
+    REQUIRE(destroyed.size() == 2);
+  }
 }
