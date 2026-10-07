@@ -53,6 +53,23 @@ class Algorithm
   }
 
   /**
+   * Erases the first element for which matches returns true.
+   *
+   * @return false if no element matched.
+   */
+  template<typename Container, typename Predicate>
+  static FORCEINLINE bool
+  removeFirstIf(Container& container, Predicate matches)
+  {
+    const auto it = std::find_if(container.begin(), container.end(), matches);
+    if (it == container.end()) {
+      return false;
+    }
+    container.erase(it);
+    return true;
+  }
+
+  /**
    * Erases every element equal to value.
    *
    * @return How many elements were erased.

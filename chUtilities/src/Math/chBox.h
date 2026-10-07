@@ -74,6 +74,12 @@ class AABox
   FORCEINLINE constexpr AABox&
   operator+=(const Vector3& point) noexcept;
 
+  /**
+   * Grows the box to hold other.
+   */
+  FORCEINLINE constexpr AABox&
+  operator+=(const AABox& other) noexcept;
+
  public:
   Vector3 minPoint;
   Vector3 maxPoint;
@@ -168,5 +174,14 @@ AABox::operator+=(const Vector3& point) noexcept
   maxPoint.y = Math::max(maxPoint.y, point.y);
   maxPoint.z = Math::max(maxPoint.z, point.z);
   return *this;
+}
+
+/*
+ */
+FORCEINLINE constexpr AABox&
+AABox::operator+=(const AABox& other) noexcept
+{
+  *this += other.minPoint;
+  return *this += other.maxPoint;
 }
 } // namespace chEngineSDK

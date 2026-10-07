@@ -11,45 +11,33 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chScene.h"
-
 namespace chEngineSDK {
 
-struct SceneNodeUIData {
-  SPtr<GameObject> gameObject;
-  bool isExpanded = false;
-};
-
-class SceneGraphUI {
+/**
+ * Editor window that shows the GameObject hierarchy of the active scene, selects objects
+ * and creates or deletes them. It reads the scene every frame, so it never shows a stale
+ * tree.
+ */
+class SceneGraphUI
+{
  public:
-  SceneGraphUI();
-  ~SceneGraphUI();
+  SceneGraphUI() = default;
 
-  /**
-   * @brief Main rendering function for the scene graph window
-   */
   void
   renderSceneGraphUI();
 
  private:
+  void
+  renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject);
 
   void
-  buildSceneGraphData(const Vector<SPtr<GameObject>>& rootGameObjects);
+  renderEmptyAreaContextMenu(Scene& scene);
 
-  void
-  handleEmptyAreaContextMenu();
-
-  void
-  renderEmptyAreaContextMenu();
-
-  void
-  handleContextMenuForGameObject(const SPtr<GameObject>& gameObject);
-
- private:
-  // UI state
   bool m_isVisible = true;
-  SPtr<Scene> m_currentScene;
-  Vector<SceneNodeUIData> m_sceneGraphData;
+
+  // Deleting while the tree is drawn would change the vectors being iterated, so it waits
+  // until the tree is done.
+  SPtr<GameObject> m_pendingDelete;
 
   // Rebuilt only when the scene name changes.
   String m_windowTitle;

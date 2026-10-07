@@ -24,9 +24,14 @@
 #include "chEditorSelection.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
-#include "chNastyRenderer.h"
+#include "chEditorCamera.h"
+#include "chGameObject.h"
+#include "chModelComponent.h"
+#include "chScene.h"
+#include "chSceneManager.h"
 
 #include "chGameObjectAsset.h"
+#include "chModelAsset.h"
 #include "chTextureAsset.h"
 
 #include "imgui.h"
@@ -682,22 +687,50 @@ ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset)
     CH_LOG_DEBUG(ContentAssetUILog, "Loading asset: {0}", asset->getName());
 
     if (asset->isTypeOf<ModelAsset>()) {
-      //m_multiStageRenderer->loadModel(std::static_pointer_cast<ModelAsset>(asset)->getModel());
-      m_nastyRenderer->loadModel(std::static_pointer_cast<ModelAsset>(asset)->getModel());
-      CH_LOG_DEBUG(ContentAssetUILog, "Loaded model asset: {0}", asset->getName());
+      addModelToScene(*std::static_pointer_cast<ModelAsset>(asset));
     }
     else if (asset->isTypeOf<TextureAsset>()) {
-      SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
-      SPtr<ITexture> texture = textureAsset->getTexture();
-      if (texture) {
-        m_nastyRenderer->setTexture(texture);
-        CH_LOG_DEBUG(ContentAssetUILog, "Loaded texture asset: {0}", asset->getName());
-      }
+      applyTextureToSelection(*std::static_pointer_cast<TextureAsset>(asset));
     }
   }
   else {
     CH_LOG_ERROR(ContentAssetUILog, "Failed to load asset: {0}", asset->getName());
   }
+}
+
+/*
+ */
+void
+ContentAssetUI::addModelToScene(const ModelAsset& modelAsset)
+{
+  const SPtr<Scene> scene = SceneManager::instance().getActiveScene().lock();
+  if (!scene || !modelAsset.getModel()) {
+    return;
+  }
+
+  SPtr<GameObject> gameObject = scene->createGameObject(modelAsset.getName());
+  const ModelComponent& modelComponent =
+      gameObject->addComponent<ModelComponent>(modelAsset.getModel());
+  if (m_editorCamera) {
+    m_editorCamera->focus(modelComponent.getWorldBounds());
+  }
+  EditorSelection::setSelectedGameObject(std::move(gameObject));
+}
+
+/*
+ */
+void
+ContentAssetUI::applyTextureToSelection(const TextureAsset& textureAsset)
+{
+  const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
+  ModelComponent* modelComponent =
+      selected ? selected->getComponent<ModelComponent>() : nullptr;
+  if (!modelComponent) {
+    CH_LOG_WARNING(ContentAssetUILog, "Select an object with a model to apply '{0}' to.",
+                   textureAsset.getName());
+    return;
+  }
+  modelComponent->setTexture(textureAsset.getTexture());
 }
 
 /*

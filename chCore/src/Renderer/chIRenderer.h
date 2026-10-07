@@ -29,11 +29,15 @@ class CH_CORE_EXPORT IRenderer
   initialize(uint32 width, uint32 height, Format colorFormat) = 0;
 
   /**
-   * Records into the command list of the frame. The color target must be in the
-   * RenderTarget state, has the size of the renderer, and is cleared.
+   * Records into the command list of the frame what the camera sees of the scene. The color
+   * target must be in the RenderTarget state, has the size of the renderer, and is cleared.
+   * Scene::updateTransforms must have run this frame.
    */
   virtual void
-  onRender(ICommandList& commandList, const ITextureView& colorTarget, float deltaTime) = 0;
+  onRender(ICommandList& commandList,
+           const ITextureView& colorTarget,
+           const Scene& scene,
+           const Camera& camera) = 0;
 
   virtual void
   resize(uint32 width, uint32 height) = 0;

@@ -117,7 +117,11 @@ SceneManager::setActiveScene(WeakPtr<Scene> scene){
 /*
 */
 void
-SceneManager::update(float) {
+SceneManager::update(float deltaTime)
+{
+  if (SPtr<Scene> scene = m_activeScene.lock()) {
+    scene->update(deltaTime);
+  }
 }
 
 } // namespace chEngineSDK

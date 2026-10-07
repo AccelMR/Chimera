@@ -14,9 +14,9 @@
 #endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
+#include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
-#include "chNastyRenderer.h"
 #include "chUIHelpers.h"
 
 #include "imgui.h"

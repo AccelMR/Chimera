@@ -11,84 +11,76 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chUUID.h"
+
 namespace chEngineSDK {
 
-class GameObject;
-
+/**
+ * Exists so a GameObject gets its behaviour from parts it can mix, instead of from a class
+ * hierarchy. A component is registered while its GameObject is in a scene and it is enabled;
+ * that is when it may add things to the scene (a ModelComponent adds what the renderer
+ * draws). Components are made with GameObject::addComponent, which owns them.
+ */
 class CH_CORE_EXPORT Component
 {
  public:
-  /**
-   * Default constructor
-   */
   Component() = default;
 
-  /**
-   * Virtual destructor
-   */
   virtual ~Component() = default;
 
-  /**
-   * Initialize the component
-   *
-   * @return True if initialization was successful
-   */
-  virtual bool
-  initialize() {
-    return true;
-  }
+  Component(const Component&) = delete;
+
+  Component&
+  operator=(const Component&) = delete;
+
+  virtual void
+  update(float deltaTime);
 
   /**
-   * Update the component
-   *
-   * @param deltaTime Time elapsed since the last update
+   * A disabled component is unregistered: it stays on its GameObject but leaves the scene.
+   */
+  void
+  setEnabled(bool enabled);
+
+  NODISCARD FORCEINLINE bool
+  isEnabled() const { return m_enabled; }
+
+  NODISCARD FORCEINLINE bool
+  isRegistered() const { return m_registered; }
+
+  NODISCARD FORCEINLINE GameObject*
+  getOwner() const { return m_owner; }
+
+  /**
+   * TypeTraits<T>::getTypeId() of the class it was created as.
+   */
+  NODISCARD FORCEINLINE const UUID&
+  getTypeId() const { return m_typeId; }
+
+ protected:
+  virtual void
+  onRegister() {}
+
+  virtual void
+  onUnregister() {}
+
+  /**
+   * Called after the scene computed a new world matrix for the owner, while registered.
    */
   virtual void
-  update(float) {}
-
-  /**
-   * Set the owner of this component
-   *
-   * @param owner Owner GameObject
-   */
-  void
-  setOwner(GameObject* owner) {
-    m_owner = owner;
-  }
-
-  /**
-   * Get the owner of this component
-   *
-   * @return Owner GameObject
-   */
-  NODISCARD GameObject*
-  getOwner() const {
-    return m_owner;
-  }
-
-  /**
-   * Enable/disable the component
-   *
-   * @param enabled Whether the component should be enabled
-   */
-  void
-  setEnabled(bool enabled) {
-    m_enabled = enabled;
-  }
-
-  /**
-   * Check if the component is enabled
-   *
-   * @return True if the component is enabled
-   */
-  NODISCARD bool
-  isEnabled() const {
-    return m_enabled;
-  }
+  onTransformChanged() {}
 
  private:
+  friend class GameObject;
+
+  void
+  setRegistered(bool registered);
+
   GameObject* m_owner = nullptr;
+  // Kept by value: the UUID TypeTraits returns lives in the module that asked for it.
+  UUID m_typeId = UUID::null();
   bool m_enabled = true;
+  bool m_registered = false;
 };
 
 } // namespace chEngineSDK

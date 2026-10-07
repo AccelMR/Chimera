@@ -11,192 +11,120 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chObject.h"
-
-#include "chTransform.h"
 #include "chComponent.h"
+#include "chObject.h"
+#include "chTransform.h"
+#include "chTypeTraits.h"
 
 namespace chEngineSDK {
 
+/**
+ * Exists as the node of a scene hierarchy: it has a transform relative to its parent, owns
+ * its children and its components. Make it with Scene::createGameObject and remove it with
+ * Scene::destroyGameObject, so the scene can register and unregister its components.
+ */
 class CH_CORE_EXPORT GameObject : public Object
 {
  public:
   /**
-   * Constructor
-   * 
-   * @param name Name of the GameObject
+   * scene may be null for an object outside any scene; its components are then never
+   * registered.
    */
-  GameObject(const String& name);
-  
+  GameObject(const String& name, Scene* scene);
+
+  ~GameObject() override;
+
+  GameObject(const GameObject&) = delete;
+
+  GameObject&
+  operator=(const GameObject&) = delete;
+
   /**
-   * Destructor
-   */
-  ~GameObject() = default;
-  
-  /**
-   * Add a child GameObject
-   * 
-   * @param child GameObject to add as child
-   */
-  void 
-  addChild(SPtr<GameObject> child);
-  
-  /**
-   * Remove a child GameObject
-   * 
-   * @param child GameObject to remove
-   * @return True if child was removed
-   */
-  bool 
-  removeChild(SPtr<GameObject> child);
-  
-  /**
-   * Get the GameObject's transformation
-   * 
-   * @return Reference to the transform
-   */
-  NODISCARD Transform& 
-  getTransform() { return m_transform; }
-  
-  /**
-   * Get the GameObject's name
-   * 
-   * @return Name of the GameObject
-   */
-  NODISCARD const String& 
-  getName() const { return m_name; }
-  
-  /**
-   * Add a component to the GameObject
-  
-   * 
-   * @tparam T Component type
-   * @param component Component to add
-   * @return Shared pointer to the added component
-   */
-  template<typename T>
-  SPtr<T> addComponent(SPtr<T> component) {
-    static_assert(std::is_base_of<Component, T>::value, "T must derive from Component");
-    m_components.push_back(component);
-    component->setOwner(this);
-    return component;
-  }
-  
-  /**
-   * Create and add a component to the GameObject
-   * 
-   * @tparam T Component type
-   * @param args Arguments to pass to the component constructor
-   * @return Shared pointer to the created component
+   * Creates a component of type T (which needs DECLARE_TYPE_TRAITS) and registers it when
+   * the object is in a scene.
    */
   template<typename T, typename... Args>
-  SPtr<T> addComponent(Args&&... args) {
-    static_assert(std::is_base_of<Component, T>::value, "T must derive from Component");
-    SPtr<T> component = chMakeShared<T>(std::forward<Args>(args)...);
-    m_components.push_back(component);
-    component->setOwner(this);
-    return component;
-  }
-  
+  T&
+  addComponent(Args&&... args);
+
   /**
-   * Get a component of a specific type
-   * 
-   * @tparam T Component type
-   * @return Shared pointer to the component, or nullptr if not found
+   * First component created as exactly T, or null.
    */
   template<typename T>
-  NODISCARD SPtr<T> getComponent() const {
-    static_assert(std::is_base_of<Component, T>::value, "T must derive from Component");
-    for (const auto& component : m_components) {
-      SPtr<T> result = std::dynamic_pointer_cast<T>(component);
-      if (result) {
-        return result;
-      }
-    }
-    return nullptr;
-  }
-  
-  /**
-   * Get all components of a specific type
-   * 
-   * @tparam T Component type
-   * @return Vector of components of the specified type
-   */
-  template<typename T>
-  NODISCARD Vector<SPtr<T>> getComponents() const {
-    static_assert(std::is_base_of<Component, T>::value, "T must derive from Component");
-    Vector<SPtr<T>> result;
-    for (const auto& component : m_components) {
-      SPtr<T> typedComponent = std::dynamic_pointer_cast<T>(component);
-      if (typedComponent) {
-        result.push_back(typedComponent);
-      }
-    }
-    return result;
-  }
-  
-  /**
-   * Get all components
-   * 
-   * @return Vector of all components
-   */
-  NODISCARD const Vector<SPtr<Component>>& 
-  getAllComponents() const { return m_components; }
-  
-  /**
-   * Get all child GameObjects
-   * 
-   * @return Vector of child GameObjects
-   */
-  NODISCARD const Vector<SPtr<GameObject>>& 
-  getChildren() const { return m_children; }
-  
-  /**
-   * Get the parent GameObject
-   * 
-   * @return Shared pointer to the parent, or nullptr if no parent
-   */
-  NODISCARD SPtr<GameObject> 
-  getParent() const { return m_parent.lock(); }
-  
-  /**
-   * Set the parent GameObject
-   * 
-   * @param parent New parent GameObject
-   */
-  void 
-  setParent(SPtr<GameObject> parent);
-  
-  /**
-   * Update the GameObject and all its children
-   * 
-   * @param deltaTime Time elapsed since the last update
-   */
-  void 
+  NODISCARD T*
+  getComponent() const;
+
+  NODISCARD FORCEINLINE const Vector<UniquePtr<Component>>&
+  getComponents() const { return m_components; }
+
+  void
   update(float deltaTime);
-  
-  /**
-   * Set whether the GameObject is active
-   * 
-   * @param active Whether the GameObject should be active
-   */
-  void 
-  setActive(bool active) { m_active = active; }
-  
-  /**
-   * Check if the GameObject is active
-   * 
-   * @return True if the GameObject is active
-   */
-  NODISCARD bool 
-  isActive() const { return m_active; }
+
+  NODISCARD FORCEINLINE Transform&
+  getTransform() { return m_transform; }
+
+  NODISCARD FORCEINLINE const Transform&
+  getTransform() const { return m_transform; }
+
+  NODISCARD FORCEINLINE Scene*
+  getScene() const { return m_scene; }
+
+  NODISCARD FORCEINLINE GameObject*
+  getParent() const { return m_parent; }
+
+  NODISCARD FORCEINLINE const Vector<SPtr<GameObject>>&
+  getChildren() const { return m_children; }
 
  private:
+  friend class Scene;
+
+  Component&
+  attachComponent(UniquePtr<Component>&& component, const UUID& typeId);
+
+  /**
+   * Registers or unregisters the components of this object and of all its children. An
+   * object that leaves its scene forgets it.
+   */
+  void
+  setRegisteredRecursive(bool registered);
+
+  void
+  updateWorldMatrices(const Matrix4& parentWorldMatrix, bool parentChanged);
+
   Transform m_transform;
-  Vector<SPtr<Component>> m_components;
+  Vector<UniquePtr<Component>> m_components;
   Vector<SPtr<GameObject>> m_children;
-  WeakPtr<GameObject> m_parent;
-  bool m_active = true;
+  GameObject* m_parent = nullptr;
+  Scene* m_scene = nullptr;
 };
+
+/*
+ */
+template<typename T, typename... Args>
+T&
+GameObject::addComponent(Args&&... args)
+{
+  static_assert(std::is_base_of_v<Component, T>, "T must derive from Component.");
+  static_assert(TypeTraits<T>::DECLARED, "T needs DECLARE_TYPE_TRAITS.");
+  // UniquePtr<T> does not convert to UniquePtr<Component>, because their deleters differ.
+  UniquePtr<Component> component(new T(std::forward<Args>(args)...));
+  return static_cast<T&>(attachComponent(std::move(component), TypeTraits<T>::getTypeId()));
+}
+
+/*
+ */
+template<typename T>
+T*
+GameObject::getComponent() const
+{
+  static_assert(TypeTraits<T>::DECLARED, "T needs DECLARE_TYPE_TRAITS.");
+  const UUID& typeId = TypeTraits<T>::getTypeId();
+  for (const UniquePtr<Component>& component : m_components) {
+    if (component->getTypeId() == typeId) {
+      return static_cast<T*>(component.get());
+    }
+  }
+  return nullptr;
+}
 
 } // namespace chEngineSDK

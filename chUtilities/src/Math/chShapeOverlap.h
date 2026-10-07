@@ -286,6 +286,26 @@ class ShapeOverlap
     return true;
   }
 
+  /**
+   * Both shapes hold everything inside the bounds, so it is outside as soon as either one
+   * is fully behind a plane; the box is only measured when the sphere crosses the plane.
+   */
+  NODISCARD static FORCEINLINE bool
+  frustumBounds(const Frustum& frustum, const SphereBoxBounds& bounds) noexcept
+  {
+    for (const Plane& plane : frustum.planes) {
+      const float distance = plane.planeDot(bounds.center);
+      if (distance >= bounds.sphereRadius) {
+        continue;
+      }
+      if (distance < -bounds.sphereRadius ||
+          distance < -projectedRadius(bounds.boxExtent, plane.normal)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
  private:
   // Half the size of a box with this extent, measured along a unit normal.
   NODISCARD static FORCEINLINE constexpr float

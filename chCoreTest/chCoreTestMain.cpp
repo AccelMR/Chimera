@@ -13,9 +13,16 @@
 #include "chAngle.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
+#include "chMath.h"
+#include "chMesh.h"
+#include "chModel.h"
+#include "chModelComponent.h"
+#include "chQuaternion.h"
 #include "chRay.h"
 #include "chRotator.h"
+#include "chScene.h"
 #include "chShapeOverlap.h"
+#include "chSphereBoxBounds.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
@@ -320,5 +327,119 @@ TEST_CASE("chCore - FormatUtils")
     REQUIRE(FormatUtils::getMipSize(Format::R8G8B8A8_UNORM, 4, 2) == 32);
     REQUIRE(FormatUtils::getMipSize(Format::R8_UNORM, 3, 3) == 9);
     REQUIRE(FormatUtils::getMipSize(Format::R32G32B32A32_SFLOAT, 1, 1, 2) == 32);
+  }
+}
+
+namespace {
+
+// One triangle in front of the test camera when the object is at the origin.
+SPtr<Model>
+createTriangleModel()
+{
+  SPtr<Mesh> mesh = chMakeShared<Mesh>();
+  mesh->setVertexData(Vector<VertexNormalTexCoord>{
+      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f)},
+      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f)},
+      {Vector3(0.0f, 2.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f)}});
+  mesh->setIndexData(Vector<uint16>{0, 1, 2});
+
+  SPtr<Model> model = chMakeShared<Model>();
+  model->createNode("Root")->addMesh(mesh);
+  return model;
+}
+
+} // namespace
+
+TEST_CASE("chCore - Mesh bounds")
+{
+  const SPtr<Model> model = createTriangleModel();
+  const SphereBoxBounds& bounds = model->getRootNodes()[0]->getMeshes()[0]->getBounds();
+  REQUIRE(bounds.center.nearEqual(Vector3(0.0f, 1.0f, 0.0f)));
+  REQUIRE(bounds.boxExtent.nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+  // The farthest vertices from the center are (1, 0, 0) and (-1, 0, 0).
+  REQUIRE(bounds.sphereRadius == Approx(Math::sqrt(2.0f)));
+
+  const Mesh empty;
+  REQUIRE(empty.getBounds().sphereRadius == 0.0f);
+}
+
+TEST_CASE("chCore - Scene transforms")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> parent = scene.createGameObject("Parent");
+  const SPtr<GameObject> child = scene.createGameObject("Child", parent.get());
+  REQUIRE(scene.getRootGameObjects().size() == 1);
+  REQUIRE(child->getParent() == parent.get());
+  REQUIRE(child->getScene() == &scene);
+
+  parent->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+  parent->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  child->getTransform().setLocalPosition(Vector3(1.0f, 0.0f, 0.0f));
+  REQUIRE(child->getTransform().isDirty());
+
+  scene.updateTransforms();
+  REQUIRE_FALSE(child->getTransform().isDirty());
+  // The parent's yaw turns the child's forward offset to the right.
+  REQUIRE(child->getTransform().getWorldPosition().nearEqual(Vector3(10.0f, 1.0f, 0.0f),
+                                                             1e-5f));
+
+  // Moving only the parent still moves the child.
+  parent->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 5.0f));
+  scene.updateTransforms();
+  REQUIRE(child->getTransform().getWorldPosition().nearEqual(Vector3(0.0f, 1.0f, 5.0f),
+                                                             1e-5f));
+
+  scene.destroyGameObject(*parent);
+  REQUIRE(scene.getRootGameObjects().empty());
+  REQUIRE(parent->getScene() == nullptr);
+  REQUIRE(child->getScene() == nullptr);
+}
+
+TEST_CASE("chCore - Scene render items")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Model");
+  const SPtr<Model> model = createTriangleModel();
+  ModelComponent& modelComponent = gameObject->addComponent<ModelComponent>(model);
+  REQUIRE(gameObject->getComponent<ModelComponent>() == &modelComponent);
+  REQUIRE(modelComponent.isRegistered());
+  REQUIRE(scene.getRenderItemCount() == 1);
+
+  const Camera camera = createTestCamera();
+  Vector<const RenderItem*> visible;
+  scene.gatherRenderItems(camera.getFrustum(), visible);
+  REQUIRE(visible.size() == 1);
+  REQUIRE(visible[0]->mesh == model->getRootNodes()[0]->getMeshes()[0].get());
+
+  SECTION("Items follow the object and are culled behind the camera")
+  {
+    gameObject->getTransform().setLocalPosition(Vector3(-20.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(visible[0]->worldBounds.center.nearEqual(Vector3(-20.0f, 1.0f, 0.0f)));
+    scene.gatherRenderItems(camera.getFrustum(), visible);
+    REQUIRE(visible.empty());
+    REQUIRE(modelComponent.getWorldBounds().getCenter().nearEqual(
+        Vector3(-20.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("Disabling unregisters")
+  {
+    modelComponent.setEnabled(false);
+    REQUIRE_FALSE(modelComponent.isRegistered());
+    REQUIRE(scene.getRenderItemCount() == 0);
+    modelComponent.setEnabled(true);
+    REQUIRE(scene.getRenderItemCount() == 1);
+  }
+
+  SECTION("Destroying the object removes its items")
+  {
+    scene.destroyGameObject(*gameObject);
+    REQUIRE(scene.getRenderItemCount() == 0);
+    REQUIRE_FALSE(modelComponent.isRegistered());
+
+    // A freed slot is reused.
+    const SPtr<GameObject> other = scene.createGameObject("Other");
+    other->addComponent<ModelComponent>(createTriangleModel());
+    REQUIRE(scene.getRenderItemCount() == 1);
   }
 }

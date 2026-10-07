@@ -25,6 +25,7 @@ class SceneGraphUI;
 class InspectorUI;
 class GameObjectAssetUI;
 class ImGuiRenderer;
+class EditorCamera;
 
 class EditorApplication : public WindowedApplication
 {
@@ -45,6 +46,9 @@ class EditorApplication : public WindowedApplication
 
   virtual void
   destroyModules() override;
+
+  virtual void
+  update(const float deltaTime) override;
 
   virtual void
   onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) override;
@@ -69,7 +73,8 @@ class EditorApplication : public WindowedApplication
   loadCodecs();
 
  private:
-  SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
+  UniquePtr<NastyRenderer> m_nastyRenderer;
+  UniquePtr<EditorCamera> m_editorCamera;
   SPtr<Scene> m_activeScene;
 
   UniquePtr<ImGuiRenderer> m_imguiRenderer;

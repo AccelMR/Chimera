@@ -17,7 +17,7 @@ namespace chEngineSDK {
 
 class EditorSelection {
  public:
-  static SPtr<GameObject>
+  NODISCARD static const SPtr<GameObject>&
   getSelectedGameObject() {
     return m_selectedGameObject;
   }

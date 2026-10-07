@@ -10,19 +10,33 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
-#include "chGameObject.h"
 
 namespace chEngineSDK {
 
-class InspectorUI {
+/**
+ * Editor window that shows and edits the transform and components of the selected
+ * GameObject.
+ */
+class InspectorUI
+{
  public:
-  InspectorUI();
-  ~InspectorUI();
+  InspectorUI() = default;
 
   void
   renderInspectorUI();
 
  private:
+  void
+  renderTransform(GameObject& gameObject);
+
+  void
+  renderModelComponent(ModelComponent& modelComponent);
+
+  // The rotation is edited as angles but stored as a quaternion, and converting back each
+  // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).
+  // So the angles are kept while the same object stays selected.
+  const GameObject* m_rotationOwner = nullptr;
+  float m_rotationDegrees[3] = {0.0f, 0.0f, 0.0f};
 };
 
 } // namespace chEngineSDK

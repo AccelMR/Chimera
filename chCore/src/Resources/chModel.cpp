@@ -240,28 +240,24 @@ Model::updateNodeHierarchy(ModelNode* node) {
  * Calculate bounds for the model
  */
 SphereBoxBounds
-Model::calculateBounds() const {
-  Vector<Vector3> allPositions;
-
-  // Para cada nodo
-  for (ModelNode* node : m_allNodes) {
-    // Para cada mesh en el nodo
-    for (const auto& mesh : node->getMeshes()) {
-      // Extraer posiciones
-      Vector<Vector3> meshPositions = mesh->extractPositions();
-
-      // Aplicar transformación global del nodo
-      for (auto& pos : meshPositions) {
-        const Vector4 transformPos = node->getGlobalTransform().transformPosition(pos);
-        pos = Vector3(transformPos.x, transformPos.y, transformPos.z);
+Model::calculateBounds() const
+{
+  bool bFirst = true;
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  for (const ModelNode* node : m_allNodes) {
+    for (const SPtr<Mesh>& mesh : node->getMeshes()) {
+      const AABox meshBounds =
+          mesh->getBounds().getBox().getTransformed(node->getGlobalTransform());
+      if (bFirst) {
+        bounds = meshBounds;
+        bFirst = false;
       }
-
-      // Agregar a todas las posiciones
-      allPositions.insert(allPositions.end(), meshPositions.begin(), meshPositions.end());
+      else {
+        bounds += meshBounds;
+      }
     }
   }
-
-  return SphereBoxBounds(allPositions);
+  return SphereBoxBounds(bounds);
 }
 
 /*

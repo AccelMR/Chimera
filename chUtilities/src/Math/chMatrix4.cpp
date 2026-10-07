@@ -285,6 +285,46 @@ ScaleRotationTranslationMatrix::ScaleRotationTranslationMatrix(const Vector3& sc
 
 /*
  */
+ScaleRotationTranslationMatrix::ScaleRotationTranslationMatrix(const Vector3& scale,
+                                                               const Quaternion& rotation,
+                                                               const Vector3& origin) noexcept
+{
+  const float x2 = rotation.x + rotation.x;
+  const float y2 = rotation.y + rotation.y;
+  const float z2 = rotation.z + rotation.z;
+  const float xx = rotation.x * x2;
+  const float xy = rotation.x * y2;
+  const float xz = rotation.x * z2;
+  const float yy = rotation.y * y2;
+  const float yz = rotation.y * z2;
+  const float zz = rotation.z * z2;
+  const float wx = rotation.w * x2;
+  const float wy = rotation.w * y2;
+  const float wz = rotation.w * z2;
+
+  m_data[0][0] = (1.0f - (yy + zz)) * scale.x;
+  m_data[0][1] = (xy + wz) * scale.x;
+  m_data[0][2] = (xz - wy) * scale.x;
+  m_data[0][3] = 0.0f;
+
+  m_data[1][0] = (xy - wz) * scale.y;
+  m_data[1][1] = (1.0f - (xx + zz)) * scale.y;
+  m_data[1][2] = (yz + wx) * scale.y;
+  m_data[1][3] = 0.0f;
+
+  m_data[2][0] = (xz + wy) * scale.z;
+  m_data[2][1] = (yz - wx) * scale.z;
+  m_data[2][2] = (1.0f - (xx + yy)) * scale.z;
+  m_data[2][3] = 0.0f;
+
+  m_data[3][0] = origin.x;
+  m_data[3][1] = origin.y;
+  m_data[3][2] = origin.z;
+  m_data[3][3] = 1.0f;
+}
+
+/*
+ */
 PerspectiveMatrix::PerspectiveMatrix(const Radian& halfFOV, float width, float height,
                                      float near, float far) noexcept
  : Matrix4(buildPerspective(halfFOV, width, height, near, far))

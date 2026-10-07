@@ -22,6 +22,8 @@
 #include "chSphere.h"
 
 namespace chEngineSDK {
+class Matrix4;
+
 /**
  * Holds a box and a sphere with the same center, so culling can run the cheap sphere
  * test first and the tighter box test only when the sphere passes.
@@ -62,6 +64,14 @@ class SphereBoxBounds
 
   NODISCARD FORCEINLINE constexpr Sphere
   getSphere() const noexcept;
+
+  /**
+   * Bounds of the same space after matrix (scale, rotation, translation). The box is exact
+   * for the old box; the sphere grows by the largest axis scale.
+   */
+  NODISCARD CH_UTILITY_EXPORT SphereBoxBounds
+  getTransformed(const Matrix4& matrix) const noexcept;
+
 
  public:
   Vector3 center;

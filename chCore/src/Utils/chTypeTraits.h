@@ -13,7 +13,14 @@
 
 namespace chEngineSDK {
 
+/**
+ * Stable name and UUID of a type, built from its name, so the id is the same in every module
+ * and in every run (saved files can store it). A type gets them with DECLARE_TYPE_TRAITS;
+ * DECLARED tells templates at compile time whether it did.
+ */
 template <typename T> struct TypeTraits {
+  static constexpr bool DECLARED = false;
+
   static constexpr const ANSICHAR*
   getTypeName() {
     return "Unknown";
@@ -26,6 +33,8 @@ template <typename T> struct TypeTraits {
 
 #define DECLARE_TYPE_TRAITS(TypeClass)                                                        \
   template <> struct TypeTraits<TypeClass> {                                                  \
+    static constexpr bool DECLARED = true;                                                    \
+                                                                                              \
     static constexpr const ANSICHAR*                                                          \
     getTypeName() {                                                                           \
       return #TypeClass;                                                                      \
@@ -58,6 +67,8 @@ template <typename T> struct AssetTypeTraits {
 
 #define DECLARE_TYPE_TRAITS_NAMESPACE_ID(TypeClass, NameSpaceIdExpr)                          \
   template <> struct TypeTraits<TypeClass> {                                                  \
+    static constexpr bool DECLARED = true;                                                    \
+                                                                                              \
     static constexpr const ANSICHAR*                                                          \
     getTypeName() {                                                                           \
       return #TypeClass;                                                                      \

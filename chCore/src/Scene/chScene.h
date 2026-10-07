@@ -11,61 +11,87 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chObject.h"
 #include "chGameObject.h"
+#include "chObject.h"
+#include "chRenderItem.h"
 
 namespace chEngineSDK {
-class CH_CORE_EXPORT Scene : public Object {
+class Frustum;
+
+/**
+ * Exists to own a hierarchy of GameObjects and the flat list of what they draw. Components
+ * add and update render items here, so the renderer only asks for the items a camera sees
+ * and never walks the hierarchy.
+ */
+class CH_CORE_EXPORT Scene : public Object
+{
  public:
-  /**
-   * Constructor
-   *
-   * @param name Name of the scene
-   */
   Scene(const String& name, UUID id);
 
-  /**
-   * Destructor
-   */
-  ~Scene() = default;
+  ~Scene() override;
+
+  Scene(const Scene&) = delete;
+
+  Scene&
+  operator=(const Scene&) = delete;
 
   /**
-   * Create a new GameObject in the scene
-   *
-   * @param name Name of the GameObject
-   * @param parent Optional parent GameObject
-   * @return Shared pointer to the created GameObject
+   * parent null makes a root object. The object stays alive while it is in the scene.
    */
   SPtr<GameObject>
-  createGameObject(const String& name, SPtr<GameObject> parent = nullptr);
+  createGameObject(const String& name, GameObject* parent = nullptr);
 
   /**
-   * Find a GameObject by name
-   *
-   * @param name Name of the GameObject to find
-   * @return Shared pointer to the GameObject, or nullptr if not found
+   * Removes the object and its children from the scene and unregisters their components.
+   * Objects still held elsewhere (an SPtr) stay alive, out of any scene.
    */
-  NODISCARD SPtr<GameObject>
-  findGameObject(const String& name) const;
+  void
+  destroyGameObject(GameObject& gameObject);
 
-  /**
-   * Get all root GameObjects in the scene
-   *
-   * @return Vector of root GameObjects
-   */
-  NODISCARD const Vector<SPtr<GameObject>>&
+  NODISCARD FORCEINLINE const Vector<SPtr<GameObject>>&
   getRootGameObjects() const { return m_rootGameObjects; }
 
   /**
-   * Update all GameObjects in the scene
-   *
-   * @param deltaTime Time elapsed since the last update
+   * Updates the components of every object.
    */
   void
   update(float deltaTime);
 
+  /**
+   * Rebuilds the world matrix of every object whose transform or parent changed and tells
+   * their components. Call it once per frame before rendering.
+   */
+  void
+  updateTransforms();
+
+  /**
+   * Returns an id that stays valid until removeRenderItem. item.mesh must not be null.
+   */
+  NODISCARD uint32
+  addRenderItem(const RenderItem& item);
+
+  NODISCARD FORCEINLINE RenderItem&
+  getRenderItem(uint32 id) { return m_renderItems[id]; }
+
+  void
+  removeRenderItem(uint32 id);
+
+  NODISCARD FORCEINLINE uint32
+  getRenderItemCount() const { return m_renderItemCount; }
+
+  /**
+   * Replaces the contents of outItems with the items whose bounds touch the frustum. The
+   * pointers are valid until the next add or remove. Reusing outItems every frame keeps it
+   * from allocating.
+   */
+  void
+  gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outItems) const;
+
  private:
   Vector<SPtr<GameObject>> m_rootGameObjects;
-  UnorderedMap<String, SPtr<GameObject>> m_gameObjectsMap;
+  Vector<RenderItem> m_renderItems;
+  Vector<uint32> m_freeRenderItems;
+  uint32 m_renderItemCount = 0;
 };
+
 } // namespace chEngineSDK

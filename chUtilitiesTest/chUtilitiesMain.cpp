@@ -813,6 +813,15 @@ TEST_CASE("chUtilities - Matrix4") {
               .nearEqual(scaleMatrix * RotationMatrix(rotation) * TranslationMatrix(origin),
                          1e-5f));
 
+  // The quaternion version gives the same matrix as the rotator it comes from, also for
+  // angles past 90 degrees.
+  for (const Rotator& testRotation : {rotation, Rotator(-75.0f, 170.0f, -120.0f),
+                                      Rotator(89.0f, -30.0f, 10.0f), Rotator::ZERO}) {
+    REQUIRE(ScaleRotationTranslationMatrix(scale, Quaternion(testRotation), origin)
+                .nearEqual(ScaleRotationTranslationMatrix(scale, testRotation, origin),
+                           1e-5f));
+  }
+
   // Test PerspectiveMatrix
   Radian halfFOV(Math::PI / 4.0f); // 45 degrees
   PerspectiveMatrix perspective(halfFOV, 800.0f, 600.0f, 0.1f, 1000.0f);
@@ -1428,6 +1437,32 @@ TEST_CASE("chUtilities - Frustum") {
       box, AABox(Vector3(9.0f, 0.0f, 50.0f), Vector3(12.0f, 1.0f, 51.0f))));
   REQUIRE_FALSE(ShapeOverlap::frustumBox(
       box, AABox(Vector3(12.0f, 0.0f, 50.0f), Vector3(14.0f, 1.0f, 51.0f))));
+
+  // Bounds are outside when either shape is: here the sphere reaches inside the x = 10
+  // plane but the box does not, then the other way around.
+  REQUIRE(ShapeOverlap::frustumBounds(
+      box, SphereBoxBounds(Vector3(0.0f, 0.0f, 50.0f), Vector3::UNIT, 1.5f)));
+  REQUIRE(ShapeOverlap::frustumBounds(
+      box, SphereBoxBounds(Vector3(10.5f, 0.0f, 50.0f), Vector3::UNIT, 1.5f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumBounds(
+      box, SphereBoxBounds(Vector3(11.5f, 0.0f, 50.0f), Vector3(0.4f, 0.4f, 0.4f), 2.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumBounds(
+      box, SphereBoxBounds(Vector3(11.5f, 0.0f, 50.0f), Vector3(2.0f, 2.0f, 2.0f), 1.0f)));
+}
+
+TEST_CASE("chUtilities - SphereBoxBounds getTransformed") {
+  const SphereBoxBounds bounds(Vector3(1.0f, 0.0f, 0.0f), Vector3(1.0f, 2.0f, 3.0f), 3.5f);
+  const ScaleRotationTranslationMatrix matrix(Vector3(2.0f, 1.0f, 1.0f),
+                                              Rotator(0.0f, 90.0f, 0.0f),
+                                              Vector3(0.0f, 0.0f, 5.0f));
+
+  // The box matches AABox::getTransformed and the sphere grows by the largest scale.
+  const SphereBoxBounds transformed = bounds.getTransformed(matrix);
+  const AABox expectedBox = bounds.getBox().getTransformed(matrix);
+  REQUIRE(transformed.center.nearEqual(expectedBox.getCenter(), 1e-5f));
+  REQUIRE(transformed.boxExtent.nearEqual(expectedBox.getExtent(), 1e-5f));
+  REQUIRE(transformed.sphereRadius == Approx(7.0f));
+  REQUIRE(transformed.center.nearEqual(Vector3(0.0f, 2.0f, 5.0f), 1e-5f));
 }
 
 TEST_CASE("chUtilities - Utilities") {

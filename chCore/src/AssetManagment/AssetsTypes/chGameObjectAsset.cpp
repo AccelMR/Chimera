@@ -21,7 +21,7 @@ GameObjectAsset::serialize(SPtr<DataStream> stream) {
 bool
 GameObjectAsset::deserialize(SPtr<DataStream> stream) {
   CH_PARAMETER_UNUSED(stream);
-  m_gameObject = chMakeShared<GameObject>("Test");
+  m_gameObject = chMakeShared<GameObject>("Test", nullptr);
   return true;
 }
 

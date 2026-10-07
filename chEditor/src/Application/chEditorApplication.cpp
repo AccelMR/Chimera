@@ -10,6 +10,7 @@
 
 #include "chEditorApplication.h"
 #include "chAssetManager.h"
+#include "chEditorCamera.h"
 #include "chConsoleVariable.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
@@ -113,10 +114,14 @@ EditorApplication::destroyModules()
   m_mainMenuBar.reset();
   m_contentAssetUI.reset();
 
+  if (m_editorCamera) {
+    m_editorCamera->unbindInputEvents();
+    m_editorCamera.reset();
+  }
   m_nastyRenderer.reset();
-  m_activeScene.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorSelection::setGameObjectAssetPreview(nullptr);
+  m_activeScene.reset();
 
   if (SceneManager::isStarted()) {
     SceneManager::shutDown();
@@ -139,14 +144,25 @@ EditorApplication::destroyModules()
 /*
  */
 void
+EditorApplication::update(const float deltaTime)
+{
+  SceneManager::instance().update(deltaTime);
+}
+
+/*
+ */
+void
 EditorApplication::onRender(ICommandList& commandList,
                             const ISwapChain& swapChain,
                             float deltaTime)
 {
+  CH_PARAMETER_UNUSED(deltaTime);
+
   const uint32 width = swapChain.getWidth();
   const uint32 height = swapChain.getHeight();
   if (width != m_nastyRenderer->getWidth() || height != m_nastyRenderer->getHeight()) {
     m_nastyRenderer->resize(width, height);
+    m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
   }
 
   if (UIHelpers::bRenderImGui) {
@@ -156,11 +172,15 @@ EditorApplication::onRender(ICommandList& commandList,
   // The scene draws under the UI, so it only takes the keyboard and mouse that no ImGui
   // window wants.
   const ImGuiIO& io = ImGui::GetIO();
-  m_nastyRenderer->setFocused(!UIHelpers::bRenderImGui ||
-                              (!io.WantCaptureMouse && !io.WantCaptureKeyboard));
+  m_editorCamera->setFocused(!UIHelpers::bRenderImGui ||
+                             (!io.WantCaptureMouse && !io.WantCaptureKeyboard));
+
+  // After the UI, which may have moved or added objects.
+  m_activeScene->updateTransforms();
 
   const ITextureView& backBuffer = swapChain.getCurrentTextureView();
-  m_nastyRenderer->onRender(commandList, backBuffer, deltaTime);
+  m_nastyRenderer->onRender(commandList, backBuffer, *m_activeScene,
+                            m_editorCamera->getCamera());
 
   if (UIHelpers::bRenderImGui) {
     m_imguiRenderer->render(commandList, *ImGui::GetDrawData(), backBuffer,
@@ -222,13 +242,16 @@ EditorApplication::initializeEditorComponents() {
   CH_LOG_INFO(EditorApp, "Loaded scene '{0}' successfully.", sceneName);
 
   m_activeScene = scene;
-  m_nastyRenderer = std::make_shared<NastyRenderer>();
   // The scene is drawn straight into the swap chain image.
   const ISwapChain& swapChain = *getSwapChain();
+  m_nastyRenderer = chMakeUnique<NastyRenderer>();
   m_nastyRenderer->initialize(swapChain.getWidth(), swapChain.getHeight(),
                               swapChain.getFormat());
   m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
-  m_nastyRenderer->bindInputEvents();
+
+  m_editorCamera = chMakeUnique<EditorCamera>(static_cast<float>(swapChain.getWidth()),
+                                              static_cast<float>(swapChain.getHeight()));
+  m_editorCamera->bindInputEvents();
 
   initImGui(display);
 
@@ -239,7 +262,7 @@ EditorApplication::initializeEditorComponents() {
   m_inspectorUI = chMakeUnique<InspectorUI>();
   m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
-  m_contentAssetUI->setNastyRenderer(m_nastyRenderer);
+  m_contentAssetUI->setEditorCamera(m_editorCamera.get());
   m_outputLogUI->updateAvailableCategories();
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");

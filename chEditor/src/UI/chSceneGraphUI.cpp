@@ -11,32 +11,39 @@
 #include "chSceneGraphUI.h"
 
 #include "chEditorSelection.h"
-#include "chSceneManager.h"
 #include "chGameObject.h"
+#include "chScene.h"
+#include "chSceneManager.h"
+#include "chStringUtils.h"
 
 #include "imgui.h"
 
-CH_LOG_DECLARE_STATIC(SceneGraphUILog, All);
-
 namespace chEngineSDK {
 
-SceneGraphUI::SceneGraphUI() {
-  SceneManager& sceneManager = SceneManager::instance();
-  WeakPtr<Scene> weakScene = sceneManager.getActiveScene();
-  m_currentScene = weakScene.lock();
-  if (m_currentScene) {
-    buildSceneGraphData(m_currentScene->getRootGameObjects());
+namespace {
+/**
+ * True when ancestor is gameObject or one of its parents, so deleting ancestor removes
+ * gameObject too.
+ */
+bool
+isInSubtree(const GameObject* gameObject, const GameObject& ancestor)
+{
+  for (; gameObject; gameObject = gameObject->getParent()) {
+    if (gameObject == &ancestor) {
+      return true;
+    }
   }
+  return false;
 }
+} // namespace
 
-SceneGraphUI::~SceneGraphUI() {
-  // Destructor implementation
-}
-
+/*
+ */
 void
-SceneGraphUI::renderSceneGraphUI() {
-  const ANSICHAR* sceneName =
-      m_currentScene ? m_currentScene->getName().c_str() : "No Active Scene";
+SceneGraphUI::renderSceneGraphUI()
+{
+  const SPtr<Scene> scene = SceneManager::instance().getActiveScene().lock();
+  const ANSICHAR* sceneName = scene ? scene->getName().c_str() : "No Active Scene";
   if (m_windowTitle.empty() || m_titleSceneName != sceneName) {
     m_titleSceneName = sceneName;
     // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
@@ -45,90 +52,78 @@ SceneGraphUI::renderSceneGraphUI() {
   }
 
   ImGui::Begin(m_windowTitle.c_str(), &m_isVisible);
-  for (const auto& nodeData : m_sceneGraphData) {
-    // Objects can share a name, so the pointer keeps their tree nodes apart.
-    ImGui::PushID(nodeData.gameObject.get());
-    if (ImGui::TreeNode(nodeData.gameObject->getName().c_str())) {
-      ImGui::TreePop();
+  if (scene) {
+    for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
+      renderGameObject(*scene, root);
     }
-    if (ImGui::IsItemClicked()) {
-      EditorSelection::setSelectedGameObject(nodeData.gameObject);
-    }
+    renderEmptyAreaContextMenu(*scene);
 
-    if (nodeData.gameObject->getName() != "Root") {
-      handleContextMenuForGameObject(nodeData.gameObject);
+    if (m_pendingDelete) {
+      const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
+      if (isInSubtree(selected.get(), *m_pendingDelete)) {
+        EditorSelection::setSelectedGameObject(nullptr);
+      }
+      scene->destroyGameObject(*m_pendingDelete);
+      m_pendingDelete.reset();
     }
-    ImGui::PopID();
   }
-
-  handleEmptyAreaContextMenu();
-  renderEmptyAreaContextMenu();
-
   ImGui::End();
 }
 
 /*
-*/
+ */
 void
-SceneGraphUI::handleEmptyAreaContextMenu() {
-    // Early return if any item is hovered
-  if (ImGui::IsAnyItemHovered()) {
-    return;
+SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
+{
+  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+                             ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                             ImGuiTreeNodeFlags_SpanAvailWidth;
+  if (gameObject->getChildren().empty()) {
+    flags |= ImGuiTreeNodeFlags_Leaf;
+  }
+  if (EditorSelection::getSelectedGameObject() == gameObject) {
+    flags |= ImGuiTreeNodeFlags_Selected;
   }
 
-  // Early return if not hovering window
-  if (!ImGui::IsWindowHovered()) {
-    return;
+  // Objects can share a name, so the pointer keeps their tree nodes apart.
+  ImGui::PushID(gameObject.get());
+  const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s", gameObject->getName().c_str());
+  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+    EditorSelection::setSelectedGameObject(gameObject);
   }
 
-  // Check for right click in empty area
-  bool emptyAreaRightClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
-
-  if (!emptyAreaRightClicked) {
-    return;
-  }
-
-  ImGui::OpenPopup("EmptyAreaContextMenu_SceneGraph");
-}
-
-/*
-*/
-void
-SceneGraphUI::renderEmptyAreaContextMenu() {
-  if (!ImGui::BeginPopup("EmptyAreaContextMenu_SceneGraph")) {
-    return;
-  }
-
-  ImGui::EndPopup();
-}
-
-/*
-*/
-void
-SceneGraphUI::handleContextMenuForGameObject(const SPtr<GameObject>& gameObject) {
-  CH_PARAMETER_UNUSED(gameObject);
-
-  // Called inside the PushID of this object, so a fixed popup name is unique.
-  if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-    ImGui::OpenPopup("GameObjectContext");
-  }
-  if (ImGui::BeginPopup("GameObjectContext")) {
-    // Context menu items for the GameObject
+  // Inside the PushID of this object, so a fixed popup name is unique.
+  if (ImGui::BeginPopupContextItem("GameObjectContext")) {
+    if (ImGui::MenuItem("Create Child")) {
+      scene.createGameObject("GameObject", gameObject.get());
+    }
     if (ImGui::MenuItem("Delete")) {
-      // Handle delete action
+      m_pendingDelete = gameObject;
     }
     ImGui::EndPopup();
   }
+
+  if (bOpen) {
+    for (const SPtr<GameObject>& child : gameObject->getChildren()) {
+      renderGameObject(scene, child);
+    }
+    ImGui::TreePop();
+  }
+  ImGui::PopID();
 }
+
 /*
-*/
+ */
 void
-SceneGraphUI::buildSceneGraphData(const Vector<SPtr<GameObject>>& rootGameObjects) {
-  for (const auto& gameObject : rootGameObjects) {
-    // Process each root GameObject and build UI data
-    SceneNodeUIData nodeData;
-    nodeData.gameObject = gameObject;
-    m_sceneGraphData.push_back(nodeData);
+SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
+{
+  if (ImGui::BeginPopupContextWindow("EmptyAreaContextMenu_SceneGraph",
+                                     ImGuiPopupFlags_MouseButtonRight |
+                                         ImGuiPopupFlags_NoOpenOverItems)) {
+    if (ImGui::MenuItem("Create Empty")) {
+      scene.createGameObject("GameObject");
+    }
+    ImGui::EndPopup();
   }
 }
 

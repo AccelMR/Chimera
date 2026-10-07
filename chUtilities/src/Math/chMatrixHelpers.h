@@ -15,6 +15,7 @@
 #include "chVector3.h"
 
 namespace chEngineSDK {
+class Quaternion;
 
 /**
  * Builds a translation, so code reads TranslationMatrix(position) instead of filling 16
@@ -64,6 +65,13 @@ class ScaleRotationTranslationMatrix : public Matrix4
  public:
   CH_UTILITY_EXPORT
   ScaleRotationTranslationMatrix(const Vector3& scale, const Rotator& rotator,
+                                 const Vector3& origin) noexcept;
+
+  /**
+   * The rotation must have unit length.
+   */
+  CH_UTILITY_EXPORT
+  ScaleRotationTranslationMatrix(const Vector3& scale, const Quaternion& rotation,
                                  const Vector3& origin) noexcept;
 };
 

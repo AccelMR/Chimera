@@ -11,7 +11,6 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
-class NastyRenderer;
 
 class MainMenuBarUI {
  public:

@@ -44,7 +44,10 @@ class IAssetManager;
 class Scene;
 class SceneAsset;
 class SceneManager;
+class Component;
 class GameObject;
+class ModelComponent;
+struct RenderItem;
 class Transform;
 
 } // namespace chEngineSDK

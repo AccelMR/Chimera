@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include "chGraphicsTypes.h"
+#include "chSphereBoxBounds.h"
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
@@ -44,6 +45,7 @@ class CH_CORE_EXPORT Mesh
       std::memcpy(m_vertexData.data(), vertices.data(), size);
     }
     m_vertexLayout = T::getLayout();
+    onDataChanged();
   }
 
   /**
@@ -64,6 +66,7 @@ class CH_CORE_EXPORT Mesh
     if (!indices.empty()) {
       memcpy(m_indexData.data(), indices.data(), size);
     }
+    onDataChanged();
   }
 
   /**
@@ -72,7 +75,11 @@ class CH_CORE_EXPORT Mesh
    * @param layout Vertex layout
   */
   FORCEINLINE void
-  setVertexLayout(const VertexLayout& layout) { m_vertexLayout = layout; }
+  setVertexLayout(const VertexLayout& layout)
+  {
+    m_vertexLayout = layout;
+    onDataChanged();
+  }
 
   /**
    * Get raw vertex data
@@ -86,6 +93,7 @@ class CH_CORE_EXPORT Mesh
   setVertexData(const Vector<uint8>& data, uint32 vertexCount) {
     m_vertexData = data;
     m_vertexCount = vertexCount;
+    onDataChanged();
   }
 
   /**
@@ -115,41 +123,6 @@ class CH_CORE_EXPORT Mesh
   */
   NODISCARD FORCEINLINE uint32
   getVertexCount() const { return m_vertexCount; }
-
-  /**
-   * Get indices as uint16
-   *
-   * @return Vector of indices as uint16
-  */
-  NODISCARD Vector<uint16>
-  getIndicesAsUInt16() const {
-    Vector<uint16> result;
-    if (m_indexType != IndexType::UInt16 || m_indexData.empty()) {
-      return result;
-    }
-
-    result.resize(m_indexCount);
-    std::memcpy(result.data(), m_indexData.data(), m_indexData.size());
-    return result;
-  }
-
-  /**
-   * Get indices as uint32
-   *
-   * @return Vector of indices as uint32
-  */
-  NODISCARD Vector<uint32>
-  getIndicesAsUInt32() const {
-    Vector<uint32> result;
-    if (m_indexType != IndexType::UInt32 || m_indexData.empty()) {
-      return result;
-    }
-
-    result.resize(m_indexCount);
-    std::memcpy(result.data(), m_indexData.data(), m_indexData.size());
-    return result;
-  }
-
 
   /**
    * Get index count
@@ -211,19 +184,52 @@ class CH_CORE_EXPORT Mesh
   getIndexData() const { return m_indexData; }
 
   /**
-   * Extract all vertex positions from the mesh
-   *
-   * @return Vector of position vectors
+   * Bounds of the positions in the mesh's own space, computed on the first call after the
+   * data changes. A mesh without positions gives zero bounds at the origin.
    */
-  NODISCARD Vector<Vector3>
-  extractPositions() const;
+  NODISCARD const SphereBoxBounds&
+  getBounds() const;
+
+  /**
+   * GPU copy of the vertices, made on the first call after the data changes (the copy runs
+   * with the next frame submit). Main thread only. Null when the mesh has no vertices.
+   */
+  NODISCARD const IBuffer*
+  getVertexBuffer() const;
+
+  /**
+   * Same as getVertexBuffer, for the indices.
+   */
+  NODISCARD const IBuffer*
+  getIndexBuffer() const;
 
  private:
+  /**
+   * Old GPU buffers go through the deferred deletion, so frames in flight can still use
+   * them.
+   */
+  FORCEINLINE void
+  onDataChanged()
+  {
+    m_bBoundsDirty = true;
+    m_vertexBuffer.reset();
+    m_indexBuffer.reset();
+  }
+
+  void
+  createGpuBuffers() const;
+
   Vector<uint8> m_vertexData;
   Vector<uint8> m_indexData;
   uint32 m_vertexCount = 0;
   uint32 m_indexCount = 0;
   IndexType m_indexType = IndexType::UInt16;
   VertexLayout m_vertexLayout;
+
+  // Caches built on first use from the data above.
+  mutable SphereBoxBounds m_bounds{Vector3::ZERO, Vector3::ZERO, 0.0f};
+  mutable SPtr<IBuffer> m_vertexBuffer;
+  mutable SPtr<IBuffer> m_indexBuffer;
+  mutable bool m_bBoundsDirty = true;
 };
 } // namespace chEngineSDK

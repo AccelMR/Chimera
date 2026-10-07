@@ -12,7 +12,9 @@
 #include "chUUID.h"
 
 namespace chEngineSDK {
-class NastyRenderer;
+class EditorCamera;
+class ModelAsset;
+class TextureAsset;
 
 /**
  * Editor window that lists the project assets in a grid or a table, with search and
@@ -34,11 +36,11 @@ class ContentAssetUI
   void
   refreshAssets();
 
-  void
-  setNastyRenderer(SPtr<NastyRenderer> renderer)
-  {
-    m_nastyRenderer = std::move(renderer);
-  }
+  /**
+   * Opening a model frames it with this camera. Not owned; it outlives this window.
+   */
+  FORCEINLINE void
+  setEditorCamera(EditorCamera* editorCamera) { m_editorCamera = editorCamera; }
 
   void
   saveUnsavedAssets();
@@ -49,6 +51,18 @@ class ContentAssetUI
 
   void
   handleAssetSelection(const SPtr<IAsset>& asset);
+
+  /**
+   * Adds a GameObject with the model to the active scene, selects it and frames it.
+   */
+  void
+  addModelToScene(const ModelAsset& modelAsset);
+
+  /**
+   * Draws the texture on the model of the selected GameObject.
+   */
+  void
+  applyTextureToSelection(const TextureAsset& textureAsset);
 
   void
   renderAssetContextMenu(const SPtr<IAsset>& asset);
@@ -148,7 +162,7 @@ class ContentAssetUI
 
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
-  SPtr<NastyRenderer> m_nastyRenderer;
+  EditorCamera* m_editorCamera = nullptr;
 
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
   UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;
