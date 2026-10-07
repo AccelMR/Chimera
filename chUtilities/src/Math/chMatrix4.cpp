@@ -18,7 +18,7 @@
 #include "chMath.h"
 #include "chPlane.h"
 #include "chQuaternion.h"
-#include "chRadian.h"
+#include "chAngle.h"
 #include "chRotator.h"
 #include "chVector3.h"
 #include "chVector4.h"
@@ -224,7 +224,7 @@ Matrix4::rotator() const noexcept
   // axis is turned from the right axis of that rotation without roll.
   const RotationMatrix noRoll(result);
   const Vector3 noRollRight(noRoll[1][0], noRoll[1][1], noRoll[1][2]);
-  result.roll = Math::atan2(up.dot(noRollRight), right.dot(noRollRight)).valueDegree();
+  result.roll = Degree(Math::atan2(up.dot(noRollRight), right.dot(noRollRight)));
 
   return result;
 }

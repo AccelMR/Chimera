@@ -16,8 +16,7 @@
 
 #include <cmath>
 
-#include "chDegree.h"
-#include "chRadian.h"
+#include "chAngle.h"
 
 namespace chEngineSDK {
 

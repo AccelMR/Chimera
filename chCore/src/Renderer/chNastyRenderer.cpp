@@ -11,13 +11,12 @@
 
 #include "chBox.h"
 #include "chCamera.h"
-#include "chDegree.h"
+#include "chAngle.h"
 #include "chEventDispatcherManager.h"
 #include "chEventSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
 #include "chMatrixHelpers.h"
-#include "chRadian.h"
 #include "chVector3.h"
 
 // Graphics-related includes

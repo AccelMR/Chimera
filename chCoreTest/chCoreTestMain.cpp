@@ -10,10 +10,9 @@
 
 #include "chBox.h"
 #include "chCamera.h"
-#include "chDegree.h"
+#include "chAngle.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
-#include "chRadian.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"

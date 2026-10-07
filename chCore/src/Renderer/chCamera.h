@@ -14,8 +14,7 @@
 #include "chQuaternion.h"
 #include "chMatrix4.h"
 #include "chPlane.h"
-#include "chRadian.h"
-#include "chDegree.h"
+#include "chAngle.h"
 #include "chRotator.h"
 
 namespace chEngineSDK {

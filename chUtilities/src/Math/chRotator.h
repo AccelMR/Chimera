@@ -19,7 +19,7 @@
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
-#include "chDegree.h"
+#include "chAngle.h"
 #include "chMath.h"
 
 namespace chEngineSDK{

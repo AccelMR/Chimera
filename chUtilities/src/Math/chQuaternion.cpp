@@ -10,7 +10,7 @@
 #include "chQuaternion.h"
 
 #include "chMatrix4.h"
-#include "chRadian.h"
+#include "chAngle.h"
 #include "chRotator.h"
 #include "chVector3.h"
 #include "chVector4.h"

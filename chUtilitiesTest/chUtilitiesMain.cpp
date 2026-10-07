@@ -14,7 +14,7 @@
 #include "chCommandLine.h"
 #include "chConfigFile.h"
 #include "chConsoleVariable.h"
-#include "chDegree.h"
+#include "chAngle.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
 #include "chFileStream.h"
@@ -29,14 +29,15 @@
 #include "chPath.h"
 #include "chPlane.h"
 #include "chQuaternion.h"
-#include "chRadian.h"
 #include "chRandom.h"
 #include "chRotator.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
 #include "chUnicode.h"
 #include "chVector2.h"
+#include "chVector2I.h"
 #include "chVector3.h"
+#include "chVector3I.h"
 #include "chVector4.h"
 
 #include <algorithm>
@@ -212,274 +213,102 @@ TEST_CASE("chUtilities - PlatformMath") {
  */
 /************************************************************************/
 TEST_CASE("chUtilities - Degree") {
-  REQUIRE(sizeof(Degree) == 4);
+  // Degree{} value-initializes to zero; a plain declaration stays uninitialized on purpose.
+  const Degree zeroed{};
+  REQUIRE(zeroed.valueDegree() == 0.0f);
 
-  Degree DegreeFromFloat(270);
-  Degree DegreeFromFloatAssign;
-  DegreeFromFloatAssign = 270;
-  REQUIRE(DegreeFromFloatAssign.valueDegree() == 270);
+  static_assert(Degree(180.0f).valueRadian() == Math::PI);
+  static_assert(Degree(90.0f) < Degree(180.0f));
 
-  Degree CopyConst(DegreeFromFloat);
-  Degree Assignment = DegreeFromFloat;
-  REQUIRE(CopyConst.valueDegree() == 270);
-  REQUIRE(Assignment.valueDegree() == 270);
+  const Degree straight(180.0f);
+  REQUIRE(straight.valueDegree() == 180.0f);
+  REQUIRE(straight.valueRadian() == Approx(Math::PI));
 
-  REQUIRE(DegreeFromFloat.valueDegree() == Approx(270.0f));
-  REQUIRE(DegreeFromFloat.valueRadian() == Approx(4.71239f));
+  // Conversion is explicit and goes both ways.
+  const Degree fromRadian{Radian(Math::HALF_PI)};
+  REQUIRE(fromRadian.valueDegree() == Approx(90.0f));
+  REQUIRE(Degree(Radian(Degree(37.5f))).valueDegree() == Approx(37.5f));
 
-  float unwindedValue = DegreeFromFloat.unwindedValue();
-  REQUIRE(unwindedValue == Approx(-90.0f));
+  REQUIRE(Degree(10.0f) + Degree(20.0f) == Degree(30.0f));
+  REQUIRE(Degree(10.0f) - Degree(20.0f) == Degree(-10.0f));
+  REQUIRE(-Degree(10.0f) == Degree(-10.0f));
+  REQUIRE(Degree(10.0f) * 3.0f == Degree(30.0f));
+  REQUIRE(3.0f * Degree(10.0f) == Degree(30.0f));
+  REQUIRE(Degree(30.0f) / 3.0f == Degree(10.0f));
 
-  DegreeFromFloat.unwind();
-  REQUIRE(DegreeFromFloat.valueDegree() == Approx(-90.0f));
+  // Mixing units needs an explicit conversion.
+  REQUIRE((Degree(90.0f) + Degree(Radian(Math::HALF_PI))).valueDegree() == Approx(180.0f));
 
-  Degree DegreeFromDegree(DegreeFromFloat);
-  REQUIRE(DegreeFromDegree.valueDegree() == Approx(-90.0f));
+  Degree compound(10.0f);
+  compound += Degree(5.0f);
+  REQUIRE(compound == Degree(15.0f));
+  compound -= Degree(10.0f);
+  REQUIRE(compound == Degree(5.0f));
+  compound *= 4.0f;
+  REQUIRE(compound == Degree(20.0f));
+  compound /= 2.0f;
+  REQUIRE(compound == Degree(10.0f));
 
-  Degree DegreeDefault;
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE(DegreeDefault.valueDegree() == 0.0f);
-  #else
-    REQUIRE(DegreeDefault.valueDegree() != 0.0f);
-  #endif
+  REQUIRE(Degree(10.0f) < Degree(20.0f));
+  REQUIRE(Degree(20.0f) > Degree(10.0f));
+  REQUIRE(Degree(10.0f) <= Degree(10.0f));
+  REQUIRE(Degree(10.0f) >= Degree(10.0f));
+  REQUIRE(Degree(10.0f) != Degree(20.0f));
 
-  DegreeFromFloat = 270.0f;
-  REQUIRE(DegreeFromFloat.valueDegree() == Approx(270.0f));
-
-  Degree DegreeSum = DegreeFromFloat + DegreeFromDegree;
-  REQUIRE(DegreeSum.valueDegree() == Approx(180.0f));
-
-  REQUIRE(DegreeSum.valueRadian() == Approx(Math::PI));
-
-  Radian TestRad(Math::PI);
-  Degree DegreeFromRadian(TestRad);
-  Degree DegreeFromRadAssign;
-  DegreeFromRadAssign = TestRad;
-  REQUIRE(DegreeFromRadAssign.valueDegree() == Approx(180.0f));
-  REQUIRE(DegreeFromRadian.valueDegree() == Approx(180.0f));
-  REQUIRE(DegreeFromRadian.valueRadian() == Approx(Math::PI));
-
-  Degree DegreeSumRadian = DegreeFromRadian + TestRad;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(360.0f));
-
-  DegreeSumRadian += TestRad;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(540.0f));
-
-  DegreeSumRadian += DegreeFromRadian;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(720.0f));
-
-  DegreeSumRadian = -DegreeSumRadian;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(-720.0f));
-
-  DegreeSumRadian = -DegreeSumRadian;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(720.0f));
-
-  DegreeSumRadian = DegreeSumRadian - DegreeFromRadian;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(540.0f));
-
-  DegreeSumRadian = DegreeSumRadian - TestRad;
-  REQUIRE(DegreeSumRadian.valueDegree() == Approx(360.0f));
-
-  Degree DegreeToCompare1(180.0f);
-  Degree DegreeToCompare2(360.0f);
-  Radian RadianToCompare1(Math::TWO_PI);
-  float FloatToCompare1 = 360.0f;
-  float FloatToCompare2 = 180.0f;
-
-  // Degree to Degree
-  REQUIRE(DegreeToCompare1 < DegreeToCompare2);
-  REQUIRE_FALSE(DegreeToCompare1 > DegreeToCompare2);
-  REQUIRE(DegreeToCompare1 <= DegreeToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 >= DegreeToCompare2);
-  REQUIRE_FALSE(DegreeToCompare1 == DegreeToCompare2);
-  REQUIRE(DegreeToCompare1 != DegreeToCompare2);
-
-  // Degree to Radian
-  REQUIRE(DegreeToCompare1 < RadianToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 > RadianToCompare1);
-  REQUIRE(DegreeToCompare1 <= RadianToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 >= RadianToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 == RadianToCompare1);
-  REQUIRE(DegreeToCompare1 != RadianToCompare1);
-
-  // Degree to float
-  REQUIRE(DegreeToCompare1 < FloatToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 > FloatToCompare1);
-  REQUIRE(DegreeToCompare1 <= FloatToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 >= FloatToCompare1);
-  REQUIRE_FALSE(DegreeToCompare1 == FloatToCompare1);
-  REQUIRE(DegreeToCompare1 != FloatToCompare1);
-
-  // Float as lValue to Degree
-  REQUIRE(FloatToCompare2 < DegreeToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 > DegreeToCompare2);
-  REQUIRE(FloatToCompare2 <= DegreeToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 >= DegreeToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 == DegreeToCompare2);
-  REQUIRE(FloatToCompare2 != DegreeToCompare2);
-
-  // Float as rValue to Degree
-  REQUIRE(180.0f < DegreeToCompare2);
-  REQUIRE_FALSE(180.0f > DegreeToCompare2);
-  REQUIRE(180.0f <= DegreeToCompare2);
-  REQUIRE_FALSE(180.0f >= DegreeToCompare2);
-  REQUIRE_FALSE(180.0f == DegreeToCompare2);
-  REQUIRE(180.0f != DegreeToCompare2);
-
-  // Const checks
-  const Radian ConstRadian(Math::PI);
-  const Degree ConstDegree(180.0f);
-
-  Degree AddRes = ConstDegree + ConstRadian;
-  REQUIRE(AddRes.valueDegree() == Approx(360.0f));
-
-  REQUIRE(ConstDegree == ConstRadian);
-  REQUIRE_FALSE(ConstDegree != ConstRadian);
-  REQUIRE_FALSE(ConstDegree > ConstRadian);
-  REQUIRE(ConstDegree >= ConstRadian);
-  REQUIRE_FALSE(ConstDegree < ConstRadian);
-  REQUIRE(ConstDegree <= ConstRadian);
-
-  REQUIRE(ConstDegree == 180.0f);
-  REQUIRE_FALSE(ConstDegree != 180.0f);
-  REQUIRE_FALSE(ConstDegree > 180.0f);
-  REQUIRE(ConstDegree >= 180.0f);
-  REQUIRE_FALSE(ConstDegree < 180.0f);
-  REQUIRE(ConstDegree <= 180.0f);
-
-  Degree MultTest(90);
-  MultTest = MultTest * 2;
-  REQUIRE(MultTest == 180.0f);
-
-  MultTest *= 0.5f;
-  REQUIRE(MultTest == 90.0f);
+  Degree toUnwind(270.0f);
+  REQUIRE(toUnwind.unwindedValue() == Approx(-90.0f));
+  REQUIRE(toUnwind.valueDegree() == 270.0f);
+  toUnwind.unwind();
+  REQUIRE(toUnwind.valueDegree() == Approx(-90.0f));
+  REQUIRE(Degree(720.0f).unwindedValue() == 0.0f);
 }
 
 TEST_CASE("chUtilities - Radian") {
-  REQUIRE(sizeof(Radian) == 4);
+  const Radian zeroed{};
+  REQUIRE(zeroed.valueRadian() == 0.0f);
 
-  Radian RadianFromFloat(Math::HALF_PI);
+  static_assert(Radian(Math::PI).valueDegree() == 180.0f);
+  static_assert(Radian(1.0f) > Radian(0.5f));
 
-  Radian CopyConst(RadianFromFloat);
-  Radian Assignment = RadianFromFloat;
+  const Radian half(Math::PI);
+  REQUIRE(half.valueRadian() == Math::PI);
+  REQUIRE(half.valueDegree() == Approx(180.0f));
 
-  REQUIRE(CopyConst.valueRadian() == Approx(Math::HALF_PI));
-  REQUIRE(Assignment.valueDegree() == Approx(90));
+  const Radian fromDegree{Degree(90.0f)};
+  REQUIRE(fromDegree.valueRadian() == Approx(Math::HALF_PI));
+  REQUIRE(Radian(Degree(Radian(1.25f))).valueRadian() == Approx(1.25f));
 
-  Degree TestConst(180);
-  Radian RadianFromDegreeCopy(TestConst);
-  REQUIRE(RadianFromDegreeCopy.valueRadian() == Approx(Math::PI));
+  REQUIRE(Radian(1.0f) + Radian(2.0f) == Radian(3.0f));
+  REQUIRE(Radian(1.0f) - Radian(2.0f) == Radian(-1.0f));
+  REQUIRE(-Radian(1.0f) == Radian(-1.0f));
+  REQUIRE(Radian(1.0f) * 3.0f == Radian(3.0f));
+  REQUIRE(3.0f * Radian(1.0f) == Radian(3.0f));
+  REQUIRE(Radian(3.0f) / 3.0f == Radian(1.0f));
 
-  Radian RadianFromDegreeAssign;
-  RadianFromDegreeAssign = TestConst;
-  REQUIRE(RadianFromDegreeAssign.valueRadian() == Approx(Math::PI));
+  REQUIRE((Radian(Math::HALF_PI) + Radian(Degree(90.0f))).valueRadian() ==
+          Approx(Math::PI));
 
-  Radian RadianUnwind(Math::TWO_PI);
-  float unwindedVal = RadianUnwind.unwindedValue();
-  REQUIRE(unwindedVal == Approx(0.0f));
+  Radian compound(1.0f);
+  compound += Radian(0.5f);
+  REQUIRE(compound == Radian(1.5f));
+  compound -= Radian(1.0f);
+  REQUIRE(compound == Radian(0.5f));
+  compound *= 4.0f;
+  REQUIRE(compound == Radian(2.0f));
+  compound /= 2.0f;
+  REQUIRE(compound == Radian(1.0f));
 
-  RadianUnwind.unwind();
-  REQUIRE(RadianUnwind.valueRadian() == Approx(0.0f));
+  REQUIRE(Radian(1.0f) < Radian(2.0f));
+  REQUIRE(Radian(2.0f) > Radian(1.0f));
+  REQUIRE(Radian(1.0f) <= Radian(1.0f));
+  REQUIRE(Radian(1.0f) >= Radian(1.0f));
+  REQUIRE(Radian(1.0f) != Radian(2.0f));
 
-  Radian NormalRadian(Math::PI);
-  Radian RadianToadd(Math::PI);
-  NormalRadian = RadianToadd + RadianToadd;
-  REQUIRE(NormalRadian.valueDegree() == Approx(360.0f));
-
-  Degree DegreeToAdd(30.0f);
-  NormalRadian = NormalRadian + DegreeToAdd;
-  REQUIRE(NormalRadian.valueRadian() == Approx(6.8067842f));
-
-  NormalRadian.unwind();
-  NormalRadian += RadianToadd;
-  REQUIRE(NormalRadian.valueRadian() == Approx((7.0f * Math::PI) / 6.0f));
-
-  NormalRadian += DegreeToAdd;
-  REQUIRE(NormalRadian.valueDegree() == Approx(240.0f));
-
-  Radian NegativeRadian(-NormalRadian);
-  REQUIRE(NegativeRadian.valueDegree() == Approx(-240.0f));
-
-  Radian RadianToSubtract(Math::PI);
-  NormalRadian = NormalRadian - NormalRadian;
-  REQUIRE(NormalRadian.valueDegree() == Approx(0.0f));
-
-  Degree DegreeToSubtract(90.0f);
-  NormalRadian = NormalRadian - DegreeToSubtract;
-  REQUIRE(NormalRadian.valueRadian() == Approx(-Math::HALF_PI));
-
-  NormalRadian -= RadianToSubtract;
-  REQUIRE(NormalRadian.valueRadian() == Approx(-4.71239f));
-
-  NormalRadian -= DegreeToSubtract;
-  REQUIRE(NormalRadian.valueRadian() == Approx(-6.2831855f));
-
-  Radian RadianToCompare1(Math::PI);
-  Radian RadianToCompare2(Math::TWO_PI);
-  float FloatToCompare1 = Math::TWO_PI;
-  float FloatToCompare2 = Math::PI;
-  Degree DegreeToCompare1(360.0f);
-
-  // Radian to Radian
-  REQUIRE(RadianToCompare1 < RadianToCompare2);
-  REQUIRE_FALSE(RadianToCompare1 > RadianToCompare2);
-  REQUIRE(RadianToCompare1 <= RadianToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 >= RadianToCompare2);
-  REQUIRE_FALSE(RadianToCompare1 == RadianToCompare2);
-  REQUIRE(RadianToCompare1 != RadianToCompare2);
-
-  // Radian to Degree
-  REQUIRE(RadianToCompare1 < DegreeToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 > DegreeToCompare1);
-  REQUIRE(RadianToCompare1 <= DegreeToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 >= DegreeToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 == DegreeToCompare1);
-  REQUIRE(RadianToCompare1 != DegreeToCompare1);
-
-  // Radian to float
-  REQUIRE(RadianToCompare1 < FloatToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 > FloatToCompare1);
-  REQUIRE(RadianToCompare1 <= RadianToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 >= FloatToCompare1);
-  REQUIRE_FALSE(RadianToCompare1 == FloatToCompare1);
-  REQUIRE(RadianToCompare1 != FloatToCompare1);
-
-  // Float as lValue to Radian
-  REQUIRE(FloatToCompare2 < RadianToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 > RadianToCompare2);
-  REQUIRE(FloatToCompare2 <= RadianToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 >= RadianToCompare2);
-  REQUIRE_FALSE(FloatToCompare2 == RadianToCompare2);
-  REQUIRE(FloatToCompare2 != RadianToCompare2);
-
-  // Float as rValue to Radian
-  REQUIRE(Math::PI < RadianToCompare2);
-  REQUIRE_FALSE(Math::PI > RadianToCompare2);
-  REQUIRE(Math::PI <= RadianToCompare2);
-  REQUIRE_FALSE(Math::PI >= RadianToCompare2);
-  REQUIRE_FALSE(Math::PI == RadianToCompare2);
-  REQUIRE(Math::PI != RadianToCompare2);
-
-  // Const checks
-  const Radian ConstRadian(Math::PI);
-  const Degree ConstDegree(180.0f);
-
-  Radian AddRes = ConstRadian + ConstDegree;
-  REQUIRE(AddRes.valueDegree() == Approx(360.0f));
-
-  REQUIRE(ConstRadian == ConstDegree);
-  REQUIRE_FALSE(ConstRadian != ConstDegree);
-  REQUIRE_FALSE(ConstRadian > ConstDegree);
-  REQUIRE(ConstRadian >= ConstDegree);
-  REQUIRE_FALSE(ConstRadian < ConstDegree);
-  REQUIRE(ConstRadian <= ConstDegree);
-
-  REQUIRE(ConstRadian == Math::PI);
-  REQUIRE_FALSE(ConstRadian != Math::PI);
-  REQUIRE_FALSE(ConstRadian > Math::PI);
-  REQUIRE(ConstRadian >= Math::PI);
-  REQUIRE_FALSE(ConstRadian < Math::PI);
-  REQUIRE(ConstRadian <= Math::PI);
+  Radian toUnwind(Math::TWO_PI);
+  REQUIRE(toUnwind.unwindedValue() == 0.0f);
+  toUnwind.unwind();
+  REQUIRE(toUnwind.valueRadian() == 0.0f);
+  REQUIRE(Radian(4.71239f).unwindedValue() == Approx(-1.5707955f));
 }
 
 /************************************************************************/
@@ -503,20 +332,17 @@ TEST_CASE("chUtilities - MathTrigonometricRadianDegree") {
   REQUIRE(Math::tan(DegreeToTest2) == Approx(0.0f).margin(Math::KINDA_SMALL_NUMBER));
 
   Radian RadiancoAcos = Math::acos(-1.0f);
-  Degree DegreecoAcos;
-  DegreecoAcos = Math::acos(-1.0f);
+  const Degree DegreecoAcos(Math::acos(-1.0f));
   REQUIRE(RadiancoAcos.valueDegree() == Approx(180.0f).margin(Math::KINDA_SMALL_NUMBER));
   REQUIRE(DegreecoAcos.valueDegree() == Approx(180.0f).margin(Math::KINDA_SMALL_NUMBER));
 
   Radian RadiancoAsin = Math::asin(1.0f);
-  Degree DegreecoAsin;
-  DegreecoAsin = Math::asin(1.0f);
+  const Degree DegreecoAsin(Math::asin(1.0f));
   REQUIRE(RadiancoAsin.valueDegree() == Approx(90.0f).margin(Math::KINDA_SMALL_NUMBER));
   REQUIRE(DegreecoAsin.valueDegree() == Approx(90.0f).margin(Math::KINDA_SMALL_NUMBER));
 
   Radian RadiancoAtan = Math::atan(1.0f);
-  Degree DegreecoAtan;
-  DegreecoAtan = Math::atan(1.0f);
+  const Degree DegreecoAtan(Math::atan(1.0f));
   REQUIRE(RadiancoAtan.valueDegree() == Approx(45.0f).margin(Math::KINDA_SMALL_NUMBER));
   REQUIRE(DegreecoAtan.valueDegree() == Approx(45.0f).margin(Math::KINDA_SMALL_NUMBER));
 
@@ -667,6 +493,40 @@ TEST_CASE("chUtilities - Vector3") {
   REQUIRE(compound == Vector3(0.0f, 1.0f, 2.0f));
   compound *= 3.0f;
   REQUIRE(compound == Vector3(0.0f, 3.0f, 6.0f));
+}
+
+TEST_CASE("chUtilities - Vector2I Vector3I") {
+  const Vector2I zeroed2{};
+  const Vector3I zeroed3{};
+  REQUIRE(zeroed2 == Vector2I::ZERO);
+  REQUIRE(zeroed3 == Vector3I::ZERO);
+
+  static_assert(Vector2I::UNIT_X + Vector2I::UNIT_Y == Vector2I::UNIT);
+  static_assert(Vector3I::UNIT_X + Vector3I::UNIT_Y + Vector3I::UNIT_Z == Vector3I::UNIT);
+
+  // != used to need every component to differ.
+  REQUIRE(Vector2I(1, 2) != Vector2I(1, 3));
+  REQUIRE(Vector3I(1, 2, 3) != Vector3I(1, 2, 4));
+  REQUIRE_FALSE(Vector2I(1, 2) != Vector2I(1, 2));
+  REQUIRE_FALSE(Vector3I(1, 2, 3) != Vector3I(1, 2, 3));
+
+  REQUIRE(Vector2I(1, 2) + Vector2I(3, 4) == Vector2I(4, 6));
+  REQUIRE(Vector2I(1, 2) - Vector2I(3, 4) == Vector2I(-2, -2));
+  REQUIRE(-Vector2I(1, -2) == Vector2I(-1, 2));
+  REQUIRE(Vector2I(1, 2) * 3 == Vector2I(3, 6));
+  REQUIRE(3 * Vector2I(1, 2) == Vector2I(3, 6));
+
+  REQUIRE(Vector3I(1, 2, 3) + Vector3I::UNIT == Vector3I(2, 3, 4));
+  REQUIRE(Vector3I(1, 2, 3) - Vector3I::UNIT == Vector3I(0, 1, 2));
+  REQUIRE(-Vector3I(1, -2, 3) == Vector3I(-1, 2, -3));
+  REQUIRE(Vector3I(1, 2, 3) * 2 == Vector3I(2, 4, 6));
+  REQUIRE(2 * Vector3I(1, 2, 3) == Vector3I(2, 4, 6));
+
+  Vector3I compound(1, 2, 3);
+  compound += Vector3I::UNIT;
+  compound -= Vector3I(2, 2, 2);
+  compound *= 3;
+  REQUIRE(compound == Vector3I(0, 3, 6));
 }
 
 TEST_CASE("chUtilities - Vector4") {
