@@ -43,6 +43,7 @@ struct PathState
   Path savedDirectory;
   Path logDirectory;
   Path configDirectory;
+  Path projectConfigDirectory;
 };
 
 PathState&
@@ -158,6 +159,7 @@ EnginePaths::initialize()
   state.savedDirectory = Path("/Saved");
   state.logDirectory = state.savedDirectory.join(Path("Logs"));
   state.configDirectory = state.savedDirectory.join(Path("Config"));
+  state.projectConfigDirectory = state.projectRoot.join(Path("Config"));
 
   const Path savedDirectory = state.projectRoot.join(Path("Saved"));
   FileSystem::createDirectories(state.absoluteGameAssetDirectory);
@@ -259,6 +261,13 @@ EnginePaths::getConfigDirectory()
 {
   initialize();
   return pathState().configDirectory;
+}
+
+const Path&
+EnginePaths::getProjectConfigDirectory()
+{
+  initialize();
+  return pathState().projectConfigDirectory;
 }
 
 } // namespace chEngineSDK

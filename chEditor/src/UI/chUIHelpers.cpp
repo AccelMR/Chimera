@@ -9,7 +9,7 @@
 #include "chUIHelpers.h"
 
 #include "chAssetCodec.h"
-#include "chCommandLine.h"
+#include "chConsoleVariable.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chDisplayEventHandle.h"
@@ -35,6 +35,15 @@ namespace chEngineSDK {
 namespace chUIHelpers {
 
 CH_LOG_DECLARE_STATIC(UIImguiHelper, All);
+
+namespace {
+// Off by default: windows outside the main one cost a swap chain each, and Wayland does
+// not let applications place their windows.
+ConsoleVariable<bool> g_cvarFloatingWindows("Editor.FloatingWindows",
+                                            false,
+                                            "Lets panels leave the main window.",
+                                            "FloatingWindows");
+} // namespace
 
 bool UIHelpers::bShowDemoWindow = false;
 bool UIHelpers::bRenderImGui = true;
@@ -312,9 +321,7 @@ UIHelpers::initFontConfig() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
-  // Off by default: windows outside the main one cost a swap chain each, and Wayland does
-  // not let applications place their windows.
-  if (CommandLine::hasFlag("FloatingWindows")) {
+  if (g_cvarFloatingWindows.get()) {
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   }
 

@@ -16,6 +16,7 @@
 #include <chrono>
 
 #include "chCommandLine.h"
+#include "chEngineConfig.h"
 #include "chEnginePaths.h"
 #include "chException.h"
 #include "chLogger.h"
@@ -67,6 +68,9 @@ BaseApplication::launch(int32 argc,
     EnginePaths::initialize();
     const Path logFile = EnginePaths::getLogDirectory().join(Path(info.logFileName));
     logger.setFileOutput(true, logFile.toString());
+
+    // After the paths, because the project decides which config files exist.
+    EngineConfig::initialize();
 
     startUpApplication();
     BaseApplication& app = instance();

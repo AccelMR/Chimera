@@ -351,6 +351,20 @@ StringUtils::trim(const String& str)
   return str.substr(start, end - start + 1);
 }
 
+/*
+ */
+StringView
+StringUtils::trimView(StringView text) noexcept
+{
+  const SIZE_T start = text.find_first_not_of(kWhitespace);
+  if (StringView::npos == start) {
+    return StringView();
+  }
+
+  const SIZE_T end = text.find_last_not_of(kWhitespace);
+  return text.substr(start, end - start + 1);
+}
+
 
 /*
  */

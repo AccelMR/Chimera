@@ -10,7 +10,7 @@
 
 #include "chEditorApplication.h"
 #include "chAssetManager.h"
-#include "chCommandLine.h"
+#include "chConsoleVariable.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
@@ -51,6 +51,13 @@ CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
 using namespace chEngineSDK::chUIHelpers;
+
+namespace {
+ConsoleVariable<String> g_cvarStartupScene("Editor.StartupScene",
+                                           "DefaultScene",
+                                           "Scene asset opened when the editor starts.",
+                                           "scene");
+} // namespace
 
 
 /*
@@ -189,7 +196,7 @@ EditorApplication::initializeEditorComponents() {
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
 
-  const String sceneName = CommandLine::getValue("scene", "DefaultScene");
+  const String& sceneName = g_cvarStartupScene.get();
   SceneManager::startUp();
   SceneManager& sceneManager = SceneManager::instance();
 

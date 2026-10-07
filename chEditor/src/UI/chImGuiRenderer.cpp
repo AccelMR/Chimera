@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chImGuiRenderer.h"
 
+#include "chGraphicsSettings.h"
 #include "chIBuffer.h"
 #include "chICommandList.h"
 #include "chIGraphicsAPI.h"
@@ -260,12 +261,12 @@ void
 ImGuiRenderer::createWindow(ImGuiViewport* viewport)
 {
   WindowData& window = getRenderer().m_windows[viewport->ID];
-  // Without vsync, like the main window.
+  // Same vsync choice as the main window.
   window.swapChain = IGraphicsAPI::instance().createSwapChain(
       {.window = getViewportWindow(*viewport),
        .width = toPixels(viewport->Size.x, viewport->FramebufferScale.x),
        .height = toPixels(viewport->Size.y, viewport->FramebufferScale.y),
-       .vsync = false,
+       .vsync = g_cvarVSync.get(),
        .debugName = "ImGui Window SwapChain"});
   viewport->RendererUserData = &window;
 }

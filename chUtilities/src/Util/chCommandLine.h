@@ -45,6 +45,13 @@ class CH_UTILITY_EXPORT CommandLine
   getValue(const String& key, const String& defaultValue = "");
 
   /**
+   * Returns nullptr when the option is missing, so "-Key=" (an empty value) can be told
+   * apart from no option. The pointer stays valid until the next initialize.
+   */
+  NODISCARD static const String*
+  tryGetValue(const String& key);
+
+  /**
    * Returns defaultValue when the option is missing or its value is not a whole number.
    */
   NODISCARD static int32

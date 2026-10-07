@@ -290,6 +290,12 @@ class CH_UTILITY_EXPORT StringUtils
   trim(const String& str);
 
   /**
+   * Same as trim, without allocating: the result points into text.
+   */
+  NODISCARD static StringView
+  trimView(StringView text) noexcept;
+
+  /**
    * Buffer sizes that fit any number written by toChars: "-9223372036854775808" and
    * "-2.2250738585072014e-308".
    */

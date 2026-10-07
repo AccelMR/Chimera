@@ -92,8 +92,17 @@ class CH_CORE_EXPORT EnginePaths
   NODISCARD static const Path&
   getLogDirectory();
 
+  /**
+   * Virtual folder of the user's config, "/Saved/Config": what the program writes.
+   */
   NODISCARD static const Path&
   getConfigDirectory();
+
+  /**
+   * Real folder of the project's config, <Project>/Config: what the project ships.
+   */
+  NODISCARD static const Path&
+  getProjectConfigDirectory();
 
   NODISCARD static constexpr StringView
   getEngineAssetExtension() noexcept

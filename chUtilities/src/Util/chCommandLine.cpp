@@ -82,6 +82,16 @@ CommandLine::getValue(const String& key, const String& defaultValue)
 
 /*
  */
+const String*
+CommandLine::tryGetValue(const String& key)
+{
+  const CommandLineData& data = getData();
+  const auto it = data.values.find(StringUtils::toLower(key));
+  return data.values.end() != it ? &it->second : nullptr;
+}
+
+/*
+ */
 int32
 CommandLine::getInt(const String& key, int32 defaultValue)
 {

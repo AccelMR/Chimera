@@ -11,14 +11,16 @@
 #include <chrono>
 #include <thread>
 
-#include "chCommandLine.h"
+#include "chConsoleVariable.h"
 #include "chDisplayEventHandle.h"
 #include "chDisplayManager.h"
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
 #include "chEventDispatcherManager.h"
+#include "chGraphicsSettings.h"
 #include "chGraphicsTypes.h"
 #include "chLogger.h"
+#include "chMath.h"
 #include "chStringUtils.h"
 
 // Include graphics API
@@ -30,6 +32,28 @@ CH_LOG_DECLARE_STATIC(WindowedApp, All);
 
 namespace chEngineSDK {
 using namespace std::chrono;
+
+namespace {
+ConsoleVariable<String> g_cvarApplicationName("Application.Name",
+                                              "Chimera Engine",
+                                              "Name the platform shows for the program.",
+                                              "AppName");
+
+ConsoleVariable<String> g_cvarWindowTitle("Window.Title",
+                                          "Chimera Engine Windowed Application",
+                                          "Title of the main window.",
+                                          "WindowTitle");
+
+ConsoleVariable<int32> g_cvarWindowWidth("Window.Width",
+                                         2560,
+                                         "Width of the main window when it opens.",
+                                         "Width");
+
+ConsoleVariable<int32> g_cvarWindowHeight("Window.Height",
+                                          1440,
+                                          "Height of the main window when it opens.",
+                                          "Height");
+} // namespace
 
 /*
  */
@@ -85,10 +109,10 @@ WindowedApplication::initialize() {
 
   loadGraphicsAPI();
   initializeDisplay(
-      {.name = CommandLine::getValue("AppName", "Chimera Engine"),
-       .title = CommandLine::getValue("WindowTitle", "Chimera Engine Windowed Application"),
-       .width = static_cast<uint32>(CommandLine::getInt("Width", 2560)),
-       .height = static_cast<uint32>(CommandLine::getInt("Height", 1440)),
+      {.name = g_cvarApplicationName.get(),
+       .title = g_cvarWindowTitle.get(),
+       .width = static_cast<uint32>(Math::max(1, g_cvarWindowWidth.get())),
+       .height = static_cast<uint32>(Math::max(1, g_cvarWindowHeight.get())),
        .resizable = true,
        .platformFlags = IGraphicsAPI::instance().getPlatformWindowFlags()});
   initializeGraphics();
@@ -166,8 +190,7 @@ WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
 void
 WindowedApplication::loadGraphicsAPI()
 {
-  // -GraphicsAPI=<plugin name>; the build picks the default.
-  const String graphicsAPIName = CommandLine::getValue("GraphicsAPI", CH_DEFAULT_GRAPHICS_API);
+  const String& graphicsAPIName = g_cvarGraphicsAPI.get();
 
   const Path& pluginDirectory = EnginePaths::getPluginDirectory();
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,
@@ -202,7 +225,8 @@ void
 WindowedApplication::initializeGraphics()
 {
   CH_LOG_INFO(WindowedApp, "Initializing graphics subsystem.");
-  IGraphicsAPI::instance().initialize({.enableValidationLayer = true});
+  IGraphicsAPI::instance().initialize(
+      {.enableValidationLayer = g_cvarValidationLayer.get()});
   CH_LOG_INFO(WindowedApp, "Graphics subsystem initialized successfully.");
 }
 
@@ -218,7 +242,7 @@ WindowedApplication::initializeRenderComponents()
       {.window = m_display->getPlatformHandler(),
        .width = m_display->getWidth(),
        .height = m_display->getHeight(),
-       .vsync = false,
+       .vsync = g_cvarVSync.get(),
        .debugName = "Main SwapChain"});
   if (!m_swapChain) {
     CH_EXCEPT(InternalErrorException, "Failed to create SwapChain.");
