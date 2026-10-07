@@ -68,6 +68,8 @@ template<typename Visitor>
 void
 visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
 {
+  // PolygonMode::Line (wireframe view modes).
+  visit(chain.core.features.fillModeNonSolid, "fillModeNonSolid");
   visit(chain.vulkan13.dynamicRendering, "dynamicRendering");
   visit(chain.vulkan13.synchronization2, "synchronization2");
   visit(chain.vulkan12.timelineSemaphore, "timelineSemaphore");

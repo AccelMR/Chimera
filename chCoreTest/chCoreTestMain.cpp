@@ -22,6 +22,7 @@
 #include "chQuaternion.h"
 #include "chRay.h"
 #include "chRenderGraph.h"
+#include "chRenderSettings.h"
 #include "chRotator.h"
 #include "chScene.h"
 #include "chShapeOverlap.h"
@@ -593,6 +594,28 @@ TEST_CASE("chCore - RenderGraph")
     REQUIRE(graph.getTransientSlotCount() == 1);
   }
 
+  SECTION("Attachments are stored only when needed later")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle depth = graph.createTexture("Depth", depthDesc);
+    graph.addPass("Scene").writeColor(output).writeDepth(depth);
+    graph.compile();
+    REQUIRE(graph.getAttachmentStoreOp(0, output) == StoreOp::Store);
+    REQUIRE(graph.getAttachmentStoreOp(0, depth) == StoreOp::DontCare);
+
+    // An overlay that loads the depth makes the scene pass keep it; the overlay itself
+    // is the last user.
+    graph.reset();
+    const RGTextureHandle output2 = importBackBuffer();
+    const RGTextureHandle depth2 = graph.createTexture("Depth", depthDesc);
+    graph.addPass("Scene").writeColor(output2).writeDepth(depth2);
+    graph.addPass("Overlay").writeColor(output2, LoadOp::Load).writeDepth(depth2, LoadOp::Load);
+    graph.compile();
+    REQUIRE(graph.getAttachmentStoreOp(0, depth2) == StoreOp::Store);
+    REQUIRE(graph.getAttachmentStoreOp(1, depth2) == StoreOp::DontCare);
+    REQUIRE(graph.getAttachmentStoreOp(1, output2) == StoreOp::Store);
+  }
+
   SECTION("Passes nobody needs are dropped")
   {
     const RGTextureHandle output = importBackBuffer();
@@ -723,4 +746,15 @@ TEST_CASE("chCore - RenderGraph")
     graph.reset();
     REQUIRE(counter.use_count() == 1);
   }
+}
+
+TEST_CASE("chCore - ViewMode names")
+{
+  for (uint32 i = 0; i < static_cast<uint32>(ViewMode::COUNT); ++i) {
+    const ViewMode mode = static_cast<ViewMode>(i);
+    REQUIRE(ViewModeUtils::fromName(ViewModeUtils::getName(mode)) == mode);
+  }
+  REQUIRE(ViewModeUtils::fromName("wireFRAME") == ViewMode::Wireframe);
+  REQUIRE_FALSE(ViewModeUtils::fromName("Unknown").has_value());
+  REQUIRE(ViewModeUtils::fromName(g_cvarViewMode.getDefault()) == ViewMode::Lit);
 }

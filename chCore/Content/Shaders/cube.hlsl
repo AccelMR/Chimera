@@ -3,6 +3,7 @@
 // so they are declared row_major and applied as mul(vector, matrix).
 
 #include "chBindless.hlsli"
+#include "chTransforms.hlsli"
 
 struct CameraData
 {
@@ -10,7 +11,7 @@ struct CameraData
   row_major float4x4 projection;
 };
 
-// Must match NastyRenderer's push constant struct.
+// Must match DrawPushConstants in chForwardRenderPath.cpp.
 struct PushConstants
 {
   row_major float4x4 model;
@@ -46,7 +47,7 @@ VSMain(VSInput input)
   VSOutput output;
   output.worldPosition = worldPosition.xyz;
   output.position = mul(mul(worldPosition, camera.view), camera.projection);
-  output.normal = mul(input.normal, (float3x3)g_push.model);
+  output.normal = transformNormal(input.normal, g_push.model);
   output.texCoord = input.texCoord;
   return output;
 }

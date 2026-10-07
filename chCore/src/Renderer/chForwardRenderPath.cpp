@@ -80,7 +80,7 @@ ForwardRenderPath::~ForwardRenderPath() = default;
 
 /*
  */
-void
+RGTextureHandle
 ForwardRenderPath::addPasses(RenderGraph& graph,
                              const RenderView& view,
                              RGTextureHandle output)
@@ -98,6 +98,7 @@ ForwardRenderPath::addPasses(RenderGraph& graph,
       .setExecute([this, camera = &view.camera, items = view.items](RenderPassContext& context) {
         recordDraws(context, *camera, items);
       });
+  return depth;
 }
 
 /*

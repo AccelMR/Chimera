@@ -29,7 +29,7 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
 
   ~ForwardRenderPath() override;
 
-  void
+  RGTextureHandle
   addPasses(RenderGraph& graph, const RenderView& view, RGTextureHandle output) override;
 
  private:

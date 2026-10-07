@@ -80,7 +80,8 @@ class RenderPassExecutor
 
 /**
  * Declares what one pass reads and writes. A pass that writes color or depth gets its
- * rendering begun and ended by the graph, with the attachments in the order declared.
+ * rendering begun and ended by the graph, with the attachments in the order declared. The
+ * graph stores an attachment only when a later pass (or the end of the frame) needs it.
  */
 class CH_CORE_EXPORT RenderPassBuilder
 {
@@ -94,14 +95,10 @@ class CH_CORE_EXPORT RenderPassBuilder
   RenderPassBuilder&
   writeColor(RGTextureHandle texture,
              LoadOp loadOp = LoadOp::Clear,
-             const LinearColor& clearColor = LinearColor::Black,
-             StoreOp storeOp = StoreOp::Store);
+             const LinearColor& clearColor = LinearColor::Black);
 
   RenderPassBuilder&
-  writeDepth(RGTextureHandle texture,
-             LoadOp loadOp = LoadOp::Clear,
-             float clearDepth = 1.0f,
-             StoreOp storeOp = StoreOp::DontCare);
+  writeDepth(RGTextureHandle texture, LoadOp loadOp = LoadOp::Clear, float clearDepth = 1.0f);
 
   /**
    * Keeps the pass even when nothing reads what it writes (readbacks, captures).
@@ -228,6 +225,12 @@ class CH_CORE_EXPORT RenderGraph
   NODISCARD TextureUsageFlags
   getTextureUsage(RGTextureHandle texture) const;
 
+  /**
+   * Store operation compile() chose for a texture a compiled pass writes as an attachment.
+   */
+  NODISCARD StoreOp
+  getAttachmentStoreOp(uint32 compiledIndex, RGTextureHandle texture) const;
+
   static constexpr uint32 INVALID_INDEX = ~0u;
 
  private:
@@ -247,6 +250,7 @@ class CH_CORE_EXPORT RenderGraph
     AccessType type = AccessType::Read;
     ResourceState state = ResourceState::Undefined;
     LoadOp loadOp = LoadOp::Load;
+    // Chosen by compile().
     StoreOp storeOp = StoreOp::Store;
     LinearColor clearColor = LinearColor::Black;
     float clearDepth = 1.0f;

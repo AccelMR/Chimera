@@ -38,8 +38,11 @@ class CH_CORE_EXPORT IRenderPath
 
   /**
    * Adds the passes that draw the view into output, which they overwrite completely.
+   *
+   * @return the depth of the scene, so later passes (overlays, the editor) can test against
+   *         it; invalid when the path keeps no depth.
    */
-  virtual void
+  virtual RGTextureHandle
   addPasses(RenderGraph& graph, const RenderView& view, RGTextureHandle output) = 0;
 };
 

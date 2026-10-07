@@ -44,8 +44,7 @@ RenderPassBuilder::read(RGTextureHandle texture)
 RenderPassBuilder&
 RenderPassBuilder::writeColor(RGTextureHandle texture,
                               LoadOp loadOp,
-                              const LinearColor& clearColor,
-                              StoreOp storeOp)
+                              const LinearColor& clearColor)
 {
   CH_ASSERT(!FormatUtils::isDepth(m_graph.getTextureDesc(texture).format));
   CH_ASSERT(m_graph.m_passes[m_passIndex].colorCount < GraphicsLimits::MAX_COLOR_ATTACHMENTS);
@@ -54,7 +53,6 @@ RenderPassBuilder::writeColor(RGTextureHandle texture,
                      .type = RenderGraph::AccessType::Color,
                      .state = ResourceState::RenderTarget,
                      .loadOp = loadOp,
-                     .storeOp = storeOp,
                      .clearColor = clearColor});
   ++m_graph.m_passes[m_passIndex].colorCount;
   return *this;
@@ -63,10 +61,7 @@ RenderPassBuilder::writeColor(RGTextureHandle texture,
 /*
  */
 RenderPassBuilder&
-RenderPassBuilder::writeDepth(RGTextureHandle texture,
-                              LoadOp loadOp,
-                              float clearDepth,
-                              StoreOp storeOp)
+RenderPassBuilder::writeDepth(RGTextureHandle texture, LoadOp loadOp, float clearDepth)
 {
   CH_ASSERT(FormatUtils::isDepth(m_graph.getTextureDesc(texture).format));
   m_graph.addAccess(m_passIndex,
@@ -74,7 +69,6 @@ RenderPassBuilder::writeDepth(RGTextureHandle texture,
                      .type = RenderGraph::AccessType::Depth,
                      .state = ResourceState::DepthWrite,
                      .loadOp = loadOp,
-                     .storeOp = storeOp,
                      .clearDepth = clearDepth});
   return *this;
 }
@@ -379,13 +373,31 @@ RenderGraph::getTextureUsage(RGTextureHandle texture) const
 
 /*
  */
+StoreOp
+RenderGraph::getAttachmentStoreOp(uint32 compiledIndex, RGTextureHandle texture) const
+{
+  CH_ASSERT(compiledIndex < m_compiledPasses.size());
+  const Pass& pass = m_passes[m_compiledPasses[compiledIndex].pass];
+  for (uint32 i = 0; i < pass.accessCount; ++i) {
+    const Access& access = m_accesses[pass.firstAccess + i];
+    if (access.texture == texture.index && access.type != AccessType::Read) {
+      return access.storeOp;
+    }
+  }
+  CH_ASSERT(false && "The pass does not write this texture as an attachment");
+  return StoreOp::DontCare;
+}
+
+/*
+ */
 void
 RenderGraph::cullPasses()
 {
   // Walks the passes backwards keeping which textures a later pass still needs: imported
   // ones with a final state are needed at the end of the frame. A pass runs when it has a
   // side effect or writes a needed texture; then what it overwrites is no longer needed
-  // before it, and what it reads (or loads before writing) is.
+  // before it, and what it reads (or loads before writing) is. Whether a later pass needs a
+  // texture is also whether the pass that writes it must store it.
   m_neededTextures.resize(m_textures.size());
   for (SIZE_T i = 0; i < m_textures.size(); ++i) {
     const TextureNode& texture = m_textures[i];
@@ -395,7 +407,7 @@ RenderGraph::cullPasses()
   m_livePasses.resize(m_passes.size());
   for (SIZE_T passIndex = m_passes.size(); passIndex-- > 0;) {
     const Pass& pass = m_passes[passIndex];
-    const Access* accesses = m_accesses.data() + pass.firstAccess;
+    Access* accesses = m_accesses.data() + pass.firstAccess;
 
     bool isLive = pass.sideEffect;
     for (uint32 i = 0; i < pass.accessCount && !isLive; ++i) {
@@ -407,7 +419,13 @@ RenderGraph::cullPasses()
     }
 
     for (uint32 i = 0; i < pass.accessCount; ++i) {
-      const Access& access = accesses[i];
+      Access& access = accesses[i];
+      if (access.type != AccessType::Read) {
+        // A side effect pass keeps what it writes even if no pass reads it.
+        access.storeOp = (m_neededTextures[access.texture] || pass.sideEffect)
+                             ? StoreOp::Store
+                             : StoreOp::DontCare;
+      }
       m_neededTextures[access.texture] =
           access.type == AccessType::Read || access.loadOp == LoadOp::Load;
     }
