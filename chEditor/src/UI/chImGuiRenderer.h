@@ -43,13 +43,12 @@ class ImGuiRenderer
   operator=(const ImGuiRenderer&) = delete;
 
   /**
-   * Draws the main window UI over the target, which must be in the RenderTarget state.
-   * Begins and ends its own rendering and keeps what is already in the target.
+   * Draws the main window UI inside a rendering already begun on a target of that format
+   * and size (a render graph pass that loads the target).
    */
   void
   render(ICommandList& commandList,
          ImDrawData& drawData,
-         const ITextureView& target,
          Format targetFormat,
          uint32 targetWidth,
          uint32 targetHeight);
@@ -113,14 +112,22 @@ class ImGuiRenderer
   static void
   setWindowSize(ImGuiViewport* viewport, ImVec2 size);
 
+  /**
+   * Creates and updates the textures ImGui asked for, also when nothing is drawn, as
+   * ImGui expects.
+   */
   void
-  recordDrawData(ICommandList& commandList,
-                 ImDrawData& drawData,
-                 const ITextureView& target,
-                 Format targetFormat,
-                 uint32 targetWidth,
-                 uint32 targetHeight,
-                 LoadOp loadOp);
+  updateTextures(ImDrawData& drawData);
+
+  /**
+   * Records the draws inside a rendering that is already begun.
+   */
+  void
+  drawGeometry(ICommandList& commandList,
+               ImDrawData& drawData,
+               Format targetFormat,
+               uint32 targetWidth,
+               uint32 targetHeight);
 
   void
   updateTexture(ImTextureData& texture);

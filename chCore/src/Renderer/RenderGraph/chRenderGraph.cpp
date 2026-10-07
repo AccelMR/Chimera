@@ -9,7 +9,9 @@
 
 #include "chRenderGraph.h"
 
+#include "chICommandList.h"
 #include "chITexture.h"
+#include "chTransientTexturePool.h"
 
 namespace chEngineSDK {
 
@@ -187,7 +189,140 @@ RenderGraph::compile()
 
 /*
  */
-const RGTextureDesc&
+void
+RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
+{
+  CH_ASSERT(m_compiled);
+
+  m_slotEntries.resize(m_slots.size());
+  for (SIZE_T i = 0; i < m_slots.size(); ++i) {
+    m_slotEntries[i] = pool.acquire(m_slots[i].desc, m_slots[i].usage);
+  }
+
+  // Resolved after every acquire, because an acquire can move the pool's entries.
+  m_resolvedTextures.resize(m_textures.size());
+  m_resolvedViews.resize(m_textures.size());
+  for (SIZE_T i = 0; i < m_textures.size(); ++i) {
+    const TextureNode& texture = m_textures[i];
+    if (isImported(texture)) {
+      m_resolvedTextures[i] = texture.importedTexture;
+      m_resolvedViews[i] = texture.importedView;
+    }
+    else if (texture.slot != INVALID_INDEX) {
+      const TransientTexturePool::Entry& entry = pool.getEntry(m_slotEntries[texture.slot]);
+      m_resolvedTextures[i] = entry.texture.get();
+      m_resolvedViews[i] = entry.view.get();
+    }
+    else {
+      m_resolvedTextures[i] = nullptr;
+      m_resolvedViews[i] = nullptr;
+    }
+  }
+
+  for (uint32 compiledIndex = 0; compiledIndex < m_compiledPasses.size(); ++compiledIndex) {
+    submitBarriers(commandList, pool, getCompiledPassBarriers(compiledIndex));
+
+    const Pass& pass = m_passes[m_compiledPasses[compiledIndex].pass];
+    RenderingDesc renderingDesc{};
+    bool isRendering = false;
+    for (uint32 i = 0; i < pass.accessCount; ++i) {
+      const Access& access = m_accesses[pass.firstAccess + i];
+      if (access.type == AccessType::Read) {
+        continue;
+      }
+
+      const RGTextureDesc& desc = m_textures[access.texture].desc;
+      renderingDesc.width = desc.width;
+      renderingDesc.height = desc.height;
+      isRendering = true;
+      if (access.type == AccessType::Color) {
+        renderingDesc.colorAttachments[renderingDesc.colorAttachmentCount++] = {
+            .view = m_resolvedViews[access.texture],
+            .loadOp = access.loadOp,
+            .storeOp = access.storeOp,
+            .clearColor = access.clearColor};
+      }
+      else {
+        renderingDesc.depthAttachment = {.view = m_resolvedViews[access.texture],
+                                         .loadOp = access.loadOp,
+                                         .storeOp = access.storeOp,
+                                         .clearDepth = access.clearDepth};
+      }
+    }
+
+    if (isRendering) {
+      commandList.beginRendering(renderingDesc);
+      commandList.setViewport(0.0f, 0.0f, static_cast<float>(renderingDesc.width),
+                              static_cast<float>(renderingDesc.height));
+      commandList.setScissor(0, 0, renderingDesc.width, renderingDesc.height);
+    }
+
+    if (pass.executor) {
+      RenderPassContext context(*this, commandList, renderingDesc.width,
+                                renderingDesc.height);
+      pass.executor->execute(context);
+    }
+
+    if (isRendering) {
+      commandList.endRendering();
+    }
+  }
+
+  submitBarriers(commandList, pool, getFinalBarriers());
+}
+
+/*
+ */
+void
+RenderGraph::submitBarriers(ICommandList& commandList,
+                            TransientTexturePool& pool,
+                            Span<const RGBarrier> barriers)
+{
+  if (barriers.empty()) {
+    return;
+  }
+
+  m_textureBarriers.clear();
+  for (const RGBarrier& barrier : barriers) {
+    const TextureNode& texture = m_textures[barrier.texture.index];
+    ResourceState before = barrier.before;
+    if (!isImported(texture)) {
+      // The pool knows the state the last frame left the texture in, which the compiled
+      // barriers cannot (they start every slot from Undefined).
+      TransientTexturePool::Entry& entry = pool.getEntry(m_slotEntries[texture.slot]);
+      before = entry.state;
+      entry.state = barrier.after;
+    }
+    m_textureBarriers.push_back({.texture = m_resolvedTextures[barrier.texture.index],
+                                 .before = before,
+                                 .after = barrier.after});
+  }
+  commandList.barrier(m_textureBarriers);
+}
+
+/*
+ */
+const ITexture&
+RenderPassContext::getTexture(RGTextureHandle texture) const
+{
+  CH_ASSERT(texture.index < m_graph.m_resolvedTextures.size() &&
+            m_graph.m_resolvedTextures[texture.index] != nullptr);
+  return *m_graph.m_resolvedTextures[texture.index];
+}
+
+/*
+ */
+const ITextureView&
+RenderPassContext::getView(RGTextureHandle texture) const
+{
+  CH_ASSERT(texture.index < m_graph.m_resolvedViews.size() &&
+            m_graph.m_resolvedViews[texture.index] != nullptr);
+  return *m_graph.m_resolvedViews[texture.index];
+}
+
+/*
+ */
+RGTextureDesc
 RenderGraph::getTextureDesc(RGTextureHandle texture) const
 {
   CH_ASSERT(texture.index < m_textures.size());

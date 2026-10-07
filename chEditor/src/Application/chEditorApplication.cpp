@@ -19,7 +19,6 @@
 #include "chICommandList.h"
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
-#include "chITextureView.h"
 #include "chImGuiRenderer.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
@@ -118,7 +117,7 @@ EditorApplication::destroyModules()
     m_editorCamera->unbindInputEvents();
     m_editorCamera.reset();
   }
-  m_nastyRenderer.reset();
+  m_sceneRenderer.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorSelection::setGameObjectAssetPreview(nullptr);
   m_activeScene.reset();
@@ -160,8 +159,9 @@ EditorApplication::onRender(ICommandList& commandList,
 
   const uint32 width = swapChain.getWidth();
   const uint32 height = swapChain.getHeight();
-  if (width != m_nastyRenderer->getWidth() || height != m_nastyRenderer->getHeight()) {
-    m_nastyRenderer->resize(width, height);
+  if (width != m_viewportWidth || height != m_viewportHeight) {
+    m_viewportWidth = width;
+    m_viewportHeight = height;
     m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
   }
 
@@ -178,13 +178,26 @@ EditorApplication::onRender(ICommandList& commandList,
   // After the UI, which may have moved or added objects.
   m_activeScene->updateTransforms();
 
-  const ITextureView& backBuffer = swapChain.getCurrentTextureView();
-  m_nastyRenderer->onRender(commandList, backBuffer, *m_activeScene,
-                            m_editorCamera->getCamera());
+  RenderGraph& graph = m_sceneRenderer->beginFrame();
+  const RGTextureHandle backBuffer =
+      graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
+                          swapChain.getCurrentTextureView(), ResourceState::Undefined,
+                          ResourceState::Present);
+  m_sceneRenderer->addScenePasses(*m_activeScene, m_editorCamera->getCamera(), backBuffer,
+                                  UIHelpers::rendererColor);
 
   if (UIHelpers::bRenderImGui) {
-    m_imguiRenderer->render(commandList, *ImGui::GetDrawData(), backBuffer,
-                            swapChain.getFormat(), width, height);
+    graph.addPass("EditorUI")
+        .writeColor(backBuffer, LoadOp::Load)
+        .setExecute([this, format = swapChain.getFormat()](RenderPassContext& context) {
+          m_imguiRenderer->render(context.getCommandList(), *ImGui::GetDrawData(), format,
+                                  context.getWidth(), context.getHeight());
+        });
+  }
+
+  m_sceneRenderer->execute(commandList);
+
+  if (UIHelpers::bRenderImGui) {
     m_imguiRenderer->renderFloatingWindows(commandList);
   }
 }
@@ -242,13 +255,11 @@ EditorApplication::initializeEditorComponents() {
   CH_LOG_INFO(EditorApp, "Loaded scene '{0}' successfully.", sceneName);
 
   m_activeScene = scene;
-  // The scene is drawn straight into the swap chain image.
-  const ISwapChain& swapChain = *getSwapChain();
-  m_nastyRenderer = chMakeUnique<NastyRenderer>();
-  m_nastyRenderer->initialize(swapChain.getWidth(), swapChain.getHeight(),
-                              swapChain.getFormat());
-  m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
+  m_sceneRenderer = chMakeUnique<SceneRenderer>();
 
+  const ISwapChain& swapChain = *getSwapChain();
+  m_viewportWidth = swapChain.getWidth();
+  m_viewportHeight = swapChain.getHeight();
   m_editorCamera = chMakeUnique<EditorCamera>(static_cast<float>(swapChain.getWidth()),
                                               static_cast<float>(swapChain.getHeight()));
   m_editorCamera->bindInputEvents();

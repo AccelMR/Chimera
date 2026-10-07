@@ -36,10 +36,9 @@ MainMenuBarUI::renderMainMenuBar() {
   }
 
   if (ImGui::BeginMenu("Render")) {
-    if (ImGui::ColorEdit4("Renderer Color", UIHelpers::rendererColor.toFloatPtr(),
-                          ImGuiColorEditFlags_NoInputs)) {
-      //m_multiStageRenderer->setClearColors({UIHelpers::rendererColor});
-    }
+    // The scene renderer reads the color every frame.
+    ImGui::ColorEdit4("Renderer Color", UIHelpers::rendererColor.toFloatPtr(),
+                      ImGuiColorEditFlags_NoInputs);
 
     ImGui::Separator(); //--------------------------------------------------------------
     if (ImGui::SliderFloat("Font Size", &UIHelpers::baseFontSize, 1.0f, 5.0f, "%.1f",

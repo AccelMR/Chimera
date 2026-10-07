@@ -11,7 +11,7 @@
 
 #include "chWindowedApplication.h"
 
-#include "chNastyRenderer.h"
+#include "chSceneRenderer.h"
 
 #include "chUUID.h"
 
@@ -73,7 +73,10 @@ class EditorApplication : public WindowedApplication
   loadCodecs();
 
  private:
-  UniquePtr<NastyRenderer> m_nastyRenderer;
+  UniquePtr<SceneRenderer> m_sceneRenderer;
+  // Size of the swap chain the camera was last set up for.
+  uint32 m_viewportWidth = 0;
+  uint32 m_viewportHeight = 0;
   UniquePtr<EditorCamera> m_editorCamera;
   SPtr<Scene> m_activeScene;
 

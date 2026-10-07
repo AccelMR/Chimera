@@ -78,8 +78,9 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   destroyRenderer();
 
   /**
-   * Draws the frame into the current image of the swap chain, which is already in the
-   * RenderTarget state and must be left in it. Begins and ends its own rendering.
+   * Draws the frame into the current image of the swap chain. The image starts with
+   * undefined contents (state Undefined) and must be left in the Present state; importing
+   * it into a render graph with those two states does both.
    */
   virtual void
   onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) = 0;

@@ -18,6 +18,7 @@ namespace chEngineSDK {
 
 class RenderGraph;
 class RenderPassContext;
+class TransientTexturePool;
 
 /**
  * Names a texture of the current frame of a RenderGraph; it means nothing after reset().
@@ -179,7 +180,19 @@ class CH_CORE_EXPORT RenderGraph
   void
   compile();
 
-  NODISCARD const RGTextureDesc&
+  /**
+   * Records the compiled passes into the command list: the barriers, the rendering of the
+   * passes that write color or depth (with a viewport and scissor over the whole target),
+   * and the code of each pass. Created textures come from pool, which must outlive the
+   * frames in flight.
+   */
+  void
+  execute(ICommandList& commandList, TransientTexturePool& pool);
+
+  /**
+   * A copy, because creating a texture can move the ones already created.
+   */
+  NODISCARD RGTextureDesc
   getTextureDesc(RGTextureHandle texture) const;
 
   NODISCARD uint32
@@ -219,6 +232,7 @@ class CH_CORE_EXPORT RenderGraph
 
  private:
   friend class RenderPassBuilder;
+  friend class RenderPassContext;
 
   enum class AccessType : uint8
   {
@@ -307,6 +321,11 @@ class CH_CORE_EXPORT RenderGraph
   NODISCARD ResourceState&
   getTrackedState(TextureNode& texture);
 
+  void
+  submitBarriers(ICommandList& commandList,
+                 TransientTexturePool& pool,
+                 Span<const RGBarrier> barriers);
+
   template<typename Function>
   class LambdaPassExecutor final : public RenderPassExecutor
   {
@@ -342,6 +361,64 @@ class CH_CORE_EXPORT RenderGraph
   Vector<RGBarrier> m_barriers;
   uint32 m_firstFinalBarrier = 0;
   bool m_compiled = false;
+
+  // Filled by execute().
+  Vector<uint32> m_slotEntries;
+  Vector<const ITexture*> m_resolvedTextures;
+  Vector<const ITextureView*> m_resolvedViews;
+  Vector<TextureBarrier> m_textureBarriers;
+};
+
+/**
+ * What the code of a pass gets while the graph runs it.
+ */
+class CH_CORE_EXPORT RenderPassContext
+{
+ public:
+  NODISCARD FORCEINLINE ICommandList&
+  getCommandList() const
+  {
+    return m_commandList;
+  }
+
+  NODISCARD const ITexture&
+  getTexture(RGTextureHandle texture) const;
+
+  NODISCARD const ITextureView&
+  getView(RGTextureHandle texture) const;
+
+  /**
+   * Size of the pass's rendering; 0 for a pass that writes no color or depth.
+   */
+  NODISCARD FORCEINLINE uint32
+  getWidth() const
+  {
+    return m_width;
+  }
+
+  NODISCARD FORCEINLINE uint32
+  getHeight() const
+  {
+    return m_height;
+  }
+
+ private:
+  friend class RenderGraph;
+
+  RenderPassContext(const RenderGraph& graph,
+                    ICommandList& commandList,
+                    uint32 width,
+                    uint32 height) noexcept
+    : m_graph(graph),
+      m_commandList(commandList),
+      m_width(width),
+      m_height(height)
+  {}
+
+  const RenderGraph& m_graph;
+  ICommandList& m_commandList;
+  uint32 m_width;
+  uint32 m_height;
 };
 
 /*

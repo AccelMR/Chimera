@@ -307,22 +307,7 @@ WindowedApplication::render(const float deltaTime)
     return;
   }
 
-  const ITexture& backBuffer = swapChain.getCurrentTexture();
-
-  // The application clears the whole image, so its previous contents are not needed.
-  const Array<TextureBarrier, 1> toRendering = {
-      TextureBarrier{.texture = &backBuffer,
-                     .before = ResourceState::Undefined,
-                     .after = ResourceState::RenderTarget}};
-  commandList.barrier(toRendering);
-
   onRender(commandList, swapChain, deltaTime);
-
-  const Array<TextureBarrier, 1> toPresent = {
-      TextureBarrier{.texture = &backBuffer,
-                     .before = ResourceState::RenderTarget,
-                     .after = ResourceState::Present}};
-  commandList.barrier(toPresent);
 
   graphicsAPI.endFrame();
   const SwapChainStatus presentStatus = swapChain.present();

@@ -168,13 +168,12 @@ ImGuiRenderer::~ImGuiRenderer()
 void
 ImGuiRenderer::render(ICommandList& commandList,
                       ImDrawData& drawData,
-                      const ITextureView& target,
                       Format targetFormat,
                       uint32 targetWidth,
                       uint32 targetHeight)
 {
-  recordDrawData(commandList, drawData, target, targetFormat, targetWidth, targetHeight,
-                 LoadOp::Load);
+  updateTextures(drawData);
+  drawGeometry(commandList, drawData, targetFormat, targetWidth, targetHeight);
 }
 
 /*
@@ -213,9 +212,18 @@ ImGuiRenderer::renderFloatingWindows(ICommandList& commandList)
     const LoadOp loadOp = (viewport.Flags & ImGuiViewportFlags_NoRendererClear)
                               ? LoadOp::DontCare
                               : LoadOp::Clear;
-    recordDrawData(commandList, *viewport.DrawData, swapChain.getCurrentTextureView(),
-                   swapChain.getFormat(), swapChain.getWidth(), swapChain.getHeight(),
-                   loadOp);
+    updateTextures(*viewport.DrawData);
+    const uint32 width = swapChain.getWidth();
+    const uint32 height = swapChain.getHeight();
+    if (width != 0 && height != 0) {
+      // Begun even without geometry, so a cleared window is still cleared.
+      RenderingDesc renderingDesc{.colorAttachmentCount = 1, .width = width, .height = height};
+      renderingDesc.colorAttachments[0] = {.view = &swapChain.getCurrentTextureView(),
+                                           .loadOp = loadOp};
+      commandList.beginRendering(renderingDesc);
+      drawGeometry(commandList, *viewport.DrawData, swapChain.getFormat(), width, height);
+      commandList.endRendering();
+    }
 
     const Array<TextureBarrier, 1> toPresent = {
         TextureBarrier{.texture = &image,
@@ -299,36 +307,28 @@ ImGuiRenderer::setWindowSize(ImGuiViewport* viewport, ImVec2 size)
 /*
  */
 void
-ImGuiRenderer::recordDrawData(ICommandList& commandList,
-                              ImDrawData& drawData,
-                              const ITextureView& target,
-                              Format targetFormat,
-                              uint32 targetWidth,
-                              uint32 targetHeight,
-                              LoadOp loadOp)
+ImGuiRenderer::updateTextures(ImDrawData& drawData)
 {
-  // Textures are created and updated even when nothing is drawn, as ImGui expects.
-  if (drawData.Textures != nullptr) {
-    for (ImTextureData* texture : *drawData.Textures) {
-      if (texture->Status != ImTextureStatus_OK) {
-        updateTexture(*texture);
-      }
-    }
-  }
-
-  if (targetWidth == 0 || targetHeight == 0) {
+  if (drawData.Textures == nullptr) {
     return;
   }
+  for (ImTextureData* texture : *drawData.Textures) {
+    if (texture->Status != ImTextureStatus_OK) {
+      updateTexture(*texture);
+    }
+  }
+}
 
-  // Begun even without geometry, so a cleared target is still cleared.
-  RenderingDesc renderingDesc{.colorAttachmentCount = 1,
-                              .width = targetWidth,
-                              .height = targetHeight};
-  renderingDesc.colorAttachments[0] = {.view = &target, .loadOp = loadOp};
-  commandList.beginRendering(renderingDesc);
-
-  if (drawData.TotalVtxCount == 0) {
-    commandList.endRendering();
+/*
+ */
+void
+ImGuiRenderer::drawGeometry(ICommandList& commandList,
+                            ImDrawData& drawData,
+                            Format targetFormat,
+                            uint32 targetWidth,
+                            uint32 targetHeight)
+{
+  if (drawData.TotalVtxCount == 0 || targetWidth == 0 || targetHeight == 0) {
     return;
   }
 
@@ -395,8 +395,6 @@ ImGuiRenderer::recordDrawData(ICommandList& commandList,
     globalIndexOffset += static_cast<uint32>(drawList->IdxBuffer.Size);
     globalVertexOffset += drawList->VtxBuffer.Size;
   }
-
-  commandList.endRendering();
 }
 
 /*
