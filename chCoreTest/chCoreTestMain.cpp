@@ -169,6 +169,7 @@ makeTestPipelineDesc(const SPtr<IShader>& vertexShader, const SPtr<IShader>& fra
                             .fragmentShader = fragmentShader,
                             .vertexLayout = VertexLayout::createPositionNormalTexCoordLayout(),
                             .colorAttachmentCount = 1,
+                            .raster = {.cullMode = CullMode::Back, .frontFace = FrontFace::Clockwise},
                             .depthFormat = Format::D32_SFLOAT};
   desc.colorFormats[0] = Format::R8G8B8A8_UNORM;
   return desc;

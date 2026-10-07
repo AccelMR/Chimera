@@ -289,7 +289,7 @@ public:
    *
    * @return Forward direction (normalized)
    */
-  NODISCARD FORCEINLINE Vector3
+  NODISCARD Vector3
   getForwardVector() const;
 
   /**
@@ -297,7 +297,7 @@ public:
    *
    * @return Right direction (normalized)
    */
-  NODISCARD FORCEINLINE Vector3
+  NODISCARD Vector3
   getRightVector() const;
 
   /**
@@ -305,7 +305,7 @@ public:
    *
    * @return Up direction (normalized)
    */
-  NODISCARD FORCEINLINE Vector3
+  NODISCARD Vector3
   getUpVector() const;
 
   /**

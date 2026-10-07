@@ -14,11 +14,13 @@ namespace chEngineSDK {
 
 bool
 GameObjectAsset::serialize(SPtr<DataStream> stream) {
+  CH_PARAMETER_UNUSED(stream);
   return true;
 }
 
 bool
 GameObjectAsset::deserialize(SPtr<DataStream> stream) {
+  CH_PARAMETER_UNUSED(stream);
   m_gameObject = chMakeShared<GameObject>("Test");
   return true;
 }

@@ -44,7 +44,7 @@ class CH_CORE_EXPORT Component
    * @param deltaTime Time elapsed since the last update
    */
   virtual void
-  update(float deltaTime) {}
+  update(float) {}
 
   /**
    * Set the owner of this component
