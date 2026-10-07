@@ -291,7 +291,7 @@ EditorApplication::bindEvents() {
     }
   });
 
-  m_onKeyUpEvent = eventDispatcher.OnKeyUp.connect([this](const KeyBoardData& keyData) {
+  m_onKeyUpEvent = eventDispatcher.OnKeyUp.connect([](const KeyBoardData& keyData) {
     switch (keyData.key) {
     case chKeyBoard::Key::F10: {
       CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");

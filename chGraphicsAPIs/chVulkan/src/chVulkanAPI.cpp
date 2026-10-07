@@ -1024,7 +1024,7 @@ VulkanAPI::initializeFunctionMap() {
     return Any(true);
   };
 
-  m_functionMap["newFrameImGui"] = [this](const Vector<Any>&) -> Any {
+  m_functionMap["newFrameImGui"] = [](const Vector<Any>&) -> Any {
     ImGui_ImplVulkan_NewFrame();
     return Any(true);
   };
@@ -1048,7 +1048,7 @@ VulkanAPI::initializeFunctionMap() {
     return Any(true);
   };
 
-  m_functionMap["addImGuiTexture"] = [this](const Vector<Any>& args) -> Any {
+  m_functionMap["addImGuiTexture"] = [](const Vector<Any>& args) -> Any {
     if (args.size() < 2) {
       CH_LOG_ERROR(Vulkan,
                    "addImGuiTexture requires at least 2 arguments: sampler and textureView");
