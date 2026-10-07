@@ -3,373 +3,175 @@
  * @file chPlatformMath.cpp
  * @author AccelMR <accel.mr@gmail.com>
  * @date 2021/09/11
- * @brief Math class wrapper, using the STD. compatible with Windows, Linux and OSX
- *
- * This class never uses double since we don't need that much precision.
- *
+ * @brief Scalar math functions that need <cmath>.
  */
- /************************************************************************/
+/************************************************************************/
 
 /************************************************************************/
 /*
  * Includes
  */
- /************************************************************************/
+/************************************************************************/
 #include "chPlatformMath.h"
 
 #include <cmath>
 
-#include "chRadian.h"
 #include "chDegree.h"
-#include "chVector3.h"
-#include "chVector4.h"
-#include "chMatrix4.h"
-#include "chPlane.h"
-#include "chSphereBoxBounds.h"
+#include "chRadian.h"
 
 namespace chEngineSDK {
 
-/************************************************************************/
+#if !USING(CH_MATH_SQRT_BUILTIN) && !USING(CH_MATH_SQRT_SSE)
 /*
- * Static variables.
  */
- /************************************************************************/
-const float PlatformMath::PI = acosf(-1.0f);
-
-const float PlatformMath::RAD2DEG = 180.0f / PI;
-
-const float PlatformMath::DEG2RAD = PI / 180.0f;
-
-const float PlatformMath::TWO_PI = PI * 2.0f;
-
-const float PlatformMath::HALF_PI = PI * 0.5f;
-
-const float PlatformMath::FORTH_PI = PI / 4.0f;
-
-const float PlatformMath::SMALL_NUMBER = (1.e-6f);
-
-const float PlatformMath::KINDA_SMALL_NUMBER = (1.e-4f);
-
-const float PlatformMath::INV_PI = 1.0f / PI;
-
-/************************************************************************/
-/*
- * Functions.
- */
- /************************************************************************/
-
-/*
-*/
 float
-PlatformMath::sqrt(float value)
+PlatformMath::sqrtNoIntrinsic(float value) noexcept
 {
   return std::sqrt(value);
 }
+#endif
 
 /*
-*/
-float
-PlatformMath::invSqrt(float value)
-{
-  return 1.0f / sqrtf(value);
-}
-
-/*
-*/
-float
-PlatformMath::pow(float value, const float vPow)
-{
-  return std::pow(value, vPow);
-}
-
-/*
-*/
-float
-PlatformMath::abs(float value)
-{
-  return std::abs(value);
-}
-
-/*
-*/
-bool
-PlatformMath::isFinite(float value)
-{
-  return std::isfinite(value);
-}
-
-/*
-*/
-float
-PlatformMath::fmod(float value1, float value2)
-{
-  return fmodf(value1, value2);
-}
-
-/*
-*/
-float
-PlatformMath::cos(const Radian& radian)
-{
-  return cosf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::cos(const Degree& degree)
-{
-  return cosf(degree.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::sin(const Radian& radian)
-{
-  return sinf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::sin(const Degree& degree)
-{
-  return sinf(degree.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::tan(const Radian& radian)
-{
-  return tanf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::tan(const Degree& degree)
-{
-  return tanf(degree.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::cosh(const Radian& radian)
-{
-  return coshf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::cosh(const Degree& degree)
-{
-  return coshf(degree.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::sinh(const Radian& radian)
-{
-  return sinhf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::sinh(const Degree& degree)
-{
-  return sinhf(degree.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::tanh(const Radian& radian)
-{
-  return tanhf(radian.valueRadian());
-}
-
-/*
-*/
-float
-PlatformMath::tanh(const Degree& degree)
-{
-  return tanhf(degree.valueRadian());
-}
-
-/*
-*/
-Radian
-PlatformMath::acos(float valuealue)
-{
-  return Radian(acosf(valuealue));
-}
-
-/*
-*/
-Radian
-PlatformMath::asin(float valuealue)
-{
-  return Radian(asinf(valuealue));
-}
-
-/*
-*/
-Radian
-PlatformMath::atan(float valuealue)
-{
-  return Radian(atanf(valuealue));
-}
-/*
-*/
-Radian
-PlatformMath::atan2(float y, const float& x)
-{
-  return Radian(atan2f(y, x));
-}
-
-/*
-*/
-Radian
-PlatformMath::acosh(float valuealue)
-{
-  return Radian(std::acoshf(valuealue));
-}
-
-/*
-*/
-Radian
-PlatformMath::asinh(float valuealue)
-{
-  return Radian(std::asinhf(valuealue));
-}
-
-/*
-*/
-Radian
-PlatformMath::atanh(float valuealue)
-{
-  return Radian(std::atanhf(valuealue));
-}
-}
-
-
-/************************************************************************/
-/*
- * Intersections
  */
-/************************************************************************/
-namespace chEngineSDK{
-/*
-*/
-bool
-PlatformMath::pointAABIntersection(const Vector3& point, const AABox& aabox)
+float
+PlatformMath::pow(float value, float exponent) noexcept
 {
-  if (point.x >= aabox.minPoint.x && point.x <= aabox.maxPoint.x &&
-      point.y >= aabox.minPoint.y && point.y <= aabox.maxPoint.y &&
-      point.z >= aabox.minPoint.z && point.z <= aabox.maxPoint.z) {
-    return true;
-  }
-  return false;
+  return std::pow(value, exponent);
 }
 
 /*
-*/
-bool
-PlatformMath::aabAABIntersection(const AABox& aabox1, const AABox& aabox2)
+ */
+float
+PlatformMath::fmod(float value, float divisor) noexcept
 {
-  if ( (aabox1.minPoint.x > aabox2.maxPoint.x) || (aabox2.minPoint.x > aabox1.maxPoint.x) ) {
-    return false;
-  }
-
-  if ( (aabox1.minPoint.y > aabox2.maxPoint.y) || (aabox2.minPoint.y > aabox1.maxPoint.y) ) {
-    return false;
-  }
-
-  if ( (aabox1.minPoint.z > aabox2.maxPoint.z) || (aabox2.minPoint.z > aabox1.maxPoint.z) ) {
-    return false;
-  }
-
-  return true;
+  return std::fmod(value, divisor);
 }
 
 /*
-*/
-bool
-PlatformMath::aabPlaneIntersection(const AABox& aabox, const Plane& plane)
+ */
+float
+PlatformMath::cos(const Radian& angle) noexcept
 {
-  const Vector3 Center = aabox.getCenter();
-  const Vector3 Extends = aabox.maxPoint - Center;
-
-  const float DotProject = (Extends.x * Math::abs(plane.x))+
-                           (Extends.y * Math::abs(plane.y)) +
-                           (Extends.z * Math::abs(plane.z));
-
-  const float Box2PlaneDistance = plane.planeDot(Center) - plane.w;
-
-  // Intersection occurs when distance s falls within [-r,+r] interval
-  return Math::abs(Box2PlaneDistance) <= DotProject;
+  return std::cos(angle.valueRadian());
 }
 
 /*
-*/
-bool
-PlatformMath::pointSphereIntersect(const Vector3& point, const Sphere& sphere)
+ */
+float
+PlatformMath::cos(const Degree& angle) noexcept
 {
-  const float Distance = point.distance(sphere.center);
-  return Distance < sphere.radius;
+  return std::cos(angle.valueRadian());
 }
 
 /*
-*/
-bool
-PlatformMath::sphereSphereIntersect(const Sphere& sphere1, const Sphere& sphere2)
+ */
+float
+PlatformMath::sin(const Radian& angle) noexcept
 {
-  const float Distance = sphere1.center.distance(sphere2.center);
-  return Distance < (sphere1.radius + sphere2.radius);
+  return std::sin(angle.valueRadian());
 }
 
 /*
-*/
-bool
-PlatformMath::aabSphereintersection(const AABox& aabox, const Sphere& sphere)
+ */
+float
+PlatformMath::sin(const Degree& angle) noexcept
 {
-  const float x = Math::max(aabox.minPoint.x, Math::min(sphere.center.x, aabox.maxPoint.x));
-  const float y = Math::max(aabox.minPoint.y, Math::min(sphere.center.y, aabox.maxPoint.y));
-  const float z = Math::max(aabox.minPoint.z, Math::min(sphere.center.z, aabox.maxPoint.z));
-  const Vector3 ClosesPoint(x, y, z);
-  const float Distance = ClosesPoint.distance(sphere.center);
-
-  return Distance < sphere.radius;
+  return std::sin(angle.valueRadian());
 }
 
 /*
-*/
-bool
-PlatformMath::spheresIntersect(const SphereBoxBounds &sphereboxbounds1,
-                               const SphereBoxBounds &sphereboxbounds2,
-                               float Tolerance /*= Math::KINDA_SMALL_NUMBER*/)
+ */
+float
+PlatformMath::tan(const Radian& angle) noexcept
 {
-  return (sphereboxbounds1.center - sphereboxbounds2.center).sqrMagnitude() <=
-          Math::sqrt(Math::max(0.f,
-            sphereboxbounds1.sphereRadius +
-            sphereboxbounds2.sphereRadius + Tolerance));
+  return std::tan(angle.valueRadian());
 }
 
 /*
-*/
-bool
-PlatformMath::boxesIntersect(const SphereBoxBounds &sphereboxbounds1,
-                             const SphereBoxBounds &sphereboxbounds2)
+ */
+float
+PlatformMath::tan(const Degree& angle) noexcept
 {
-  return Math::aabAABIntersection(sphereboxbounds1.getBox(),
-                                  sphereboxbounds2.getBox());
+  return std::tan(angle.valueRadian());
 }
 
-
+/*
+ */
+Radian
+PlatformMath::acos(float value) noexcept
+{
+  return Radian(std::acos(clamp(value, -1.0f, 1.0f)));
 }
+
+/*
+ */
+Radian
+PlatformMath::asin(float value) noexcept
+{
+  return Radian(std::asin(clamp(value, -1.0f, 1.0f)));
+}
+
+/*
+ */
+Radian
+PlatformMath::atan(float value) noexcept
+{
+  return Radian(std::atan(value));
+}
+
+/*
+ */
+Radian
+PlatformMath::atan2(float y, float x) noexcept
+{
+  return Radian(std::atan2(y, x));
+}
+
+/*
+ */
+float
+PlatformMath::cosh(float value) noexcept
+{
+  return std::cosh(value);
+}
+
+/*
+ */
+float
+PlatformMath::sinh(float value) noexcept
+{
+  return std::sinh(value);
+}
+
+/*
+ */
+float
+PlatformMath::tanh(float value) noexcept
+{
+  return std::tanh(value);
+}
+
+/*
+ */
+float
+PlatformMath::acosh(float value) noexcept
+{
+  return std::acosh(value);
+}
+
+/*
+ */
+float
+PlatformMath::asinh(float value) noexcept
+{
+  return std::asinh(value);
+}
+
+/*
+ */
+float
+PlatformMath::atanh(float value) noexcept
+{
+  return std::atanh(value);
+}
+} // namespace chEngineSDK

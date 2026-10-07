@@ -243,9 +243,9 @@ RotationTranslationMatrix::RotationTranslationMatrix(const Rotator& rotator,
                                                      const Vector3& origin) noexcept
 {
   float sp, cp, sy, cy, sr, cr;
-  Math::sin_cos(&sp, &cp, rotator.pitch.valueRadian());
-  Math::sin_cos(&sy, &cy, rotator.yaw.valueRadian());
-  Math::sin_cos(&sr, &cr, rotator.roll.valueRadian());
+  Math::sinCos(rotator.pitch.valueRadian(), sp, cp);
+  Math::sinCos(rotator.yaw.valueRadian(), sy, cy);
+  Math::sinCos(rotator.roll.valueRadian(), sr, cr);
 
   m_data[0][0] = cp * cy;
   m_data[0][1] = cp * sy;

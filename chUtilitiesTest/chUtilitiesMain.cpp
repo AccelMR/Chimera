@@ -20,6 +20,7 @@
 #include "chFileStream.h"
 #include "chFileSystem.h"
 #include "chHash.h"
+#include "chShapeOverlap.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -39,7 +40,9 @@
 #include "chVector4.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <limits>
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
@@ -93,11 +96,87 @@ TEST_CASE("chUtilities - PlatformMath") {
   REQUIRE(Math::DEG2RAD == Approx(0.0174532924f));
   REQUIRE(Math::TWO_PI == Approx(6.28318548f));
   REQUIRE(Math::HALF_PI == Approx(1.57079637f));
-  REQUIRE(Math::FORTH_PI == Approx(0.78539816339f));
+  REQUIRE(Math::QUARTER_PI == Approx(0.78539816339f));
+
+  // Every constant must be the float nearest to the exact value.
+  constexpr double kPi = 3.14159265358979323846;
+  REQUIRE(Math::PI == static_cast<float>(kPi));
+  REQUIRE(Math::TWO_PI == static_cast<float>(kPi * 2.0));
+  REQUIRE(Math::HALF_PI == static_cast<float>(kPi / 2.0));
+  REQUIRE(Math::QUARTER_PI == static_cast<float>(kPi / 4.0));
+  REQUIRE(Math::INV_PI == static_cast<float>(1.0 / kPi));
+  REQUIRE(Math::RAD2DEG == static_cast<float>(180.0 / kPi));
+  REQUIRE(Math::DEG2RAD == static_cast<float>(kPi / 180.0));
+
+  // Known at compile time, so other modules fold them.
+  static_assert(Math::PI > 3.14f && Math::PI < 3.15f);
+  static_assert(Math::abs(-2.0f) == 2.0f);
+  static_assert(Math::clamp(5, 0, 3) == 3);
+  static_assert(!Math::isFinite(std::numeric_limits<float>::infinity()));
 
   // Functions
   REQUIRE(Math::unwindDegrees(270.0f) == Approx(-90.0f));
+  REQUIRE(Math::unwindDegrees(-270.0f) == Approx(90.0f));
+  REQUIRE(Math::unwindDegrees(725.0f) == Approx(5.0f));
+  REQUIRE(Math::unwindDegrees(-725.0f) == Approx(-5.0f));
+  REQUIRE(Math::unwindDegrees(180.0f) == 180.0f);
+  REQUIRE(Math::unwindDegrees(-180.0f) == -180.0f);
+  REQUIRE(Math::unwindDegrees(45.0f) == 45.0f);
+  REQUIRE(Math::unwindDegrees(720.0f) == 0.0f);
+  REQUIRE(Math::unwindRadians(Math::TWO_PI) == 0.0f);
   REQUIRE(Math::unwindRadians(4.71239f) == Approx(-1.5707955f));
+  REQUIRE(Math::unwindRadians(-4.71239f) == Approx(1.5707955f));
+
+  // Subtracting 360 no longer changes a float this big, so a loop would never end.
+  const float bigDegrees = Math::unwindDegrees(1.0e10f);
+  REQUIRE(bigDegrees >= -180.0f);
+  REQUIRE(bigDegrees <= 180.0f);
+  const float bigRadians = Math::unwindRadians(-1.0e10f);
+  REQUIRE(bigRadians >= -Math::PI);
+  REQUIRE(bigRadians <= Math::PI);
+
+  REQUIRE(Math::square(3.0f) == 9.0f);
+  REQUIRE(Math::min(2.0f, 3.0f) == 2.0f);
+  REQUIRE(Math::max(2.0f, 3.0f) == 3.0f);
+  REQUIRE(Math::clamp(-1.0f, 0.0f, 1.0f) == 0.0f);
+  REQUIRE(Math::clamp(0.5f, 0.0f, 1.0f) == 0.5f);
+  REQUIRE(Math::nearEqual(1.0f, 1.0f + Math::SMALL_NUMBER * 0.5f));
+  REQUIRE_FALSE(Math::nearEqual(1.0f, 1.001f));
+
+  // abs clears the sign bit, so -0 becomes +0.
+  REQUIRE_FALSE(std::signbit(Math::abs(-0.0f)));
+  REQUIRE(Math::abs(-std::numeric_limits<float>::infinity()) ==
+          std::numeric_limits<float>::infinity());
+
+  REQUIRE_FALSE(Math::isFinite(std::numeric_limits<float>::infinity()));
+  REQUIRE_FALSE(Math::isFinite(-std::numeric_limits<float>::infinity()));
+  REQUIRE_FALSE(Math::isFinite(std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE(Math::isFinite(std::numeric_limits<float>::max()));
+  REQUIRE(Math::isFinite(std::numeric_limits<float>::denorm_min()));
+
+  // sinCos against the standard library over several turns, both signs.
+  float maxSinError = 0.0f;
+  float maxCosError = 0.0f;
+  for (int32 step = -2000; step <= 2000; ++step) {
+    const float angle = static_cast<float>(step) * 0.01f;
+    float sinValue = 0.0f;
+    float cosValue = 0.0f;
+    Math::sinCos(angle, sinValue, cosValue);
+    maxSinError = Math::max(maxSinError, Math::abs(sinValue - std::sin(angle)));
+    maxCosError = Math::max(maxCosError, Math::abs(cosValue - std::cos(angle)));
+  }
+  REQUIRE(maxSinError < 1.0e-5f);
+  REQUIRE(maxCosError < 1.0e-5f);
+
+  // Values that used to overflow the integer cast must not crash, and NaN stays NaN.
+  float hugeSin = 0.0f;
+  float hugeCos = 0.0f;
+  Math::sinCos(1.0e20f, hugeSin, hugeCos);
+  REQUIRE(Math::abs(hugeSin) <= 1.0f);
+  REQUIRE(Math::abs(hugeCos) <= 1.0f);
+  Math::sinCos(std::numeric_limits<float>::quiet_NaN(), hugeSin, hugeCos);
+  REQUIRE_FALSE(Math::isFinite(hugeSin));
+  REQUIRE_FALSE(Math::isFinite(hugeCos));
 
   REQUIRE(Math::sqrt(25.0f) == Approx(5.0f));
   REQUIRE(Math::invSqrt(25.0f) == Approx(0.2f));
@@ -414,15 +493,6 @@ TEST_CASE("chUtilities - MathTrigonometricRadianDegree") {
   REQUIRE(Math::tan(RadianToTest2) == Approx(0.0f).margin(Math::KINDA_SMALL_NUMBER));
   REQUIRE(Math::tan(DegreeToTest2) == Approx(0.0f).margin(Math::KINDA_SMALL_NUMBER));
 
-  REQUIRE(Math::cosh(RadianToTest2) == Approx(11.59195328f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(Math::cosh(DegreeToTest2) == Approx(11.59195328f).margin(Math::KINDA_SMALL_NUMBER));
-
-  REQUIRE(Math::sinh(RadianToTest2) == Approx(11.548739368f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(Math::sinh(DegreeToTest2) == Approx(11.548739368f).margin(Math::KINDA_SMALL_NUMBER));
-
-  REQUIRE(Math::tanh(RadianToTest1) == Approx(0.91715234f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(Math::tanh(DegreeToTest1) == Approx(0.91715234f).margin(Math::KINDA_SMALL_NUMBER));
-
   Radian RadiancoAcos = Math::acos(-1.0f);
   Degree DegreecoAcos;
   DegreecoAcos = Math::acos(-1.0f);
@@ -448,28 +518,20 @@ TEST_CASE("chUtilities - MathTrigonometricRadianDegree") {
   REQUIRE(DegreecoAtan2.valueRadian() ==
           Approx(0.785398163397f).margin(Math::KINDA_SMALL_NUMBER));
 
-  Radian RadiancoAcosh = Math::acosh(2.0f);
-  Degree DegreecoAcosh(Math::acosh(2.0f));
-  REQUIRE(RadiancoAcosh.valueRadian() ==
-          Approx(1.316957896925f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(DegreecoAcosh.valueRadian() ==
-          Approx(1.316957896925f).margin(Math::KINDA_SMALL_NUMBER));
+  // Rounding can push a dot product of unit vectors just past 1.
+  REQUIRE(Math::acos(1.0000001f).valueRadian() == 0.0f);
+  REQUIRE(Math::acos(-1.0000001f).valueRadian() == Approx(Math::PI));
+  REQUIRE(Math::asin(1.0000001f).valueRadian() == Approx(Math::HALF_PI));
+  REQUIRE(Math::asin(-1.0000001f).valueRadian() == Approx(-Math::HALF_PI));
+}
 
-  Radian RadiancoAsinh = Math::asinh(2.0f);
-  Degree DegreecoAsinh;
-  DegreecoAsinh = Math::asinh(2.0f);
-  REQUIRE(RadiancoAsinh.valueRadian() ==
-          Approx(1.443635475179f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(DegreecoAsinh.valueRadian() ==
-          Approx(1.443635475179f).margin(Math::KINDA_SMALL_NUMBER));
-
-  Radian RadiancoAtanh = Math::atanh(0.6f);
-  Degree DegreecoAtanh;
-  DegreecoAtanh = Math::atanh(0.6f);
-  REQUIRE(RadiancoAtanh.valueRadian() ==
-          Approx(0.69314718056f).margin(Math::KINDA_SMALL_NUMBER));
-  REQUIRE(DegreecoAtanh.valueRadian() ==
-          Approx(0.69314718056f).margin(Math::KINDA_SMALL_NUMBER));
+TEST_CASE("chUtilities - MathHyperbolic") {
+  REQUIRE(Math::cosh(Math::PI) == Approx(11.59195328f).margin(Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Math::sinh(Math::PI) == Approx(11.548739368f).margin(Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Math::tanh(Math::HALF_PI) == Approx(0.91715234f).margin(Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Math::acosh(2.0f) == Approx(1.316957896925f).margin(Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Math::asinh(2.0f) == Approx(1.443635475179f).margin(Math::KINDA_SMALL_NUMBER));
+  REQUIRE(Math::atanh(0.6f) == Approx(0.69314718056f).margin(Math::KINDA_SMALL_NUMBER));
 }
 
 /************************************************************************/
@@ -1249,13 +1311,13 @@ TEST_CASE("chUtilities - AABox") {
   REQUIRE(Movable.getCenter() == Vector3(2.5f, 2.5f, 2.5f));
 
   const Vector3 Half(.5f, .5f, .5f);
-  REQUIRE(Math::pointAABIntersection(Half, UnitBox));
-  REQUIRE_FALSE(Math::pointAABIntersection(Vector3::UNIT * 2, UnitBox));
+  REQUIRE(ShapeOverlap::pointBox(Half, UnitBox));
+  REQUIRE_FALSE(ShapeOverlap::pointBox(Vector3::UNIT * 2, UnitBox));
 
   const AABox Box2(Vector3::UNIT, Vector3::UNIT * 2);
   const AABox FarBox(Vector3::UNIT * 3.1f, Vector3::UNIT * 6);
-  REQUIRE(Math::aabAABIntersection(Box2, Movable));
-  REQUIRE_FALSE(Math::aabAABIntersection(Movable, FarBox));
+  REQUIRE(ShapeOverlap::boxBox(Box2, Movable));
+  REQUIRE_FALSE(ShapeOverlap::boxBox(Movable, FarBox));
 
   const Vector<Vector3> ArrayPoints = {{-1.0f, -1.0f, 1.0f}, {7.0f, 8.0f, -2.0f},
                                        {1.0f, 1.1f, 1.6f},   {7.0f, 12.0f, 22.0f},
@@ -1279,8 +1341,17 @@ TEST_CASE("chUtilities - Plane") {
   const AABox Aabox(Vector3::ZERO, Vector3::UNIT);
   const Plane Plane2AABoxTrue(Vector3::UNIT * .5f, Vector3::RIGHT);
   const Plane Plane2AABoxFalse(Vector3::UNIT * 5.f, Vector3::RIGHT);
-  REQUIRE(Math::aabPlaneIntersection(Aabox, Plane2AABoxTrue));
-  REQUIRE_FALSE(Math::aabPlaneIntersection(Aabox, Plane2AABoxFalse));
+  REQUIRE(ShapeOverlap::boxPlane(Aabox, Plane2AABoxTrue));
+  REQUIRE_FALSE(ShapeOverlap::boxPlane(Aabox, Plane2AABoxFalse));
+
+  // Planes away from the origin: w used to be subtracted twice.
+  REQUIRE(ShapeOverlap::boxPlane(Aabox, Plane(Vector3(0.0f, 0.9f, 0.0f), Vector3::RIGHT)));
+  REQUIRE(ShapeOverlap::boxPlane(Aabox, Plane(Vector3(0.0f, 1.0f, 0.0f), Vector3::RIGHT)));
+  REQUIRE_FALSE(
+      ShapeOverlap::boxPlane(Aabox, Plane(Vector3(0.0f, 1.1f, 0.0f), Vector3::RIGHT)));
+  REQUIRE_FALSE(
+      ShapeOverlap::boxPlane(Aabox, Plane(Vector3(0.0f, -0.1f, 0.0f), Vector3::RIGHT)));
+  REQUIRE(ShapeOverlap::boxPlane(Aabox, Plane(Vector3(0.5f, 0.0f, 0.0f), Vector3::FORWARD)));
 }
 
 TEST_CASE("chUtilities - Sphere") {
@@ -1297,17 +1368,17 @@ TEST_CASE("chUtilities - Sphere") {
   REQUIRE(FromPoints.center == Vector3(-46.5000000f, 4.5f, 10.30000002f));
 
   const Sphere Center2(Vector3::UNIT * 3, 1);
-  REQUIRE_FALSE(Math::pointSphereIntersect(Vector3::ZERO, Center2));
-  REQUIRE(Math::pointSphereIntersect(Vector3::UNIT * 2.5, Center2));
+  REQUIRE_FALSE(ShapeOverlap::pointSphere(Vector3::ZERO, Center2));
+  REQUIRE(ShapeOverlap::pointSphere(Vector3::UNIT * 2.5, Center2));
 
   const Sphere Center3(Vector3::UNIT * 3, 2);
   const Sphere Center1(Vector3::UNIT, .5f);
-  REQUIRE(Math::sphereSphereIntersect(Center2, Center3));
-  REQUIRE_FALSE(Math::sphereSphereIntersect(Center3, Center1));
+  REQUIRE(ShapeOverlap::sphereSphere(Center2, Center3));
+  REQUIRE_FALSE(ShapeOverlap::sphereSphere(Center3, Center1));
 
   const AABox Aabox(Vector3::ZERO, Vector3::UNIT);
-  REQUIRE(Math::aabSphereintersection(Aabox, Center1));
-  REQUIRE_FALSE(Math::aabSphereintersection(Aabox, Center3));
+  REQUIRE(ShapeOverlap::boxSphere(Aabox, Center1));
+  REQUIRE_FALSE(ShapeOverlap::boxSphere(Aabox, Center3));
 }
 
 TEST_CASE("chUtilities - Box2D") {
@@ -1339,8 +1410,17 @@ TEST_CASE("chUtilities - SphereBoxBounds") {
   REQUIRE(FromPoints.center == Vector3(-46.5000000f, 4.5f, 10.30000002f));
   REQUIRE(FromPoints.boxExtent == Vector3(53.5f, 5.5f, 12.30000002f));
 
-  REQUIRE_FALSE(Math::spheresIntersect(FromPoints, FromSphereBox));
-  REQUIRE_FALSE(Math::boxesIntersect(FromPoints, FromSphereBoxTRUE));
+  // The centers are about 48.5 apart and the radii add up to about 60.6. The old code
+  // compared the squared distance with sqrt of the radii, so it said they did not touch.
+  REQUIRE(ShapeOverlap::sphereSphere(FromPoints, FromSphereBox));
+  REQUIRE_FALSE(ShapeOverlap::boxBox(FromPoints, FromSphereBoxTRUE));
+
+  // Radii 1 and 2 with centers 3 apart touch; one unit further they do not.
+  const SphereBoxBounds Touching1(Vector3::ZERO, Vector3::UNIT, 1.0f);
+  const SphereBoxBounds Touching2(Vector3(3.0f, 0.0f, 0.0f), Vector3::UNIT, 2.0f);
+  const SphereBoxBounds Apart(Vector3(4.0f, 0.0f, 0.0f), Vector3::UNIT, 2.0f);
+  REQUIRE(ShapeOverlap::sphereSphere(Touching1, Touching2));
+  REQUIRE_FALSE(ShapeOverlap::sphereSphere(Touching1, Apart));
 }
 
 TEST_CASE("chUtilities - Utilities") {

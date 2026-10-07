@@ -21,7 +21,7 @@ namespace chEngineSDK{
 /*
  * Description:
  *     3D Sphere representation.
- * For any intersection please see Math class.
+ * For overlap tests see ShapeOverlap.
  *
  * Sample usage:
  *

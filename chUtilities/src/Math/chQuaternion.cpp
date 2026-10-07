@@ -26,7 +26,7 @@ const Quaternion Quaternion::IDENTITY = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
 Quaternion::Quaternion(const Vector3& axis, const Degree& angle) {
   const float halfRad = 0.5f * angle.valueRadian();
   float sinVal, cosVal;
-  Math::sin_cos(&sinVal, &cosVal, halfRad);
+  Math::sinCos(halfRad, sinVal, cosVal);
 
   // Use normalized axis to ensure proper quaternion creation
   Vector3 normAxis = axis;
@@ -129,9 +129,9 @@ Quaternion::unrotateVector(const Vector3& v) const {
 Quaternion::Quaternion(const Rotator& rotator)
 {
   float sp, cp, sy, cy, sr, cr;
-  Math::sin_cos(&sp, &cp, rotator.pitch.valueRadian() * 0.5f);
-  Math::sin_cos(&sy, &cy, rotator.yaw.valueRadian() * 0.5f);
-  Math::sin_cos(&sr, &cr, rotator.roll.valueRadian() * 0.5f);
+  Math::sinCos(rotator.pitch.valueRadian() * 0.5f, sp, cp);
+  Math::sinCos(rotator.yaw.valueRadian() * 0.5f, sy, cy);
+  Math::sinCos(rotator.roll.valueRadian() * 0.5f, sr, cr);
 
   // Same rotation as RotationMatrix(rotator), so both can be mixed freely.
   x = cr * sp * sy - sr * cp * cy;
