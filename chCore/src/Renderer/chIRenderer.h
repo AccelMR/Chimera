@@ -10,20 +10,12 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chGraphicsTypes.h"
+
 namespace chEngineSDK {
 /**
- * @brief Renderer output containing the rendered result
- */
-struct RendererOutput {
-  SPtr<ITextureView> colorTarget;
-  SPtr<ITextureView> depthTarget;
-  uint32 width;
-  uint32 height;
-  bool isValid = false;
-};
-
-/**
- * @brief Base renderer interface for deferred rendering
+ * Draws the scene into a color target it does not own (the swap chain image), so the
+ * application decides where the frame ends up and what is drawn over it.
  */
 class CH_CORE_EXPORT IRenderer
 {
@@ -31,41 +23,28 @@ class CH_CORE_EXPORT IRenderer
   virtual ~IRenderer() = default;
 
   /**
-   * @brief Initialize the renderer with target dimensions
-   * @param width Target render width
-   * @param height Target render height
+   * The pipelines are built for colorFormat, the format of every target given to onRender.
    */
   virtual void
-  initialize(uint32 width, uint32 height) = 0;
+  initialize(uint32 width, uint32 height, Format colorFormat) = 0;
 
   /**
-   * Records into the command list of the frame. The color target is left in the
-   * ShaderRead state, so later work in the same frame can sample it.
+   * Records into the command list of the frame. The color target must be in the
+   * RenderTarget state, has the size of the renderer, and is cleared.
    */
-  virtual RendererOutput
-  onRender(ICommandList& commandList, float deltaTime) = 0;
+  virtual void
+  onRender(ICommandList& commandList, const ITextureView& colorTarget, float deltaTime) = 0;
 
-  /**
-   * @brief Resize renderer targets
-   * @param width New width
-   * @param height New height
-   */
   virtual void
   resize(uint32 width, uint32 height) = 0;
 
-  /**
-   * @brief Cleanup renderer resources
-   */
   virtual void
   cleanup() = 0;
 
-  /**
-   * @brief Get current render target dimensions
-   */
-  virtual uint32
+  NODISCARD virtual uint32
   getWidth() const = 0;
 
-  virtual uint32
+  NODISCARD virtual uint32
   getHeight() const = 0;
 
   virtual void

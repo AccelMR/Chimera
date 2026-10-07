@@ -19,6 +19,7 @@
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
 #include "chITextureView.h"
+#include "chImGuiRenderer.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
 #include "chPath.h"
@@ -41,6 +42,10 @@
 
 #include "imgui.h"
 
+#if USING(CH_DISPLAY_SDL3)
+#include "imgui_impl_sdl3.h"
+#endif // USING(CH_DISPLAY_SDL3)
+
 CH_LOG_DECLARE_STATIC(EditorApp, All);
 
 namespace chEngineSDK {
@@ -56,14 +61,6 @@ EditorApplication::EditorApplication() {
 /*
  */
 EditorApplication::~EditorApplication() {}
-
-/*
- */
-NODISCARD LinearColor
-EditorApplication::getBackgroundColor() const {
-  // Return the background color for the editor
-  return UIHelpers::backgroundColor;
-}
 
 /*
  */
@@ -89,11 +86,15 @@ EditorApplication::destroyModules()
   m_onKeyUpEvent.disconnect();
   m_updateInjection.disconnect();
 
-  // The ImGui backends use the window and the device, which the parent destroys.
+  // The renderer gives its textures back to the ImGui context, and the SDL backend uses the
+  // window, which the parent destroys.
+  m_imguiRenderer.reset();
   if (ImGui::GetCurrentContext()) {
-    if (IGraphicsAPI::isStarted()) {
-      IGraphicsAPI::instance().execute("shutdownImGui");
+#if USING(CH_DISPLAY_SDL3)
+    if (ImGui::GetIO().BackendPlatformUserData) {
+      ImGui_ImplSDL3_Shutdown();
     }
+#endif // USING(CH_DISPLAY_SDL3)
     ImGui::DestroyContext();
   }
 
@@ -103,8 +104,6 @@ EditorApplication::destroyModules()
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
   m_contentAssetUI.reset();
-  m_imguiTextures.clear();
-  m_defaultSampler.reset();
 
   m_nastyRenderer.reset();
   m_activeScene.reset();
@@ -131,59 +130,33 @@ EditorApplication::destroyModules()
 
 /*
  */
-RendererOutput
-EditorApplication::onRender(ICommandList& commandList, float deltaTime)
+void
+EditorApplication::onRender(ICommandList& commandList,
+                            const ISwapChain& swapChain,
+                            float deltaTime)
 {
-  // Resized before the frame is recorded, so this frame's UI only uses the new target.
-  if (m_viewportWidth > 0 && m_viewportHeight > 0 &&
-      (m_viewportWidth != m_nastyRenderer->getWidth() ||
-       m_viewportHeight != m_nastyRenderer->getHeight())) {
-    resizeViewport(m_viewportWidth, m_viewportHeight);
+  const uint32 width = swapChain.getWidth();
+  const uint32 height = swapChain.getHeight();
+  if (width != m_nastyRenderer->getWidth() || height != m_nastyRenderer->getHeight()) {
+    m_nastyRenderer->resize(width, height);
   }
 
-  return m_nastyRenderer->onRender(commandList, deltaTime);
-}
-
-/*
- */
-void
-EditorApplication::onPresent(const RendererOutput& rendererOutput,
-                             ICommandList& commandList,
-                             uint32 swapChainWidth,
-                             uint32 swapChainHeight)
-{
-
-  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  CH_PARAMETER_UNUSED(swapChainWidth);
-  CH_PARAMETER_UNUSED(swapChainHeight);
-
-  if (!UIHelpers::bRenderImGui) {
-    // If ImGui rendering is disabled, skip the rendering process
-    return;
-  }
-
-  UIHelpers::newFrame(graphicAPI);
-
-  renderFullScreenRenderer(rendererOutput);
-  m_mainMenuBar->renderMainMenuBar();
-  m_contentAssetUI->renderContentAssetUI();
-  m_outputLogUI->renderOutputLogUI();
-  m_sceneGraphUI->renderSceneGraphUI();
-  m_inspectorUI->renderInspectorUI();
-  m_gameObjectAssetUI->renderGameObjectAssetUI();
-
-  UIHelpers::render(graphicAPI, commandList);
-}
-
-/*
- */
-void
-EditorApplication::onPostPresent()
-{
-  // The floating ImGui windows acquire, submit and present their own swap chains, so they
-  // go after the main frame instead of in the middle of its recording.
   if (UIHelpers::bRenderImGui) {
-    UIHelpers::renderPlatformWindows();
+    renderUI();
+  }
+
+  // The scene draws under the UI, so it only takes the keyboard and mouse that no ImGui
+  // window wants.
+  const ImGuiIO& io = ImGui::GetIO();
+  m_nastyRenderer->setFocused(!UIHelpers::bRenderImGui ||
+                              (!io.WantCaptureMouse && !io.WantCaptureKeyboard));
+
+  const ITextureView& backBuffer = swapChain.getCurrentTextureView();
+  m_nastyRenderer->onRender(commandList, backBuffer, deltaTime);
+
+  if (UIHelpers::bRenderImGui) {
+    m_imguiRenderer->render(commandList, *ImGui::GetDrawData(), backBuffer,
+                            swapChain.getFormat(), width, height);
   }
 }
 
@@ -233,21 +206,14 @@ EditorApplication::initializeEditorComponents() {
 
   m_activeScene = scene;
   m_nastyRenderer = std::make_shared<NastyRenderer>();
-  m_nastyRenderer->initialize(display->getWidth(), display->getHeight());
+  // The scene is drawn straight into the swap chain image.
+  const ISwapChain& swapChain = *getSwapChain();
+  m_nastyRenderer->initialize(swapChain.getWidth(), swapChain.getHeight(),
+                              swapChain.getFormat());
   m_nastyRenderer->setClearColors({UIHelpers::rendererColor});
   m_nastyRenderer->bindInputEvents();
 
   initImGui(display);
-
-  SamplerCreateInfo samplerInfo{};
-  samplerInfo.magFilter = SamplerFilter::Linear;
-  samplerInfo.minFilter = SamplerFilter::Linear;
-  samplerInfo.addressModeU = SamplerAddressMode::ClampToEdge;
-  samplerInfo.addressModeV = SamplerAddressMode::ClampToEdge;
-  samplerInfo.addressModeW = SamplerAddressMode::ClampToEdge;
-
-  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  m_defaultSampler = graphicAPI.createSampler(samplerInfo);
 
   m_contentAssetUI = chMakeUnique<ContentAssetUI>();
   m_mainMenuBar = chMakeUnique<MainMenuBarUI>();
@@ -332,7 +298,8 @@ EditorApplication::bindEvents() {
 /*
  */
 void
-EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
+EditorApplication::initImGui(const SPtr<DisplaySurface>& display)
+{
   CH_LOG_INFO(EditorApp, "Initializing ImGui for the editor.");
 
   ImGui::CreateContext();
@@ -346,8 +313,11 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
   UIHelpers::initStyle();
   UIHelpers::initFontConfig();
 
-  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  graphicAPI.execute("initImGui", {ImGui::GetCurrentContext(), display, getSwapChain()});
+#if USING(CH_DISPLAY_SDL3)
+  // Windows ImGui opens get SDL_WINDOW_VULKAN, which Vulkan needs to make a surface on them.
+  ImGui_ImplSDL3_InitForVulkan(display->getPlatformHandler());
+#endif // USING(CH_DISPLAY_SDL3)
+  m_imguiRenderer = chMakeUnique<ImGuiRenderer>();
 
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
@@ -358,67 +328,18 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display) {
 /*
  */
 void
-EditorApplication::renderFullScreenRenderer(const RendererOutput& rendererOutput) {
-  ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
-
-  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
-                                  ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_NoResize |
-                                  ImGuiWindowFlags_NoSavedSettings |
-                                  ImGuiWindowFlags_NoBringToFrontOnFocus |
-                                  ImGuiWindowFlags_NoFocusOnAppearing;
-
-  if (!ImGui::Begin("Renderer Fullscreen", nullptr, window_flags)) {
-    ImGui::End();
-    return;
-  }
-  m_nastyRenderer->setFocused(ImGui::IsWindowFocused());
-
-  const ImVec2 panelSize = ImGui::GetWindowSize();
-  const ImVec2 framebufferScale = ImGui::GetIO().DisplayFramebufferScale;
-  m_viewportWidth = static_cast<uint32>(panelSize.x * framebufferScale.x);
-  m_viewportHeight = static_cast<uint32>(panelSize.y * framebufferScale.y);
-
-  if (rendererOutput.colorTarget) {
-    auto it = m_imguiTextures.find(rendererOutput.colorTarget);
-
-    uint64 textureId = 0;
-    if (it == m_imguiTextures.end()) {
-      IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-      Any result = graphicAPI.execute(
-          "addImGuiTexture", {Any(m_defaultSampler), Any(rendererOutput.colorTarget)});
-
-      if (AnyUtils::tryGetValue<uint64>(result, textureId) && textureId != 0) {
-        m_imguiTextures[rendererOutput.colorTarget] = textureId;
-      }
-    }
-    else {
-      textureId = it->second;
-    }
-
-    if (textureId != 0) {
-      ImGui::Image(static_cast<ImTextureID>(textureId), panelSize);
-    }
-  }
-  ImGui::End();
-}
-
-/*
- */
-void
-EditorApplication::resizeViewport(uint32 viewportWidth, uint32 viewportHeight)
+EditorApplication::renderUI()
 {
-  // Waits for the GPU, so no frame in flight still draws the ImGui textures of the old
-  // target and they can go back to ImGui's pool.
-  m_nastyRenderer->resize(viewportWidth, viewportHeight);
+  UIHelpers::newFrame();
 
-  IGraphicsAPI& graphicAPI = IGraphicsAPI::instance();
-  for (const auto& [textureView, textureId] : m_imguiTextures) {
-    graphicAPI.execute("removeImGuiTexture", {Any(textureId)});
-  }
-  m_imguiTextures.clear();
+  m_mainMenuBar->renderMainMenuBar();
+  m_contentAssetUI->renderContentAssetUI();
+  m_outputLogUI->renderOutputLogUI();
+  m_sceneGraphUI->renderSceneGraphUI();
+  m_inspectorUI->renderInspectorUI();
+  m_gameObjectAssetUI->renderGameObjectAssetUI();
+
+  ImGui::Render();
 }
 
 /*

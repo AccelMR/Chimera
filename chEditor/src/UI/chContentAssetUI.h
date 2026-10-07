@@ -149,10 +149,9 @@ class ContentAssetUI
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
   SPtr<NastyRenderer> m_nastyRenderer;
-  SPtr<ISampler> m_defaultSampler;
 
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
-  UnorderedMap<UUID, Pair<SPtr<ITextureView>, uint64>> m_assetThumbnails;
+  UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;
 
   Vector<WeakPtr<IAsset>> m_unsavedAssets;
 

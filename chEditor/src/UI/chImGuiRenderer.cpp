@@ -1,0 +1,343 @@
+/************************************************************************/
+/**
+ * @file chImGuiRenderer.cpp
+ * @author AccelMR
+ * @date 2026/10/06
+ * @brief
+ * Draws Dear ImGui with the engine graphics interfaces.
+ */
+/************************************************************************/
+#include "chImGuiRenderer.h"
+
+#include "chEnginePaths.h"
+#include "chFileSystem.h"
+#include "chIBuffer.h"
+#include "chICommandList.h"
+#include "chIGraphicsAPI.h"
+#include "chIPipeline.h"
+#include "chISampler.h"
+#include "chIShader.h"
+#include "chITexture.h"
+#include "chLogger.h"
+#include "chMath.h"
+#include "chPath.h"
+
+#include "imgui.h"
+
+CH_LOG_DECLARE_STATIC(ImGuiRendererLog, All);
+
+namespace chEngineSDK {
+
+namespace {
+// Must match PushConstants in imgui.hlsl.
+struct ImGuiPushConstants
+{
+  float scaleX;
+  float scaleY;
+  float translateX;
+  float translateY;
+  uint32 textureIndex;
+  uint32 samplerIndex;
+};
+static_assert(sizeof(ImGuiPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
+
+constexpr IndexType kIndexType =
+    sizeof(ImDrawIdx) == 2 ? IndexType::UInt16 : IndexType::UInt32;
+
+// First size of the geometry buffers, enough for a typical editor frame, so they rarely
+// have to grow.
+constexpr uint32 kInitialVertexBufferSize = 512 * 1024;
+constexpr uint32 kInitialIndexBufferSize = 128 * 1024;
+
+SPtr<IShader>
+loadShader(ShaderStage stage, const ANSICHAR* entryPoint, const ANSICHAR* fileName)
+{
+  const Path shaderPath(EnginePaths::getShaderBinaryDirectory().join(Path("SPIRV")),
+                        Path(fileName));
+  return IGraphicsAPI::instance().createShader({.stage = stage,
+                                                .entryPoint = entryPoint,
+                                                .sourceCode = FileSystem::fastRead(shaderPath),
+                                                .filePath = shaderPath.toString(),
+                                                .defines = {}});
+}
+
+/*
+ * Makes sure the buffer holds size bytes. Its contents are not kept: it is filled again
+ * right after.
+ */
+void
+reserveBuffer(SPtr<IBuffer>& buffer, SIZE_T size, uint32 initialSize, BufferUsageFlags usage)
+{
+  const SIZE_T capacity = buffer ? buffer->getSize() : 0;
+  if (size <= capacity) {
+    return;
+  }
+
+  const SIZE_T newSize = Math::max(size, Math::max(capacity * 2, SIZE_T(initialSize)));
+  buffer = IGraphicsAPI::instance().createBuffer({.size = static_cast<uint32>(newSize),
+                                                  .usage = usage,
+                                                  .memoryUsage = MemoryUsage::CpuToGpu});
+}
+} // namespace
+
+/*
+ */
+ImGuiRenderer::ImGuiRenderer()
+{
+  ImGuiIO& io = ImGui::GetIO();
+  CH_ASSERT(io.BackendRendererUserData == nullptr && "An ImGui renderer is already set.");
+  io.BackendRendererUserData = this;
+  io.BackendRendererName = "Chimera";
+  io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+  io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+  m_vertexShader = loadShader(ShaderStage::Vertex, "VSMain", "imgui.vs.spv");
+  m_fragmentShader = loadShader(ShaderStage::Fragment, "PSMain", "imgui.ps.spv");
+
+  m_vertexLayout.addAttribute(VertexAttributeType::Position, VertexFormat::Float2,
+                              offsetof(ImDrawVert, pos));
+  m_vertexLayout.addAttribute(VertexAttributeType::TexCoord0, VertexFormat::Float2,
+                              offsetof(ImDrawVert, uv));
+  m_vertexLayout.addAttribute(VertexAttributeType::Color, VertexFormat::UByte4Normalized,
+                              offsetof(ImDrawVert, col));
+  CH_ASSERT(m_vertexLayout.getStride() == sizeof(ImDrawVert));
+
+  m_sampler = IGraphicsAPI::instance().createSampler(
+      {.addressModeU = SamplerAddressMode::ClampToEdge,
+       .addressModeV = SamplerAddressMode::ClampToEdge,
+       .addressModeW = SamplerAddressMode::ClampToEdge});
+}
+
+/*
+ */
+ImGuiRenderer::~ImGuiRenderer()
+{
+  // Textures still used by another context are left to it.
+  for (ImTextureData* texture : ImGui::GetPlatformIO().Textures) {
+    if (texture->RefCount == 1) {
+      texture->SetTexID(ImTextureID_Invalid);
+      texture->SetStatus(ImTextureStatus_Destroyed);
+    }
+  }
+  m_textures.clear();
+
+  ImGuiIO& io = ImGui::GetIO();
+  io.BackendRendererUserData = nullptr;
+  io.BackendRendererName = nullptr;
+  io.BackendFlags &=
+      ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures);
+}
+
+/*
+ */
+void
+ImGuiRenderer::render(ICommandList& commandList,
+                      ImDrawData& drawData,
+                      const ITextureView& target,
+                      Format targetFormat,
+                      uint32 targetWidth,
+                      uint32 targetHeight)
+{
+  // Textures are created and updated even when nothing is drawn, as ImGui expects.
+  if (drawData.Textures != nullptr) {
+    for (ImTextureData* texture : *drawData.Textures) {
+      if (texture->Status != ImTextureStatus_OK) {
+        updateTexture(*texture);
+      }
+    }
+  }
+
+  if (drawData.TotalVtxCount == 0 || targetWidth == 0 || targetHeight == 0) {
+    return;
+  }
+
+  FrameBuffers& frameBuffers = m_frameBuffers[IGraphicsAPI::instance().getFrameIndex()];
+  uploadGeometry(drawData, frameBuffers);
+
+  RenderingDesc renderingDesc{.colorAttachmentCount = 1,
+                              .width = targetWidth,
+                              .height = targetHeight};
+  renderingDesc.colorAttachments[0] = {.view = &target, .loadOp = LoadOp::Load};
+  commandList.beginRendering(renderingDesc);
+
+  m_pipeline = &getPipeline(targetFormat);
+  setupRenderState(commandList, drawData, frameBuffers, targetWidth, targetHeight);
+
+  // Clip rectangles come in ImGui coordinates; the scissor is in target pixels.
+  const ImVec2 clipOffset = drawData.DisplayPos;
+  const ImVec2 clipScale = drawData.FramebufferScale;
+  const float maxX = static_cast<float>(targetWidth);
+  const float maxY = static_cast<float>(targetHeight);
+
+  uint32 boundTextureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+  uint32 globalIndexOffset = 0;
+  int32 globalVertexOffset = 0;
+  for (const ImDrawList* drawList : drawData.CmdLists) {
+    for (const ImDrawCmd& drawCommand : drawList->CmdBuffer) {
+      if (drawCommand.UserCallback != nullptr) {
+        if (drawCommand.UserCallback == ImDrawCallback_ResetRenderState) {
+          setupRenderState(commandList, drawData, frameBuffers, targetWidth, targetHeight);
+          boundTextureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+        }
+        else {
+          drawCommand.UserCallback(drawList, &drawCommand);
+        }
+        continue;
+      }
+
+      const float clipMinX = Math::max((drawCommand.ClipRect.x - clipOffset.x) * clipScale.x,
+                                       0.0f);
+      const float clipMinY = Math::max((drawCommand.ClipRect.y - clipOffset.y) * clipScale.y,
+                                       0.0f);
+      const float clipMaxX = Math::min((drawCommand.ClipRect.z - clipOffset.x) * clipScale.x,
+                                       maxX);
+      const float clipMaxY = Math::min((drawCommand.ClipRect.w - clipOffset.y) * clipScale.y,
+                                       maxY);
+      if (clipMaxX <= clipMinX || clipMaxY <= clipMinY) {
+        continue;
+      }
+      commandList.setScissor(static_cast<uint32>(clipMinX),
+                             static_cast<uint32>(clipMinY),
+                             static_cast<uint32>(clipMaxX - clipMinX),
+                             static_cast<uint32>(clipMaxY - clipMinY));
+
+      const ImTextureID textureId = drawCommand.GetTexID();
+      CH_ASSERT(textureId != ImTextureID_Invalid);
+      const uint32 textureIndex = static_cast<uint32>(textureId - 1);
+      if (textureIndex != boundTextureIndex) {
+        commandList.pushConstants(&textureIndex, sizeof(textureIndex),
+                                  offsetof(ImGuiPushConstants, textureIndex));
+        boundTextureIndex = textureIndex;
+      }
+
+      commandList.drawIndexed(drawCommand.ElemCount,
+                              1,
+                              drawCommand.IdxOffset + globalIndexOffset,
+                              static_cast<int32>(drawCommand.VtxOffset) + globalVertexOffset,
+                              0);
+    }
+    globalIndexOffset += static_cast<uint32>(drawList->IdxBuffer.Size);
+    globalVertexOffset += drawList->VtxBuffer.Size;
+  }
+
+  commandList.endRendering();
+}
+
+/*
+ */
+void
+ImGuiRenderer::updateTexture(ImTextureData& texture)
+{
+  // GPU objects are freed by the deferred deletion, so a texture can be replaced or
+  // destroyed at once even if a frame in flight still samples it.
+  if (texture.Status == ImTextureStatus_WantCreate) {
+    CH_ASSERT(texture.Format == ImTextureFormat_RGBA32);
+    SPtr<ITexture> gpuTexture = IGraphicsAPI::instance().createTexture(
+        {.format = Format::R8G8B8A8_UNORM,
+         .width = static_cast<uint32>(texture.Width),
+         .height = static_cast<uint32>(texture.Height),
+         .initialData = texture.GetPixels(),
+         .initialDataSize = static_cast<SIZE_T>(texture.GetSizeInBytes())});
+    texture.SetTexID(getTextureId(gpuTexture->getBindlessIndex()));
+    m_textures[texture.UniqueID] = std::move(gpuTexture);
+    texture.SetStatus(ImTextureStatus_OK);
+  }
+  else if (texture.Status == ImTextureStatus_WantUpdates) {
+    // The whole texture is uploaded again instead of the changed rectangles. It only
+    // happens when ImGui adds glyphs to the atlas, and keeps the graphics interface small.
+    const auto it = m_textures.find(texture.UniqueID);
+    CH_ASSERT(it != m_textures.end());
+    it->second->uploadData(texture.GetPixels(), static_cast<SIZE_T>(texture.GetSizeInBytes()));
+    texture.SetStatus(ImTextureStatus_OK);
+  }
+  else if (texture.Status == ImTextureStatus_WantDestroy) {
+    m_textures.erase(texture.UniqueID);
+    texture.SetTexID(ImTextureID_Invalid);
+    texture.SetStatus(ImTextureStatus_Destroyed);
+  }
+}
+
+/*
+ */
+void
+ImGuiRenderer::uploadGeometry(ImDrawData& drawData, FrameBuffers& frameBuffers)
+{
+  const SIZE_T vertexBytes = static_cast<SIZE_T>(drawData.TotalVtxCount) * sizeof(ImDrawVert);
+  const SIZE_T indexBytes = static_cast<SIZE_T>(drawData.TotalIdxCount) * sizeof(ImDrawIdx);
+  reserveBuffer(frameBuffers.vertexBuffer, vertexBytes, kInitialVertexBufferSize,
+                BufferUsage::VertexBuffer);
+  reserveBuffer(frameBuffers.indexBuffer, indexBytes, kInitialIndexBufferSize,
+                BufferUsage::IndexBuffer);
+
+  uint32 vertexOffset = 0;
+  uint32 indexOffset = 0;
+  for (const ImDrawList* drawList : drawData.CmdLists) {
+    const SIZE_T listVertexBytes =
+        static_cast<SIZE_T>(drawList->VtxBuffer.Size) * sizeof(ImDrawVert);
+    const SIZE_T listIndexBytes =
+        static_cast<SIZE_T>(drawList->IdxBuffer.Size) * sizeof(ImDrawIdx);
+    frameBuffers.vertexBuffer->update(drawList->VtxBuffer.Data, listVertexBytes, vertexOffset);
+    frameBuffers.indexBuffer->update(drawList->IdxBuffer.Data, listIndexBytes, indexOffset);
+    vertexOffset += static_cast<uint32>(listVertexBytes);
+    indexOffset += static_cast<uint32>(listIndexBytes);
+  }
+}
+
+/*
+ */
+void
+ImGuiRenderer::setupRenderState(ICommandList& commandList,
+                                const ImDrawData& drawData,
+                                const FrameBuffers& frameBuffers,
+                                uint32 targetWidth,
+                                uint32 targetHeight)
+{
+  commandList.bindPipeline(*m_pipeline);
+  commandList.bindVertexBuffer(*frameBuffers.vertexBuffer);
+  commandList.bindIndexBuffer(*frameBuffers.indexBuffer, kIndexType);
+  commandList.setViewport(0.0f, 0.0f, static_cast<float>(targetWidth),
+                          static_cast<float>(targetHeight));
+
+  // Maps ImGui coordinates (pixels, Y down, from DisplayPos) to clip space, whose Y points
+  // up in the engine.
+  const float scaleX = 2.0f / drawData.DisplaySize.x;
+  const float scaleY = -2.0f / drawData.DisplaySize.y;
+  const ImGuiPushConstants pushConstants{
+      .scaleX = scaleX,
+      .scaleY = scaleY,
+      .translateX = -1.0f - drawData.DisplayPos.x * scaleX,
+      .translateY = 1.0f - drawData.DisplayPos.y * scaleY,
+      .textureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX,
+      .samplerIndex = m_sampler->getBindlessIndex()};
+  commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+}
+
+/*
+ */
+const IPipeline&
+ImGuiRenderer::getPipeline(Format targetFormat)
+{
+  if (m_pipeline != nullptr && m_pipelineFormat == targetFormat) {
+    return *m_pipeline;
+  }
+
+  GraphicsPipelineDesc desc{.vertexShader = m_vertexShader,
+                            .fragmentShader = m_fragmentShader,
+                            .vertexLayout = m_vertexLayout,
+                            .raster = {.cullMode = CullMode::None},
+                            .depth = {.testEnable = false, .writeEnable = false},
+                            .colorAttachmentCount = 1};
+  desc.colorFormats[0] = targetFormat;
+  desc.blendStates[0] = {.enable = true,
+                         .srcColorFactor = BlendFactor::SrcAlpha,
+                         .dstColorFactor = BlendFactor::OneMinusSrcAlpha,
+                         .colorOp = BlendOp::Add,
+                         .srcAlphaFactor = BlendFactor::One,
+                         .dstAlphaFactor = BlendFactor::OneMinusSrcAlpha,
+                         .alphaOp = BlendOp::Add};
+
+  m_pipelineFormat = targetFormat;
+  return *m_pipelineCache.getOrCreate(desc);
+}
+
+} // namespace chEngineSDK

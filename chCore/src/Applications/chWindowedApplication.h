@@ -10,9 +10,6 @@
 
 #include "chBaseApplication.h"
 #include "chDisplaySurface.h"
-#include "chLinearColor.h"
-
-#include "chIRenderer.h"
 
 namespace chEngineSDK {
 
@@ -36,11 +33,6 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   initialize() override;
 
  protected:
-  NODISCARD FORCEINLINE virtual LinearColor
-  getBackgroundColor() const {
-    return LinearColor::Black;
-  }
-
   NODISCARD FORCEINLINE const SPtr<ISwapChain>&
   getSwapChain() const
   {
@@ -79,19 +71,11 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   destroyRenderer();
 
   /**
-   * Records the scene into the frame command list, before the swap chain image is drawn.
-   */
-  virtual RendererOutput
-  onRender(ICommandList& commandList, float deltaTime) = 0;
-
-  /**
-   * Draws into the swap chain image; rendering to it has already begun.
+   * Draws the frame into the current image of the swap chain, which is already in the
+   * RenderTarget state and must be left in it. Begins and ends its own rendering.
    */
   virtual void
-  onPresent(const RendererOutput& rendererOutput,
-            ICommandList& commandList,
-            uint32 swapChainWidth,
-            uint32 swapChainHeight) = 0;
+  onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) = 0;
 
   /**
    * Runs after the frame was submitted and presented, for work that submits on its own.

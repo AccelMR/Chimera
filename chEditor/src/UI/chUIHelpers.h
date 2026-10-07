@@ -28,17 +28,7 @@ class UIHelpers {
  public:
 
   static void
-  newFrame(IGraphicsAPI& graphicAPI);
-
-  static void
-  render(IGraphicsAPI& graphicAPI, ICommandList& commandList);
-
-  /**
-   * Draws the ImGui windows dragged outside the main window. Runs after the main frame
-   * is presented, because each of them submits and presents on its own.
-   */
-  static void
-  renderPlatformWindows();
+  newFrame();
 
   NODISCARD static AssetIcon
   getIconFromAssetType(const SPtr<IAsset>& asset);
@@ -65,7 +55,6 @@ class UIHelpers {
   // Variable to control if ImGui should render
   static bool bRenderImGui;
   static float baseFontSize; // Default font size for ImGui
-  static LinearColor backgroundColor; // Background color for the editor
   static LinearColor rendererColor; // Renderer color for the editor
 }; // class UIHelpers
 

@@ -61,7 +61,7 @@ struct DrawPushConstants {
 };
 static_assert(sizeof(DrawPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
 
-constexpr Format kColorFormat = Format::R8G8B8A8_UNORM;
+constexpr Format kTextureFormat = Format::R8G8B8A8_UNORM;
 constexpr Format kDepthFormat = Format::D32_SFLOAT;
 } // namespace
 
@@ -92,15 +92,17 @@ NastyRenderer::~NastyRenderer() {
 /*
  */
 void
-NastyRenderer::initialize(uint32 width, uint32 height) {
+NastyRenderer::initialize(uint32 width, uint32 height, Format colorFormat)
+{
   CH_LOG_INFO(NastyRendererSystem, "Initializing NastyRenderer with dimensions: {0}x{1}",
               width, height);
 
   CH_ASSERT(IGraphicsAPI::instancePtr() != nullptr);
   m_renderWidth = width;
   m_renderHeight = height;
+  m_colorFormat = colorFormat;
 
-  createRenderTargets();
+  createDepthTarget();
   initializeRenderResources();
 
   CH_LOG_INFO(NastyRendererSystem, "NastyRenderer initialized successfully");
@@ -108,8 +110,10 @@ NastyRenderer::initialize(uint32 width, uint32 height) {
 
 /*
  */
-RendererOutput
-NastyRenderer::onRender(ICommandList& commandList, float deltaTime)
+void
+NastyRenderer::onRender(ICommandList& commandList,
+                        const ITextureView& colorTarget,
+                        float deltaTime)
 {
   IBuffer& cameraBuffer = *m_cameraBuffers[IGraphicsAPI::instance().getFrameIndex()];
   if (m_camera) {
@@ -118,11 +122,8 @@ NastyRenderer::onRender(ICommandList& commandList, float deltaTime)
     cameraBuffer.update(&cameraData, sizeof(cameraData));
   }
 
-  // The targets are cleared, so their old contents (and layouts) are not needed.
-  const Array<TextureBarrier, 2> toRendering = {
-      TextureBarrier{.texture = m_colorTarget.get(),
-                     .before = ResourceState::Undefined,
-                     .after = ResourceState::RenderTarget},
+  // The depth target is cleared, so its old contents (and layout) are not needed.
+  const Array<TextureBarrier, 1> toRendering = {
       TextureBarrier{.texture = m_depthTarget.get(),
                      .before = ResourceState::Undefined,
                      .after = ResourceState::DepthWrite}};
@@ -133,7 +134,7 @@ NastyRenderer::onRender(ICommandList& commandList, float deltaTime)
                               .width = m_renderWidth,
                               .height = m_renderHeight};
   renderingDesc.colorAttachments[0] = {
-      .view = m_colorTargetView.get(),
+      .view = &colorTarget,
       .clearColor = m_clearColors.empty() ? LinearColor::Black : m_clearColors[0]};
 
   commandList.beginRendering(renderingDesc);
@@ -146,23 +147,6 @@ NastyRenderer::onRender(ICommandList& commandList, float deltaTime)
   }
 
   commandList.endRendering();
-
-  // The editor samples the target later in the same frame.
-  const Array<TextureBarrier, 1> toSampling = {
-      TextureBarrier{.texture = m_colorTarget.get(),
-                     .before = ResourceState::RenderTarget,
-                     .after = ResourceState::ShaderRead}};
-  commandList.barrier(toSampling);
-
-  // Return output
-  RendererOutput output;
-  output.colorTarget = m_colorTargetView;
-  output.depthTarget = m_depthTargetView;
-  output.width = m_renderWidth;
-  output.height = m_renderHeight;
-  output.isValid = true;
-
-  return output;
 }
 
 /*
@@ -172,12 +156,12 @@ NastyRenderer::resize(uint32 width, uint32 height)
 {
   CH_LOG_INFO(NastyRendererSystem, "Resizing NastyRenderer to {0}x{1}", width, height);
 
-  IGraphicsAPI::instance().waitIdle();
-
   m_renderWidth = width;
   m_renderHeight = height;
 
-  createRenderTargets();
+  // The old depth target goes through the deferred deletion, so the GPU can keep using it
+  // until the frames in flight are done.
+  createDepthTarget();
 
   // Update camera viewport
   if (m_camera) {
@@ -209,8 +193,6 @@ NastyRenderer::cleanup()
   }
 
   // Reset render targets
-  m_colorTargetView.reset();
-  m_colorTarget.reset();
   m_depthTargetView.reset();
   m_depthTarget.reset();
 
@@ -229,29 +211,10 @@ NastyRenderer::cleanup()
 /*
  */
 void
-NastyRenderer::createRenderTargets() {
+NastyRenderer::createDepthTarget()
+{
   auto& graphicsAPI = IGraphicsAPI::instance();
 
-  // Create color target (RGBA8 for now, can be upgraded to HDR later)
-  TextureCreateInfo colorTextureInfo{.type = TextureType::Texture2D,
-                                     .format = kColorFormat,
-                                     .width = m_renderWidth,
-                                     .height = m_renderHeight,
-                                     .depth = 1,
-                                     .mipLevels = 1,
-                                     .arrayLayers = 1,
-                                     .samples = SampleCount::Count1,
-                                     .usage = TextureUsage::ColorAttachment
-                                              | TextureUsage::Sampled};
-
-  m_colorTarget = graphicsAPI.createTexture(colorTextureInfo);
-
-  TextureViewCreateInfo colorViewInfo{.format = kColorFormat,
-                                      .viewType = TextureViewType::View2D};
-
-  m_colorTargetView = m_colorTarget->createView(colorViewInfo);
-
-  // Create depth target
   TextureCreateInfo depthTextureInfo{.type = TextureType::Texture2D,
                                      .format = kDepthFormat,
                                      .width = m_renderWidth,
@@ -270,7 +233,7 @@ NastyRenderer::createRenderTargets() {
 
   m_depthTargetView = m_depthTarget->createView(depthViewInfo);
 
-  CH_LOG_INFO(NastyRendererSystem, "Render targets created: {0}x{1}", m_renderWidth,
+  CH_LOG_INFO(NastyRendererSystem, "Depth target created: {0}x{1}", m_renderWidth,
               m_renderHeight);
 }
 
@@ -308,7 +271,7 @@ NastyRenderer::initializeRenderResources() {
   m_sampler = graphicsAPI.createSampler(samplerCreateInfo);
 
   constexpr uint32 kWhitePixel = 0xFFFFFFFF;
-  m_defaultTexture = graphicsAPI.createTexture({.format = kColorFormat,
+  m_defaultTexture = graphicsAPI.createTexture({.format = kTextureFormat,
                                                 .initialData = &kWhitePixel,
                                                 .initialDataSize = sizeof(kWhitePixel)});
 
@@ -337,7 +300,7 @@ NastyRenderer::initializeRenderResources() {
                                     .vertexLayout = VertexNormalTexCoord::getLayout(),
                                     .colorAttachmentCount = 1,
                                     .depthFormat = kDepthFormat};
-  pipelineDesc.colorFormats[0] = kColorFormat;
+  pipelineDesc.colorFormats[0] = m_colorFormat;
   m_pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
 
   CH_LOG_INFO(NastyRendererSystem, "Render resources initialized");

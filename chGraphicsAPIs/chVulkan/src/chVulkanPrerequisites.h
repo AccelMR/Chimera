@@ -24,23 +24,6 @@
 VK_DEFINE_HANDLE(VmaAllocator)
 VK_DEFINE_HANDLE(VmaAllocation)
 
-// CMake defines CH_VULKAN_IMGUI as 1 or 0, so its value matters, not only whether it exists.
-#if defined(CH_VULKAN_IMGUI) && CH_VULKAN_IMGUI
-#define CH_VK_IMGUI IN_USE
-#else
-#define CH_VK_IMGUI NOT_IN_USE
-#endif
-
-#if USING(CH_VK_IMGUI)
-#include <imgui_impl_vulkan.h>
-
-  #if USING(CH_DISPLAY_SDL3)
-    #include <imgui_impl_sdl3.h>
-  #endif // USING(CH_DISPLAY_SDL3
-
-#endif // USING(CH_VK_IMGUI)
-
-
 #if USING(CH_DISPLAY_SDL3)
 # include <SDL3/SDL_vulkan.h>
 #endif // USING(CH_DISPLAY_SDL3)

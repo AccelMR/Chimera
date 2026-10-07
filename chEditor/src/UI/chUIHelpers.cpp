@@ -12,7 +12,6 @@
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chDisplayEventHandle.h"
-#include "chIGraphicsAPI.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
@@ -39,39 +38,18 @@ CH_LOG_DECLARE_STATIC(UIImguiHelper, All);
 bool UIHelpers::bShowDemoWindow = false;
 bool UIHelpers::bRenderImGui = true;
 float UIHelpers::baseFontSize = 1.4f; // Default font size
-LinearColor UIHelpers::backgroundColor = LinearColor::Pink;
 LinearColor UIHelpers::rendererColor = LinearColor::Black;
 
 /*
  */
 void
-UIHelpers::newFrame(IGraphicsAPI& graphicAPI) {
+UIHelpers::newFrame()
+{
 #if USING(CH_DISPLAY_SDL3)
   ImGui_ImplSDL3_NewFrame();
 #endif // USING(CH_DISPLAY_SDL3)
 
   ImGui::NewFrame();
-  graphicAPI.execute("newFrameImGui");
-}
-
-/*
- */
-void
-UIHelpers::render(IGraphicsAPI& graphicAPI, ICommandList& commandList)
-{
-  ImGui::Render();
-  graphicAPI.execute("renderImGui", {Any(&commandList)});
-}
-
-/*
- */
-void
-UIHelpers::renderPlatformWindows()
-{
-  if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault();
-  }
 }
 
 AssetIcon
@@ -333,7 +311,6 @@ UIHelpers::initFontConfig() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
-  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
 
   io.Fonts->AddFontDefault();
 

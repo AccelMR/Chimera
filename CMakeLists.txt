@@ -69,7 +69,7 @@ endif()
 add_subdirectory(Externals/SDL3 SYSTEM)
 ch_set_folder_for_directory(Externals/SDL3 Externals/SDL3)
 
-# ImGui is used by the editor and, until the editor has its own renderer, by chVulkan.
+# Only the editor uses ImGui; it draws it with its own renderer on the graphics interfaces.
 if(CH_BUILD_EDITOR)
   add_subdirectory(chImgui)
 endif()

@@ -8,11 +8,3 @@ target_link_libraries(chVulkan PRIVATE chCore Vulkan::Vulkan SDL3::SDL3)
 # Header-only library; SYSTEM keeps our warning level out of its code.
 target_include_directories(chVulkan SYSTEM PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/Externals/VulkanMemoryAllocator/include)
-
-# The editor draws ImGui through this plugin until it has its own renderer.
-if(CH_BUILD_EDITOR)
-  target_link_libraries(chVulkan PRIVATE chImguiVulkan chImguiSDL3)
-  target_compile_definitions(chVulkan PRIVATE CH_VULKAN_IMGUI=1)
-else()
-  target_compile_definitions(chVulkan PRIVATE CH_VULKAN_IMGUI=0)
-endif()

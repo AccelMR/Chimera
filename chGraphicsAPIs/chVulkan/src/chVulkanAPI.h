@@ -143,9 +143,6 @@ class VulkanAPI : public IGraphicsAPI {
     setDebugNameHandle(type, reinterpret_cast<uint64>(handle), name);
   }
 
-  virtual Any
-  execute(const String& functionName, const Vector<Any>& args = {}) override;
-
  private:
 
   void
@@ -171,9 +168,6 @@ class VulkanAPI : public IGraphicsAPI {
 
   bool
   createSurface(WeakPtr<DisplaySurface> display);
-
-  void
-  initializeFunctionMap();
 
   void
   createAllocator();
@@ -215,8 +209,6 @@ class VulkanAPI : public IGraphicsAPI {
   // Swap chains that acquired an image in the current frame.
   Array<const VulkanSwapChain*, MAX_FRAME_SWAP_CHAINS> m_frameSwapChains{};
   uint32 m_frameSwapChainCount = 0;
-
-  Map<String, Function<Any(const Vector<Any>&)>> m_functionMap;
 };
 
 VulkanAPI& g_vulkanAPI();

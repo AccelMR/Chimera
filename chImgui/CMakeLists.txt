@@ -15,13 +15,6 @@ target_link_libraries(chImguiSDL3 PUBLIC chImgui SDL3::SDL3)
 
 set(IMGUI_TARGETS chImgui chImguiSDL3)
 
-if(CH_BUILD_VULKAN)
-  find_package(Vulkan REQUIRED)
-  add_library(chImguiVulkan STATIC ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp)
-  target_link_libraries(chImguiVulkan PUBLIC chImgui Vulkan::Vulkan)
-  list(APPEND IMGUI_TARGETS chImguiVulkan)
-endif()
-
 set_target_properties(${IMGUI_TARGETS} PROPERTIES
   SYSTEM ON
   FOLDER Externals/ImGui)

@@ -19,7 +19,8 @@
 
 #include "chAssetManager.h"
 #include "chLogger.h"
-#include "chIGraphicsAPI.h"
+#include "chImGuiRenderer.h"
+#include "chITexture.h"
 #include "chEditorSelection.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
@@ -94,14 +95,6 @@ getAssetStateString(AssetState state) noexcept
  */
 ContentAssetUI::ContentAssetUI()
 {
-  SamplerCreateInfo samplerInfo{};
-  samplerInfo.magFilter = SamplerFilter::Linear;
-  samplerInfo.minFilter = SamplerFilter::Linear;
-  samplerInfo.addressModeU = SamplerAddressMode::ClampToEdge;
-  samplerInfo.addressModeV = SamplerAddressMode::ClampToEdge;
-  samplerInfo.addressModeW = SamplerAddressMode::ClampToEdge;
-  m_defaultSampler = IGraphicsAPI::instance().createSampler(samplerInfo);
-
   refreshAssets();
 }
 
@@ -596,7 +589,7 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
   }
 
   // Stored even when it fails, so a broken texture is not loaded again every frame.
-  Pair<SPtr<ITextureView>, uint64>& thumbnail = m_assetThumbnails[uuid];
+  Pair<SPtr<ITexture>, uint64>& thumbnail = m_assetThumbnails[uuid];
 
   SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
 
@@ -608,24 +601,15 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
   }
 
   SPtr<ITexture> texture = textureAsset->getTexture();
-  if (!texture) {
-    CH_LOG_ERROR(ContentAssetUILog, "Texture asset {0} has no texture data.",
-                 asset->getName());
+  const uint64 textureId =
+      texture ? ImGuiRenderer::getTextureId(texture->getBindlessIndex()) : 0;
+  if (textureId != 0) {
+    // Keeping the texture keeps the thumbnail valid after the asset is unloaded below.
+    thumbnail = {std::move(texture), textureId};
   }
   else {
-    SPtr<ITextureView> textureView =
-        texture->createView({.format = texture->getFormat(), .viewType = TextureViewType::View2D});
-    uint64 textureId = 0;
-    Any result = textureView ? IGraphicsAPI::instance().execute(
-                                   "addImGuiTexture", {Any(m_defaultSampler), Any(textureView)})
-                             : Any();
-    if (AnyUtils::tryGetValue<uint64>(result, textureId) && textureId != 0) {
-      thumbnail = {std::move(textureView), textureId};
-    }
-    else {
-      CH_LOG_ERROR(ContentAssetUILog, "Failed to create the thumbnail of {0}.",
-                   asset->getName());
-    }
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to create the thumbnail of {0}.",
+                 asset->getName());
   }
 
   if (loadedHere) {

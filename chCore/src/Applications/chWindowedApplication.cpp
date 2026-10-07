@@ -277,27 +277,16 @@ WindowedApplication::render(const float deltaTime)
     return;
   }
 
-  const RendererOutput sceneOutput = onRender(commandList, deltaTime);
-
-  const uint32 width = swapChain.getWidth();
-  const uint32 height = swapChain.getHeight();
   const ITexture& backBuffer = swapChain.getCurrentTexture();
 
-  // The whole image is cleared, so its previous contents are not needed.
+  // The application clears the whole image, so its previous contents are not needed.
   const Array<TextureBarrier, 1> toRendering = {
       TextureBarrier{.texture = &backBuffer,
                      .before = ResourceState::Undefined,
                      .after = ResourceState::RenderTarget}};
   commandList.barrier(toRendering);
 
-  RenderingDesc renderingDesc{.colorAttachmentCount = 1, .width = width, .height = height};
-  renderingDesc.colorAttachments[0] = {.view = &swapChain.getCurrentTextureView(),
-                                       .clearColor = getBackgroundColor()};
-  commandList.beginRendering(renderingDesc);
-
-  onPresent(sceneOutput, commandList, width, height);
-
-  commandList.endRendering();
+  onRender(commandList, swapChain, deltaTime);
 
   const Array<TextureBarrier, 1> toPresent = {
       TextureBarrier{.texture = &backBuffer,

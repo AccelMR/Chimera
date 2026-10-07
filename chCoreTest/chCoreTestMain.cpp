@@ -148,6 +148,17 @@ TEST_CASE("chCore - VertexLayout")
   REQUIRE(custom.getStride(0) == 20);
   REQUIRE(custom.getStride(1) == 16);
   REQUIRE(custom.getBindingCount() == 2);
+
+  // Packed formats count their real size (Dear ImGui's vertex is two Float2 and a color).
+  VertexLayout packed;
+  packed.addAttribute(VertexAttributeType::Position, VertexFormat::Float2);
+  packed.addAttribute(VertexAttributeType::TexCoord0, VertexFormat::Float2);
+  packed.addAttribute(VertexAttributeType::Color, VertexFormat::UByte4Normalized);
+  packed.addAttribute(VertexAttributeType::Custom, VertexFormat::Short2Normalized);
+  packed.addAttribute(VertexAttributeType::Custom, VertexFormat::UInt3);
+  REQUIRE(packed.getAttributes()[3].offset == 20);
+  REQUIRE(packed.getAttributes()[4].offset == 24);
+  REQUIRE(packed.getStride(0) == 36);
 }
 
 namespace {

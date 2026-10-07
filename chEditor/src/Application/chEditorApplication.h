@@ -24,6 +24,7 @@ class OutputLogUI;
 class SceneGraphUI;
 class InspectorUI;
 class GameObjectAssetUI;
+class ImGuiRenderer;
 
 class EditorApplication : public WindowedApplication
 {
@@ -39,26 +40,14 @@ class EditorApplication : public WindowedApplication
   virtual ~EditorApplication();
 
  protected:
-  NODISCARD virtual LinearColor
-  getBackgroundColor() const override;
-
   virtual void
   onPostInitialize() override;
 
   virtual void
   destroyModules() override;
 
-  virtual RendererOutput
-  onRender(ICommandList& commandList, float deltaTime) override;
-
   virtual void
-  onPresent(const RendererOutput& rendererOutput,
-            ICommandList& commandList,
-            uint32 swapChainWidth,
-            uint32 swapChainHeight) override;
-
-  virtual void
-  onPostPresent() override;
+  onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) override;
 
  private:
   void
@@ -71,10 +60,7 @@ class EditorApplication : public WindowedApplication
   initImGui(const SPtr<DisplaySurface>& display);
 
   void
-  renderFullScreenRenderer(const RendererOutput& rendererOutput);
-
-  void
-  resizeViewport(uint32 viewportWidth, uint32 viewportHeight);
+  renderUI();
 
   void
   loadCodecs();
@@ -83,13 +69,7 @@ class EditorApplication : public WindowedApplication
   SPtr<NastyRenderer> m_nastyRenderer; ///< The renderer used by the editor
   SPtr<Scene> m_activeScene;
 
-  SPtr<ISampler> m_defaultSampler;
-  // ImGui texture id (ImTextureID) of each renderer target shown in the viewport.
-  Map<SPtr<ITextureView>, uint64> m_imguiTextures;
-
-  // Pixel size of the viewport panel in the last UI frame; the renderer follows it.
-  uint32 m_viewportWidth = 0;
-  uint32 m_viewportHeight = 0;
+  UniquePtr<ImGuiRenderer> m_imguiRenderer;
 
   UniquePtr<ContentAssetUI> m_contentAssetUI; ///< Content Asset UI instance
   UniquePtr<MainMenuBarUI> m_mainMenuBar; ///< Main menu bar instance

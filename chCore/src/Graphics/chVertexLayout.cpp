@@ -131,6 +131,7 @@ VertexLayout::calculateOffset(uint32 binding) const {
 */
 uint32
 VertexLayout::getFormatSize(VertexFormat format) {
+  // No default, so a new format without its size is a compiler warning.
   switch (format) {
     case VertexFormat::Float: return sizeof(float);
     case VertexFormat::Float2: return sizeof(float) * 2;
@@ -140,9 +141,20 @@ VertexLayout::getFormatSize(VertexFormat format) {
     case VertexFormat::Int2: return sizeof(int32) * 2;
     case VertexFormat::Int3: return sizeof(int32) * 3;
     case VertexFormat::Int4: return sizeof(int32) * 4;
-    case VertexFormat::Short2: return sizeof(int16) * 2;
-    case VertexFormat::Short4: return sizeof(int16) * 4;
-    default: return 0;
+    case VertexFormat::UInt: return sizeof(uint32);
+    case VertexFormat::UInt2: return sizeof(uint32) * 2;
+    case VertexFormat::UInt3: return sizeof(uint32) * 3;
+    case VertexFormat::UInt4: return sizeof(uint32) * 4;
+    case VertexFormat::Byte4:
+    case VertexFormat::Byte4Normalized:
+    case VertexFormat::UByte4:
+    case VertexFormat::UByte4Normalized: return sizeof(uint8) * 4;
+    case VertexFormat::Short2:
+    case VertexFormat::Short2Normalized: return sizeof(int16) * 2;
+    case VertexFormat::Short4:
+    case VertexFormat::Short4Normalized: return sizeof(int16) * 4;
+    case VertexFormat::COUNT: break;
   }
+  return 0;
 }
 } // namespace chEngineSDK

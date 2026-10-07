@@ -186,11 +186,6 @@ VulkanAPI::~VulkanAPI()
   VulkanData& data = *m_vulkanData;
   if (data.device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(data.device);
-  }
-
-  m_functionMap.clear();
-
-  if (data.device != VK_NULL_HANDLE) {
     destroyFrames();
     m_uploader.destroy();
     // Frees the pending bindless indexes too, so it runs before the heap is destroyed.
@@ -260,7 +255,6 @@ VulkanAPI::initialize(const GraphicsAPIInfo& graphicsAPIInfo) {
   CH_LOG_DEBUG(Vulkan, "Vulkan API initialized successfully");
   CH_LOG_DEBUG(Vulkan, "Using Adapter : " + getAdapterName());
 
-  initializeFunctionMap();
 }
 
 /*
@@ -934,189 +928,6 @@ VulkanAPI::waitIdle()
   // by commands recorded and not submitted yet (staging buffers of pending uploads, the
   // open frame), so they wait for the next submit like always.
   m_deletionQueue.collect();
-}
-
-/*
- */
-void
-VulkanAPI::initializeFunctionMap() {
-#if USING(CH_VK_IMGUI)
-  m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
-    const bool functionsLoaded = ImGui_ImplVulkan_LoadFunctions(
-        VK_API_VERSION_1_3,
-        [](const ANSICHAR* function_name, void* user_data) -> PFN_vkVoidFunction {
-          VkInstance* instance = static_cast<VkInstance*>(user_data);
-          return vkGetInstanceProcAddr(*instance, function_name);
-        },
-        &m_vulkanData->instance);
-    if (!functionsLoaded) {
-      CH_LOG_ERROR(Vulkan, "Failed to load the ImGui Vulkan functions");
-      return Any(false);
-    }
-
-    ImGuiContext* context;
-    if (!AnyUtils::tryGetValue<ImGuiContext*>(args[0], context)) {
-      CH_LOG_ERROR(Vulkan, "Invalid ImGui Context argument");
-      return Any(static_cast<void*>(nullptr));
-    }
-
-    ImGui::SetCurrentContext(context);
-
-#if USING(CH_DISPLAY_SDL3)
-    SPtr<DisplaySurface> displaySurface;
-    if (!AnyUtils::tryGetValue<SPtr<DisplaySurface>>(args[1], displaySurface)) {
-      CH_LOG_ERROR(Vulkan, "DisplaySurface is expired");
-      return Any(false);
-    }
-    CH_ASSERT(displaySurface && "DisplaySurface is null");
-
-    SDL_Window* sdlWindow = displaySurface->getPlatformHandler();
-    CH_ASSERT(sdlWindow && "SDL_Window is null");
-    ImGui_ImplSDL3_InitForVulkan(sdlWindow);
-
-    SPtr<ISwapChain> inSwapchain;
-    if (!AnyUtils::tryGetValue<SPtr<ISwapChain>>(args[2], inSwapchain) || !inSwapchain) {
-      CH_LOG_ERROR(Vulkan, "SwapChain is expired");
-      return Any(false);
-    }
-
-    ImGui_ImplVulkan_InitInfo init_info = {};
-    init_info.ApiVersion = VK_API_VERSION_1_3;
-    init_info.Instance = m_vulkanData->instance;
-    init_info.PhysicalDevice = m_vulkanData->physicalDevice;
-    init_info.Device = m_vulkanData->device;
-    init_info.QueueFamily = m_graphicsQueueFamilyIndex;
-    init_info.Queue = m_graphicsQueueHandle;
-    // The main window draws with dynamic rendering, like the rest of the engine. ImGui keeps
-    // the pointer to the format, so it points to the surface format that lives with the API.
-    init_info.UseDynamicRendering = true;
-    init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .pNext = nullptr,
-        .viewMask = 0,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &m_vulkanData->surfaceFormat,
-        .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
-        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED};
-    init_info.MinImageCount = 2;
-    init_info.ImageCount = inSwapchain->getTextureCount();
-
-    // TODO: hardcoded for now, need to be set by someone(?)
-    init_info.DescriptorPoolSize = 8;
-
-    ImGui_ImplVulkan_Init(&init_info);
-    return Any(true);
-#else // USING(CH_DISPLAY_SDL3)
-    return Any(false);
-#endif // USING(CH_DISPLAY_SDL3)
-  };
-
-  // ImGui binds its own pipeline layout and sets, so anything drawn after it in the same
-  // command list must bind the bindless heap again.
-  m_functionMap["renderImGui"] = [](const Vector<Any>& args) -> Any {
-    ICommandList* commandList = nullptr;
-    if (args.empty() || !AnyUtils::tryGetValue<ICommandList*>(args[0], commandList) ||
-        commandList == nullptr) {
-      CH_LOG_ERROR(Vulkan, "renderImGui requires the command list to record into");
-      return Any(false);
-    }
-
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(),
-                                    static_cast<VulkanCommandList*>(commandList)->getHandle());
-    return Any(true);
-  };
-
-  m_functionMap["newFrameImGui"] = [](const Vector<Any>&) -> Any {
-    ImGui_ImplVulkan_NewFrame();
-    return Any(true);
-  };
-
-  m_functionMap["shutdownImGui"] = [](const Vector<Any>&) -> Any {
-    // This library has its own copy of ImGui, whose context is only set once initImGui ran.
-    if (!ImGui::GetCurrentContext()) {
-      return Any(false);
-    }
-
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.BackendRendererUserData) {
-      ImGui_ImplVulkan_Shutdown();
-    }
-#if USING(CH_DISPLAY_SDL3)
-    if (io.BackendPlatformUserData) {
-      ImGui_ImplSDL3_Shutdown();
-    }
-#endif // USING(CH_DISPLAY_SDL3)
-    ImGui::SetCurrentContext(nullptr);
-    return Any(true);
-  };
-
-  m_functionMap["addImGuiTexture"] = [](const Vector<Any>& args) -> Any {
-    if (args.size() < 2) {
-      CH_LOG_ERROR(Vulkan,
-                   "addImGuiTexture requires at least 2 arguments: sampler and textureView");
-      return Any(uint64(0));
-    }
-
-    SPtr<ISampler> sampler;
-    if (!AnyUtils::tryGetValue<SPtr<ISampler>>(args[0], sampler)) {
-      CH_LOG_ERROR(Vulkan, "Invalid sampler argument");
-      return Any(uint64(0));
-    }
-
-    SPtr<ITextureView> textureView;
-    if (!AnyUtils::tryGetValue<SPtr<ITextureView>>(args[1], textureView)) {
-      CH_LOG_ERROR(Vulkan, "Invalid textureView argument");
-      return Any(uint64(0));
-    }
-
-    // Cast to Vulkan objects
-    auto vulkanSampler = std::reinterpret_pointer_cast<VulkanSampler>(sampler);
-    auto vulkanTextureView = std::reinterpret_pointer_cast<VulkanTextureView>(textureView);
-
-    if (!vulkanSampler || !vulkanTextureView) {
-      CH_LOG_ERROR(Vulkan, "Failed to cast to Vulkan objects");
-      return Any(uint64(0));
-    }
-
-    // Get Vulkan handles
-    VkSampler vkSampler = vulkanSampler->getHandle();
-    VkImageView vkImageView = static_cast<VkImageView>(vulkanTextureView->getRaw());
-
-    // Use ImGui's function to create the descriptor set
-    VkDescriptorSet descriptorSet = ImGui_ImplVulkan_AddTexture(
-        vkSampler, vkImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // The ImTextureID of this backend is the descriptor set.
-    return Any(reinterpret_cast<uint64>(descriptorSet));
-  };
-
-  // The set goes back to ImGui's pool at once, so the caller must make sure no frame in
-  // flight still draws it.
-  m_functionMap["removeImGuiTexture"] = [](const Vector<Any>& args) -> Any {
-    uint64 textureId = 0;
-    if (args.empty() || !AnyUtils::tryGetValue<uint64>(args[0], textureId) || textureId == 0) {
-      CH_LOG_ERROR(Vulkan, "removeImGuiTexture requires the texture id to remove");
-      return {};
-    }
-
-    ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(textureId));
-    return {};
-  };
-
-#endif // USING (CH_VK_IMGUI)
-}
-
-/*
- */
-Any
-VulkanAPI::execute(const String& functionName, const Vector<Any>& args) {
-  auto it = m_functionMap.find(functionName);
-  if (it != m_functionMap.end()) {
-    return it->second(args);
-  }
-  CH_LOG_ERROR(Vulkan, "Unknown function: {0}", functionName);
-  return Any{};
 }
 
 /*

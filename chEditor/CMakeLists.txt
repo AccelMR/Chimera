@@ -15,3 +15,7 @@ foreach(PLUGIN chVulkan chImageCodec chMeshCodec)
     add_dependencies(chEditor ${PLUGIN})
   endif()
 endforeach()
+
+ch_add_shaders(chEditorShaders ${CMAKE_CURRENT_SOURCE_DIR}/Content/Shaders)
+set_target_properties(chEditorShaders PROPERTIES FOLDER Editor)
+add_dependencies(chEditor chEditorShaders)

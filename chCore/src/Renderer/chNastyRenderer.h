@@ -21,20 +21,22 @@ public:
   virtual ~NastyRenderer();
 
   void
-  initialize(uint32 width, uint32 height) override;
+  initialize(uint32 width, uint32 height, Format colorFormat) override;
 
-  RendererOutput
-  onRender(ICommandList& commandList, float deltaTime) override;
+  void
+  onRender(ICommandList& commandList, const ITextureView& colorTarget,
+           float deltaTime) override;
+
   void
   resize(uint32 width, uint32 height) override;
 
   void
   cleanup() override;
 
-  uint32
+  NODISCARD uint32
   getWidth() const override { return m_renderWidth; }
 
-  uint32
+  NODISCARD uint32
   getHeight() const override { return m_renderHeight; }
 
   FORCEINLINE void
@@ -60,7 +62,7 @@ public:
 
 
   void
-  createRenderTargets();
+  createDepthTarget();
 
   void
   initializeRenderResources();
@@ -73,8 +75,7 @@ public:
 
   bool m_bIsfocused = false;
 
-  SPtr<ITexture> m_colorTarget;
-  SPtr<ITextureView> m_colorTargetView;
+  Format m_colorFormat = Format::Unknown;
   SPtr<ITexture> m_depthTarget;
   SPtr<ITextureView> m_depthTargetView;
 
