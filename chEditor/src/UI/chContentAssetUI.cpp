@@ -556,9 +556,17 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
       std::chrono::system_clock::time_point(std::chrono::system_clock::duration(createdAt));
   std::time_t createdAtTimeT = std::chrono::system_clock::to_time_t(timePoint);
 
+  // std::localtime returns a pointer to shared static data, so it is not thread-safe; the
+  // platform versions fill a local struct instead.
   ANSICHAR createdAtStr[64] = {};
-  if (struct tm* timeInfo = std::localtime(&createdAtTimeT)) {
-    std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", timeInfo);
+  struct tm timeInfo = {};
+#if USING(CH_PLATFORM_WIN32)
+  const bool hasLocalTime = localtime_s(&timeInfo, &createdAtTimeT) == 0;
+#else
+  const bool hasLocalTime = localtime_r(&createdAtTimeT, &timeInfo) != nullptr;
+#endif
+  if (hasLocalTime) {
+    std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", &timeInfo);
   }
   else {
     StringUtils::copyToBuffer(createdAtStr, "Unknown");

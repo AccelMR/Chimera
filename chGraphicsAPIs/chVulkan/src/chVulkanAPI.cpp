@@ -942,14 +942,17 @@ void
 VulkanAPI::initializeFunctionMap() {
 #if USING(CH_VK_IMGUI)
   m_functionMap["initImGui"] = [this](const Vector<Any>& args) -> Any {
-    bool bSuccedLoadingFunctions = ImGui_ImplVulkan_LoadFunctions(
+    const bool functionsLoaded = ImGui_ImplVulkan_LoadFunctions(
         VK_API_VERSION_1_3,
         [](const ANSICHAR* function_name, void* user_data) -> PFN_vkVoidFunction {
           VkInstance* instance = static_cast<VkInstance*>(user_data);
           return vkGetInstanceProcAddr(*instance, function_name);
         },
         &m_vulkanData->instance);
-    CH_ASSERT(bSuccedLoadingFunctions && "Failed to load ImGui Vulkan functions");
+    if (!functionsLoaded) {
+      CH_LOG_ERROR(Vulkan, "Failed to load the ImGui Vulkan functions");
+      return Any(false);
+    }
 
     ImGuiContext* context;
     if (!AnyUtils::tryGetValue<ImGuiContext*>(args[0], context)) {

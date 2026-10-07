@@ -21,10 +21,12 @@ CH_LOG_DECLARE_STATIC(EnginePathsLog, All);
 
 namespace {
 const ANSICHAR* const kEngineContentFolder = "chCore/Content";
+const ANSICHAR* const kProjectExtension = ".chproject";
+#if USING(CH_EDITOR)
 const ANSICHAR* const kEditorContentFolder = "chEditor/Content";
 const ANSICHAR* const kDefaultProjectFolder = "Projects/Sandbox";
 const ANSICHAR* const kDefaultProjectName = "Sandbox";
-const ANSICHAR* const kProjectExtension = ".chproject";
+#endif // USING(CH_EDITOR)
 
 struct PathState
 {

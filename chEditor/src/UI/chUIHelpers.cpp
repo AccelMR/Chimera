@@ -397,11 +397,9 @@ UIHelpers::openFileExplorer(const Path& pathToOpen, const Vector<String>& filter
     supportedExtensionsStr += filters[i];
   }
 
-  const Vector<nfdfilteritem_t> nfdFilter = {
-      {"Supported Files", supportedExtensionsStr.c_str()}};
+  const nfdfilteritem_t nfdFilter{"Supported Files", supportedExtensionsStr.c_str()};
 
-  nfdresult_t result = NFD::OpenDialog(outPath, nfdFilter.data(), nfdFilter.size(),
-                                       pathToOpen.toString().c_str());
+  nfdresult_t result = NFD::OpenDialog(outPath, &nfdFilter, 1, pathToOpen.toString().c_str());
 
   if (result == NFD_OKAY) {
     CH_LOG_INFO(UIImguiHelper, "Selected file: {0}", outPath.get());

@@ -1,46 +1,27 @@
-cmake_minimum_required(VERSION 3.19)
+# Dear ImGui and the backends we use, as static libraries. They are third-party code, so they
+# get none of our warning settings, and SYSTEM keeps their headers out of our warnings.
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Externals/imgui)
 
-set(IMGUI_DIR "${CMAKE_SOURCE_DIR}/chImgui/Externals/imgui" CACHE PATH "Path to ImGui sources")
-message(STATUS "IMGUI_DIR = '${IMGUI_DIR}'")
+file(GLOB IMGUI_SOURCES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/*.h)
+add_library(chImgui STATIC ${IMGUI_SOURCES})
+target_include_directories(chImgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+# imconfig options must be the same in the library and in every file that includes imgui.h.
+target_compile_definitions(chImgui PUBLIC
+  IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+  IMGUI_DISABLE_OBSOLETE_KEYIO)
 
-set(CMAKE_DEBUG_POSTFIX "d")
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+add_library(chImguiSDL3 STATIC ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp)
+target_link_libraries(chImguiSDL3 PUBLIC chImgui SDL3::SDL3)
 
-# Configurar RPATH antes de agregar cualquier objetivo
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-set(CMAKE_INSTALL_RPATH "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(IMGUI_TARGETS chImgui chImguiSDL3)
 
-# Para Linux, agregar $ORIGIN para ruta relativa
-if(UNIX AND NOT APPLE)
-    set(CMAKE_INSTALL_RPATH "$ORIGIN:${CMAKE_BINARY_DIR}/lib")
+if(CH_BUILD_VULKAN)
+  find_package(Vulkan REQUIRED)
+  add_library(chImguiVulkan STATIC ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp)
+  target_link_libraries(chImguiVulkan PUBLIC chImgui Vulkan::Vulkan)
+  list(APPEND IMGUI_TARGETS chImguiVulkan)
 endif()
 
-file(GLOB IMGUI_SRC_FILES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/*.h)
-
-add_library(chImgui STATIC
-    ${IMGUI_SRC_FILES}
-)
-
-set_target_properties(chImgui PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CH_OUTPUT_DIR}
-    OUTPUT_NAME "chImgui"
-    PREFIX ""
-    DEBUG_POSTFIX "d"
-    INSTALL_RPATH "$ORIGIN"
-)
-
-target_include_directories(chImgui PUBLIC
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-)
-
-target_compile_definitions(chImgui PRIVATE
-  IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-  IMGUI_DISABLE_OBSOLETE_KEYIO
-)
-
-target_compile_definitions(chImgui PRIVATE IMGUI_BUILD_DLL)
-
+set_target_properties(${IMGUI_TARGETS} PROPERTIES
+  SYSTEM ON
+  FOLDER Externals/ImGui)

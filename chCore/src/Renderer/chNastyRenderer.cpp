@@ -281,8 +281,10 @@ NastyRenderer::initializeRenderResources() {
   auto& graphicsAPI = IGraphicsAPI::instance();
 
   // Create camera
-  m_camera =
-      chMakeUnique<Camera>(initialCameraPos, Vector3::ZERO, m_renderWidth, m_renderHeight);
+  m_camera = chMakeUnique<Camera>(initialCameraPos,
+                                  Vector3::ZERO,
+                                  static_cast<float>(m_renderWidth),
+                                  static_cast<float>(m_renderHeight));
   m_camera->setProjectionType(CameraProjectionType::Perspective);
   m_camera->setFieldOfView(g_FOV);
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);

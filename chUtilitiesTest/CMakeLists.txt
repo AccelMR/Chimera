@@ -1,24 +1,6 @@
-# Define el ejecutable para las pruebas
-add_executable(chUtilitiesTest chUtilitiesMain.cpp)
+ch_add_test(chUtilitiesTest SOURCE chUtilitiesMain.cpp)
 
-# Añade el include directory para Catch2 (mismo directorio que chUtilitiesMain.cpp)
-target_include_directories(chUtilitiesTest PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(chUtilitiesTest PRIVATE chUtilities)
 
-# Linkea tu biblioteca principal
-target_link_libraries(
-  chUtilitiesTest
-  chUtilities
-)
-
-# Macro para incluir subcarpetas
-macro(INCLUDESUBFOLDERS curdir)
-    file(GLOB children ${curdir}/*)
-    set(dirlist "")
-    foreach(child ${children})
-        if(IS_DIRECTORY ${child})
-            include_directories(${child})
-        endif()
-    endforeach()
-endmacro()
-
-INCLUDESUBFOLDERS(${CMAKE_SOURCE_DIR}/chUtilities/src)
+# catch.hpp lives next to the tests; SYSTEM keeps our warning level out of it.
+target_include_directories(chUtilitiesTest SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

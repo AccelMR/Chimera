@@ -22,3 +22,6 @@ chEditor/Content/fonts/fa-brands-400.ttf chEditor/Content/fonts/fa-regular-400.t
 *.ini
 
 [Pp]rojects/
+
+# Personal CMake presets
+CMakeUserPresets.json

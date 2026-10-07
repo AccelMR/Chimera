@@ -1,0 +1,92 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows MSVC (Visual Studio 2022)",
+      "inherits": "windows-base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vs"
+    },
+    {
+      "name": "windows-clang-base",
+      "hidden": true,
+      "inherits": "windows-base",
+      "generator": "Ninja",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "toolset": { "value": "host=x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "$env{VCINSTALLDIR}Tools/Llvm/x64/bin/clang.exe",
+        "CMAKE_CXX_COMPILER": "$env{VCINSTALLDIR}Tools/Llvm/x64/bin/clang++.exe"
+      }
+    },
+    {
+      "name": "windows-clang-debug",
+      "displayName": "Windows clang Debug (Ninja)",
+      "inherits": "windows-clang-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "windows-clang-release",
+      "displayName": "Windows clang Release (Ninja)",
+      "inherits": "windows-clang-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux-clang-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux-clang-debug",
+      "displayName": "Linux clang Debug",
+      "inherits": "linux-clang-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "linux-clang-release",
+      "displayName": "Linux clang Release",
+      "inherits": "linux-clang-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc-debug", "configurePreset": "windows-msvc", "configuration": "Debug" },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc", "configuration": "Release" },
+    { "name": "windows-clang-debug", "configurePreset": "windows-clang-debug" },
+    { "name": "windows-clang-release", "configurePreset": "windows-clang-release" },
+    { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "test-base",
+      "hidden": true,
+      "output": { "outputOnFailure": true }
+    },
+    { "name": "windows-msvc-debug", "inherits": "test-base", "configurePreset": "windows-msvc", "configuration": "Debug" },
+    { "name": "windows-msvc-release", "inherits": "test-base", "configurePreset": "windows-msvc", "configuration": "Release" },
+    { "name": "windows-clang-debug", "inherits": "test-base", "configurePreset": "windows-clang-debug" },
+    { "name": "windows-clang-release", "inherits": "test-base", "configurePreset": "windows-clang-release" },
+    { "name": "linux-clang-debug", "inherits": "test-base", "configurePreset": "linux-clang-debug" },
+    { "name": "linux-clang-release", "inherits": "test-base", "configurePreset": "linux-clang-release" }
+  ]
+}
