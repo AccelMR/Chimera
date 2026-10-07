@@ -22,10 +22,10 @@ class GraphicsLimits
 {
  public:
   static constexpr uint32 MAX_COLOR_ATTACHMENTS = 8;
-  // The size Vulkan guarantees on every device; DX12 root constants hold it too.
+  // The push constant size every supported graphics API guarantees.
   static constexpr uint32 PUSH_CONSTANTS_SIZE = 128;
   static constexpr uint32 MAX_BINDLESS_RESOURCES = 65536;
-  // The size of the DX12 sampler heap.
+  // The smallest sampler heap among the supported graphics APIs.
   static constexpr uint32 MAX_BINDLESS_SAMPLERS = 2048;
   static constexpr uint32 INVALID_BINDLESS_INDEX = ~0u;
   // The CPU records one frame while the GPU runs the one before it.
@@ -347,24 +347,17 @@ struct TextureCreateInfo {
 
   TextureUsageFlags usage = TextureUsage::Sampled | TextureUsage::TransferDst;
 
-  bool cubeCompatible = false;
-  bool generateMipmaps = false;
-
-  bool concurrentSharing = false;
-  Vector<uint32> queueFamilyIndices = {/**/};
-
   const void* initialData = nullptr;
   SIZE_T initialDataSize = 0;
 };
 
 struct TextureViewCreateInfo {
-  Format format = Format::Unknown;  // Usar el formato de la imagen si es Unknown
+  Format format = Format::Unknown; // Unknown takes the format of the texture.
   TextureViewType viewType = TextureViewType::View2D;
   uint32 baseMipLevel = 0;
   uint32 mipLevelCount = ~0u;
   uint32 baseArrayLayer = 0;
   uint32 arrayLayerCount = ~0u;
-  bool bIsDepthStencil = false;
 };
 
 struct ShaderCreateInfo {
@@ -387,7 +380,7 @@ struct BlendAttachmentState {
 
 struct RasterState {
   CullMode cullMode = CullMode::Back;
-  // The engine is left-handed and projects like Direct3D, so front faces are clockwise.
+  // The engine is left-handed with NDC Y up, so front faces are clockwise.
   FrontFace frontFace = FrontFace::Clockwise;
   PolygonMode polygonMode = PolygonMode::Fill;
   float depthBiasConstant = 0.0f;

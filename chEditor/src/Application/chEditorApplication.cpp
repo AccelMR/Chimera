@@ -44,6 +44,7 @@
 
 #if USING(CH_DISPLAY_SDL3)
 #include "imgui_impl_sdl3.h"
+#include <SDL3/SDL_video.h>
 #endif // USING(CH_DISPLAY_SDL3)
 
 CH_LOG_DECLARE_STATIC(EditorApp, All);
@@ -323,8 +324,15 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display)
   UIHelpers::initFontConfig();
 
 #if USING(CH_DISPLAY_SDL3)
-  // Windows ImGui opens get SDL_WINDOW_VULKAN, which Vulkan needs to make a surface on them.
-  ImGui_ImplSDL3_InitForVulkan(display->getPlatformHandler());
+  // The windows ImGui opens need the same window flags the graphics API asked for, and the
+  // backend only adds this one when it is started for it.
+  const uint64 windowFlags = IGraphicsAPI::instance().getPlatformWindowFlags();
+  if ((windowFlags & SDL_WINDOW_VULKAN) != 0) {
+    ImGui_ImplSDL3_InitForVulkan(display->getPlatformHandler());
+  }
+  else {
+    ImGui_ImplSDL3_InitForOther(display->getPlatformHandler());
+  }
 #endif // USING(CH_DISPLAY_SDL3)
   m_imguiRenderer = chMakeUnique<ImGuiRenderer>();
 

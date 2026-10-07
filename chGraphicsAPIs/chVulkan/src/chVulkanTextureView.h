@@ -43,8 +43,6 @@ class VulkanTextureView : public ITextureView {
 
   ~VulkanTextureView() override;
 
-  NODISCARD FORCEINLINE void*
-  getRaw() const override { return static_cast<void*>(m_imageView); }
 
   NODISCARD VkImageView
   getHandle() const { return m_imageView; }

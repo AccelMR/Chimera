@@ -55,6 +55,13 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   virtual void
   destroyModules() override;
 
+  /**
+   * Loads the graphics API plugin without initializing it, so the main window can be made
+   * with the flags it asks for.
+   */
+  virtual void
+  loadGraphicsAPI();
+
   virtual void
   initializeDisplay(const ScreenDescriptor& desc);
 

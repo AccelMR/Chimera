@@ -264,6 +264,19 @@ VulkanAPI::getAdapterName() const {
 
 /*
  */
+uint64
+VulkanAPI::getPlatformWindowFlags() const
+{
+#if USING(CH_DISPLAY_SDL3)
+  // SDL only makes Vulkan surfaces on windows created with this flag.
+  return SDL_WINDOW_VULKAN;
+#else
+  return 0;
+#endif // USING(CH_DISPLAY_SDL3)
+}
+
+/*
+ */
 NODISCARD SPtr<ISwapChain>
 VulkanAPI::createSwapChain(const SwapChainDesc& desc)
 {

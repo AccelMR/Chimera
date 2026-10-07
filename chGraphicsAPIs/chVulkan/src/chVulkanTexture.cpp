@@ -91,8 +91,7 @@ VulkanTexture::VulkanTexture(VkDevice device,
 
   if (m_usage.isSet(TextureUsage::Sampled)) {
     m_defaultView = createView({.format = Format::Unknown,
-                                .viewType = toDefaultViewType(m_type, m_arrayLayers),
-                                .bIsDepthStencil = FormatUtils::isDepth(m_format)});
+                                .viewType = toDefaultViewType(m_type, m_arrayLayers)});
   }
 }
 

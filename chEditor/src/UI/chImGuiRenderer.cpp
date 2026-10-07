@@ -9,8 +9,6 @@
 /************************************************************************/
 #include "chImGuiRenderer.h"
 
-#include "chEnginePaths.h"
-#include "chFileSystem.h"
 #include "chIBuffer.h"
 #include "chICommandList.h"
 #include "chIGraphicsAPI.h"
@@ -21,7 +19,6 @@
 #include "chITexture.h"
 #include "chLogger.h"
 #include "chMath.h"
-#include "chPath.h"
 
 #include "imgui.h"
 
@@ -53,18 +50,6 @@ constexpr IndexType kIndexType =
 // have to grow.
 constexpr uint32 kInitialVertexBufferSize = 512 * 1024;
 constexpr uint32 kInitialIndexBufferSize = 128 * 1024;
-
-SPtr<IShader>
-loadShader(ShaderStage stage, const ANSICHAR* entryPoint, const ANSICHAR* fileName)
-{
-  const Path shaderPath(EnginePaths::getShaderBinaryDirectory().join(Path("SPIRV")),
-                        Path(fileName));
-  return IGraphicsAPI::instance().createShader({.stage = stage,
-                                                .entryPoint = entryPoint,
-                                                .sourceCode = FileSystem::fastRead(shaderPath),
-                                                .filePath = shaderPath.toString(),
-                                                .defines = {}});
-}
 
 /*
  * Makes sure the buffer holds size bytes and returns true when it had to be replaced. A new
@@ -128,8 +113,9 @@ ImGuiRenderer::ImGuiRenderer()
   platformIO.Renderer_DestroyWindow = &ImGuiRenderer::destroyWindow;
   platformIO.Renderer_SetWindowSize = &ImGuiRenderer::setWindowSize;
 
-  m_vertexShader = loadShader(ShaderStage::Vertex, "VSMain", "imgui.vs.spv");
-  m_fragmentShader = loadShader(ShaderStage::Fragment, "PSMain", "imgui.ps.spv");
+  IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
+  m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "imgui");
+  m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "imgui");
 
   m_vertexLayout.addAttribute(VertexAttributeType::Position, VertexFormat::Float2,
                               offsetof(ImDrawVert, pos));
@@ -139,7 +125,7 @@ ImGuiRenderer::ImGuiRenderer()
                               offsetof(ImDrawVert, col));
   CH_ASSERT(m_vertexLayout.getStride() == sizeof(ImDrawVert));
 
-  m_sampler = IGraphicsAPI::instance().createSampler(
+  m_sampler = graphicsAPI.createSampler(
       {.addressModeU = SamplerAddressMode::ClampToEdge,
        .addressModeV = SamplerAddressMode::ClampToEdge,
        .addressModeW = SamplerAddressMode::ClampToEdge});

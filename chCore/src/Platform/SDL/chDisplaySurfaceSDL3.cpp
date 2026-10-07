@@ -80,7 +80,8 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
                        SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
                        desc.height);
 
-  SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+  SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER,
+                        static_cast<int64>(desc.platformFlags));
   SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, desc.resizable);
 
   // TODO: Add more capabilities based on descriptor

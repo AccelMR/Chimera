@@ -46,8 +46,9 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
   Format format = (createInfo.format != Format::Unknown) ?
                    createInfo.format : vulkanTexture->getFormat();
   viewInfo.format = chFormatToVkFormat(format);
+  const bool isDepth = FormatUtils::isDepth(format);
 
-  if (createInfo.bIsDepthStencil) {
+  if (isDepth) {
     viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
     viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
     viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
@@ -83,9 +84,8 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
 
   if (vulkanTexture->getUsage().isSet(TextureUsage::Sampled)) {
     // Shaders sample it after a barrier to ShaderRead, which uses these layouts.
-    const VkImageLayout layout = createInfo.bIsDepthStencil
-                                     ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-                                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const VkImageLayout layout = isDepth ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                                         : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     VulkanBindlessHeap& bindlessHeap = g_vulkanAPI().getBindlessHeap();
     m_bindlessIndex = bindlessHeap.allocateResourceIndex();
     bindlessHeap.writeSampledImage(m_bindlessIndex, m_imageView, layout);

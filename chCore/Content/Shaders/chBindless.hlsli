@@ -4,7 +4,8 @@
 #pragma once
 
 // Reads a constant buffer of the heap into a plain value. Keeping the ConstantBuffer itself
-// in a local makes DXC write invalid SPIR-V when optimizations are off (debug builds).
+// in a local makes DXC write invalid code for one of its targets when optimizations are off
+// (debug builds).
 template<typename T>
 T
 loadConstants(uint index)

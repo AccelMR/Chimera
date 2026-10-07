@@ -83,11 +83,14 @@ WindowedApplication::initialize() {
   CH_LOG_INFO(WindowedApp, "Initializing WindowedApplication.");
   initializeModules();
 
+  loadGraphicsAPI();
   initializeDisplay(
       {.name = CommandLine::getValue("AppName", "Chimera Engine"),
        .title = CommandLine::getValue("WindowTitle", "Chimera Engine Windowed Application"),
        .width = static_cast<uint32>(CommandLine::getInt("Width", 2560)),
-       .height = static_cast<uint32>(CommandLine::getInt("Height", 1440))});
+       .height = static_cast<uint32>(CommandLine::getInt("Height", 1440)),
+       .resizable = true,
+       .platformFlags = IGraphicsAPI::instance().getPlatformWindowFlags()});
   initializeGraphics();
   initializeRenderComponents();
   bindEvents();
@@ -161,11 +164,10 @@ WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
 /*
  */
 void
-WindowedApplication::initializeGraphics() {
-  CH_LOG_INFO(WindowedApp, "Initializing graphics subsystem.");
-  // Initialize graphics subsystem here
-  // Chimera.exe -GraphicsAPI=chVulkan -scene=MyScene
-  const String graphicsAPIName = CommandLine::getValue("GraphicsAPI", "chVulkan");
+WindowedApplication::loadGraphicsAPI()
+{
+  // -GraphicsAPI=<plugin name>; the build picks the default.
+  const String graphicsAPIName = CommandLine::getValue("GraphicsAPI", CH_DEFAULT_GRAPHICS_API);
 
   const Path& pluginDirectory = EnginePaths::getPluginDirectory();
   CH_LOG_DEBUG(WindowedApp, "Loading graphics library: {0} from path: {1}", graphicsAPIName,
@@ -188,14 +190,19 @@ WindowedApplication::initializeGraphics() {
   }
   initFunc();
 
-  // Initialize the graphics API
-  IGraphicsAPI* graphicsAPI = IGraphicsAPI::instancePtr();
-  if (!graphicsAPI) {
-    CH_EXCEPT(InternalErrorException, "Graphics API instance is null after initialization.");
+  if (!IGraphicsAPI::isStarted()) {
+    CH_EXCEPT(InternalErrorException,
+              StringUtils::format("{0} did not start a graphics API.", graphicsAPIName));
   }
+}
 
-  graphicsAPI->initialize({.enableValidationLayer = true});
-
+/*
+ */
+void
+WindowedApplication::initializeGraphics()
+{
+  CH_LOG_INFO(WindowedApp, "Initializing graphics subsystem.");
+  IGraphicsAPI::instance().initialize({.enableValidationLayer = true});
   CH_LOG_INFO(WindowedApp, "Graphics subsystem initialized successfully.");
 }
 

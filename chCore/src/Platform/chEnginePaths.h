@@ -77,7 +77,8 @@ class CH_CORE_EXPORT EnginePaths
 
   /**
    * Real folder of the compiled shaders, <exe folder>/Shaders, with one subfolder per format
-   * (SPIRV, DXIL). The build writes them there from chCore/Content/Shaders.
+   * (IGraphicsAPI::getShaderBinaryFormat). The build writes them there from the
+   * Content/Shaders folders.
    */
   NODISCARD static const Path&
   getShaderBinaryDirectory();

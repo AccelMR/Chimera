@@ -12,10 +12,8 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chDegree.h"
-#include "chEnginePaths.h"
 #include "chEventDispatcherManager.h"
 #include "chEventSystem.h"
-#include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMatrix4.h"
 #include "chMatrixHelpers.h"
@@ -228,8 +226,7 @@ NastyRenderer::createDepthTarget()
   m_depthTarget = graphicsAPI.createTexture(depthTextureInfo);
 
   TextureViewCreateInfo depthViewInfo{.format = kDepthFormat,
-                                      .viewType = TextureViewType::View2D,
-                                      .bIsDepthStencil = true};
+                                      .viewType = TextureViewType::View2D};
 
   m_depthTargetView = m_depthTarget->createView(depthViewInfo);
 
@@ -275,25 +272,8 @@ NastyRenderer::initializeRenderResources() {
                                                 .initialData = &kWhitePixel,
                                                 .initialDataSize = sizeof(kWhitePixel)});
 
-  const Path shaderDir = EnginePaths::getShaderBinaryDirectory().join(Path("SPIRV"));
-  const Path cubeVertexShader(shaderDir, Path("cube.vs.spv"));
-  const Path cubeFragmentShader(shaderDir, Path("cube.ps.spv"));
-
-  // Load shaders
-  ShaderCreateInfo shaderCreateInfo{.stage = ShaderStage::Vertex,
-                                    .entryPoint = "VSMain",
-                                    .sourceCode = FileSystem::fastRead(cubeVertexShader),
-                                    .filePath = cubeVertexShader.toString(),
-                                    .defines = {}};
-
-  ShaderCreateInfo fragmentShaderCreateInfo{.stage = ShaderStage::Fragment,
-                                            .entryPoint = "PSMain",
-                                            .sourceCode = FileSystem::fastRead(cubeFragmentShader),
-                                            .filePath = cubeFragmentShader.toString(),
-                                            .defines = {}};
-
-  m_vertexShader = graphicsAPI.createShader(shaderCreateInfo);
-  m_fragmentShader = graphicsAPI.createShader(fragmentShaderCreateInfo);
+  m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "cube");
+  m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "cube");
 
   GraphicsPipelineDesc pipelineDesc{.vertexShader = m_vertexShader,
                                     .fragmentShader = m_fragmentShader,

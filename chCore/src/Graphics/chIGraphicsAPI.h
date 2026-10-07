@@ -22,6 +22,16 @@ struct GraphicsAPIInfo {
   bool enableValidationLayer = true;
 };
 
+/**
+ * Where the compiled shaders of a graphics API live: a subfolder of
+ * EnginePaths::getShaderBinaryDirectory() and the file extension, both chosen by the build.
+ */
+struct ShaderBinaryFormat
+{
+  StringView folder;
+  StringView extension;
+};
+
 class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   public:
   IGraphicsAPI() = default;
@@ -32,6 +42,16 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
 
   NODISCARD virtual String
   getAdapterName() const = 0;
+
+  /**
+   * Flags of the platform window layer (SDL_WindowFlags with SDL3) that every window this
+   * API draws to needs. Read before initialize, because the main window is made first.
+   */
+  NODISCARD virtual uint64
+  getPlatformWindowFlags() const = 0;
+
+  NODISCARD virtual ShaderBinaryFormat
+  getShaderBinaryFormat() const = 0;
 
   /**
    * The swap chain makes its own surface on desc.window, so every window can have one.
@@ -47,6 +67,13 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
 
   NODISCARD virtual SPtr<IShader>
   createShader(const ShaderCreateInfo& createInfo) = 0;
+
+  /**
+   * Loads the compiled shader <name>.<vs|ps|cs> in the format of this API, with the entry
+   * point the build compiled for its stage (VSMain, PSMain, CSMain).
+   */
+  NODISCARD SPtr<IShader>
+  loadShader(ShaderStage stage, StringView name);
 
   /**
    * Builds a pipeline every time; use PipelineCache to reuse one with the same description.

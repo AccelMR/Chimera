@@ -14,7 +14,18 @@ option(CH_BUILD_EDITOR "Build the editor; also builds chCore with its editor cod
 # Codecs are only loaded by the editor (IAssetCodec lives inside CH_EDITOR).
 cmake_dependent_option(CH_BUILD_CODECS "Build the import codecs" ON "CH_BUILD_EDITOR" OFF)
 option(CH_BUILD_VULKAN "Build the Vulkan graphics plugin" ON)
+cmake_dependent_option(CH_BUILD_DX12 "Build the Direct3D 12 graphics plugin" ON "WIN32" OFF)
 option(CH_BUILD_TESTS "Build the unit tests" ON)
+
+# Graphics plugin a windowed application loads when -GraphicsAPI is not given. The engine
+# code never names a graphics API, so the build chooses it.
+if(CH_BUILD_VULKAN)
+  set(CH_DEFAULT_GRAPHICS_API_INIT chVulkan)
+elseif(CH_BUILD_DX12)
+  set(CH_DEFAULT_GRAPHICS_API_INIT chDX12)
+endif()
+set(CH_DEFAULT_GRAPHICS_API "${CH_DEFAULT_GRAPHICS_API_INIT}" CACHE STRING
+  "Graphics plugin loaded when -GraphicsAPI is not given")
 
 # ---------- Output ----------
 # Every executable and plugin goes to one folder and codecs to its Codecs subfolder,
@@ -80,6 +91,10 @@ add_subdirectory(chCore)
 
 if(CH_BUILD_VULKAN)
   add_subdirectory(chGraphicsAPIs/chVulkan)
+endif()
+
+if(CH_BUILD_DX12)
+  add_subdirectory(chGraphicsAPIs/chDX12)
 endif()
 
 if(CH_BUILD_CODECS)

@@ -47,8 +47,5 @@ class ITextureView {
    */
   NODISCARD virtual uint32
   getBindlessIndex() const = 0;
-
-  NODISCARD virtual void*
-  getRaw() const = 0;
 };
 } // namespace chEngineSDK

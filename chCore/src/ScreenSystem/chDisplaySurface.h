@@ -38,6 +38,8 @@ struct CH_CORE_EXPORT ScreenDescriptor {
   uint32 width = 1280;
   uint32 height = 720;
   bool resizable = true;
+  // Extra flags of the platform window layer, the ones the graphics API asks for.
+  uint64 platformFlags = 0;
 };
 
 /*

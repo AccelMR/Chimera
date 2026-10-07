@@ -38,6 +38,15 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD String
   getAdapterName() const override;
 
+  NODISCARD uint64
+  getPlatformWindowFlags() const override;
+
+  NODISCARD ShaderBinaryFormat
+  getShaderBinaryFormat() const override
+  {
+    return {.folder = "SPIRV", .extension = "spv"};
+  }
+
   NODISCARD SPtr<ISwapChain>
   createSwapChain(const SwapChainDesc& desc) override;
 

@@ -8,6 +8,8 @@ target_compile_definitions(chCore PUBLIC
   CH_SDL3_ENABLED
   $<$<BOOL:${CH_BUILD_EDITOR}>:CH_EDITOR_ENABLED>
   $<$<BOOL:${CH_BUILD_CODECS}>:CH_CODECS_ENABLED>)
+target_compile_definitions(chCore PRIVATE
+  CH_DEFAULT_GRAPHICS_API="${CH_DEFAULT_GRAPHICS_API}")
 
 ch_add_shaders(chCoreShaders ${CMAKE_CURRENT_SOURCE_DIR}/Content/Shaders)
 set_target_properties(chCoreShaders PROPERTIES FOLDER Engine)
