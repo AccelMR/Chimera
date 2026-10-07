@@ -163,7 +163,6 @@ NastyRenderer::resize(uint32 width, uint32 height)
   // Update camera viewport
   if (m_camera) {
     m_camera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
-    m_camera->updateMatrices();
   }
 
   CH_LOG_INFO(NastyRendererSystem, "NastyRenderer resized successfully");
@@ -247,7 +246,6 @@ NastyRenderer::initializeRenderResources() {
   m_camera->setProjectionType(CameraProjectionType::Perspective);
   m_camera->setFieldOfView(g_FOV);
   m_camera->setClipPlanes(g_nearPlane, g_farPlane);
-  m_camera->updateMatrices();
 
   for (SPtr<IBuffer>& cameraBuffer : m_cameraBuffers) {
     cameraBuffer = graphicsAPI.createBuffer({.size = sizeof(CameraData),
@@ -506,7 +504,7 @@ NastyRenderer::bindInputEvents() {
       }
       if (isMouseButtonDown) {
         m_camera->rotate(std::move(mouseData.deltaY * g_rotationSpeed),
-                         std::move(mouseData.deltaX * g_rotationSpeed), 0.0f);
+                         std::move(mouseData.deltaX * g_rotationSpeed));
       }
     }
   });

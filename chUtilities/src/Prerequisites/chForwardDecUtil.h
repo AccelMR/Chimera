@@ -30,6 +30,12 @@ class AABox;
 class Plane;
 class Sphere;
 class SphereBoxBounds;
+class Ray;
+class OrientedBox;
+class Capsule;
+class Frustum;
+class Vector2I;
+class Vector3I;
 
 class DynamicLibraryManager;
 class DynamicLibrary;

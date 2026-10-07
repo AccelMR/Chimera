@@ -3,409 +3,295 @@
  * @file chCamera.h
  * @author AccelMR
  * @date 2025/04/18
- * @brief
+ * @brief Camera with a view, a projection and their frustum.
  */
 /************************************************************************/
 #pragma once
 
 #include "chPrerequisitesCore.h"
 
-#include "chVector3.h"
-#include "chQuaternion.h"
-#include "chMatrix4.h"
-#include "chFrustum.h"
 #include "chAngle.h"
-#include "chRotator.h"
+#include "chFrustum.h"
+#include "chMatrix4.h"
+#include "chVector3.h"
 
 namespace chEngineSDK {
 
-/**
- * Enum to specify the projection type used by the camera
- */
-enum class CameraProjectionType {
+enum class CameraProjectionType
+{
   Perspective,
   Orthographic
 };
 
 /**
- * Class that represents a camera in 3D space
+ * Holds where a camera is, where it looks and how it projects, and gives the matrices and
+ * frustum that rendering and culling need.
+ *
+ * Setters only store the value; the view, the projection, view * projection and the
+ * frustum are rebuilt by the first getter that needs them, so any number of changes in a
+ * frame costs one rebuild. World Z is always up: the camera never rolls.
  */
 class CH_CORE_EXPORT Camera
 {
-public:
-  /**
-   * Default constructor
-   */
-  Camera();
+ public:
+  Camera() = default;
+
+  Camera(const Vector3& position, const Vector3& target, float viewportWidth,
+         float viewportHeight);
+
+  FORCEINLINE void
+  setPosition(const Vector3& position)
+  {
+    m_position = position;
+    markViewDirty();
+  }
+
+  NODISCARD FORCEINLINE const Vector3&
+  getPosition() const
+  {
+    return m_position;
+  }
+
+  FORCEINLINE void
+  lookAt(const Vector3& target)
+  {
+    m_lookAtPoint = target;
+    markViewDirty();
+  }
+
+  NODISCARD FORCEINLINE const Vector3&
+  getLookAt() const
+  {
+    return m_lookAtPoint;
+  }
 
   /**
-   * Construct a camera with specific position and target
-   *
-   * @param position Initial camera position
-   * @param target Point the camera will look at
-   * @param upVector Up direction for the camera
-   */
-  Camera(const Vector3& position,
-         const Vector3& target,
-         float viewPortWidth,
-         float viewPortHeight,
-         const Vector3& upVector = Vector3::UP);
-
-  /**
-   * Destructor
-   */
-  ~Camera() = default;
-
-  /**
-   * Set camera position in world space
-   *
-   * @param position New position vector
+   * Turns the camera in place by moving the look at point. Roll is dropped.
    */
   void
-  setPosition(const Vector3& position);
-
-  /**
-   * Get camera position in world space
-   *
-   * @return Current camera position
-   */
-  NODISCARD FORCEINLINE const Vector3&
-  getPosition() const { return m_position; }
-
-  /**
-   * Set camera rotation as quaternion
-   *
-   * @param rotation New rotation quaternion
-   */
-  FORCEINLINE void
   setRotation(const Quaternion& rotation);
 
-  /**
-   * Get camera rotation as quaternion
-   *
-   * @return Current camera rotation
-   */
-  NODISCARD FORCEINLINE const Quaternion&
-  getRotation() const { return m_rotation; }
-
-  /**
-   * Set camera rotation using Euler angles
-   *
-   * @param rotator Rotation angles (pitch, yaw, roll)
-   */
-  FORCEINLINE void
+  void
   setRotator(const Rotator& rotator);
 
   /**
-   * Get camera rotation as Euler angles
-   *
-   * @return Current rotation as Rotator
+   * Computed from the view on each call; the camera does not store a rotation.
    */
-  NODISCARD FORCEINLINE Rotator
+  NODISCARD Quaternion
+  getRotation() const;
+
+  NODISCARD Rotator
   getRotator() const;
 
-  /**
-   * Set the camera to look at a specific target
-   *
-   * @param target Point to look at
-   * @param upVector Up direction (default: world up)
-   */
-  void
-  lookAt(const Vector3& target, const Vector3& upVector = Vector3::UP);
-
-  /**
-   * Set the camera's field of view (for perspective projection)
-   *
-   * @param fov Field of view in degrees
-   */
-  void
-  setFieldOfView(Radian fov);
-
-  /**
-   * Get the camera's field of view in degrees
-   *
-   * @return Current field of view
-   */
-  NODISCARD FORCEINLINE float
-  getFieldOfView() const { return m_fieldOfView.valueDegree(); }
-
-  /**
-   * Set the camera's viewport size
-   *
-   * @param width Width of the viewport
-   * @param height Height of the viewport
-   */
-  void
-  setViewportSize(float width, float height);
-
-  /**
-   * Get the camera's aspect ratio
-   *
-   * @return Current aspect ratio
-   */
-  NODISCARD FORCEINLINE float
-  getAspectRatio() const { return m_width / m_height; }
-
-  /**
-   * Set the near and far clip planes
-   *
-   * @param nearPlane Distance to near clip plane
-   * @param farPlane Distance to far clip plane
-   */
-  void
-  setClipPlanes(float nearPlane, float farPlane);
-
-  /**
-   * Get the distance to the near clip plane
-   *
-   * @return Near clip distance
-   */
-  NODISCARD FORCEINLINE float
-  getNearClipPlane() const { return m_nearClip; }
-
-  /**
-   * Get the distance to the far clip plane
-   *
-   * @return Far clip distance
-   */
-  NODISCARD FORCEINLINE float
-  getFarClipPlane() const { return m_farClip; }
-
-  /**
-   * Set the projection type (perspective or orthographic)
-   *
-   * @param type Projection type to use
-   */
   FORCEINLINE void
-  setProjectionType(CameraProjectionType type) { m_projectionType = type; }
+  setFieldOfView(Radian fieldOfView)
+  {
+    m_fieldOfView = fieldOfView;
+    markProjectionDirty();
+  }
 
   /**
-   * Get the current projection type
-   *
-   * @return Current projection type
+   * The horizontal field of view.
    */
+  NODISCARD FORCEINLINE Radian
+  getFieldOfView() const
+  {
+    return m_fieldOfView;
+  }
+
+  FORCEINLINE void
+  setViewportSize(float width, float height)
+  {
+    m_width = width;
+    m_height = height;
+    markProjectionDirty();
+  }
+
+  NODISCARD FORCEINLINE float
+  getAspectRatio() const
+  {
+    return m_width / m_height;
+  }
+
+  FORCEINLINE void
+  setClipPlanes(float nearPlane, float farPlane)
+  {
+    m_nearClip = nearPlane;
+    m_farClip = farPlane;
+    markProjectionDirty();
+  }
+
+  NODISCARD FORCEINLINE float
+  getNearClipPlane() const
+  {
+    return m_nearClip;
+  }
+
+  NODISCARD FORCEINLINE float
+  getFarClipPlane() const
+  {
+    return m_farClip;
+  }
+
+  FORCEINLINE void
+  setProjectionType(CameraProjectionType type)
+  {
+    m_projectionType = type;
+    markProjectionDirty();
+  }
+
   NODISCARD FORCEINLINE CameraProjectionType
-  getProjectionType() const { return m_projectionType; }
+  getProjectionType() const
+  {
+    return m_projectionType;
+  }
 
   /**
-   * Set orthographic size for orthographic projection
-   *
-   * @param size Size of the orthographic viewport
+   * Half the visible height of the orthographic projection, in world units.
    */
   FORCEINLINE void
-  setOrthographicSize(float size) { m_orthographicSize = size; }
+  setOrthographicSize(float halfHeight)
+  {
+    m_orthographicSize = halfHeight;
+    markProjectionDirty();
+  }
 
-  /**
-   * Get the orthographic size
-   *
-   * @return Current orthographic size
-   */
   NODISCARD FORCEINLINE float
-  getOrthographicSize() const { return m_orthographicSize; }
+  getOrthographicSize() const
+  {
+    return m_orthographicSize;
+  }
 
   /**
-   * Move the camera forward by the specified distance
-   *
-   * @param distance Distance to move
+   * Moves the camera and its look at point along the view direction.
    */
   void
   moveForward(float distance);
 
-  /**
-   * Move the camera right by the specified distance
-   *
-   * @param distance Distance to move
-   */
   void
   moveRight(float distance);
 
   /**
-   * Move the camera up by the specified distance
-   *
-   * @param distance Distance to move
+   * Moves along world up, not the view's up.
    */
   void
   moveUp(float distance);
 
   /**
-   * Pan the camera by the specified delta values
-   *
-   * @param deltaX Change in X direction
-   * @param deltaY Change in Y direction
+   * Moves the camera and its look at point across the view.
    */
   void
   pan(float deltaX, float deltaY);
 
   /**
-   * Rotate the camera by the specified Euler angles
-   *
-   * @param pitch Pitch angle in degrees
-   * @param yaw Yaw angle in degrees
-   * @param roll Roll angle in degrees
+   * Orbits around the look at point by these degrees. Pitch stops at 89 degrees up or
+   * down, where the view would flip.
    */
   void
-  rotate(float pitch, float yaw, float roll);
+  rotate(float pitchDegrees, float yawDegrees);
 
-  /**
-   * Update the camera's view and projection matrices
-   * Call this after changing camera parameters
-   */
-  void
-  updateMatrices();
-
-  NODISCARD FORCEINLINE Vector3
-  getLookAt() const { return m_lookAtPoint; }
-
-  FORCEINLINE void
-  setLookAtPoint(const Vector3& lookAt) { m_lookAtPoint = lookAt; }
-
-  /**
-   * Get the view matrix (world to camera space)
-   *
-   * @return View matrix
-   */
   NODISCARD FORCEINLINE const Matrix4&
-  getViewMatrix() const { return m_viewMatrix; }
+  getViewMatrix() const
+  {
+    if (m_viewDirty) {
+      updateView();
+    }
+    return m_viewMatrix;
+  }
 
-  /**
-   * Get the projection matrix (camera to clip space)
-   *
-   * @return Projection matrix
-   */
   NODISCARD FORCEINLINE const Matrix4&
-  getProjectionMatrix() const { return m_projectionMatrix; }
+  getProjectionMatrix() const
+  {
+    if (m_projectionDirty) {
+      updateProjection();
+    }
+    return m_projectionMatrix;
+  }
 
-  /**
-   * Get the combined view-projection matrix
-   *
-   * @return View-projection matrix
-   */
-  NODISCARD FORCEINLINE Matrix4
-  getViewProjectionMatrix() const { return m_viewMatrix * m_projectionMatrix; }
-
-  /**
-   * Get the forward direction vector
-   *
-   * @return Forward direction (normalized)
-   */
-  NODISCARD Vector3
-  getForwardVector() const;
-
-  /**
-   * Get the right direction vector
-   *
-   * @return Right direction (normalized)
-   */
-  NODISCARD Vector3
-  getRightVector() const;
-
-  /**
-   * Get the up direction vector
-   *
-   * @return Up direction (normalized)
-   */
-  NODISCARD Vector3
-  getUpVector() const;
-
-  /**
-   * Check if a point is in the camera's view frustum
-   *
-   * @param point Point to check
-   * @return True if the point is in the frustum
-   */
-  NODISCARD bool
-  isPointInFrustum(const Vector3& point) const;
+  NODISCARD FORCEINLINE const Matrix4&
+  getViewProjectionMatrix() const
+  {
+    if (m_viewProjectionDirty) {
+      updateViewProjection();
+    }
+    return m_viewProjectionMatrix;
+  }
 
   NODISCARD FORCEINLINE const Frustum&
-  getFrustum() const noexcept
+  getFrustum() const
   {
+    if (m_viewProjectionDirty) {
+      updateViewProjection();
+    }
     return m_frustum;
   }
 
   /**
-   * Check if a sphere is in the camera's view frustum
-   *
-   * @param center Sphere center
-   * @param radius Sphere radius
-   * @return True if the sphere is at least partially in the frustum
+   * The view's axes in world space, read from the view matrix.
+   */
+  NODISCARD Vector3
+  getForwardVector() const;
+
+  NODISCARD Vector3
+  getRightVector() const;
+
+  NODISCARD Vector3
+  getUpVector() const;
+
+  /**
+   * Where a world point lands on screen, from (0, 0) at the top left to (1, 1) at the
+   * bottom right. Returns false for a point behind the camera.
    */
   NODISCARD bool
-  isSphereInFrustum(const Vector3& center, float radius) const;
+  worldToScreenPoint(const Vector3& worldPoint, Vector2& outScreenPoint) const;
 
   /**
-   * Check if a box is in the camera's view frustum
-   *
-   * @param box Axis-aligned bounding box
-   * @return True if the box is at least partially in the frustum
+   * The ray from the near plane through a screen point given as in worldToScreenPoint.
    */
-  NODISCARD bool
-  isBoxInFrustum(const AABox& box) const;
+  NODISCARD Ray
+  screenToWorldRay(const Vector2& screenPoint) const;
 
-  /**
-   * Convert a world space position to screen space coordinates
-   *
-   * @param worldPos Position in world space
-   * @return Vector2 with screen coordinates (x,y in range 0-1)
-   */
-  NODISCARD Vector2
-  worldToScreenPoint(const Vector3& worldPos) const;
+ private:
+  FORCEINLINE void
+  markViewDirty()
+  {
+    m_viewDirty = true;
+    m_viewProjectionDirty = true;
+  }
 
-  /**
-   * Unproject a screen position to a world space ray
-   *
-   * @param screenPos Screen position (x,y in range 0-1)
-   * @param rayOrigin [out] Ray origin
-   * @param rayDirection [out] Ray direction
-   */
+  FORCEINLINE void
+  markProjectionDirty()
+  {
+    m_projectionDirty = true;
+    m_viewProjectionDirty = true;
+  }
+
   void
-  screenToWorldRay(const Vector2& screenPos, Vector3& rayOrigin, Vector3& rayDirection) const;
+  updateView() const;
 
-private:
-  /**
-   * Calculate perspective projection matrix
-   */
   void
-  calculatePerspectiveMatrix();
+  updateProjection() const;
 
-  /**
-   * Calculate orthographic projection matrix
-   */
   void
-  calculateOrthographicMatrix();
+  updateViewProjection() const;
 
-  /**
-   * Rebuilds the view matrix from position and look at point, and keeps m_rotation in
-   * sync with it.
-   */
-  void
-  calculateViewMatrix();
+  Vector3 m_position = Vector3::ZERO;
+  Vector3 m_lookAtPoint = Vector3::FORWARD;
+  Radian m_fieldOfView = Radian(Degree(60.0f));
+  float m_nearClip = 0.1f;
+  float m_farClip = 1000.0f;
+  float m_orthographicSize = 5.0f;
+  float m_width = 800.0f;
+  float m_height = 600.0f;
+  CameraProjectionType m_projectionType = CameraProjectionType::Perspective;
 
-  /**
-   * Extract frustum planes from view-projection matrix
-   */
-  void
-  extractFrustumPlanes();
-
-private:
-  // Position and orientation
-  Vector3 m_position;
-  Quaternion m_rotation;
-
-  // Projection parameters
-  Radian m_fieldOfView;
-  float m_nearClip;
-  float m_farClip;
-  float m_orthographicSize;
-  float m_width;
-  float m_height;
-  CameraProjectionType m_projectionType;
-  Vector3 m_lookAtPoint;
-
-  // Cached matrices
-  Matrix4 m_viewMatrix;
-  Matrix4 m_projectionMatrix;
-
-  // Planes of view * projection, rebuilt whenever either changes.
-  Frustum m_frustum;
+  // Built on demand by the getters above.
+  mutable bool m_viewDirty = true;
+  mutable bool m_projectionDirty = true;
+  mutable bool m_viewProjectionDirty = true;
+  mutable Matrix4 m_viewMatrix;
+  mutable Matrix4 m_projectionMatrix;
+  mutable Matrix4 m_viewProjectionMatrix;
+  mutable Frustum m_frustum;
 };
 } // namespace chEngineSDK

@@ -3,76 +3,36 @@
  * @file chCamera.cpp
  * @author AccelMR
  * @date 2025/04/18
- * @brief
+ * @brief Camera with a view, a projection and their frustum.
  */
 /************************************************************************/
 
 #include "chCamera.h"
-#include "chBox.h"
+
 #include "chMath.h"
 #include "chMatrixHelpers.h"
-#include "chShapeOverlap.h"
+#include "chQuaternion.h"
+#include "chRay.h"
+#include "chRotator.h"
 #include "chVector2.h"
+#include "chVector4.h"
 
 namespace chEngineSDK {
 namespace {
-
-// The columns of a view matrix are the camera's right, up and forward axes in world space.
-// As rows forward, right, up they form the rotation that turns the world axes into them.
-Quaternion
-rotationFromView(const Matrix4& view)
-{
-  return Matrix4(view[0][2], view[1][2], view[2][2], 0.0f,
-                 view[0][0], view[1][0], view[2][0], 0.0f,
-                 view[0][1], view[1][1], view[2][1], 0.0f,
-                 0.0f, 0.0f, 0.0f, 1.0f)
-      .toQuaternion();
-}
-
+// Orbiting stops short of straight up or down, where the view has no right axis and
+// would flip.
+constexpr float kMaxPitch = 89.0f;
 } // namespace
 
 /*
 */
-Camera::Camera()
-  : m_position(Vector3::ZERO),
-    m_rotation(Quaternion::IDENTITY),
-    m_fieldOfView(Degree(60.0f)),
-    m_nearClip(0.1f),
-    m_farClip(1000.0f),
-    m_orthographicSize(5.0f),
-    m_width(800.0f),
-    m_height(600.0f),
-    m_projectionType(CameraProjectionType::Perspective) {
-  updateMatrices();
-}
-
-/*
-*/
-Camera::Camera(const Vector3& position,
-               const Vector3& target,
-               float viewPortWidth,
-               float viewPortHeight,
-               const Vector3& upVector)
-  : m_position(position),
-    m_rotation(Quaternion::IDENTITY),
-    m_fieldOfView(Degree(60.0f)),
-    m_nearClip(0.1f),
-    m_farClip(1000.0f),
-    m_orthographicSize(5.0f),
-    m_width(viewPortWidth),
-    m_height(viewPortHeight),
-    m_projectionType(CameraProjectionType::Perspective) {
-  lookAt(target, upVector);
-}
-
-/*
-*/
-void
-Camera::setPosition(const Vector3& position) {
-  m_position = position;
-  calculateViewMatrix();
-  extractFrustumPlanes();
-}
+Camera::Camera(const Vector3& position, const Vector3& target, float viewportWidth,
+               float viewportHeight)
+ : m_position(position),
+   m_lookAtPoint(target),
+   m_width(viewportWidth),
+   m_height(viewportHeight)
+{}
 
 /*
 */
@@ -80,12 +40,10 @@ void
 Camera::setRotation(const Quaternion& rotation)
 {
   // The view is built from the look at point, so turning the camera moves that point.
-  // Roll is lost because the view always keeps world up.
   const float distance = (m_lookAtPoint - m_position).magnitude();
   const float lookDistance = distance > Math::SMALL_NUMBER ? distance : 1.0f;
   m_lookAtPoint = m_position + rotation.rotateVector(Vector3::FORWARD) * lookDistance;
-  calculateViewMatrix();
-  extractFrustumPlanes();
+  markViewDirty();
 }
 
 /*
@@ -98,285 +56,198 @@ Camera::setRotator(const Rotator& rotator)
 
 /*
 */
-Rotator
-Camera::getRotator() const {
-  return m_rotation.toRotator();
-}
-
-/*
-*/
-void
-Camera::lookAt(const Vector3& target, const Vector3& upVector) {
-  m_lookAtPoint = target;
-  m_viewMatrix = LookAtMatrix(m_position, target, upVector);
-  m_rotation = rotationFromView(m_viewMatrix);
-  extractFrustumPlanes();
-}
-
-/*
-*/
-void
-Camera::setFieldOfView(Radian fov) {
-  m_fieldOfView = fov;
-  calculatePerspectiveMatrix();
-  extractFrustumPlanes();
-}
-
-/*
-*/
-void
-Camera::setViewportSize(float width, float height) {
-  m_width = width;
-  m_height = height;
-
-  if (m_projectionType == CameraProjectionType::Perspective) {
-    calculatePerspectiveMatrix();
-  }
-  else {
-    calculateOrthographicMatrix();
-  }
-
-  extractFrustumPlanes();
-}
-
-/*
-*/
-void
-Camera::setClipPlanes(float nearPlane, float farPlane) {
-  m_nearClip = nearPlane;
-  m_farClip = farPlane;
-
-  if (m_projectionType == CameraProjectionType::Perspective) {
-    calculatePerspectiveMatrix();
-  }
-  else {
-    calculateOrthographicMatrix();
-  }
-
-  extractFrustumPlanes();
-}
-
-/*
-*/
-void
-Camera::moveForward(float distance) {
-  Vector3 direction = (m_lookAtPoint - m_position).getNormalized();
-  m_position += direction * distance;
-  m_lookAtPoint += direction * distance;
-  calculateViewMatrix();
-}
-
-/*
-*/
-void
-Camera::moveRight(float distance) {
-  Vector3 forward = (m_lookAtPoint - m_position).getNormalized();
-  Vector3 right = Vector3::UP.cross(forward).getNormalized();
-  m_position += right * distance;
-  m_lookAtPoint += right * distance;
-  calculateViewMatrix();
-}
-
-/*
-*/
-void
-Camera::moveUp(float distance) {
-  m_position += Vector3::UP * distance;
-  m_lookAtPoint += Vector3::UP * distance;
-  calculateViewMatrix();
-}
-
-/*
-*/
-void
-Camera::pan(float deltaX, float deltaY) {
-  Vector3 forward = (m_lookAtPoint - m_position).getNormalized();
-  Vector3 right = Vector3::UP.cross(forward).getNormalized();
-  Vector3 up = forward.cross(right).getNormalized();
-  Vector3 panOffset = (right * deltaX) + (up * deltaY);
-
-  m_position += panOffset;
-  m_lookAtPoint += panOffset;
-
-  calculateViewMatrix();
-}
-
-/*
-*/
-void
-Camera::rotate(float pitch, float yaw, float roll)
+Quaternion
+Camera::getRotation() const
 {
-  CH_PARAMETER_UNUSED(roll);
+  // The columns of a view matrix are the camera's right, up and forward axes in world
+  // space. As rows forward, right, up they form the rotation that turns the world axes
+  // into them.
+  const Matrix4& view = getViewMatrix();
+  return Quaternion(Matrix4(view[0][2], view[1][2], view[2][2], 0.0f,
+                            view[0][0], view[1][0], view[2][0], 0.0f,
+                            view[0][1], view[1][1], view[2][1], 0.0f,
+                            0.0f, 0.0f, 0.0f, 1.0f));
+}
+
+/*
+*/
+Rotator
+Camera::getRotator() const
+{
+  return getRotation().toRotator();
+}
+
+/*
+*/
+void
+Camera::moveForward(float distance)
+{
+  // Read from the two points instead of the view matrix, so several moves in one frame
+  // do not rebuild the view each time.
+  const Vector3 offset = (m_lookAtPoint - m_position).getNormalized() * distance;
+  m_position += offset;
+  m_lookAtPoint += offset;
+  markViewDirty();
+}
+
+/*
+*/
+void
+Camera::moveRight(float distance)
+{
+  const Vector3 forward = (m_lookAtPoint - m_position).getNormalized();
+  const Vector3 offset = Vector3::UP.cross(forward).getNormalized() * distance;
+  m_position += offset;
+  m_lookAtPoint += offset;
+  markViewDirty();
+}
+
+/*
+*/
+void
+Camera::moveUp(float distance)
+{
+  const Vector3 offset = Vector3::UP * distance;
+  m_position += offset;
+  m_lookAtPoint += offset;
+  markViewDirty();
+}
+
+/*
+*/
+void
+Camera::pan(float deltaX, float deltaY)
+{
+  const Vector3 forward = (m_lookAtPoint - m_position).getNormalized();
+  const Vector3 right = Vector3::UP.cross(forward).getNormalized();
+  const Vector3 up = forward.cross(right);
+  const Vector3 offset = right * deltaX + up * deltaY;
+  m_position += offset;
+  m_lookAtPoint += offset;
+  markViewDirty();
+}
+
+/*
+*/
+void
+Camera::rotate(float pitchDegrees, float yawDegrees)
+{
   const Vector3 toTarget = m_lookAtPoint - m_position;
   const float distance = toTarget.magnitude();
+  if (distance <= Math::SMALL_NUMBER) {
+    return;
+  }
   const Vector3 forward = toTarget / distance;
 
-  // Orbits on a sphere around the look at point. Pitch stops short of straight up or
-  // down, where the view has no right axis and would flip.
-  constexpr float kMaxPitch = 89.0f;
-  const float currentPitch = Math::asin(Math::clamp(forward.z, -1.0f, 1.0f)).valueDegree();
-  const float currentYaw = Math::atan2(forward.y, forward.x).valueDegree();
-  const Rotator orbit(Math::clamp(currentPitch + pitch, -kMaxPitch, kMaxPitch),
-                      currentYaw + yaw, 0.0f);
+  const float pitch =
+      Math::clamp(Math::asin(forward.z).valueDegree() + pitchDegrees, -kMaxPitch, kMaxPitch);
+  const float yaw = Math::atan2(forward.y, forward.x).valueDegree() + yawDegrees;
 
-  const Vector4 rotated = RotationMatrix(orbit).transformVector(Vector3::FORWARD);
-  const Vector3 newForward(rotated.x, rotated.y, rotated.z);
+  // Positive pitch turns forward up and positive yaw turns it right.
+  float sinPitch, cosPitch, sinYaw, cosYaw;
+  Math::sinCos(Degree(pitch).valueRadian(), sinPitch, cosPitch);
+  Math::sinCos(Degree(yaw).valueRadian(), sinYaw, cosYaw);
+  const Vector3 newForward(cosPitch * cosYaw, cosPitch * sinYaw, sinPitch);
+
   m_position = m_lookAtPoint - newForward * distance;
-
-  calculateViewMatrix();
-  extractFrustumPlanes();
-}
-
-/*
-*/
-void
-Camera::updateMatrices() {
-  calculateViewMatrix();
-
-  if (m_projectionType == CameraProjectionType::Perspective) {
-    calculatePerspectiveMatrix();
-  }
-  else {
-    calculateOrthographicMatrix();
-  }
-
-  extractFrustumPlanes();
+  markViewDirty();
 }
 
 /*
 */
 Vector3
-Camera::getForwardVector() const {
-  return (m_lookAtPoint - m_position).getNormalized();
+Camera::getForwardVector() const
+{
+  const Matrix4& view = getViewMatrix();
+  return {view[0][2], view[1][2], view[2][2]};
 }
 
 /*
 */
-Vector3 Camera::getRightVector() const {
-  return m_rotation.rotateVector(Vector3::RIGHT);
+Vector3
+Camera::getRightVector() const
+{
+  const Matrix4& view = getViewMatrix();
+  return {view[0][0], view[1][0], view[2][0]};
 }
 
 /*
 */
-Vector3 Camera::getUpVector() const {
-  return m_rotation.rotateVector(Vector3::UP);
+Vector3
+Camera::getUpVector() const
+{
+  const Matrix4& view = getViewMatrix();
+  return {view[0][1], view[1][1], view[2][1]};
+}
+
+/*
+*/
+bool
+Camera::worldToScreenPoint(const Vector3& worldPoint, Vector2& outScreenPoint) const
+{
+  const Vector4 clip = getViewProjectionMatrix().transformPosition(worldPoint);
+  if (clip.w <= Math::SMALL_NUMBER) {
+    return false;
+  }
+
+  // Normalized device coordinates have Y up; the screen has Y down.
+  const float inverseW = 1.0f / clip.w;
+  outScreenPoint.x = (clip.x * inverseW + 1.0f) * 0.5f;
+  outScreenPoint.y = (1.0f - clip.y * inverseW) * 0.5f;
+  return true;
+}
+
+/*
+*/
+Ray
+Camera::screenToWorldRay(const Vector2& screenPoint) const
+{
+  const float ndcX = screenPoint.x * 2.0f - 1.0f;
+  const float ndcY = (1.0f - screenPoint.y) * 2.0f - 1.0f;
+  const Matrix4 inverse = getViewProjectionMatrix().getInverse();
+
+  // Depth 0 is the near plane and 1 the far plane.
+  const Vector4 nearPoint = inverse.transformVector4(Vector4(ndcX, ndcY, 0.0f, 1.0f));
+  const Vector4 farPoint = inverse.transformVector4(Vector4(ndcX, ndcY, 1.0f, 1.0f));
+  const Vector3 origin(nearPoint.x / nearPoint.w, nearPoint.y / nearPoint.w,
+                       nearPoint.z / nearPoint.w);
+  const Vector3 end(farPoint.x / farPoint.w, farPoint.y / farPoint.w,
+                    farPoint.z / farPoint.w);
+  return Ray(origin, (end - origin).getNormalized());
 }
 
 /*
 */
 void
-Camera::calculateViewMatrix()
+Camera::updateView() const
 {
   m_viewMatrix = LookAtMatrix(m_position, m_lookAtPoint, Vector3::UP);
-  m_rotation = rotationFromView(m_viewMatrix);
+  m_viewDirty = false;
 }
 
 /*
 */
 void
-Camera::calculatePerspectiveMatrix() {
-  m_projectionMatrix = PerspectiveMatrix(Radian(m_fieldOfView * 0.5f),
-                                         m_width,
-                                         m_height,
-                                         m_nearClip,
-                                         m_farClip);
+Camera::updateProjection() const
+{
+  if (m_projectionType == CameraProjectionType::Perspective) {
+    m_projectionMatrix =
+        PerspectiveMatrix(m_fieldOfView * 0.5f, m_width, m_height, m_nearClip, m_farClip);
+  }
+  else {
+    m_projectionMatrix = OrthographicMatrix(m_orthographicSize * getAspectRatio(),
+                                            m_orthographicSize, m_nearClip, m_farClip);
+  }
+  m_projectionDirty = false;
 }
 
 /*
 */
 void
-Camera::calculateOrthographicMatrix()
+Camera::updateViewProjection() const
 {
-  const float halfHeight = m_orthographicSize;
-  const float halfWidth = halfHeight * getAspectRatio();
-  m_projectionMatrix = OrthographicMatrix(halfWidth, halfHeight, m_nearClip, m_farClip);
-}
-
-/*
-*/
-void
-Camera::extractFrustumPlanes()
-{
-  m_frustum = Frustum(getViewProjectionMatrix());
-}
-
-/*
-*/
-bool
-Camera::isPointInFrustum(const Vector3& point) const
-{
-  return ShapeOverlap::frustumPoint(m_frustum, point);
-}
-
-/*
-*/
-bool
-Camera::isSphereInFrustum(const Vector3& center, float radius) const
-{
-  return ShapeOverlap::frustumSphere(m_frustum, Sphere(center, radius));
-}
-
-/*
-*/
-bool
-Camera::isBoxInFrustum(const AABox& box) const
-{
-  return ShapeOverlap::frustumBox(m_frustum, box);
-}
-
-/*
-*/
-Vector2
-Camera::worldToScreenPoint(const Vector3& worldPos) const {
-  // Transform to clip space
-  Vector4 viewPos = m_viewMatrix.transformPosition(worldPos);
-  Vector4 clipPos = m_projectionMatrix.transformPosition(Vector3(viewPos.x, viewPos.y, viewPos.z));
-
-  // Perspective divide to get NDC coordinates
-  clipPos.x /= clipPos.w;
-  clipPos.y /= clipPos.w;
-
-  // Map to screen coordinates (0-1 range)
-  Vector2 screenPos;
-  screenPos.x = (clipPos.x + 1.0f) * 0.5f;
-  screenPos.y = (1.0f - clipPos.y) * 0.5f;  // Y is flipped
-
-  return screenPos;
-}
-
-/*
-*/
-void
-Camera::screenToWorldRay(const Vector2& screenPos, Vector3& rayOrigin, Vector3& rayDirection) const {
-  // Convert screen position to NDC space (-1 to 1)
-  Vector4 ndcPos;
-
-  ndcPos.x = screenPos.x * 2.0f - 1.0f;
-  ndcPos.y = (1.0f - screenPos.y) * 2.0f - 1.0f; // Flip Y
-  ndcPos.z = 0.0f;  // Near plane
-  ndcPos.w = 1.0f;
-
-  // Get the inverse view-projection matrix
-  Matrix4 invViewProj = getViewProjectionMatrix().getInverse();
-
-  // Transform to world space
-  Vector4 worldPosNear = invViewProj.transformVector4(ndcPos);
-  worldPosNear.x /= worldPosNear.w;
-  worldPosNear.y /= worldPosNear.w;
-  worldPosNear.z /= worldPosNear.w;
-
-  // Repeat for far plane
-  ndcPos.z = 1.0f;
-  Vector4 worldPosFar = invViewProj.transformVector4(ndcPos);
-  worldPosFar.x /= worldPosFar.w;
-  worldPosFar.y /= worldPosFar.w;
-  worldPosFar.z /= worldPosFar.w;
-
-  // Set ray origin and direction
-  rayOrigin = Vector3(worldPosNear.x, worldPosNear.y, worldPosNear.z);
-  rayDirection = Vector3(worldPosFar.x - worldPosNear.x,
-                         worldPosFar.y - worldPosNear.y,
-                         worldPosFar.z - worldPosNear.z);
-  rayDirection.normalize();
+  m_viewProjectionMatrix = getViewMatrix() * getProjectionMatrix();
+  m_frustum = Frustum(m_viewProjectionMatrix);
+  m_viewProjectionDirty = false;
 }
 } // namespace chEngineSDK

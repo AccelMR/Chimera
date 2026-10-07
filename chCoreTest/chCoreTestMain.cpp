@@ -13,6 +13,9 @@
 #include "chAngle.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
+#include "chRay.h"
+#include "chRotator.h"
+#include "chShapeOverlap.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
@@ -36,7 +39,6 @@ createTestCamera()
   camera.setProjectionType(CameraProjectionType::Perspective);
   camera.setFieldOfView(Radian(Degree(90.0f)));
   camera.setClipPlanes(0.1f, 100.0f);
-  camera.updateMatrices();
   return camera;
 }
 
@@ -82,42 +84,94 @@ TEST_CASE("chCore - Camera projection")
   REQUIRE(farPoint.z / farPoint.w == Approx(1.0f).margin(kTolerance));
 
   // The center of the view lands in the middle of the screen; screen Y grows downwards.
-  const Vector2 center = camera.worldToScreenPoint(Vector3::ZERO);
+  Vector2 center;
+  REQUIRE(camera.worldToScreenPoint(Vector3::ZERO, center));
   REQUIRE(center.x == Approx(0.5f).margin(kTolerance));
   REQUIRE(center.y == Approx(0.5f).margin(kTolerance));
 
-  const Vector2 right = camera.worldToScreenPoint(Vector3(0.0f, 1.0f, 0.0f));
+  Vector2 right;
+  REQUIRE(camera.worldToScreenPoint(Vector3(0.0f, 1.0f, 0.0f), right));
   REQUIRE(right.x > 0.5f);
 
-  const Vector2 up = camera.worldToScreenPoint(Vector3(0.0f, 0.0f, 1.0f));
+  Vector2 up;
+  REQUIRE(camera.worldToScreenPoint(Vector3(0.0f, 0.0f, 1.0f), up));
   REQUIRE(up.y < 0.5f);
+
+  // A point behind the camera has no place on screen.
+  Vector2 behind;
+  REQUIRE_FALSE(camera.worldToScreenPoint(Vector3(-10.0f, 0.0f, 0.0f), behind));
+
+  // The ray through the center of the screen starts on the near plane and looks forward.
+  const Ray centerRay = camera.screenToWorldRay(Vector2(0.5f, 0.5f));
+  REQUIRE(centerRay.origin.nearEqual(Vector3(-4.9f, 0.0f, 0.0f), 1e-3f));
+  REQUIRE(centerRay.direction.nearEqual(Vector3::FORWARD, 1e-4f));
 }
 
 TEST_CASE("chCore - Camera frustum")
 {
   const Camera camera = createTestCamera();
+  const Frustum& frustum = camera.getFrustum();
 
-  REQUIRE(camera.isPointInFrustum(Vector3::ZERO));
-  REQUIRE(camera.isPointInFrustum(Vector3(90.0f, 0.0f, 0.0f)));
+  REQUIRE(ShapeOverlap::frustumPoint(frustum, Vector3::ZERO));
+  REQUIRE(ShapeOverlap::frustumPoint(frustum, Vector3(90.0f, 0.0f, 0.0f)));
 
   // Behind the camera, closer than the near plane and past the far plane.
-  REQUIRE_FALSE(camera.isPointInFrustum(Vector3(-10.0f, 0.0f, 0.0f)));
-  REQUIRE_FALSE(camera.isPointInFrustum(Vector3(-4.95f, 0.0f, 0.0f)));
-  REQUIRE_FALSE(camera.isPointInFrustum(Vector3(100.0f, 0.0f, 0.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(frustum, Vector3(-10.0f, 0.0f, 0.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(frustum, Vector3(-4.95f, 0.0f, 0.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(frustum, Vector3(100.0f, 0.0f, 0.0f)));
 
   // Far to a side, outside the 90 degree field of view.
-  REQUIRE_FALSE(camera.isPointInFrustum(Vector3(0.0f, 50.0f, 0.0f)));
-  REQUIRE_FALSE(camera.isPointInFrustum(Vector3(0.0f, 0.0f, 50.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(frustum, Vector3(0.0f, 50.0f, 0.0f)));
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(frustum, Vector3(0.0f, 0.0f, 50.0f)));
 
   // A sphere outside the side plane but close enough to touch it is still visible.
-  REQUIRE(camera.isSphereInFrustum(Vector3(0.0f, 12.0f, 0.0f), 5.0f));
-  REQUIRE_FALSE(camera.isSphereInFrustum(Vector3(0.0f, 50.0f, 0.0f), 1.0f));
+  REQUIRE(ShapeOverlap::frustumSphere(frustum, Sphere(Vector3(0.0f, 12.0f, 0.0f), 5.0f)));
+  REQUIRE_FALSE(
+      ShapeOverlap::frustumSphere(frustum, Sphere(Vector3(0.0f, 50.0f, 0.0f), 1.0f)));
 
   const AABox visibleBox(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f));
-  REQUIRE(camera.isBoxInFrustum(visibleBox));
+  REQUIRE(ShapeOverlap::frustumBox(frustum, visibleBox));
 
   const AABox boxBehind(Vector3(-20.0f, -1.0f, -1.0f), Vector3(-15.0f, 1.0f, 1.0f));
-  REQUIRE_FALSE(camera.isBoxInFrustum(boxBehind));
+  REQUIRE_FALSE(ShapeOverlap::frustumBox(frustum, boxBehind));
+}
+
+TEST_CASE("chCore - Camera updates")
+{
+  Camera camera = createTestCamera();
+
+  // Moving must also move the frustum; it used to keep the planes of the old position.
+  REQUIRE_FALSE(ShapeOverlap::frustumPoint(camera.getFrustum(), Vector3(-10.0f, 0.0f, 0.0f)));
+  camera.moveForward(-10.0f);
+  REQUIRE(camera.getPosition().nearEqual(Vector3(-15.0f, 0.0f, 0.0f)));
+  REQUIRE(camera.getLookAt().nearEqual(Vector3(-10.0f, 0.0f, 0.0f)));
+  REQUIRE(ShapeOverlap::frustumPoint(camera.getFrustum(), Vector3(-10.0f, 0.0f, 0.0f)));
+
+  camera.moveRight(2.0f);
+  REQUIRE(camera.getPosition().nearEqual(Vector3(-15.0f, 2.0f, 0.0f)));
+  camera.moveUp(3.0f);
+  REQUIRE(camera.getPosition().nearEqual(Vector3(-15.0f, 2.0f, 3.0f)));
+  REQUIRE(camera.getRightVector().nearEqual(Vector3::RIGHT, kTolerance));
+  REQUIRE(camera.getUpVector().nearEqual(Vector3::UP, kTolerance));
+
+  // Switching to orthographic takes effect without any other call.
+  const Matrix4 perspective = camera.getProjectionMatrix();
+  camera.setProjectionType(CameraProjectionType::Orthographic);
+  REQUIRE_FALSE(camera.getProjectionMatrix().nearEqual(perspective, kTolerance));
+  REQUIRE(camera.getProjectionMatrix()[3][3] == 1.0f);
+
+  // Orbiting keeps the distance to the look at point and stops pitch at 89 degrees.
+  Camera orbiting = createTestCamera();
+  orbiting.rotate(0.0f, 90.0f);
+  REQUIRE(orbiting.getPosition().nearEqual(Vector3(0.0f, -5.0f, 0.0f), 1e-4f));
+  REQUIRE(orbiting.getForwardVector().nearEqual(Vector3::RIGHT, 1e-4f));
+  orbiting.rotate(200.0f, 0.0f);
+  REQUIRE(orbiting.getPosition().distance(Vector3::ZERO) == Approx(5.0f));
+  REQUIRE(orbiting.getRotator().pitch.valueDegree() == Approx(89.0f).margin(1e-2f));
+
+  // The rotation read back from the view matches where the camera looks.
+  REQUIRE(camera.getRotation().rotateVector(Vector3::FORWARD)
+              .nearEqual(camera.getForwardVector(), 1e-5f));
 }
 
 TEST_CASE("chCore - VertexLayout")
