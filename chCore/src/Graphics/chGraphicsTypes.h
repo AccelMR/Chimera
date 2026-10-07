@@ -410,8 +410,8 @@ struct CH_CORE_EXPORT GraphicsPipelineDesc {
   SPtr<IShader> fragmentShader;
   VertexLayout vertexLayout;
   PrimitiveTopology topology = PrimitiveTopology::TriangleList;
-  RasterState raster;
-  DepthState depth;
+  RasterState raster{};
+  DepthState depth{};
 
   Array<Format, GraphicsLimits::MAX_COLOR_ATTACHMENTS> colorFormats{};
   Array<BlendAttachmentState, GraphicsLimits::MAX_COLOR_ATTACHMENTS> blendStates{};

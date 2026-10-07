@@ -334,7 +334,6 @@ NastyRenderer::initializeRenderResources() {
                                     .fragmentShader = m_fragmentShader,
                                     .vertexLayout = VertexNormalTexCoord::getLayout(),
                                     .colorAttachmentCount = 1,
-                                    .raster = {.cullMode = CullMode::Back, .frontFace = FrontFace::Clockwise},
                                     .depthFormat = kDepthFormat};
   pipelineDesc.colorFormats[0] = kColorFormat;
   m_pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
