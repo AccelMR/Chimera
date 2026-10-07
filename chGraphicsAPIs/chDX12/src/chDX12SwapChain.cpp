@@ -10,6 +10,7 @@
 #include "chDX12SwapChain.h"
 
 #include "chDX12API.h"
+#include "chMath.h"
 
 #if USING(CH_DISPLAY_SDL3)
 # include <SDL3/SDL_properties.h>
@@ -31,6 +32,23 @@ getWindowHandle(PlatformDisplay window)
 #endif // USING(CH_DISPLAY_SDL3)
 }
 
+struct WindowSize
+{
+  uint32 width = 0;
+  uint32 height = 0;
+};
+
+NODISCARD WindowSize
+getClientSize(HWND window)
+{
+  RECT rect{};
+  if (!GetClientRect(window, &rect)) {
+    return {};
+  }
+  return {static_cast<uint32>(rect.right - rect.left),
+          static_cast<uint32>(rect.bottom - rect.top)};
+}
+
 NODISCARD bool
 isTearingSupported(IDXGIFactory6* factory)
 {
@@ -46,17 +64,21 @@ isTearingSupported(IDXGIFactory6* factory)
 DX12SwapChain::DX12SwapChain(IDXGIFactory6* factory,
                              ID3D12CommandQueue* queue,
                              const SwapChainDesc& desc)
-  : m_width(desc.width),
-    m_height(desc.height),
+  : m_window(getWindowHandle(desc.window)),
     m_vsync(desc.vsync),
     m_allowTearing(isTearingSupported(factory)),
     m_debugName(desc.debugName)
 {
-  const HWND window = getWindowHandle(desc.window);
-  if (window == nullptr) {
+  if (m_window == nullptr) {
     CH_EXCEPT(DX12ErrorException,
               StringUtils::format("{0} has no native window.", m_debugName));
   }
+
+  // The window decides the size, as a surface does in the other graphics APIs; the size
+  // asked for is only used while the window reports none yet.
+  const WindowSize clientSize = getClientSize(m_window);
+  m_width = Math::max(clientSize.width != 0 ? clientSize.width : desc.width, 1u);
+  m_height = Math::max(clientSize.height != 0 ? clientSize.height : desc.height, 1u);
 
   const DXGI_SWAP_CHAIN_DESC1 swapChainDesc{
       .Width = m_width,
@@ -72,11 +94,11 @@ DX12SwapChain::DX12SwapChain(IDXGIFactory6* factory,
       .Flags = m_allowTearing ? static_cast<UINT>(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0u};
 
   ComPtr<IDXGISwapChain1> swapChain;
-  DX12_CHECK(factory->CreateSwapChainForHwnd(queue, window, &swapChainDesc, nullptr, nullptr,
+  DX12_CHECK(factory->CreateSwapChainForHwnd(queue, m_window, &swapChainDesc, nullptr, nullptr,
                                              &swapChain));
   DX12_CHECK(swapChain.As(&m_swapChain));
   // The window layer handles full screen, so DXGI must not switch it on Alt+Enter.
-  DX12_CHECK(factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER));
+  DX12_CHECK(factory->MakeWindowAssociation(m_window, DXGI_MWA_NO_ALT_ENTER));
 
   createTextures();
 }
@@ -122,8 +144,11 @@ DX12SwapChain::present()
 void
 DX12SwapChain::resize(uint32 width, uint32 height)
 {
-  // A minimized window has no size; the buffers are kept until it is restored.
-  if (width == 0 || height == 0 || (width == m_width && height == m_height)) {
+  // A minimized window has no size; the buffers are kept until it is restored. The window
+  // decides the new size, as in the constructor.
+  const WindowSize clientSize = getClientSize(m_window);
+  if (width == 0 || height == 0 || clientSize.width == 0 || clientSize.height == 0 ||
+      (clientSize.width == m_width && clientSize.height == m_height)) {
     return;
   }
 
@@ -133,10 +158,10 @@ DX12SwapChain::resize(uint32 width, uint32 height)
 
   const UINT flags =
       m_allowTearing ? static_cast<UINT>(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0u;
-  DX12_CHECK(m_swapChain->ResizeBuffers(BUFFER_COUNT, width, height,
+  DX12_CHECK(m_swapChain->ResizeBuffers(BUFFER_COUNT, clientSize.width, clientSize.height,
                                         chFormatToDxgiFormat(FORMAT), flags));
-  m_width = width;
-  m_height = height;
+  m_width = clientSize.width;
+  m_height = clientSize.height;
   createTextures();
 }
 

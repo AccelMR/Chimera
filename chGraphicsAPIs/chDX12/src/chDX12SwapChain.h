@@ -89,6 +89,7 @@ class DX12SwapChain : public ISwapChain
   static constexpr Format FORMAT = Format::B8G8R8A8_UNORM;
 
   ComPtr<IDXGISwapChain3> m_swapChain;
+  HWND m_window = nullptr;
   uint32 m_width = 0;
   uint32 m_height = 0;
   uint32 m_currentImageIndex = 0;
