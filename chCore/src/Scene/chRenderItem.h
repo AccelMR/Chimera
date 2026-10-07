@@ -15,6 +15,7 @@
 #include "chSphereBoxBounds.h"
 
 namespace chEngineSDK {
+class Material;
 
 /**
  * Exists so the renderer reads a flat array instead of walking GameObjects and components.
@@ -27,8 +28,8 @@ struct RenderItem
   SphereBoxBounds worldBounds{Vector3::ZERO, Vector3::ZERO, 0.0f};
   // Null marks a free slot of the scene.
   const Mesh* mesh = nullptr;
-  // Null draws with the renderer's default texture.
-  const ITexture* texture = nullptr;
+  // Null draws with the renderer's default look.
+  const Material* material = nullptr;
 };
 
 } // namespace chEngineSDK

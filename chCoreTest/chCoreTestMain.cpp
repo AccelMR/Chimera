@@ -11,10 +11,14 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chAngle.h"
+#include "chAssetFile.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
 #include "chITexture.h"
 #include "chITextureView.h"
+#include "chFileStream.h"
+#include "chMaterial.h"
+#include "chMaterialAsset.h"
 #include "chMath.h"
 #include "chMesh.h"
 #include "chModel.h"
@@ -27,6 +31,7 @@
 #include "chScene.h"
 #include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
+#include "chStringUtils.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
@@ -757,4 +762,200 @@ TEST_CASE("chCore - ViewMode names")
   REQUIRE(ViewModeUtils::fromName("wireFRAME") == ViewMode::Wireframe);
   REQUIRE_FALSE(ViewModeUtils::fromName("Unknown").has_value());
   REQUIRE(ViewModeUtils::fromName(g_cvarViewMode.getDefault()) == ViewMode::Lit);
+}
+
+namespace {
+
+// Material assets only need valid metadata until they are saved or loaded.
+SPtr<MaterialAsset>
+createTestMaterialAsset(StringView name)
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<MaterialAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, name);
+  return chMakeShared<MaterialAsset>(metadata);
+}
+
+} // namespace
+
+TEST_CASE("chCore - Asset file start")
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<MaterialAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, "Rock");
+  const chEngineSDK::UUID references[] = {chEngineSDK::UUID::createRandom(),
+                                          chEngineSDK::UUID::createRandom()};
+
+  MemoryDataStream stream(4096);
+  AssetFile::writeStart(stream, metadata, references);
+  const SIZE_T referenceCountOffset = stream.tell() - sizeof(references) - sizeof(uint32);
+  REQUIRE(referenceCountOffset == AssetFile::METADATA_OFFSET + sizeof(AssetMetadata));
+  AssetFile::writeString(stream, "Slot");
+  stream.seek(0);
+
+  AssetMetadata readMetadata;
+  Vector<chEngineSDK::UUID> readReferences;
+  REQUIRE(AssetFile::readMetadata(stream, readMetadata));
+  REQUIRE(readMetadata.uuid == metadata.uuid);
+  REQUIRE(readMetadata.assetType == metadata.assetType);
+  REQUIRE(StringUtils::equals(readMetadata.name, "Rock"));
+  REQUIRE(AssetFile::readReferences(stream, readReferences));
+  REQUIRE(readReferences.size() == 2);
+  REQUIRE(readReferences[0] == references[0]);
+  REQUIRE(readReferences[1] == references[1]);
+  String text;
+  REQUIRE(AssetFile::readString(stream, text, 64));
+  REQUIRE(text == "Slot");
+
+  SECTION("A file without the magic number is rejected")
+  {
+    MemoryDataStream other(sizeof(AssetFileHeader) + sizeof(AssetMetadata));
+    const uint32 junk[2] = {0x12345678, AssetFileHeader::FORMAT_VERSION};
+    other.write(junk, sizeof(junk));
+    other.seek(0);
+    REQUIRE_FALSE(AssetFile::readMetadata(other, readMetadata));
+  }
+
+  SECTION("Broken lengths are rejected")
+  {
+    stream.seek(referenceCountOffset);
+    const uint32 tooMany = AssetFile::MAX_REFERENCES + 1;
+    stream.write(&tooMany, sizeof(tooMany));
+    stream.seek(referenceCountOffset);
+    REQUIRE_FALSE(AssetFile::readReferences(stream, readReferences));
+    REQUIRE(readReferences.empty());
+
+    stream.seek(referenceCountOffset + sizeof(uint32) + sizeof(references));
+    REQUIRE_FALSE(AssetFile::readString(stream, text, 3));
+  }
+}
+
+TEST_CASE("chCore - Material")
+{
+  Material material;
+  REQUIRE(material.getBaseColorFactor().r == 1.0f);
+  REQUIRE(material.getBaseColorTextureId().isNull());
+  REQUIRE(material.getBaseColorGpuTexture() == nullptr);
+
+  Vector<chEngineSDK::UUID> references;
+  material.collectReferences(references);
+  REQUIRE(references.empty());
+
+  // A texture that is missing keeps its id, so saving again does not lose it.
+  const chEngineSDK::UUID textureId = chEngineSDK::UUID::createRandom();
+  material.setBaseColorFactor(LinearColor(0.25f, 0.5f, 0.75f, 1.0f));
+  material.setBaseColorTexture(textureId, nullptr);
+  material.collectReferences(references);
+  REQUIRE(references.size() == 1);
+  REQUIRE(references[0] == textureId);
+
+  MemoryDataStream stream(256);
+  material.serialize(stream);
+  stream.seek(0);
+
+  Material loaded;
+  REQUIRE(loaded.deserialize(stream));
+  REQUIRE(loaded.getBaseColorFactor().g == 0.5f);
+  REQUIRE(loaded.getBaseColorFactor().b == 0.75f);
+  REQUIRE(loaded.getBaseColorTextureId() == textureId);
+  REQUIRE(loaded.getBaseColorTexture() == nullptr);
+
+  SECTION("Another version is rejected")
+  {
+    stream.seek(0);
+    const uint32 otherVersion = Material::SERIALIZATION_VERSION + 1;
+    stream.write(&otherVersion, sizeof(otherVersion));
+    stream.seek(0);
+    REQUIRE_FALSE(loaded.deserialize(stream));
+  }
+
+  SECTION("Clearing the texture clears its id")
+  {
+    material.setBaseColorTexture(nullptr);
+    REQUIRE(material.getBaseColorTextureId().isNull());
+  }
+}
+
+TEST_CASE("chCore - Model material slots")
+{
+  const SPtr<Model> model = createTriangleModel();
+  const SPtr<Mesh>& mesh = model->getRootNodes()[0]->getMeshes()[0];
+  REQUIRE(mesh->getMaterialSlot() == 0);
+
+  // A second mesh on another node uses slot 1.
+  SPtr<Mesh> secondMesh = chMakeShared<Mesh>();
+  secondMesh->setVertexData(Vector<VertexNormalTexCoord>{
+      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f)},
+      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f)},
+      {Vector3(0.0f, 1.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f)}});
+  secondMesh->setIndexData(Vector<uint16>{0, 1, 2});
+  secondMesh->setMaterialSlot(1);
+  model->createNode("Sword", model->getRootNodes()[0])->addMesh(secondMesh);
+
+  const SPtr<MaterialAsset> body = createTestMaterialAsset("M_Body");
+  const SPtr<MaterialAsset> sword = createTestMaterialAsset("M_Sword");
+  REQUIRE(model->addMaterialSlot({.name = "Body", .materialId = body->getUUID(),
+                                  .material = body}) == 0);
+  REQUIRE(model->addMaterialSlot({.name = "Sword", .materialId = sword->getUUID(),
+                                  .material = sword}) == 1);
+
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Skeleton");
+  ModelComponent& modelComponent = gameObject->addComponent<ModelComponent>(model);
+  REQUIRE(modelComponent.getMaterialSlotCount() == 2);
+  REQUIRE(scene.getRenderItemCount() == 2);
+
+  const auto materialOf = [&scene](const Mesh* itemMesh) -> const Material* {
+    const Camera camera = createTestCamera();
+    Vector<const RenderItem*> visible;
+    scene.gatherRenderItems(camera.getFrustum(), visible);
+    for (const RenderItem* item : visible) {
+      if (item->mesh == itemMesh) {
+        return item->material;
+      }
+    }
+    return nullptr;
+  };
+  REQUIRE(materialOf(mesh.get()) == &body->getMaterial());
+  REQUIRE(materialOf(secondMesh.get()) == &sword->getMaterial());
+
+  SECTION("An override changes only its slot and this object")
+  {
+    const SPtr<MaterialAsset> gold = createTestMaterialAsset("M_Gold");
+    modelComponent.setMaterial(1, gold);
+    REQUIRE(modelComponent.getMaterialOverride(1) == gold);
+    REQUIRE(modelComponent.getMaterial(1) == gold);
+    REQUIRE(modelComponent.getMaterial(0) == body);
+    REQUIRE(materialOf(secondMesh.get()) == &gold->getMaterial());
+    REQUIRE(materialOf(mesh.get()) == &body->getMaterial());
+
+    modelComponent.setMaterial(1, nullptr);
+    REQUIRE(materialOf(secondMesh.get()) == &sword->getMaterial());
+  }
+
+  SECTION("Overrides set while unregistered apply on register")
+  {
+    const SPtr<MaterialAsset> gold = createTestMaterialAsset("M_Gold");
+    modelComponent.setEnabled(false);
+    modelComponent.setMaterial(0, gold);
+    modelComponent.setEnabled(true);
+    REQUIRE(materialOf(mesh.get()) == &gold->getMaterial());
+  }
+
+  SECTION("Slots past the end have no material")
+  {
+    REQUIRE(modelComponent.getMaterial(2) == nullptr);
+    modelComponent.setMaterial(5, body);
+    secondMesh->setMaterialSlot(7);
+    modelComponent.setModel(model);
+    REQUIRE(materialOf(secondMesh.get()) == nullptr);
+  }
+
+  SECTION("Editing a material shows in the items that use it")
+  {
+    body->getMaterial().setBaseColorFactor(LinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+    REQUIRE(materialOf(mesh.get())->getBaseColorFactor().g == 0.0f);
+  }
 }

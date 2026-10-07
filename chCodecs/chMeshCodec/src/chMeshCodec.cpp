@@ -4,29 +4,34 @@
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * Implementation of the MeshCodec class for loading and managing mesh resources.
+ * Implementation of the MeshCodec class for importing model files.
  */
 /************************************************************************/
 
 #include "chMeshCodec.h"
 
-#include <chrono>
 #include <limits>
 
 #if USING(CH_CODECS)
 
 #include "chAlgorithm.h"
+#include "chAssetCodecManager.h"
 #include "chAssetManager.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
+#include "chMaterialAsset.h"
 #include "chMatrix4.h"
+#include "chMesh.h"
 #include "chModelAsset.h"
+#include "chTextureAsset.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
 namespace chEngineSDK {
+CH_LOG_DECLARE_STATIC(MeshSystem, All);
+
 namespace MeshManagerHelpers {
 // With aiProcess_MakeLeftHanded assimp gives X right, Y up, Z forward; the engine uses
 // X forward, Y right, Z up. Engine axis i reads assimp axis kAssimpAxis[i]. This step is
@@ -57,9 +62,154 @@ convertAssimpMatrix(const aiMatrix4x4& matrix)
   }
   return result;
 }
+
+/*
+ */
+static SPtr<Mesh>
+processMesh(const aiMesh& mesh)
+{
+  SPtr<Mesh> newMesh = chMakeShared<Mesh>();
+
+  const bool hasPositions = mesh.HasPositions();
+  const bool hasNormals = mesh.HasNormals();
+  const bool hasTexCoords = mesh.HasTextureCoords(0);
+  const bool hasColors = mesh.HasVertexColors(0);
+
+  if (hasPositions && hasNormals && hasTexCoords) {
+    Vector<VertexNormalTexCoord> vertices(mesh.mNumVertices);
+
+    for (uint32 i = 0; i < mesh.mNumVertices; ++i) {
+      vertices[i].position = convertAssimpVector(mesh.mVertices[i]);
+      vertices[i].normal = convertAssimpVector(mesh.mNormals[i]);
+      vertices[i].texCoord = {mesh.mTextureCoords[0][i].x, mesh.mTextureCoords[0][i].y};
+    }
+
+    newMesh->setVertexData(std::move(vertices));
+  }
+  else if (hasPositions) {
+    if (!hasColors) {
+      CH_LOG_WARNING(MeshSystem, "Mesh does not have color data, using default color");
+    }
+    Vector<VertexPosColor> vertices(mesh.mNumVertices);
+
+    for (uint32 i = 0; i < mesh.mNumVertices; ++i) {
+      vertices[i].position = convertAssimpVector(mesh.mVertices[i]);
+      if (hasColors) {
+        const aiColor4D& color = mesh.mColors[0][i];
+        vertices[i].color = {color.r, color.g, color.b, color.a};
+      }
+      else {
+        vertices[i].color = {0.7f, 0.7f, 0.7f, 1.0f};
+      }
+    }
+
+    newMesh->setVertexData(std::move(vertices));
+  }
+  else {
+    CH_LOG_ERROR(MeshSystem, "Mesh does not have position data");
+    return nullptr;
+  }
+
+  newMesh->setMaterialSlot(mesh.mMaterialIndex);
+
+  if (mesh.HasFaces()) {
+    const uint32 numIndices = mesh.mNumFaces * 3;
+
+    // Past 65535 vertices (the largest uint16) the indices need 32 bits.
+    if (mesh.mNumVertices > std::numeric_limits<uint16>::max()) {
+      Vector<uint32> indices(numIndices);
+      uint32 index = 0;
+      for (uint32 i = 0; i < mesh.mNumFaces; i++) {
+        const aiFace& face = mesh.mFaces[i];
+        for (uint32 j = 0; j < face.mNumIndices; j++) {
+          indices[index++] = face.mIndices[j];
+        }
+      }
+      newMesh->setIndexData(indices);
+    }
+    else {
+      Vector<uint16> indices(numIndices);
+      uint32 index = 0;
+      for (uint32 i = 0; i < mesh.mNumFaces; i++) {
+        const aiFace& face = mesh.mFaces[i];
+        for (uint32 j = 0; j < face.mNumIndices; j++) {
+          indices[index++] = static_cast<uint16>(face.mIndices[j]);
+        }
+      }
+      newMesh->setIndexData(indices);
+    }
+  }
+
+  return newMesh;
+}
+
+/*
+ */
+static void
+processNode(const aiNode& node,
+            const Vector<SPtr<Mesh>>& meshes,
+            Model& model,
+            ModelNode* parentNode)
+{
+  const Matrix4 nodeLocalTransform = convertAssimpMatrix(node.mTransformation);
+  ModelNode* modelNode = model.createNode(node.mName.C_Str(), nodeLocalTransform, parentNode);
+
+  CH_ASSERT(parentNode == nullptr ||
+            Algorithm::contains(parentNode->getChildren(), modelNode));
+
+  for (uint32 i = 0; i < node.mNumMeshes; i++) {
+    if (const SPtr<Mesh>& mesh = meshes[node.mMeshes[i]]) {
+      modelNode->addMesh(mesh);
+    }
+  }
+
+  for (uint32 i = 0; i < node.mNumChildren; i++) {
+    processNode(*node.mChildren[i], meshes, model, modelNode);
+  }
+}
+
+/*
+ * A folder under parent named after the model; "_1", "_2"... when it is taken.
+ */
+static Path
+makeUniqueFolder(const Path& parent, const String& name)
+{
+  Path folder = parent.join(Path(name));
+  ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+  for (uint32 suffix = 1; FileSystem::exists(folder) && suffix < 1000; ++suffix) {
+    String candidate = name;
+    candidate += '_';
+    candidate += StringUtils::toChars(numberBuffer, suffix);
+    folder = parent.join(Path(std::move(candidate)));
+  }
+  return folder;
+}
+
+/*
+ * The name an asset made from a part of a file stores as its imported path, so importing
+ * the file again finds it.
+ */
+static String
+makePartPath(const Path& sourceFile, StringView part)
+{
+  String importedPath = sourceFile.toString();
+  importedPath += '#';
+  importedPath += part;
+  return importedPath;
+}
+
+/*
+ */
+template <typename AssetType>
+static SPtr<AssetType>
+findImported(StringView importedPath)
+{
+  const SPtr<IAsset> asset = AssetManager::instance().findAssetByImportedPath(importedPath);
+  return asset ? asset->as<AssetType>() : nullptr;
+}
 } // namespace MeshManagerHelpers
 
-CH_LOG_DECLARE_STATIC(MeshSystem, All);
+using namespace MeshManagerHelpers;
 
 /*
  */
@@ -83,288 +233,197 @@ MeshCodec::MeshCodec()
 /*
  */
 SPtr<IAsset>
-MeshCodec::importAsset(const Path& filePath, const String& assetName) {
+MeshCodec::importAsset(const Path& filePath, const String& assetName, const Path& assetFolder)
+{
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
     return nullptr;
   }
 
-  SPtr<Model> model = loadModel(filePath);
-  if (!model) {
-    CH_LOG_ERROR(MeshSystem, "Failed to load model from path: {0}", filePath.toString());
-    return nullptr;
-  }
-
-  AssetMetadata metadata;
-  metadata.uuid = UUID::createRandom();
-  metadata.assetType = AssetTypeTraits<ModelAsset>::getTypeId();
-  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  StringUtils::copyToBuffer(metadata.typeName, AssetTypeTraits<ModelAsset>::getTypeName());
-  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  StringUtils::copyToBuffer(metadata.name, assetName);
-
-  const Path importedPath = FileSystem::absolutePath(Path(filePath));
-  StringUtils::copyToBuffer(metadata.importedPath, importedPath.toString());
-  StringUtils::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
-
-  SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
-
-  if (!AssetManager::instance().saveAsset(modelAsset)) {
-    CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
-    return nullptr;
-  }
-  registerNewAsset(modelAsset);
-
-  return std::static_pointer_cast<IAsset>(modelAsset);
-}
-
-/*
- */
-SPtr<Mesh>
-MeshCodec::loadMesh(const Path& meshPath, const String& meshName) {
-  String name = meshName.empty() ? meshPath.getFileName() : meshName;
-
-  auto it = m_meshes.find(name);
-  if (it != m_meshes.end()) {
-    return it->second;
-  }
-
-  SPtr<Model> model = loadModel(meshPath);
-  if (!model || model->getAllNodes().empty()) {
-    CH_LOG_ERROR(MeshSystem, "Failed to load mesh from path: {0}", meshPath.toString());
-    return nullptr;
-  }
-
-  // Buscar el primer nodo que tenga meshes
-  SPtr<Mesh> firstMesh = nullptr;
-  for (ModelNode* node : model->getAllNodes()) {
-    if (!node->getMeshes().empty()) {
-      firstMesh = node->getMeshes()[0];
-      break;
-    }
-  }
-
-  if (!firstMesh) {
-    CH_LOG_ERROR(MeshSystem, "Model has no meshes: {0}", meshPath.toString());
-    return nullptr;
-  }
-
-  m_meshes[name] = firstMesh;
-  CH_LOG_DEBUG(MeshSystem, "Loaded mesh from path: {0}", meshPath.toString());
-
-  return firstMesh;
-}
-
-/*
- */
-SPtr<Model>
-MeshCodec::loadModel(const Path& filePath) {
-  CH_LOG_INFO(MeshSystem, "Loading model: {0}", filePath.toString());
-
-  String modelName = filePath.getFileName();
-
-  auto it = m_models.find(modelName);
-  if (it != m_models.end()) {
-    return it->second;
-  }
-
-  if (!FileSystem::isFile(filePath)) {
-    CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
-    return nullptr;
-  }
-
   Assimp::Importer importer;
-
   const aiScene* scene = importer.ReadFile(filePath.toString(),
                                            aiProcessPreset_TargetRealtime_MaxQuality |
                                                aiProcess_FlipUVs | aiProcess_MakeLeftHanded |
-                                               aiProcess_FlipWindingOrder //|
-                                           // aiProcess_PreTransformVertices
-  );
-
+                                               aiProcess_FlipWindingOrder);
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
     CH_LOG_ERROR(MeshSystem, "Assimp error: {0}", importer.GetErrorString());
     return nullptr;
   }
 
-  SPtr<Model> model = chMakeShared<Model>();
-
-  // Procesar el árbol de nodos comenzando por la raíz
-  processNodeForModel(scene->mRootNode, scene, model, nullptr);
-
-  // Actualizar todas las transformaciones
-  model->updateTransforms();
-
-  m_models[modelName] = model;
-
-  return model;
-}
-
-/*
- */
-void
-MeshCodec::unloadMesh(const WeakPtr<Mesh>& mesh) {
-  CH_PARAMETER_UNUSED(mesh);
-}
-
-/*
- */
-Vector<SPtr<Mesh>>
-MeshCodec::processNode(aiNode* node, const aiScene* scene) {
-  Vector<SPtr<Mesh>> meshes;
-
-  for (uint32 i = 0; i < node->mNumMeshes; i++) {
-    aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-    SPtr<Mesh> processedMesh = processMesh(mesh, scene);
-
-    if (processedMesh) {
-      meshes.push_back(processedMesh);
-    }
-  }
-
-  for (uint32 i = 0; i < node->mNumChildren; i++) {
-    Vector<SPtr<Mesh>> childMeshes = processNode(node->mChildren[i], scene);
-    meshes.insert(meshes.end(), childMeshes.begin(), childMeshes.end());
-  }
-
-  return meshes;
-}
-
-/*
- */
-SPtr<Mesh>
-MeshCodec::processMesh(aiMesh* mesh, const aiScene* scene) {
-  SPtr<Mesh> newMesh = chMakeShared<Mesh>();
-
-  const bool hasPositions = mesh->HasPositions();
-  const bool hasNormals = mesh->HasNormals();
-  const bool hasTexCoords = mesh->HasTextureCoords(0);
-  const bool hasColors = mesh->HasVertexColors(0);
-  // const bool hasTangents = mesh->HasTangentsAndBitangents();
-
-  if (hasPositions && hasNormals && hasTexCoords) {
-    Vector<VertexNormalTexCoord> vertices(mesh->mNumVertices);
-
-    for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
-      vertices[i].normal = MeshManagerHelpers::convertAssimpVector(mesh->mNormals[i]);
-
-      if (hasTexCoords) {
-        vertices[i].texCoord = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
-      }
-      else {
-        CH_LOG_WARNING(MeshSystem, "Mesh does not have texture coordinates");
-        vertices[i].texCoord = {0.0f, 0.0f};
-      }
-    }
-
-    newMesh->setVertexData(std::move(vertices));
-  }
-  else if (hasPositions && hasColors) {
-    Vector<VertexPosColor> vertices(mesh->mNumVertices);
-
-    for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
-
-      if (hasColors) {
-        vertices[i].color = {mesh->mColors[0][i].r, mesh->mColors[0][i].g,
-                             mesh->mColors[0][i].b, mesh->mColors[0][i].a};
-      }
-      else {
-        vertices[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
-      }
-    }
-
-    newMesh->setVertexData(std::move(vertices));
-  }
-  else if (hasPositions) {
-    CH_LOG_WARNING(MeshSystem, "Mesh does not have color data, using default color");
-    Vector<VertexPosColor> vertices(mesh->mNumVertices);
-
-    for (uint32 i = 0; i < mesh->mNumVertices; ++i) {
-      vertices[i].position = MeshManagerHelpers::convertAssimpVector(mesh->mVertices[i]);
-
-      // Assign default color if no color data is available
-      vertices[i].color = {0.7f, 0.7f, 0.7f, 1.0f};
-    }
-
-    newMesh->setVertexData(std::move(vertices));
-  }
-  else {
-    CH_LOG_ERROR(MeshSystem, "Mesh does not have position data");
+  const Path modelFolder = makeUniqueFolder(assetFolder, assetName);
+  if (!FileSystem::createDirectories(modelFolder)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to create the folder {0}", modelFolder);
     return nullptr;
   }
 
-  if (mesh->mMaterialIndex != 0) {
-    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+  const ImportContext context{.scene = scene,
+                              .sourceFile = FileSystem::absolutePath(filePath),
+                              .assetFolder = modelFolder,
+                              .modelName = assetName};
 
-    // TODO: Process material properties
-
-    aiString texturePath;
-    if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-      const String diffuseTexPath = texturePath.C_Str();
-      CH_LOG_INFO(MeshSystem, "Found diffuse texture: {0}", diffuseTexPath);
-    }
+  SPtr<Model> model = chMakeShared<Model>();
+  for (uint32 i = 0; i < scene->mNumMaterials; ++i) {
+    model->addMaterialSlot(importMaterial(context, *scene->mMaterials[i], i));
   }
 
-  // Procesar índices
-  if (mesh->HasFaces()) {
-    const uint32 numIndices = mesh->mNumFaces * 3;
+  // Converted once per assimp mesh, so nodes that share one share the Mesh too.
+  Vector<SPtr<Mesh>> meshes(scene->mNumMeshes);
+  for (uint32 i = 0; i < scene->mNumMeshes; ++i) {
+    meshes[i] = processMesh(*scene->mMeshes[i]);
+  }
+  processNode(*scene->mRootNode, meshes, *model, nullptr);
+  model->updateTransforms();
 
-    // If the number of vertices is greater than 65535, use uint32 indices
-    // 65535 = 2^16 - 1 which is the max value for uint16
-    if (mesh->mNumVertices > std::numeric_limits<uint16>::max()) {
-      Vector<uint32> indices(numIndices);
-      uint32 index = 0;
-      for (uint32 i = 0; i < mesh->mNumFaces; i++) {
-        const aiFace& face = mesh->mFaces[i];
-        for (uint32 j = 0; j < face.mNumIndices; j++) {
-          indices[index++] = face.mIndices[j];
-        }
-      }
-      newMesh->setIndexData(indices);
-    }
-    else {
-      Vector<uint16> indices(numIndices);
-      uint32 index = 0;
-      for (uint32 i = 0; i < mesh->mNumFaces; i++) {
-        const aiFace& face = mesh->mFaces[i];
-        for (uint32 j = 0; j < face.mNumIndices; j++) {
-          indices[index++] = static_cast<uint16>(face.mIndices[j]);
-        }
-      }
-      newMesh->setIndexData(indices);
-    }
+  const AssetMetadata metadata =
+      makeMetadata<ModelAsset>(assetName, context.sourceFile.toString(), modelFolder);
+  SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
+  if (!saveAndRegister(modelAsset)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
+    return nullptr;
   }
 
-  return newMesh;
+  return modelAsset;
 }
 
-void
-MeshCodec::processNodeForModel(aiNode* node, const aiScene* scene, SPtr<Model> model,
-                                   ModelNode* parentNode) {
-  Matrix4 nodeLocalTransform = MeshManagerHelpers::convertAssimpMatrix(node->mTransformation);
+/*
+ */
+ModelMaterialSlot
+MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source, uint32 index)
+{
+  ModelMaterialSlot slot;
+  slot.name = source.GetName().C_Str();
+  if (slot.name.empty()) {
+    ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+    slot.name = "Material";
+    slot.name += StringUtils::toChars(numberBuffer, index);
+  }
 
-  String nodeName = node->mName.C_Str();
-  ModelNode* modelNode = model->createNode(nodeName, nodeLocalTransform, parentNode);
+  const String importedPath = makePartPath(context.sourceFile, slot.name);
+  if (SPtr<MaterialAsset> existing = findImported<MaterialAsset>(importedPath)) {
+    slot.materialId = existing->getUUID();
+    slot.material = std::move(existing);
+    return slot;
+  }
 
-  CH_ASSERT(parentNode == nullptr ||
-            Algorithm::contains(parentNode->getChildren(), modelNode));
+  const AssetMetadata metadata =
+      makeMetadata<MaterialAsset>("M_" + slot.name, importedPath, context.assetFolder);
+  SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
+  Material& material = materialAsset->getMaterial();
 
-  for (uint32 i = 0; i < node->mNumMeshes; i++) {
-    aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-    SPtr<Mesh> processedMesh = processMesh(mesh, scene);
+  SPtr<TextureAsset> texture = importBaseColorTexture(context, source);
 
-    if (processedMesh) {
-      modelNode->addMesh(processedMesh);
+  // A base color (glTF and other PBR formats) multiplies its texture by definition. The
+  // diffuse color of older formats is usually ignored by their tools once a texture is set,
+  // and multiplying by it would darken the texture, so it is used only without one.
+  aiColor4D color;
+  if (source.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS ||
+      (!texture && source.Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS)) {
+    material.setBaseColorFactor(LinearColor(color.r, color.g, color.b, color.a));
+  }
+  material.setBaseColorTexture(texture);
+
+  if (!saveAndRegister(materialAsset)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);
+    return slot;
+  }
+
+  slot.materialId = materialAsset->getUUID();
+  slot.material = std::move(materialAsset);
+  return slot;
+}
+
+/*
+ */
+SPtr<TextureAsset>
+MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial& source)
+{
+  aiString reference;
+  if (source.GetTexture(aiTextureType_BASE_COLOR, 0, &reference) != AI_SUCCESS &&
+      source.GetTexture(aiTextureType_DIFFUSE, 0, &reference) != AI_SUCCESS) {
+    return nullptr;
+  }
+
+  if (const aiTexture* embedded = context.scene->GetEmbeddedTexture(reference.C_Str())) {
+    return importEmbeddedTexture(context, *embedded, reference.C_Str());
+  }
+
+  // Files often keep the path of the machine that made them, so the texture is also looked
+  // for by name next to the source file.
+  const Path referencePath(reference.C_Str());
+  const Path sourceFolder = context.sourceFile.getDirectory();
+  const Path candidates[] = {sourceFolder.join(referencePath),
+                             sourceFolder.join(Path(referencePath.getFileName()))};
+  const Path* found = nullptr;
+  for (const Path& candidate : candidates) {
+    if (FileSystem::isFile(candidate)) {
+      found = &candidate;
+      break;
     }
   }
-
-  for (uint32 i = 0; i < node->mNumChildren; i++) {
-    processNodeForModel(node->mChildren[i], scene, model, modelNode);
+  if (!found) {
+    CH_LOG_WARNING(MeshSystem, "Texture {0} of material {1} not found near {2}",
+                   reference.C_Str(), source.GetName().C_Str(), context.sourceFile);
+    return nullptr;
   }
+
+  const Path texturePath = FileSystem::absolutePath(*found);
+  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(texturePath.toString())) {
+    return existing;
+  }
+
+  const SPtr<IAsset> asset = AssetCodecManager::instance().importAsset(
+      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder);
+  return asset ? asset->as<TextureAsset>() : nullptr;
 }
+
+/*
+ */
+SPtr<TextureAsset>
+MeshCodec::importEmbeddedTexture(const ImportContext& context,
+                                 const aiTexture& texture,
+                                 StringView reference)
+{
+  const String importedPath = makePartPath(context.sourceFile, reference);
+  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(importedPath)) {
+    return existing;
+  }
+
+  // Embedded textures may have no file name ("*0"), so the model name stands in.
+  String assetName = "T_";
+  const Path embeddedName(texture.mFilename.C_Str());
+  assetName += embeddedName.empty() ? context.modelName : embeddedName.getFileName(false);
+
+  // A height of zero means mWidth bytes of a compressed file (PNG, JPG...).
+  if (texture.mHeight == 0) {
+    const Span<const uint8> data(reinterpret_cast<const uint8*>(texture.pcData),
+                                 texture.mWidth);
+    const SPtr<IAsset> asset = AssetCodecManager::instance().importAssetFromMemory(
+        data, texture.achFormatHint, assetName, context.assetFolder, importedPath);
+    return asset ? asset->as<TextureAsset>() : nullptr;
+  }
+
+  const SIZE_T texelCount = static_cast<SIZE_T>(texture.mWidth) * texture.mHeight;
+  Vector<uint8> pixels(texelCount * 4);
+  for (SIZE_T i = 0; i < texelCount; ++i) {
+    const aiTexel& texel = texture.pcData[i];
+    pixels[i * 4 + 0] = texel.r;
+    pixels[i * 4 + 1] = texel.g;
+    pixels[i * 4 + 2] = texel.b;
+    pixels[i * 4 + 3] = texel.a;
+  }
+
+  const AssetMetadata metadata =
+      makeMetadata<TextureAsset>(assetName, importedPath, context.assetFolder);
+  SPtr<TextureAsset> textureAsset =
+      chMakeShared<TextureAsset>(metadata, std::move(pixels), texture.mWidth, texture.mHeight);
+  if (!saveAndRegister(textureAsset)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save texture asset: {0}", assetName);
+    return nullptr;
+  }
+  return textureAsset;
+}
+
 } // namespace chEngineSDK
 
 #endif // USING(CH_CODECS)

@@ -10,10 +10,15 @@
 #include "chModelComponent.h"
 
 #include "chGameObject.h"
+#include "chMaterialAsset.h"
 #include "chModel.h"
 #include "chScene.h"
 
 namespace chEngineSDK {
+namespace {
+// Returned by reference for slots that do not exist.
+const SPtr<MaterialAsset> kNoMaterial;
+} // namespace
 
 /*
  */
@@ -32,9 +37,11 @@ ModelComponent::setModel(const SPtr<Model>& model)
   }
 
   m_model = model;
+  m_materialOverrides.clear();
   if (m_model) {
     // The node matrices are read when the items are placed, so they must be current.
     m_model->updateTransforms();
+    m_materialOverrides.resize(m_model->getMaterialSlots().size());
   }
 
   if (isRegistered()) {
@@ -44,18 +51,64 @@ ModelComponent::setModel(const SPtr<Model>& model)
 
 /*
  */
-void
-ModelComponent::setTexture(const SPtr<ITexture>& texture)
+uint32
+ModelComponent::getMaterialSlotCount() const
 {
-  m_texture = texture;
+  return static_cast<uint32>(m_materialOverrides.size());
+}
+
+/*
+ */
+void
+ModelComponent::setMaterial(uint32 slot, const SPtr<MaterialAsset>& material)
+{
+  if (slot >= m_materialOverrides.size()) {
+    return;
+  }
+
+  m_materialOverrides[slot] = material;
   if (!isRegistered()) {
     return;
   }
 
   Scene& scene = *getOwner()->getScene();
+  const Material* renderMaterial = getRenderMaterial(slot);
   for (const MeshPart& part : m_parts) {
-    scene.getRenderItem(part.renderItemId).texture = m_texture.get();
+    if (part.mesh->getMaterialSlot() == slot) {
+      scene.getRenderItem(part.renderItemId).material = renderMaterial;
+    }
   }
+}
+
+/*
+ */
+const SPtr<MaterialAsset>&
+ModelComponent::getMaterialOverride(uint32 slot) const
+{
+  return slot < m_materialOverrides.size() ? m_materialOverrides[slot] : kNoMaterial;
+}
+
+/*
+ */
+const SPtr<MaterialAsset>&
+ModelComponent::getMaterial(uint32 slot) const
+{
+  if (slot >= m_materialOverrides.size()) {
+    return kNoMaterial;
+  }
+  if (m_materialOverrides[slot]) {
+    return m_materialOverrides[slot];
+  }
+  return m_model->getMaterialSlots()[slot].material;
+}
+
+/*
+ */
+const Material*
+ModelComponent::getRenderMaterial(uint32 slot) const
+{
+  const SPtr<MaterialAsset>& material = getMaterial(slot);
+  return material ? &material->getMaterial() : nullptr;
 }
 
 /*
@@ -124,7 +177,7 @@ ModelComponent::addRenderItems()
       const RenderItem item{.worldMatrix = world,
                             .worldBounds = mesh->getBounds().getTransformed(world),
                             .mesh = mesh.get(),
-                            .texture = m_texture.get()};
+                            .material = getRenderMaterial(mesh->getMaterialSlot())};
       const uint32 renderItemId = scene.addRenderItem(item);
       m_parts.push_back({.node = node, .mesh = mesh.get(), .renderItemId = renderItemId});
     }

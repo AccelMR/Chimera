@@ -11,8 +11,12 @@
 
 #include <cstring>
 
+#include "chAlgorithm.h"
+#include "chAssetFile.h"
+#include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chLogger.h"
+#include "chMaterialAsset.h"
 #include "chMesh.h"
 #include "chModel.h"
 
@@ -37,10 +41,12 @@ ModelAsset::serialize(SPtr<DataStream> stream) {
 
   try {
     // Write Model Header
+    const Vector<ModelMaterialSlot>& materialSlots = m_model->getMaterialSlots();
     ModelHeader modelHeader = {
-        .version = 1,
+        .version = ModelHeader::VERSION,
         .nodeCount = m_model->getNodeCount(),
-        .uniqueMeshCount = static_cast<uint32>(m_model->getMeshToNodesMap().size())
+        .uniqueMeshCount = static_cast<uint32>(m_model->getMeshToNodesMap().size()),
+        .materialSlotCount = static_cast<uint32>(materialSlots.size())
     };
 
     stream << modelHeader;
@@ -48,6 +54,11 @@ ModelAsset::serialize(SPtr<DataStream> stream) {
     // Serialize global model transform
     const Matrix4& globalTransform = m_model->getTransform();
     stream << globalTransform;
+
+    for (const ModelMaterialSlot& slot : materialSlots) {
+      AssetFile::writeString(*stream, slot.name);
+      stream << slot.materialId;
+    }
 
     serializeUniqueMeshes(stream);
     serializeNodeTree(stream);
@@ -148,14 +159,15 @@ ModelAsset::serializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh) {
 
   // Create and write mesh header
   MeshHeader meshHeader = {
-      .version = 1,
+      .version = MeshHeader::VERSION,
       .vertexCount = mesh->getVertexCount(),
       .indexCount = mesh->getIndexCount(),
       .vertexDataSize = static_cast<uint32>(mesh->getVertexDataSize()),
       .indexDataSize = static_cast<uint32>(mesh->getIndexDataSize()),
       .attributeCount = static_cast<uint32>(mesh->getVertexLayout().getAttributes().size()),
       .indexType = mesh->getIndexType(),
-      .vertexStride = mesh->getVertexLayout().getVertexSize()};
+      .vertexStride = mesh->getVertexLayout().getVertexSize(),
+      .materialSlot = mesh->getMaterialSlot()};
 
   stream << meshHeader;
 
@@ -221,7 +233,7 @@ ModelAsset::deserialize(SPtr<DataStream> stream) {
     ModelHeader modelHeader;
     stream >> modelHeader;
 
-    if (modelHeader.version != 1) {
+    if (modelHeader.version != ModelHeader::VERSION) {
       CH_LOG(ModelAssetLog, Error, "Unsupported model version: {0}", modelHeader.version);
       return false;
     }
@@ -233,6 +245,13 @@ ModelAsset::deserialize(SPtr<DataStream> stream) {
     Matrix4 globalTransform;
     stream >> globalTransform;
     m_model->setTransform(globalTransform);
+
+    if (!deserializeMaterialSlots(*stream, modelHeader.materialSlotCount)) {
+      CH_LOG(ModelAssetLog, Error, "Failed to read the material slots of ModelAsset {0}",
+             m_metadata.name);
+      m_model.reset();
+      return false;
+    }
 
     // Read unique meshes first (they'll be referenced by nodes)
     Vector<SPtr<Mesh>> uniqueMeshes;
@@ -279,6 +298,55 @@ ModelAsset::clearAssetData() {
     return;
   }
   m_model.reset();
+}
+
+/*
+ */
+void
+ModelAsset::collectReferences(Vector<UUID>& outReferences) const
+{
+  if (!m_model) {
+    return;
+  }
+  for (const ModelMaterialSlot& slot : m_model->getMaterialSlots()) {
+    if (!slot.materialId.isNull() && !Algorithm::contains(outReferences, slot.materialId)) {
+      outReferences.push_back(slot.materialId);
+    }
+  }
+}
+
+/*
+ */
+bool
+ModelAsset::deserializeMaterialSlots(DataStream& stream, uint32 slotCount)
+{
+  // Above any real model; only a broken file asks for more.
+  constexpr uint32 kMaxMaterialSlots = 4096;
+  constexpr uint32 kMaxSlotNameLength = 1024;
+  if (slotCount > kMaxMaterialSlots) {
+    return false;
+  }
+
+  // IAsset::load already loaded the references, so the materials are ready when they exist.
+  AssetManager& assetManager = AssetManager::instance();
+  for (uint32 i = 0; i < slotCount; ++i) {
+    ModelMaterialSlot slot;
+    if (!AssetFile::readString(stream, slot.name, kMaxSlotNameLength) ||
+        stream.read(&slot.materialId, sizeof(UUID)) != sizeof(UUID)) {
+      return false;
+    }
+
+    if (!slot.materialId.isNull()) {
+      const SPtr<IAsset> asset = assetManager.getAsset(slot.materialId);
+      slot.material = asset ? asset->as<MaterialAsset>() : nullptr;
+      if (!slot.material) {
+        CH_LOG(ModelAssetLog, Warning, "Model {0} lost the material of slot {1}",
+               m_metadata.name, slot.name);
+      }
+    }
+    m_model->addMaterialSlot(std::move(slot));
+  }
+  return true;
 }
 
 /*
@@ -400,10 +468,11 @@ ModelAsset::deserializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh) {
   MeshHeader meshHeader;
   stream >> meshHeader;
 
-  if (meshHeader.version != 1) {
+  if (meshHeader.version != MeshHeader::VERSION) {
     CH_LOG(ModelAssetLog, Error, "Unsupported mesh version: {0}", meshHeader.version);
     return false;
   }
+  mesh->setMaterialSlot(meshHeader.materialSlot);
 
   // Deserialize VertexLayout
   VertexLayout layout;

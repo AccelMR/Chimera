@@ -123,6 +123,12 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD FORCEINLINE uint64
   getCreatedAt() const { return m_metadata.creationTime; }
 
+  /**
+   * The assets this one points to, as saved in its file. They are loaded before it.
+   */
+  NODISCARD FORCEINLINE const Vector<UUID>&
+  getReferencedAssets() const { return m_referencedAssets; }
+
  protected:
   friend class AssetManager;
   friend class IAssetCodec;
@@ -165,6 +171,15 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   virtual bool
   deserialize(SPtr<DataStream>) = 0;
 
+  /**
+   * Adds the UUIDs of the assets this one needs, called when it is saved.
+   */
+  virtual void
+  collectReferences(Vector<UUID>& outReferences) const
+  {
+    CH_PARAMETER_UNUSED(outReferences);
+  }
+
   bool
   validateMetadata(const AssetMetadata&) const;
 
@@ -172,7 +187,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   AssetState m_state;        ///< State of the asset
   Atomic<uint32> m_refCount; ///< Reference count for the asset
 
-  Vector<UUID> m_referencedAssets; ///< List of referenced assets
+  Vector<UUID> m_referencedAssets; ///< Filled by collectReferences on save, read on load
 }; // class IAsset
 
 /*

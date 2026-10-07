@@ -12,7 +12,9 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
+class MaterialAsset;
 class ModelAsset;
+class TextureAsset;
 
 /**
  * Exists so every window that takes assets from the Content Browser agrees on the payload:
@@ -35,6 +37,18 @@ class AssetDragDrop
    */
   NODISCARD static SPtr<ModelAsset>
   acceptModel();
+
+  /**
+   * Same as acceptModel, for textures.
+   */
+  NODISCARD static SPtr<TextureAsset>
+  acceptTexture();
+
+  /**
+   * Same as acceptModel, for materials.
+   */
+  NODISCARD static SPtr<MaterialAsset>
+  acceptMaterial();
 
   /**
    * Adds a GameObject with the model under parent (a root object when null) and selects it.

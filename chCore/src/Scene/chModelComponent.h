@@ -16,6 +16,8 @@
 #include "chTypeTraits.h"
 
 namespace chEngineSDK {
+class Material;
+class MaterialAsset;
 class ModelNode;
 
 /**
@@ -37,13 +39,28 @@ class CH_CORE_EXPORT ModelComponent : public Component
   getModel() const { return m_model; }
 
   /**
-   * Drawn on every mesh until materials exist; null uses the renderer's default.
+   * As many as the model has.
+   */
+  NODISCARD uint32
+  getMaterialSlotCount() const;
+
+  /**
+   * Replaces the model's material of that slot on this object only; null goes back to it.
    */
   void
-  setTexture(const SPtr<ITexture>& texture);
+  setMaterial(uint32 slot, const SPtr<MaterialAsset>& material);
 
-  NODISCARD FORCEINLINE const SPtr<ITexture>&
-  getTexture() const { return m_texture; }
+  /**
+   * Null when the slot uses the model's material.
+   */
+  NODISCARD const SPtr<MaterialAsset>&
+  getMaterialOverride(uint32 slot) const;
+
+  /**
+   * The override, else the model's material; null when neither exists.
+   */
+  NODISCARD const SPtr<MaterialAsset>&
+  getMaterial(uint32 slot) const;
 
   /**
    * Box around everything it draws, in world space as of the last transform update. Zero at
@@ -76,8 +93,12 @@ class CH_CORE_EXPORT ModelComponent : public Component
   void
   removeRenderItems();
 
+  NODISCARD const Material*
+  getRenderMaterial(uint32 slot) const;
+
   SPtr<Model> m_model;
-  SPtr<ITexture> m_texture;
+  // One per material slot of the model; null uses the model's material.
+  Vector<SPtr<MaterialAsset>> m_materialOverrides;
   Vector<MeshPart> m_parts;
 };
 DECLARE_TYPE_TRAITS(ModelComponent)

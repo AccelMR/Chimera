@@ -17,6 +17,7 @@
 #include "chISampler.h"
 #include "chIShader.h"
 #include "chITexture.h"
+#include "chMaterial.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
 #include "chRenderItem.h"
@@ -35,6 +36,7 @@ struct CameraData
 struct DrawPushConstants
 {
   Matrix4 model;
+  float baseColorFactor[4];
   uint32 cameraIndex;
   uint32 textureIndex;
   uint32 samplerIndex;
@@ -118,6 +120,7 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
   commandList.bindPipeline(*m_pipeline);
 
   DrawPushConstants pushConstants{.model = Matrix4::IDENTITY,
+                                  .baseColorFactor = {1.0f, 1.0f, 1.0f, 1.0f},
                                   .cameraIndex = cameraBuffer.getBindlessIndex(),
                                   .textureIndex = 0,
                                   .samplerIndex = m_sampler->getBindlessIndex(),
@@ -129,9 +132,16 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
       continue;
     }
 
-    const ITexture& texture = item->texture ? *item->texture : *m_defaultTexture;
+    const Material* material = item->material;
+    const ITexture* texture = material ? material->getBaseColorGpuTexture() : nullptr;
+    const LinearColor& baseColor =
+        material ? material->getBaseColorFactor() : LinearColor::White;
     pushConstants.model = item->worldMatrix;
-    pushConstants.textureIndex = texture.getBindlessIndex();
+    pushConstants.baseColorFactor[0] = baseColor.r;
+    pushConstants.baseColorFactor[1] = baseColor.g;
+    pushConstants.baseColorFactor[2] = baseColor.b;
+    pushConstants.baseColorFactor[3] = baseColor.a;
+    pushConstants.textureIndex = (texture ? *texture : *m_defaultTexture).getBindlessIndex();
     commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 
     commandList.bindVertexBuffer(*vertexBuffer);

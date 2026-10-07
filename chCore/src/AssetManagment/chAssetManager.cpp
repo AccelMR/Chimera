@@ -12,6 +12,7 @@
 
 #include "chAssetManager.h"
 
+#include "chAssetFile.h"
 #include "chTypeTraits.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
@@ -20,6 +21,7 @@
 
 // Base asset types
 #include "chGameObjectAsset.h"
+#include "chMaterialAsset.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
 #include "chSceneAsset.h"
@@ -42,6 +44,7 @@ AssetManager::initialize() {
   // Register asset creators
   m_assetRegister->registerAssetCreator<ModelAsset>();
   m_assetRegister->registerAssetCreator<TextureAsset>();
+  m_assetRegister->registerAssetCreator<MaterialAsset>();
   m_assetRegister->registerAssetCreator<GameObjectAsset>();
 }
 
@@ -292,6 +295,57 @@ AssetManager::removeAsset(const UUID& assetUUID) {
   return true;
 }
 
+/*
+ */
+SPtr<IAsset>
+AssetManager::findAssetByImportedPath(StringView importedPath) const
+{
+  for (const auto& [uuid, asset] : m_assets) {
+    if (importedPath == asset->getImportedPath()) {
+      return asset;
+    }
+  }
+  return nullptr;
+}
+
+/*
+ */
+String
+AssetManager::makeUniqueAssetName(const Path& folder, StringView name) const
+{
+  // Cut first, so the name checked is the one the metadata will keep, with room for a
+  // suffix of up to "_999".
+  constexpr SIZE_T kMaxNameLength = sizeof(AssetMetadata::name) - 1;
+  constexpr SIZE_T kSuffixRoom = 4;
+  const String baseName(name.substr(0, kMaxNameLength - kSuffixRoom));
+
+  const auto isTaken = [this, &folder](const String& candidate) {
+    for (const auto& [uuid, asset] : m_assets) {
+      if (StringUtils::equals(asset->getName(), candidate) &&
+          StringUtils::equals(asset->getAssetPath(), folder.toString())) {
+        return true;
+      }
+    }
+    String fileName = candidate;
+    fileName += EnginePaths::getEngineAssetExtension();
+    return FileSystem::exists(folder.join(Path(fileName)));
+  };
+
+  if (!isTaken(baseName)) {
+    return baseName;
+  }
+  ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+  for (uint32 suffix = 1; suffix < 1000; ++suffix) {
+    String candidate = baseName;
+    candidate += '_';
+    candidate += StringUtils::toChars(numberBuffer, suffix);
+    if (!isTaken(candidate)) {
+      return candidate;
+    }
+  }
+  return baseName;
+}
+
 #endif // Editor-specific functionality
 
 /*
@@ -304,8 +358,7 @@ AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
   }
 
   AssetMetadata metadata;
-  if (!stream->read(reinterpret_cast<void*>(&metadata), sizeof(AssetMetadata))) {
-    CH_LOG_ERROR(AssetSystem, "Failed to deserialize asset metadata from stream");
+  if (!AssetFile::readMetadata(*stream, metadata)) {
     return nullptr;
   }
 

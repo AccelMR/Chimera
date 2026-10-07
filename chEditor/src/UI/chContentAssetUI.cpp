@@ -27,6 +27,7 @@
 #include "chUIHelpers.h"
 
 #include "chGameObjectAsset.h"
+#include "chMaterialAsset.h"
 #include "chTextureAsset.h"
 
 #include "imgui.h"
@@ -895,6 +896,18 @@ ContentAssetUI::renderEmptyAreaContextMenu()
   ImGui::Separator();
 
   if (ImGui::BeginMenu("Create")) {
+    if (ImGui::MenuItem("Material")) {
+      // Saved at once, so a model or object can reference it before "Save All".
+      AssetManager& assetManager = AssetManager::instance();
+      const Path& folder = EnginePaths::getGameAssetDirectory();
+      const SPtr<MaterialAsset> material =
+          assetManager.createAsset<MaterialAsset>(
+              assetManager.makeUniqueAssetName(folder, "M_New"), folder).lock();
+      if (!material || !assetManager.saveAsset(material)) {
+        CH_LOG_ERROR(ContentAssetUILog, "Failed to create a material.");
+      }
+      refreshAssets();
+    }
     if (ImGui::MenuItem("Game Object Asset")) {
       WeakPtr<IAsset> newAsset = AssetManager::instance().createAsset<GameObjectAsset>(
           "New", EnginePaths::getGameAssetDirectory());

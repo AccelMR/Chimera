@@ -135,6 +135,20 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
 #if USING(CH_EDITOR)
   bool
   removeAsset(const UUID& assetUUID);
+
+  /**
+   * The asset imported from this source (as stored in its metadata), or null. Lets an
+   * import reuse what an earlier one made instead of making a copy. Walks every asset.
+   */
+  NODISCARD SPtr<IAsset>
+  findAssetByImportedPath(StringView importedPath) const;
+
+  /**
+   * The name, cut to fit the metadata, plus "_1", "_2"... when an asset in that folder (in
+   * memory or on disk) already has it.
+   */
+  NODISCARD String
+  makeUniqueAssetName(const Path& folder, StringView name) const;
 #endif // Editor-specific functionality
 
   /*
@@ -242,6 +256,10 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
 
   CH_LOG(AssetSystem, Debug, "Asset {0} created with UUID {1} at path {2}", name,
          assetUUID.toString(), assetPath.toString());
+
+  // Its data is the default made in memory, so loading it from a file that does not exist
+  // yet must not be tried.
+  asset->m_state = AssetState::Loaded;
 
   // DeleteMe
   m_loadedAssets[refUUID] = asset;

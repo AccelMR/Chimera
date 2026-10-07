@@ -28,11 +28,10 @@ TextureAsset::serialize(SPtr<DataStream> stream) {
     CH_LOG_ERROR(TextureAssetLog, "Failed to serialize texture asset: texture data is empty");
     return false;
   }
-  TextureAssetMetadata metadata;
-  metadata.width = m_width;
-  metadata.height = m_height;
-  metadata.format = Format::R8G8B8A8_UNORM;
-  stream << metadata;
+  const TextureAssetHeader header{.width = m_width,
+                                  .height = m_height,
+                                  .format = Format::R8G8B8A8_UNORM};
+  stream << header;
 
   stream->write(m_textureData.data(), m_textureData.size());
   CH_LOG_DEBUG(TextureAssetLog, "Serialized texture asset {0} with size {1}",
@@ -53,17 +52,22 @@ TextureAsset::deserialize(SPtr<DataStream> stream) {
   // Deserialize texture data
   m_textureData.clear();
 
-  TextureAssetMetadata metadata;
-  stream >> metadata;
-  m_width = metadata.width;
-  m_height = metadata.height;
-  // The value comes from the file, so it is checked before it indexes the format table.
-  if (static_cast<uint32>(metadata.format) >= static_cast<uint32>(Format::COUNT)) {
-    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: unknown format {0}",
-                 metadata.format);
+  TextureAssetHeader header;
+  if (stream->read(&header, sizeof(header)) != sizeof(header) ||
+      header.version != TextureAssetHeader::VERSION) {
+    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset {0}: bad header",
+                 getName());
     return false;
   }
-  m_textureData.resize(FormatUtils::getMipSize(metadata.format, m_width, m_height));
+  m_width = header.width;
+  m_height = header.height;
+  // The value comes from the file, so it is checked before it indexes the format table.
+  if (static_cast<uint32>(header.format) >= static_cast<uint32>(Format::COUNT)) {
+    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: unknown format {0}",
+                 header.format);
+    return false;
+  }
+  m_textureData.resize(FormatUtils::getMipSize(header.format, m_width, m_height));
   if (m_textureData.empty()) {
     CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: texture data is empty");
     return false;

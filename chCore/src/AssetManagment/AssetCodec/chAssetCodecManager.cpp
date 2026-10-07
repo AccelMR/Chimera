@@ -24,7 +24,9 @@ AssetCodecManager::initialize() {
 /*
 */
 SPtr<IAsset>
-AssetCodecManager::importAsset(const Path& importPath, const String& assetName)
+AssetCodecManager::importAsset(const Path& importPath,
+                               const String& assetName,
+                               const Path& assetFolder)
 {
   CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
 
@@ -42,7 +44,26 @@ AssetCodecManager::importAsset(const Path& importPath, const String& assetName)
 
   CH_LOG_DEBUG(AssetCodecSystem, "Importing {0} as {1} with codec {2}", importPath, assetName,
                codec->getCodecType());
-  return codec->importAsset(importPath, assetName);
+  return codec->importAsset(importPath, assetName, assetFolder);
+}
+
+/*
+*/
+SPtr<IAsset>
+AssetCodecManager::importAssetFromMemory(Span<const uint8> data,
+                                         StringView extension,
+                                         const String& assetName,
+                                         const Path& assetFolder,
+                                         StringView importedPath)
+{
+  CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
+
+  SPtr<IAssetCodec> codec = m_codecRegistry->getCodecForExtension(extension);
+  if (!codec) {
+    CH_LOG_ERROR(AssetCodecSystem, "No codec found for file extension {0}", extension);
+    return nullptr;
+  }
+  return codec->importAssetFromMemory(data, assetName, assetFolder, importedPath);
 }
 
 /*

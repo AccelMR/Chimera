@@ -17,11 +17,17 @@
 namespace chEngineSDK {
 class ITexture;
 
-struct TextureAssetMetadata : public AssetMetadata {
-  uint32 width = 0;   ///< Width of the texture
-  uint32 height = 0;  ///< Height of the texture
-  Format format = Format::Unknown; ///< Format of the texture
+// Written after the common asset start, before the pixels.
+struct TextureAssetHeader
+{
+  static constexpr uint32 VERSION = 1;
+
+  uint32 version = VERSION;
+  uint32 width = 0;
+  uint32 height = 0;
+  Format format = Format::Unknown;
 };
+static_assert(sizeof(TextureAssetHeader) == 16, "TextureAssetHeader must have no padding");
 
 /**
  * @class TextureAsset
@@ -45,7 +51,7 @@ class CH_CORE_EXPORT TextureAsset : public IAsset
 
   ~TextureAsset() = default;
 
-  NODISCARD FORCEINLINE SPtr<ITexture>
+  NODISCARD FORCEINLINE const SPtr<ITexture>&
   getTexture() const { return m_texture; }
 
  protected:

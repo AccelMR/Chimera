@@ -10,7 +10,6 @@
 #include "chImageCodec.h"
 
 #include <cstring>
-#include <chrono>
 
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -25,14 +24,14 @@ namespace chEngineSDK{
 CH_LOG_DECLARE_STATIC(ImageCodecLog, All);
 
 namespace ImageImpoterHelpers{
+/*
+ * Takes the pixels stb returned (RGBA, 8 bits per channel) and frees them.
+ */
 Vector<uint8>
-loadImage(const Path& path, int32* width, int32* height, int32* channels) {
-  CH_ASSERT(FileSystem::isFile(path));
-
+takeImage(uint8* data, int32 width, int32 height) {
   Vector<uint8> imageData;
-  uint8* data = stbi_load(path.toString().c_str(), width, height, channels, STBI_rgb_alpha);
   if (data) {
-    imageData.resize((*width) * (*height) * (static_cast<SIZE_T>(STBI_rgb_alpha)));
+    imageData.resize(static_cast<SIZE_T>(width) * height * STBI_rgb_alpha);
     memcpy(imageData.data(), data, imageData.size());
     stbi_image_free(data);
   }
@@ -43,42 +42,74 @@ loadImage(const Path& path, int32* width, int32* height, int32* channels) {
 /*
 */
 SPtr<IAsset>
-ImageCodec::importAsset(const Path& filePath, const String& assetName) {
+ImageCodec::importAsset(const Path& filePath,
+                        const String& assetName,
+                        const Path& assetFolder) {
   CH_ASSERT(FileSystem::isFile(filePath) && "File does not exist");
-  CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
 
   int32 width = 0;
   int32 height = 0;
   int32 channels = 0;
-  Vector<uint8> imageData = ImageImpoterHelpers::loadImage(filePath, &width, &height, &channels);
-
+  uint8* data = stbi_load(filePath.toString().c_str(), &width, &height, &channels,
+                          STBI_rgb_alpha);
+  Vector<uint8> imageData = ImageImpoterHelpers::takeImage(data, width, height);
   if (imageData.empty()) {
     CH_LOG_ERROR(ImageCodecLog, "Failed to load image from path: {0}", filePath.toString());
     return nullptr;
   }
 
-  AssetMetadata metadata;
-  metadata.uuid = UUID::createRandom();
-  metadata.assetType = AssetTypeTraits<TextureAsset>::getTypeId();
-  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  StringUtils::copyToBuffer(metadata.typeName, AssetTypeTraits<TextureAsset>::getTypeName());
-  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
-  StringUtils::copyToBuffer(metadata.name, assetName);
+  const Path importedPath = FileSystem::absolutePath(filePath);
+  return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
+                            importedPath.toString());
+}
 
-  const Path importedPath = FileSystem::absolutePath(Path(filePath));
-  StringUtils::copyToBuffer(metadata.importedPath, importedPath.toString());
-  StringUtils::copyToBuffer(metadata.assetPath, EnginePaths::getGameAssetDirectory().toString());
-
-  SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(metadata, imageData, width, height);
-
-  if (!AssetManager::instance().saveAsset(textureAsset)) {
-    CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: " + assetName);
+/*
+*/
+SPtr<IAsset>
+ImageCodec::importAssetFromMemory(Span<const uint8> data,
+                                  const String& assetName,
+                                  const Path& assetFolder,
+                                  StringView importedPath) {
+  int32 width = 0;
+  int32 height = 0;
+  int32 channels = 0;
+  uint8* pixels = stbi_load_from_memory(data.data(), static_cast<int32>(data.size()), &width,
+                                        &height, &channels, STBI_rgb_alpha);
+  Vector<uint8> imageData = ImageImpoterHelpers::takeImage(pixels, width, height);
+  if (imageData.empty()) {
+    CH_LOG_ERROR(ImageCodecLog, "Failed to read image {0}: {1}", importedPath,
+                 stbi_failure_reason());
     return nullptr;
   }
 
-  CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", assetName, filePath.toString());
-  registerNewAsset(textureAsset);
-  return std::static_pointer_cast<IAsset>(textureAsset);
+  return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
+                            importedPath);
+}
+
+/*
+*/
+SPtr<IAsset>
+ImageCodec::createTextureAsset(Vector<uint8> pixels,
+                               int32 width,
+                               int32 height,
+                               const String& assetName,
+                               const Path& assetFolder,
+                               StringView importedPath) {
+  CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
+
+  const AssetMetadata metadata =
+      makeMetadata<TextureAsset>(assetName, importedPath, assetFolder);
+  SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
+      metadata, std::move(pixels), static_cast<uint32>(width), static_cast<uint32>(height));
+
+  if (!saveAndRegister(textureAsset)) {
+    CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: {0}", assetName);
+    return nullptr;
+  }
+
+  CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", textureAsset->getName(),
+              importedPath);
+  return textureAsset;
 }
 
 } // namespace chEngineSDK

@@ -278,6 +278,15 @@ Model::registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
   m_meshToNodesMap[mesh].push_back(node);
 }
 
+/*
+ */
+uint32
+Model::addMaterialSlot(ModelMaterialSlot slot)
+{
+  m_materialSlots.push_back(std::move(slot));
+  return static_cast<uint32>(m_materialSlots.size() - 1);
+}
+
 void
 Model::unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node)
 {

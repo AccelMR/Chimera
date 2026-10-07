@@ -12,6 +12,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
+class MaterialAsset;
 
 /**
  * Editor window that shows and edits the transform and components of the selected
@@ -31,6 +32,12 @@ class InspectorUI
 
   void
   renderModelComponent(ModelComponent& modelComponent);
+
+  void
+  renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
+
+  void
+  renderMaterial(const SPtr<MaterialAsset>& materialAsset);
 
   // The rotation is edited as angles but stored as a quaternion, and converting back each
   // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).

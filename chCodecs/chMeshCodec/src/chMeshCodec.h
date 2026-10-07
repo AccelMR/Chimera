@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2025/04/19
  * @brief
- * MeshCodec class for loading and managing mesh resources.
+ * MeshCodec class for importing model files.
  */
 /************************************************************************/
 #pragma once
@@ -17,18 +17,23 @@
 #include "chTypeTraits.h"
 #include "chIAsset.h"
 
-#include "chMesh.h"
 #include "chModel.h"
 #include "chModelAsset.h"
-#include "chSTDThreading.h"
 #include "chUUID.h"
 
 //Forward declarations from Assimp
-struct aiNode;
-struct aiMesh;
+struct aiMaterial;
 struct aiScene;
+struct aiTexture;
 
 namespace chEngineSDK {
+class TextureAsset;
+
+/**
+ * Exists to turn model files read by Assimp into engine assets. Besides the model it imports
+ * the materials of the file and their textures, all in a folder of its own, so the model
+ * arrives looking as it did in the tool that made it.
+ */
 class MeshCodec  : public IAssetCodec {
  public:
   MeshCodec();
@@ -52,69 +57,30 @@ class MeshCodec  : public IAssetCodec {
   }
 
   SPtr<IAsset>
-  importAsset(const Path& filePath, const String& assetName) override;
-
-  /**
-   * Load a mesh from a file
-   *
-   * @param filename Path to the mesh file
-   * @param meshName Name of the mesh (optional)
-   * @return Pointer to the loaded mesh
-   */
-  SPtr<Mesh>
-  loadMesh(const Path& filename, const String& meshName = "");
-
-  /**
-   * Load a model from a file
-   *
-   * @param filename Path to the model file
-   * @return Vector of pointers to the loaded meshes
-   */
-  SPtr<Model>
-  loadModel(const Path& filename);
-
-  /**
-   * Unload a mesh
-   *
-   * @param mesh Pointer to the mesh to unload
-   */
-  void
-  unloadMesh(const WeakPtr<Mesh>& mesh);
+  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) override;
 
  private:
+  struct ImportContext
+  {
+    const aiScene* scene = nullptr;
+    // Absolute, so it can be stored as the imported path of everything made from it.
+    Path sourceFile;
+    Path assetFolder;
+    String modelName;
+  };
 
-  /**
-   * Process a node in the Assimp scene
-   *
-   * @param node Pointer to the Assimp node
-   * @param scene Pointer to the Assimp scene
-   * @return Vector of pointers to the processed meshes
-   */
-  Vector<SPtr<Mesh>>
-  processNode(aiNode* node, const aiScene* scene);
+  NODISCARD ModelMaterialSlot
+  importMaterial(const ImportContext& context, const aiMaterial& source, uint32 index);
 
-  /**
-   * Process a mesh in the Assimp scene
-   *
-   * @param mesh Pointer to the Assimp mesh
-   * @param scene Pointer to the Assimp scene
-   * @return Pointer to the processed mesh
-   */
-  SPtr<Mesh>
-  processMesh(aiMesh* mesh, const aiScene* scene);
+  NODISCARD SPtr<TextureAsset>
+  importBaseColorTexture(const ImportContext& context, const aiMaterial& source);
 
-  void
-  processNodeForModel(aiNode* node,
-                      const aiScene* scene,
-                      SPtr<Model> model,
-                      ModelNode* parentNode);
+  NODISCARD SPtr<TextureAsset>
+  importEmbeddedTexture(const ImportContext& context,
+                        const aiTexture& texture,
+                        StringView reference);
 
-
- private:
   Vector<String> m_extensions;
-  UnorderedMap<String, SPtr<Mesh>> m_meshes;
-  UnorderedMap<String, SPtr<Model>> m_models;
-  Mutex m_mutex;
 };
 DECLARE_ASSET_TYPE(MeshCodec);
 

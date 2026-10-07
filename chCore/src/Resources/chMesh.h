@@ -203,6 +203,15 @@ class CH_CORE_EXPORT Mesh
   NODISCARD const IBuffer*
   getIndexBuffer() const;
 
+  /**
+   * Index into the material slots of the Model that holds this mesh.
+   */
+  FORCEINLINE void
+  setMaterialSlot(uint32 slot) noexcept { m_materialSlot = slot; }
+
+  NODISCARD FORCEINLINE uint32
+  getMaterialSlot() const noexcept { return m_materialSlot; }
+
  private:
   /**
    * Old GPU buffers go through the deferred deletion, so frames in flight can still use
@@ -225,6 +234,7 @@ class CH_CORE_EXPORT Mesh
   uint32 m_indexCount = 0;
   IndexType m_indexType = IndexType::UInt16;
   VertexLayout m_vertexLayout;
+  uint32 m_materialSlot = 0;
 
   // Caches built on first use from the data above.
   mutable SphereBoxBounds m_bounds{Vector3::ZERO, Vector3::ZERO, 0.0f};

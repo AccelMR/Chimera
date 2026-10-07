@@ -88,5 +88,5 @@ PSMain(VSOutput input) : SV_Target0
 
   Texture2D albedoTexture = ResourceDescriptorHeap[g_push.textureIndex];
   SamplerState albedoSampler = SamplerDescriptorHeap[g_push.samplerIndex];
-  return albedoTexture.Sample(albedoSampler, input.texCoord);
+  return albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.color;
 }

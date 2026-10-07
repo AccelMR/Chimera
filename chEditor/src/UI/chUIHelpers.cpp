@@ -17,6 +17,7 @@
 #include "chLogger.h"
 #include "chModelAsset.h"
 #include "chPath.h"
+#include "chMaterialAsset.h"
 #include "chTextureAsset.h"
 #include "chGameObjectAsset.h"
 
@@ -70,6 +71,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<TextureAsset>()) {
     return {AssetType::Texture, ICON_FA_IMAGE};
+  }
+  if (asset->isTypeOf<MaterialAsset>()) {
+    return {AssetType::Material, ICON_FA_PALETTE};
   }
   if (asset->isTypeOf<GameObjectAsset>()) {
     return {AssetType::GameObject, ICON_FA_CUBES};
@@ -418,7 +422,8 @@ UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
     return nullptr;
   }
 
-  SPtr<IAsset> importedAsset = codec->importAsset(filePath, filePath.getFileName(false));
+  SPtr<IAsset> importedAsset = codec->importAsset(filePath, filePath.getFileName(false),
+                                                  EnginePaths::getGameAssetDirectory());
   if (!importedAsset) {
     CH_LOG_ERROR(UIImguiHelper, "Failed to import asset: {0}", filePath);
     return nullptr;

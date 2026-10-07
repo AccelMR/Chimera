@@ -24,18 +24,31 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
    *        The codec creates and saves the asset.
    * @param importPath The external file to import.
    * @param assetName The name of the new asset.
+   * @param assetFolder Virtual folder under /Game that receives the asset.
    * @return The new asset, or nullptr if the file does not exist, no codec handles
    *         its extension, or the codec fails.
    */
   SPtr<IAsset>
-  importAsset(const Path& importPath, const String& assetName);
+  importAsset(const Path& importPath, const String& assetName, const Path& assetFolder);
 
   template <typename AssetType>
   FORCEINLINE SPtr<AssetType>
-  importAsset(const Path& importPath, const String& assetName)
+  importAsset(const Path& importPath, const String& assetName, const Path& assetFolder)
   {
-    return std::static_pointer_cast<AssetType>(importAsset(importPath, assetName));
+    return std::static_pointer_cast<AssetType>(
+        importAsset(importPath, assetName, assetFolder));
   }
+
+  /**
+   * Same as importAsset for a file already in memory; the codec is picked by extension
+   * (with or without the dot). See IAssetCodec::importAssetFromMemory.
+   */
+  SPtr<IAsset>
+  importAssetFromMemory(Span<const uint8> data,
+                        StringView extension,
+                        const String& assetName,
+                        const Path& assetFolder,
+                        StringView importedPath);
 
   template<typename AssetCodecType>
   NODISCARD FORCEINLINE SPtr<AssetCodecType>

@@ -54,6 +54,12 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   clearAssetData() override;
 
   void
+  collectReferences(Vector<UUID>& outReferences) const override;
+
+  bool
+  deserializeMaterialSlots(DataStream& stream, uint32 slotCount);
+
+  void
   serializeNodeTree(SPtr<DataStream> stream);
   void
   serializeNode(SPtr<DataStream> stream, ModelNode* node,

@@ -17,6 +17,7 @@
 #include "chISampler.h"
 #include "chIShader.h"
 #include "chITexture.h"
+#include "chMaterial.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
 #include "chRenderItem.h"
@@ -217,6 +218,7 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
                                    .textureIndex = 0,
                                    .samplerIndex = m_sampler->getBindlessIndex(),
                                    .mode = settings.shaderMode};
+  const bool bUnlit = settings.shaderMode == static_cast<uint32>(DebugMode::Unlit);
   for (const RenderItem* item : settings.items) {
     const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
     const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
@@ -224,9 +226,20 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
       continue;
     }
 
-    const ITexture& texture = item->texture ? *item->texture : *m_defaultTexture;
+    const Material* material = item->material;
+    const ITexture* texture = material ? material->getBaseColorGpuTexture() : nullptr;
     pushConstants.model = item->worldMatrix;
-    pushConstants.textureIndex = texture.getBindlessIndex();
+    pushConstants.textureIndex = (texture ? *texture : *m_defaultTexture).getBindlessIndex();
+    // Unlit multiplies the texture by the color, so it shows the material's tint; the
+    // other modes keep the color of the settings.
+    if (bUnlit) {
+      const LinearColor& baseColor =
+          material ? material->getBaseColorFactor() : LinearColor::White;
+      pushConstants.color[0] = baseColor.r;
+      pushConstants.color[1] = baseColor.g;
+      pushConstants.color[2] = baseColor.b;
+      pushConstants.color[3] = baseColor.a;
+    }
     commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 
     commandList.bindVertexBuffer(*vertexBuffer);

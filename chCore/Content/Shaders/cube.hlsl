@@ -15,6 +15,7 @@ struct CameraData
 struct PushConstants
 {
   row_major float4x4 model;
+  float4 baseColorFactor;
   uint cameraIndex;
   uint textureIndex;
   uint samplerIndex;
@@ -62,6 +63,7 @@ PSMain(VSOutput input) : SV_Target0
   const float diffuse = max(dot(normalize(input.normal), lightDirection), 0.0f);
   const float3 ambient = float3(0.1f, 0.1f, 0.1f);
 
-  const float4 textureColor = albedoTexture.Sample(albedoSampler, input.texCoord);
+  const float4 textureColor =
+      albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.baseColorFactor;
   return float4(ambient + diffuse, 1.0f) * textureColor;
 }

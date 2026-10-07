@@ -11,6 +11,7 @@
 
 #include "chIAsset.h"
 
+#include "chAssetFile.h"
 #include "chAssetManager.h"
 
 #include "chEnginePaths.h"
@@ -66,9 +67,9 @@ IAsset::save() {
     return false;
   }
 
-  stream->write(static_cast<const void*>(&m_metadata), sizeof(AssetMetadata));
-
-  //TODO: Write referenced assets count
+  m_referencedAssets.clear();
+  collectReferences(m_referencedAssets);
+  AssetFile::writeStart(*stream, m_metadata, m_referencedAssets);
 
   const bool success = serialize(stream);
   if (!success) {
@@ -140,8 +141,7 @@ IAsset::updateMetadata(const AssetMetadata& newMetadata) {
     return false;
   }
 
-  // Write only metadata at the beginning
-  stream->seek(0); // Go to start
+  stream->seek(AssetFile::METADATA_OFFSET);
   stream->write(&newMetadata, sizeof(AssetMetadata));
   stream->close();
 
@@ -175,14 +175,28 @@ IAsset::load() {
     return false;
   }
   AssetMetadata metadata;
-  stream->read(static_cast<void*>(&metadata), sizeof(metadata));
-
-  if (!validateMetadata(metadata)) {
-    CH_LOG(AssetSystem, Error, "Invalid asset metadata {0}", m_metadata.name);
+  if (!AssetFile::readMetadata(*stream, metadata) || !validateMetadata(metadata) ||
+      !AssetFile::readReferences(*stream, m_referencedAssets)) {
+    CH_LOG(AssetSystem, Error, "Invalid asset file {0}", m_metadata.name);
     m_state = AssetState::Failed;
     return false;
   }
   m_metadata = metadata;
+
+  // Loaded first, so deserialize finds the assets it points to already loaded.
+  AssetManager& assetManager = AssetManager::instance();
+  for (const UUID& reference : m_referencedAssets) {
+    const SPtr<IAsset> referenced = assetManager.getAsset(reference);
+    if (!referenced) {
+      CH_LOG(AssetSystem, Warning, "Asset {0} references {1}, which does not exist",
+             m_metadata.name, reference);
+      continue;
+    }
+    if (!assetManager.syncLoadAsset(referenced)) {
+      CH_LOG(AssetSystem, Warning, "Asset {0} could not load its reference {1}",
+             m_metadata.name, referenced->getName());
+    }
+  }
 
   const bool success = deserialize(stream);
 

@@ -39,8 +39,30 @@ class CH_CORE_EXPORT IAssetCodec {
   NODISCARD virtual const Vector<String>&
   getSupportedExtensions() const = 0;
 
+  /**
+   * Saves the new asset (and anything it needs) in assetFolder, a virtual path under /Game.
+   * The name gets a suffix when the folder already has an asset with it.
+   */
   virtual SPtr<IAsset>
-  importAsset(const Path& filePath, const String& assetName) = 0;
+  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) = 0;
+
+  /**
+   * Same as importAsset for a file already in memory (a texture inside a model file).
+   * importedPath names the source in the metadata, so a later import can find the asset.
+   * Codecs that cannot read memory return null.
+   */
+  virtual SPtr<IAsset>
+  importAssetFromMemory(Span<const uint8> data,
+                        const String& assetName,
+                        const Path& assetFolder,
+                        StringView importedPath)
+  {
+    CH_PARAMETER_UNUSED(data);
+    CH_PARAMETER_UNUSED(assetName);
+    CH_PARAMETER_UNUSED(assetFolder);
+    CH_PARAMETER_UNUSED(importedPath);
+    return nullptr;
+  }
 
   /**
    * Accepts the extension with or without the dot, in any case (".PNG").
@@ -62,8 +84,8 @@ class CH_CORE_EXPORT IAssetCodec {
 
   template <typename AssetType = IAsset>
   FORCEINLINE SPtr<AssetType>
-  importAsset(const Path& filePath, const String& assetName) {
-    return std::static_pointer_cast<AssetType>(importAsset(filePath, assetName));
+  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) {
+    return std::static_pointer_cast<AssetType>(importAsset(filePath, assetName, assetFolder));
   }
 
   void
@@ -71,6 +93,27 @@ class CH_CORE_EXPORT IAssetCodec {
     CH_ASSERT(asset && "Asset cannot be null");
     AssetManager::instance().registerNewAsset(asset);
   }
+
+  /**
+   * Saves the asset and adds it to the AssetManager.
+   */
+  NODISCARD bool
+  saveAndRegister(const SPtr<IAsset>& asset)
+  {
+    if (!AssetManager::instance().saveAsset(asset)) {
+      return false;
+    }
+    registerNewAsset(asset);
+    return true;
+  }
+
+  /**
+   * Metadata of a new asset of that type, with a fresh UUID and a name no other asset in
+   * the folder has.
+   */
+  template <typename AssetType>
+  NODISCARD static AssetMetadata
+  makeMetadata(StringView assetName, StringView importedPath, const Path& assetFolder);
 
   /**
    * The form extensions are stored and looked up in: lowercase, without the dot.
@@ -91,6 +134,25 @@ class CH_CORE_EXPORT IAssetCodec {
     return extension;
   }
 };
+
+/*
+ */
+template <typename AssetType>
+AssetMetadata
+IAssetCodec::makeMetadata(StringView assetName, StringView importedPath, const Path& assetFolder)
+{
+  AssetMetadata metadata;
+  metadata.uuid = UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<AssetType>::getTypeId();
+  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
+  StringUtils::copyToBuffer(metadata.typeName, AssetTypeTraits<AssetType>::getTypeName());
+  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
+  StringUtils::copyToBuffer(metadata.name,
+                            AssetManager::instance().makeUniqueAssetName(assetFolder, assetName));
+  StringUtils::copyToBuffer(metadata.importedPath, importedPath);
+  StringUtils::copyToBuffer(metadata.assetPath, assetFolder.toString());
+  return metadata;
+}
 
 } // namespace chEngineSDK
 

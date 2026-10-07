@@ -47,9 +47,23 @@ class ImageCodec : public IAssetCodec {
   }
 
   SPtr<IAsset>
-  importAsset(const Path& filePath, const String& assetName) override;
+  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) override;
+
+  SPtr<IAsset>
+  importAssetFromMemory(Span<const uint8> data,
+                        const String& assetName,
+                        const Path& assetFolder,
+                        StringView importedPath) override;
 
  private:
+  SPtr<IAsset>
+  createTextureAsset(Vector<uint8> pixels,
+                     int32 width,
+                     int32 height,
+                     const String& assetName,
+                     const Path& assetFolder,
+                     StringView importedPath);
+
   // The formats stb_image reads. It has no EXR support.
   const Vector<String> m_extensions = {"png", "jpg", "jpeg", "bmp", "tga", "hdr"};
 };

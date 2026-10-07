@@ -12,6 +12,7 @@
 #include "chMatrix4.h"
 #include "chMesh.h"
 #include "chPrerequisitesCore.h"
+#include "chUUID.h"
 
 namespace chEngineSDK {
 
@@ -19,6 +20,18 @@ namespace chEngineSDK {
  * Forward declaration of Model class
  */
 class Model;
+class MaterialAsset;
+
+/**
+ * One material the meshes of a model can use; each Mesh stores the index of its slot.
+ */
+struct ModelMaterialSlot
+{
+  String name;
+  // Kept even when the asset is missing, so saving the model again does not lose it.
+  UUID materialId = UUID::null();
+  SPtr<MaterialAsset> material;
+};
 
 /**
  * Structure representing a node in the model hierarchy
@@ -174,6 +187,15 @@ class CH_CORE_EXPORT Model
   getMeshToNodesMap() const { return m_meshToNodesMap; }
 
   /**
+   * Returns the index of the new slot.
+   */
+  uint32
+  addMaterialSlot(ModelMaterialSlot slot);
+
+  NODISCARD FORCEINLINE const Vector<ModelMaterialSlot>&
+  getMaterialSlots() const { return m_materialSlots; }
+
+  /**
    * Update transforms for all nodes that need updating
    */
   void
@@ -263,6 +285,8 @@ class CH_CORE_EXPORT Model
 
   // Map to track which nodes contain each mesh
   UnorderedMap<SPtr<Mesh>, Vector<ModelNode*>> m_meshToNodesMap;
+
+  Vector<ModelMaterialSlot> m_materialSlots;
 
   // Global transform for the entire model
   Matrix4 m_globalTransform;
