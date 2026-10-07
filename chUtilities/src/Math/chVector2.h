@@ -3,429 +3,285 @@
  * @file chVector2.h
  * @author AccelMR <accel.mr@gmail.com>
  * @date 2021/09/16
- * Vector for 2D spaces.
- *
- * A vector for 2D spaces composed by (X,Y) with floating points.
- *
- * @bug No bug known.
+ * @brief Vector with two float components.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
 /*
  * Includes
  */
- /************************************************************************/
+/************************************************************************/
 #include "chPrerequisitesUtilities.h"
+
+#include <type_traits>
 
 #include "chMath.h"
 
 namespace chEngineSDK {
-
 /**
- * Vector for 2D spaces.
+ * Holds a point or a direction in 2D space.
  *
- * A vector for 2D spaces composed by (X,Y) with floating points.
- *
- * Sample usage:
- *   Vector2 vector2(0.0, 0.0, 1.0);
- *   float Magnitude = vector2.magnitude();
- *
+ * No vector class includes another, so the math headers stay independent; convert
+ * between them by components. The class is not exported, so the constants are inline
+ * constexpr and other modules fold them at compile time.
  */
 class Vector2
 {
-public:
-  /*
-   * Default constructor
+ public:
+  /**
+   * Leaves the values uninitialized, so a vector filled right after is written once.
+   * Use Vector2::ZERO or Vector2{} when it must start at zero.
    */
-  FORCEINLINE Vector2() = default;
+  Vector2() = default;
+
+  FORCEINLINE constexpr
+  Vector2(float inX, float inY) noexcept;
+
+  FORCEINLINE explicit constexpr
+  Vector2(const float values[2]) noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  dot(const Vector2& other) const noexcept;
 
   /**
-   * Constructor using initial given values.
-   *
-   * @param _x
-   *   X value
-   *
-   * @param _y
-   *   Y value
+   * Z of the 3D cross product: positive when other is counter-clockwise from this vector
+   * (with X right and Y up).
    */
-  FORCEINLINE Vector2(float _x, float _y);
+  NODISCARD FORCEINLINE constexpr float
+  cross(const Vector2& other) const noexcept;
+
+  NODISCARD FORCEINLINE float
+  magnitude() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  sqrMagnitude() const noexcept;
 
   /**
-   * Constructor using initial given values as an C++ Array.
-   *
-   * @param vector2Array
-   *   C++ array to be converted to this Vector2 type
-   */
-  FORCEINLINE explicit Vector2(const float vector2Array[2]);
-
-  //FORCEINLINE explicit Vector2(const float* v2Arr);
-
-  /**
-   * Copy Constructor.
-   */
-  FORCEINLINE Vector2(const Vector2& toCopy);
-
-  /**
-   *
-   **/
-  Vector2(const Vector3& vector3);
-
-  /*
-   * Default destructor
-   */
-  ~Vector2() = default;
-
-  /**
-   * Computes the cross product from this to another vector.
-   *
-   * @param vector2
-   *   Vector to compute cross product from this
-   *
-   * @return
-   *  Float Scalar Z of the result vector2.
-   */
-  FORCEINLINE float
-  cross(const Vector2& vector2) const;
-
-  /**
-   * Computes the dot product from this to another vector.
-   *
-   * @param vector2
-   *   Vector to compute product from this.
-   *
-   * @return
-   *  Float value of dot product.
-   */
-  FORCEINLINE float
-  dot(const Vector2& vector2) const;
-
-  /**
-   * Projection of one vector over another.
-   *
-   * @param vector2
-   *  Vector to project this
-   *
-   * @return
-   *  Float Between 0.0f - 1.0f. Projection A over B.
-   */
-  FORCEINLINE  Vector2
-  projection(const Vector2& vector2) const;
-
-  /**
-   * Magnitude of this vector.
-   *
-   * @return
-   *  Float the magnitude of this vector.
-   */
-  FORCEINLINE float
-  magnitude() const;
-
-  /**
-   * Fast magnitude that jumps the square root part.
-   * Note: if you want a precise magnitude then prefer magnitude.
-   *
-   * @return
-   *  Float magnitude before square root.
-   */
-  FORCEINLINE float
-  sqrMagnitude() const;
-
-  /**
-   * Normalize this vector.
-   */
-  FORCEINLINE void
-  normalize(float tolerance = Math::SMALL_NUMBER);
-
-  /**
-   * Creates a new normalized vector from this.
-   *
-   * @return
-   *  Vector2 new Vector created from normalization
-   */
-  FORCEINLINE Vector2
-  getNormalized(float tolerance = Math::SMALL_NUMBER) const;
-
-
-  /************************************************************************/
-  /*
-   * Operator overloads.
-   */
-   /************************************************************************/
-
-   /**
-    * Compares this vector against a given one.
-    *
-    * @param vector2
-    *  Vector to compare against this.
-    *
-    * @return
-    *  True if both vectors are equal.
-    */
-  FORCEINLINE bool
-  operator==(const Vector2& vector2) const;
-
-  /**
-   * Compares this vector against a given one.
-   *
-   * @param vector2
-   *   Vector to compare against this.
-   *
-   * @return
-   *   true if both vectors are equal.
+   * Makes the length 1. Returns false and leaves the vector as it was when its squared
+   * length is not above tolerance.
    */
   FORCEINLINE bool
-  operator!=(const Vector2& vector2) const;
+  normalize(float tolerance = Math::SMALL_NUMBER) noexcept;
 
   /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *   Scalar to be multiplied.
-   *
-   * @return
-   *    Vector2 new Vector2 created from this operation.
+   * Returns the vector with length 1, or ZERO when its squared length is not above
+   * tolerance.
    */
-  FORCEINLINE Vector2
-  operator*(float scalar) const;
+  NODISCARD FORCEINLINE Vector2
+  getNormalized(float tolerance = Math::SMALL_NUMBER) const noexcept;
 
   /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *   Scalar to be multiplied.
-   *
-   * @return
-   *   THIS reference. Note that this function modifies this Vector.
+   * Projects this vector onto other, which must not be zero.
    */
-  FORCEINLINE Vector2&
-  operator*=(float scalar);
+  NODISCARD FORCEINLINE constexpr Vector2
+  projection(const Vector2& other) const noexcept;
 
-  /**
-   *   Adds two vectors and returns a new one created.
-   *
-   * @param vector3
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  The new vector created from adding other two vector.
-   **/
-  FORCEINLINE Vector2
-  operator+(const Vector2& vector3) const;
+  NODISCARD FORCEINLINE constexpr bool
+  nearEqual(const Vector2& other, float tolerance = Math::SMALL_NUMBER) const noexcept;
 
-  /**
-   *   Adds two vectors modifying this vector.
-   *
-   * @param vector3
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  This reference modified.
-   **/
-  FORCEINLINE Vector2&
-  operator+=(const Vector2& vector3);
+  NODISCARD FORCEINLINE constexpr bool
+  operator==(const Vector2& other) const noexcept;
 
-  /**
-   *   Subtracts this vector against other and returns a new one.
-   *
-   * @param vector3
-   *  The other vector to be subtracted.
-   *
-   * @return Vector3
-   *  The new created vector.
-   **/
-  FORCEINLINE Vector2
-  operator-(const Vector2& vector3) const;
+  NODISCARD FORCEINLINE constexpr Vector2
+  operator+(const Vector2& other) const noexcept;
 
-  /**
-   *   Subtracts this vector against other modifying this.
-   *
-   * @param vector3
-   *  The other vector to be subtracted.
-   *
-   * @return Vector3
-   *  This vector reference modified.
-   **/
-  FORCEINLINE Vector2&
-  operator-=(const Vector2& vector3);
+  NODISCARD FORCEINLINE constexpr Vector2
+  operator-(const Vector2& other) const noexcept;
 
-  /**
-   *   Modifies sign of this vector.
-   *
-   * @return
-   *  A new vector3 created from this vector.
-   **/
-  FORCEINLINE Vector2
-  operator-() const;
+  NODISCARD FORCEINLINE constexpr Vector2
+  operator-() const noexcept;
 
-  FORCEINLINE Vector2&
-  operator=(const float* v2Arr);
+  NODISCARD FORCEINLINE constexpr Vector2
+  operator*(float scalar) const noexcept;
 
-  FORCEINLINE Vector2&
-  operator=(const Vector2& vector2);
+  FORCEINLINE constexpr Vector2&
+  operator+=(const Vector2& other) noexcept;
 
-  /**
-   *   Returns the xy as Array
-   *
-   * @return
-   *  A new Array 2 x,y
-   **/
-  FORCEINLINE Array<float, 2>
-  xy() const { return {x, y};}
+  FORCEINLINE constexpr Vector2&
+  operator-=(const Vector2& other) noexcept;
 
-public:
-  /************************************************************************/
-  /*
-   * Static Pre-constructed Vectors.
-   */
-   /************************************************************************/
+  FORCEINLINE constexpr Vector2&
+  operator*=(float scalar) noexcept;
 
-   /**
-    * Global 2D zero vector constant (0.0f, 0.0f).
-    */
-  static CH_UTILITY_EXPORT const Vector2 ZERO;
-
-  /**
-   * Global 2D Unit vector constant (1.0f, 1.0f).
-   */
-  static CH_UTILITY_EXPORT const Vector2 UNIT;
-
-  /**
-   * Global 2D Unit x vector constant (1.0f, 0.0f).
-   */
-  static CH_UTILITY_EXPORT const Vector2 UNIT_X;
-
-  /**
-   * Global 2D Unit y vector constant (0.0f, 1.0f).
-   */
-  static CH_UTILITY_EXPORT const Vector2 UNIT_Y;
-
-public:
+ public:
+  static const Vector2 ZERO;
+  static const Vector2 UNIT;
+  static const Vector2 UNIT_X;
+  static const Vector2 UNIT_Y;
 
   float x;
   float y;
 };
 
+static_assert(std::is_trivially_copyable_v<Vector2>);
+static_assert(sizeof(Vector2) == 8);
+
 /************************************************************************/
 /*
- * Implementations.
+ * Implementation
  */
- /************************************************************************/
- /*
+/************************************************************************/
+
+/*
  */
-FORCEINLINE
-Vector2::Vector2(float _x, float _y) : x(_x), y(_y)
+FORCEINLINE constexpr
+Vector2::Vector2(float inX, float inY) noexcept
+ : x(inX),
+   y(inY)
 {}
 
 /*
-*/
-FORCEINLINE
-Vector2::Vector2(const float vector2Array[2]) : x(vector2Array[0]), y(vector2Array[1])
+ */
+FORCEINLINE constexpr
+Vector2::Vector2(const float values[2]) noexcept
+ : x(values[0]),
+   y(values[1])
 {}
 
-/*
-*/
-FORCEINLINE
-Vector2::Vector2(const Vector2& copyVector) : x(copyVector.x), y(copyVector.y)
-{}
+inline constexpr Vector2 Vector2::ZERO{0.0f, 0.0f};
+inline constexpr Vector2 Vector2::UNIT{1.0f, 1.0f};
+inline constexpr Vector2 Vector2::UNIT_X{1.0f, 0.0f};
+inline constexpr Vector2 Vector2::UNIT_Y{0.0f, 1.0f};
 
 /*
-*/
-FORCEINLINE float
-Vector2::cross(const Vector2& vector2) const
+ */
+FORCEINLINE constexpr float
+Vector2::dot(const Vector2& other) const noexcept
 {
-  return x * vector2.y - y * vector2.x;
+  return x * other.x + y * other.y;
 }
 
 /*
-*/
-FORCEINLINE float
-Vector2::dot(const Vector2& vector2) const
+ */
+FORCEINLINE constexpr float
+Vector2::cross(const Vector2& other) const noexcept
 {
-  return x * vector2.x + y * vector2.y;
+  return x * other.y - y * other.x;
 }
 
 /*
-*/
-FORCEINLINE Vector2
-Vector2::projection(const Vector2& vector2) const
-{
-  const float dotP = dot(vector2);
-  return vector2 * (dotP / vector2.dot(vector2));
-}
-
-/*
-*/
+ */
 FORCEINLINE float
-Vector2::magnitude() const
+Vector2::magnitude() const noexcept
 {
   return Math::sqrt(sqrMagnitude());
 }
 
 /*
-*/
-FORCEINLINE float
-Vector2::sqrMagnitude() const
+ */
+FORCEINLINE constexpr float
+Vector2::sqrMagnitude() const noexcept
 {
-  return x * x + y * y;
+  return dot(*this);
 }
 
 /*
-*/
-FORCEINLINE void
-Vector2::normalize(float tolerance)
+ */
+FORCEINLINE bool
+Vector2::normalize(float tolerance) noexcept
 {
-  const float SquareSum = x * x + y * y;
-  if (SquareSum > tolerance) {
-    const float Scale = Math::invSqrt(SquareSum);
-    x *= Scale;
-    y *= Scale;
-    return;
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return false;
   }
-  x = 0.0f;
-  y = 0.0f;
+  *this *= Math::invSqrt(squareLength);
+  return true;
 }
 
 /*
-*/
+ */
 FORCEINLINE Vector2
-Vector2::getNormalized(float tolerance) const
+Vector2::getNormalized(float tolerance) const noexcept
 {
-  Vector2 Res = *this;
-  Res.normalize(tolerance);
-  return Res;
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return ZERO;
+  }
+  return *this * Math::invSqrt(squareLength);
 }
 
 /*
-*/
-FORCEINLINE bool
-Vector2::operator==(const Vector2& vector2) const
+ */
+FORCEINLINE constexpr Vector2
+Vector2::projection(const Vector2& other) const noexcept
 {
-  return x == vector2.x && y == vector2.y;
+  return other * (dot(other) / other.dot(other));
 }
 
 /*
-*/
-FORCEINLINE bool
-Vector2::operator!=(const Vector2& vector2) const
+ */
+FORCEINLINE constexpr bool
+Vector2::nearEqual(const Vector2& other, float tolerance) const noexcept
 {
-  return x != vector2.x || y != vector2.y;
+  return Math::abs(other.x - x) <= tolerance && Math::abs(other.y - y) <= tolerance;
 }
 
+/*
+ */
+FORCEINLINE constexpr bool
+Vector2::operator==(const Vector2& other) const noexcept
+{
+  return x == other.x && y == other.y;
+}
 
 /*
-*/
-FORCEINLINE Vector2
-Vector2::operator*(float scalar) const
+ */
+FORCEINLINE constexpr Vector2
+Vector2::operator+(const Vector2& other) const noexcept
+{
+  return {x + other.x, y + other.y};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Vector2::operator-(const Vector2& other) const noexcept
+{
+  return {x - other.x, y - other.y};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Vector2::operator-() const noexcept
+{
+  return {-x, -y};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2
+Vector2::operator*(float scalar) const noexcept
 {
   return {x * scalar, y * scalar};
 }
 
 /*
-*/
-FORCEINLINE Vector2&
-Vector2::operator*=(float scalar)
+ */
+FORCEINLINE constexpr Vector2&
+Vector2::operator+=(const Vector2& other) noexcept
+{
+  x += other.x;
+  y += other.y;
+  return *this;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2&
+Vector2::operator-=(const Vector2& other) noexcept
+{
+  x -= other.x;
+  y -= other.y;
+  return *this;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector2&
+Vector2::operator*=(float scalar) noexcept
 {
   x *= scalar;
   y *= scalar;
@@ -433,66 +289,10 @@ Vector2::operator*=(float scalar)
 }
 
 /*
-*/
-FORCEINLINE Vector2
-Vector2::operator+(const Vector2& vector3) const
+ */
+NODISCARD FORCEINLINE constexpr Vector2
+operator*(float scalar, const Vector2& vector) noexcept
 {
-  return { x + vector3.x, y + vector3.y };
+  return vector * scalar;
 }
-
-/*
-*/
-FORCEINLINE Vector2&
-Vector2::operator+=(const Vector2& vector3)
-{
-  x += vector3.x;
-  y += vector3.y;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector2
-Vector2::operator-(const Vector2& vector3) const
-{
-  return {x - vector3.x, y - vector3.y};
-}
-
-/*
-*/
-FORCEINLINE Vector2&
-Vector2::operator-=(const Vector2& vector3)
-{
-  x -= vector3.x;
-  y -= vector3.y;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector2
-Vector2::operator-() const
-{
-  return {-x, -y};
-}
-
-/*
-*/
-FORCEINLINE Vector2&
-Vector2::operator=(const float* v2Arr) {
-  x = v2Arr[0];
-  y = v2Arr[1];
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector2&
-Vector2::operator=(const Vector2& vector2) {
-  x = vector2.x;
-  y = vector2.y;
-  return *this;
-}
-
-
-}
+} // namespace chEngineSDK

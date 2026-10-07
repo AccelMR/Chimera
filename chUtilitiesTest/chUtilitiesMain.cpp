@@ -49,6 +49,15 @@
 
 using namespace chEngineSDK;
 
+namespace {
+// Vectors do not convert into each other, and the matrix transforms return a Vector4.
+Vector3
+xyzOf(const Vector4& vector)
+{
+  return {vector.x, vector.y, vector.z};
+}
+} // namespace
+
 bool isNear(float a, float b, float epsilon = 0.0001f) {
   return (std::abs(a - b) <= epsilon);
 }
@@ -540,321 +549,181 @@ TEST_CASE("chUtilities - MathHyperbolic") {
  */
 /************************************************************************/
 TEST_CASE("chUtilities - Vector2") {
-  REQUIRE(sizeof(Vector2) == 8);
+  // Vector2{} value-initializes to zero; a plain declaration stays uninitialized on purpose.
+  const Vector2 zeroed{};
+  REQUIRE(zeroed == Vector2::ZERO);
 
-  Vector2 VectorDefault;
-  const Vector2 VectorZero = Vector2::ZERO;
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE(VectorDefault == VectorZero);
-  #else
-    REQUIRE(VectorDefault != VectorZero);
-  #endif
+  // The constants are constexpr.
+  static_assert(Vector2::UNIT_X.dot(Vector2::UNIT_Y) == 0.0f);
+  static_assert(Vector2::UNIT_X + Vector2::UNIT_Y == Vector2::UNIT);
 
-  REQUIRE(VectorZero.x == Approx(0.0f));
-  REQUIRE(VectorZero.y == Approx(0.0f));
+  const float values[2] = {1.0f, 20.0f};
+  REQUIRE(Vector2(values) == Vector2(1.0f, 20.0f));
 
-  Array<float, 2> vec2Z = {0.0f, 0.0f};
-  REQUIRE(VectorZero.xy() == vec2Z);
+  REQUIRE(Vector2::UNIT_X.cross(Vector2::UNIT_Y) == 1.0f);
+  REQUIRE(Vector2::UNIT_Y.cross(Vector2::UNIT_X) == -1.0f);
+  REQUIRE(Vector2(2.0f, 3.0f).dot(Vector2(4.0f, 5.0f)) == 23.0f);
 
-  #if USING(CH_DEBUG_MODE)
-  REQUIRE(VectorZero.xy() == VectorDefault.xy());
-  #else
-  REQUIRE_FALSE(VectorZero.xy() == VectorDefault.xy());
-  #endif
+  const Vector2 threeFour(3.0f, 4.0f);
+  REQUIRE(threeFour.sqrMagnitude() == 25.0f);
+  REQUIRE(threeFour.magnitude() == 5.0f);
 
-  REQUIRE(VectorZero.xy()[0] == VectorZero.x);
-  REQUIRE(VectorZero.xy()[1] == VectorZero.y);
+  Vector2 toNormalize(15.0f, 0.0f);
+  const Vector2 normalized = toNormalize.getNormalized();
+  REQUIRE(toNormalize.normalize());
+  REQUIRE(toNormalize == normalized);
+  REQUIRE(toNormalize == Vector2::UNIT_X);
+  REQUIRE(Vector2(1.0f, 1.0f).getNormalized().magnitude() == Approx(1.0f));
 
-  Vector2 VectorComponents(15.0f, 10.0f);
-  VectorComponents.x = 19.0f;
-  VectorComponents.y = 19.5f;
+  // Squared length 1e-8 is under the default tolerance: normalize refuses and leaves the
+  // vector as it was, getNormalized gives ZERO.
+  Vector2 tooShort(1.0e-4f, 0.0f);
+  REQUIRE_FALSE(tooShort.normalize());
+  REQUIRE(tooShort == Vector2(1.0e-4f, 0.0f));
+  REQUIRE(tooShort.getNormalized() == Vector2::ZERO);
+  REQUIRE(Vector2::ZERO.getNormalized() == Vector2::ZERO);
 
-  REQUIRE(VectorComponents.x == Approx(19.0f));
-  REQUIRE(VectorComponents.y == Approx(19.5f));
+  const Vector2 projected = Vector2(6.0f, 5.0f).projection(Vector2(10.0f, 3.0f));
+  REQUIRE(projected.nearEqual(Vector2(6.88073397f, 2.06422019f)));
 
-  float v2[2] = {1.3f, 2.7f};
-  VectorComponents = v2;
-  REQUIRE(VectorComponents.x == Approx(1.3f));
-  REQUIRE(VectorComponents.y == Approx(2.7f));
+  REQUIRE(Vector2(1.0f, 2.0f).nearEqual(Vector2(1.0f + 1.0e-7f, 2.0f)));
+  REQUIRE_FALSE(Vector2(1.0f, 2.0f).nearEqual(Vector2(1.001f, 2.0f)));
 
-  const Vector2 VectorFromFloat2(1.0f, 1.0f);
-  const Vector2 VectorUnity = Vector2::UNIT;
-  REQUIRE(VectorFromFloat2 == VectorUnity);
+  REQUIRE(Vector2(1.0f, 2.0f) + Vector2(3.0f, 4.0f) == Vector2(4.0f, 6.0f));
+  REQUIRE(Vector2(1.0f, 2.0f) - Vector2(3.0f, 4.0f) == Vector2(-2.0f, -2.0f));
+  REQUIRE(-Vector2(1.0f, -2.0f) == Vector2(-1.0f, 2.0f));
+  REQUIRE(Vector2(1.0f, 2.0f) * 3.0f == Vector2(3.0f, 6.0f));
+  REQUIRE(3.0f * Vector2(1.0f, 2.0f) == Vector2(3.0f, 6.0f));
 
-  const Vector2 VectorFromFloat1X(1.0f, 0.0f);
-  const Vector2 VectorUnity_X = Vector2::UNIT_X;
-  REQUIRE(VectorFromFloat1X == VectorUnity_X);
-
-  const Vector2 VectorFromFloat1Y(0.0f, 1.0f);
-  const Vector2 VectorUnity_Y = Vector2::UNIT_Y;
-  REQUIRE(VectorFromFloat1Y == VectorUnity_Y);
-
-  float ScalarCross = VectorFromFloat1X.cross(VectorUnity);
-  REQUIRE(ScalarCross == Approx(1.0f));
-
-  const Vector2 NegativeY = Vector2(0.0f, -1.0f);
-
-  float ScalatDot = VectorFromFloat1Y.dot(VectorFromFloat1X);
-  REQUIRE(ScalatDot == Approx(0.0f));
-
-  Vector2 VectorToNormalize(15.0f, 0.0f);
-  Vector2 VectorNormalized = VectorToNormalize.getNormalized();
-  float Magnitude = VectorToNormalize.magnitude();
-  float SqrtMagnitude = VectorToNormalize.sqrMagnitude();
-  VectorToNormalize.normalize();
-  REQUIRE(VectorToNormalize == VectorNormalized);
-  REQUIRE(VectorToNormalize.magnitude() == Approx(1.0f));
-  REQUIRE(Magnitude == Approx(15.0f));
-  REQUIRE(SqrtMagnitude == Approx(225.0f));
-
-  Vector2 VectorToProjectA(6.0f, 5.0f);
-  Vector2 VectorToProjectB(10.0f, 3.0f);
-  Vector2 VectorToProjectC(5.0f, 1.0f);
-  Vector2 ProjectionAB = VectorToProjectA.projection(VectorToProjectB);
-  REQUIRE(ProjectionAB == Vector2(6.88073397f, 2.06422019f));
-
-  const Vector2 VectorMultScalar = Vector2::ZERO * 5;
-  Vector2 VectorMultScalarThis = Vector2::ZERO;
-  VectorMultScalarThis *= 5.0f;
-
-  REQUIRE(VectorMultScalarThis == VectorMultScalar);
-
-  float ArrayToV2[2] = {1.0f, 20.0f};
-  Vector2 V2FromArrayConstructor(ArrayToV2);
-  Vector2 V2ToCheckArray(ArrayToV2[0], ArrayToV2[1]);
-  REQUIRE(V2FromArrayConstructor == V2ToCheckArray);
-
-  Vector2 V2Add(1.0f, 2.0f);
-  const Vector2 V2ToAdd(1.0f, 2.0f);
-  const Vector2 AddedVector = V2Add + V2ToAdd;
-  V2Add += V2ToAdd;
-  REQUIRE(V2Add == AddedVector);
-
-  Vector2 V2Subtract(1.0f, 2.0f);
-  const Vector2 V2ToSubtract(1.0f, 2.0f);
-  const Vector2 SubtractedVector = V2Subtract - V2ToSubtract;
-  V2Subtract -= V2ToSubtract;
-  REQUIRE(V2Subtract == SubtractedVector);
+  Vector2 compound(1.0f, 2.0f);
+  compound += Vector2(1.0f, 1.0f);
+  REQUIRE(compound == Vector2(2.0f, 3.0f));
+  compound -= Vector2(2.0f, 2.0f);
+  REQUIRE(compound == Vector2(0.0f, 1.0f));
+  compound *= 4.0f;
+  REQUIRE(compound == Vector2(0.0f, 4.0f));
 }
 
 TEST_CASE("chUtilities - Vector3") {
-  REQUIRE(sizeof(Vector3) == 12);
+  const Vector3 zeroed{};
+  REQUIRE(zeroed == Vector3::ZERO);
 
-  const Vector2 vector2 = Vector2::ZERO;
-  Vector3 V3FromV2(vector2);
-  REQUIRE(V3FromV2 == Vector3::ZERO);
+  static_assert(Vector3::FORWARD.cross(Vector3::RIGHT) == Vector3::UP);
+  static_assert((Vector3::UP * 2.0f).z == 2.0f);
 
-  Vector3 VectorDefault;
-  const Vector3 VectorZero = Vector3::ZERO;
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE(VectorDefault == VectorZero);
-  #else
-    REQUIRE(VectorDefault != VectorZero);
-  #endif
+  // World axes: X forward, Y right, Z up, left-handed.
+  REQUIRE(Vector3::FORWARD == Vector3(1.0f, 0.0f, 0.0f));
+  REQUIRE(Vector3::RIGHT == Vector3(0.0f, 1.0f, 0.0f));
+  REQUIRE(Vector3::UP == Vector3(0.0f, 0.0f, 1.0f));
+  REQUIRE(Vector3::BACKWARD == -Vector3::FORWARD);
+  REQUIRE(Vector3::LEFT == -Vector3::RIGHT);
+  REQUIRE(Vector3::DOWN == -Vector3::UP);
+  REQUIRE(Vector3::UNIT == Vector3(1.0f, 1.0f, 1.0f));
+  REQUIRE(Vector3::RIGHT.cross(Vector3::UP) == Vector3::FORWARD);
+  REQUIRE(Vector3::UP.cross(Vector3::FORWARD) == Vector3::RIGHT);
 
-  REQUIRE(VectorZero.x == Approx(0.0f));
-  REQUIRE(VectorZero.y == Approx(0.0f));
-  REQUIRE(VectorZero.z == Approx(0.0f));
+  const float values[3] = {1.0f, 20.0f, 3.0f};
+  REQUIRE(Vector3(values) == Vector3(1.0f, 20.0f, 3.0f));
 
-  Array<float, 3> vec3Z = {0.0f, 0.0f, 0.0f};
-  Array<float, 2> vec2Z = {0.0f, 0.0f};
-  REQUIRE(VectorZero.xyz() == vec3Z);
-  REQUIRE(VectorZero.xy() == vec2Z);
+  REQUIRE(Vector3(1.0f, 2.0f, 3.0f).dot(Vector3(4.0f, 5.0f, 6.0f)) == 32.0f);
+  REQUIRE(Vector3(-1.0f, 2.0f, -3.0f).getAbs() == Vector3(1.0f, 2.0f, 3.0f));
 
-  REQUIRE(VectorZero.xyz()[0] == Approx(VectorZero.x));
-  REQUIRE(VectorZero.xy()[0] == Approx(VectorZero.x));
-  REQUIRE(VectorZero.xyz()[1] == Approx(VectorZero.y));
-  REQUIRE(VectorZero.xy()[1] == Approx(VectorZero.y));
-  REQUIRE(VectorZero.xyz()[2] == Approx(VectorZero.z));
+  const Vector3 twoThreeSix(2.0f, 3.0f, 6.0f);
+  REQUIRE(twoThreeSix.sqrMagnitude() == 49.0f);
+  REQUIRE(twoThreeSix.magnitude() == 7.0f);
+  REQUIRE(Vector3::ZERO.sqrDistance(twoThreeSix) == 49.0f);
+  REQUIRE(twoThreeSix.distance(Vector3::ZERO) == 7.0f);
 
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE(VectorZero.xy() == VectorDefault.xy());
-  #else
-    REQUIRE(VectorZero.xy() != VectorDefault.xy());
-  #endif
+  Vector3 toNormalize(15.0f, 0.0f, 0.0f);
+  const Vector3 normalized = toNormalize.getNormalized();
+  REQUIRE(toNormalize.normalize());
+  REQUIRE(toNormalize == normalized);
+  REQUIRE(toNormalize == Vector3::FORWARD);
+  REQUIRE(twoThreeSix.getNormalized().nearEqual(Vector3(2.0f, 3.0f, 6.0f) / 7.0f));
 
-  REQUIRE(VectorZero.xy()[0] == VectorZero.x);
-  REQUIRE(VectorZero.xy()[1] == VectorZero.y);
+  Vector3 tooShort(1.0e-4f, 0.0f, 0.0f);
+  REQUIRE_FALSE(tooShort.normalize());
+  REQUIRE(tooShort == Vector3(1.0e-4f, 0.0f, 0.0f));
+  REQUIRE(tooShort.getNormalized() == Vector3::ZERO);
+  REQUIRE(Vector3::ZERO.getNormalized() == Vector3::ZERO);
 
-  REQUIRE(VectorZero.xyz()[0] == VectorZero.x);
-  REQUIRE(VectorZero.xyz()[1] == VectorZero.y);
-  REQUIRE(VectorZero.xyz()[2] == VectorZero.z);
+  const Vector3 projected =
+      Vector3(6.0f, 5.0f, 0.0f).projection(Vector3(10.0f, 3.0f, 0.0f));
+  REQUIRE(projected.nearEqual(Vector3(6.88073394f, 2.06422018f, 0.0f)));
 
-  Vector3 VectorComponents(15.0f, 10.0f, 22.0f);
-  VectorComponents.x = 19.0f;
-  VectorComponents.y = 19.5f;
-  VectorComponents.xyz()[2] = 22.0f;
+  REQUIRE(Vector3::UNIT.nearEqual(Vector3(1.0f, 1.0f + 1.0e-7f, 1.0f)));
+  REQUIRE_FALSE(Vector3::UNIT.nearEqual(Vector3(1.0f, 1.0f, 1.001f)));
 
-  REQUIRE(VectorComponents.x == Approx(19.0f));
-  REQUIRE(VectorComponents.y == Approx(19.5f));
-  REQUIRE(VectorComponents.xyz()[2] == Approx(22.0f));
+  REQUIRE(Vector3(1.0f, 2.0f, 3.0f) + Vector3::UNIT == Vector3(2.0f, 3.0f, 4.0f));
+  REQUIRE(Vector3(1.0f, 2.0f, 3.0f) - Vector3::UNIT == Vector3(0.0f, 1.0f, 2.0f));
+  REQUIRE(Vector3(1.0f, 2.0f, 3.0f) * 2.0f == Vector3(2.0f, 4.0f, 6.0f));
+  REQUIRE(2.0f * Vector3(1.0f, 2.0f, 3.0f) == Vector3(2.0f, 4.0f, 6.0f));
+  REQUIRE(Vector3(2.0f, 4.0f, 6.0f) / 2.0f == Vector3(1.0f, 2.0f, 3.0f));
 
-  const Vector3 VectorFromFloat2(1.0f, 1.0f, 1.0f);
-  const Vector3 VectorUnity = Vector3::UNIT;
-  REQUIRE(VectorFromFloat2 == VectorUnity);
-
-  const Vector3 VectorFromFloat1X(0.0f, 1.0f, 0.0f);
-  const Vector3 VectorUnity_X = Vector3::RIGHT;
-  REQUIRE(VectorFromFloat1X == VectorUnity_X);
-
-  const Vector3 VectorFromFloat1Y(0.0f, 0.0f, 1.0f);
-  const Vector3 VectorUnity_Y = Vector3::UP;
-  REQUIRE(VectorFromFloat1Y == VectorUnity_Y);
-
-  const Vector3 VectorFromFloat1Z(1.0f, 0.0f, 0.0f);
-  const Vector3 VectorUnity_Z = Vector3::FORWARD;
-  REQUIRE(VectorFromFloat1Z == VectorUnity_Z);
-
-  Vector3 Vector3Crossed = VectorFromFloat1X.cross(VectorUnity_Y);
-  REQUIRE(Vector3Crossed == Vector3::FORWARD);
-
-  float ScalatDot = VectorFromFloat1Y.dot(VectorFromFloat1X);
-  REQUIRE(ScalatDot == Approx(0.0f));
-
-  Vector3 VectorToNormalize(15.0f, 0.0f, 0.0f);
-  Vector3 VectorNormalized = VectorToNormalize.getNormalized();
-  float Magnitude = VectorToNormalize.magnitude();
-  float SqrtMagnitude = VectorToNormalize.sqrMagnitude();
-  VectorToNormalize.normalize();
-  REQUIRE(VectorToNormalize == VectorNormalized);
-  REQUIRE(VectorToNormalize.magnitude() == Approx(1.0f));
-  REQUIRE(Magnitude == Approx(15.0f));
-  REQUIRE(SqrtMagnitude == Approx(225.0f));
-
-  Vector3 VectorToProjectA(6.0f, 5.0f, 0.0f);
-  Vector3 VectorToProjectB(10.0f, 3.0f, 0.0f);
-  Vector3 VectorToProjectC(5.0f, 1.0f, 0.0f);
-  Vector3 ProjectionAB = VectorToProjectA.projection(VectorToProjectB);
-  REQUIRE(ProjectionAB == Vector3(6.880733944954128f, 2.064220183486239f, 0.0f));
-
-  const Vector3 VectorMultScalar = Vector3::UP * 5;
-  Vector3 VectorMultScalarThis = Vector3::UP;
-  VectorMultScalarThis *= 5.0f;
-
-  REQUIRE(VectorMultScalarThis == VectorMultScalar);
-
-  float ArrayToV3[3] = {1.0f, 20.0f, 0.0f};
-  Vector3 V2FromArrayConstructor(ArrayToV3);
-  Vector3 V2ToCheckArray(ArrayToV3[0], ArrayToV3[1], ArrayToV3[2]);
-  REQUIRE(V2FromArrayConstructor == V2ToCheckArray);
-
-  Vector3 V3Add(1.0f, 2.0f, 3.0f);
-  const Vector3 V3ToAdd(1.0f, 2.0f, 3.0f);
-  const Vector3 AddedVector = V3Add + V3ToAdd;
-  V3Add += V3ToAdd;
-  REQUIRE(V3Add == AddedVector);
-
-  Vector3 V3Subtract(1.0f, 2.0f, 3.0f);
-  const Vector3 V3ToSubtract(1.0f, 2.0f, 3.0f);
-  const Vector3 SubtractedVector = V3Subtract - V3ToSubtract;
-  V3Subtract -= V3ToSubtract;
-  REQUIRE(V3Subtract == SubtractedVector);
+  Vector3 compound(1.0f, 2.0f, 3.0f);
+  compound += Vector3::UNIT;
+  REQUIRE(compound == Vector3(2.0f, 3.0f, 4.0f));
+  compound -= Vector3(2.0f, 2.0f, 2.0f);
+  REQUIRE(compound == Vector3(0.0f, 1.0f, 2.0f));
+  compound *= 3.0f;
+  REQUIRE(compound == Vector3(0.0f, 3.0f, 6.0f));
 }
 
 TEST_CASE("chUtilities - Vector4") {
-  REQUIRE(sizeof(Vector4) == 16);
+  const Vector4 zeroed{};
+  REQUIRE(zeroed == Vector4::ZERO);
 
-  Vector4 VectorDefault;
-  const Vector4 VectorZero = Vector4::ZERO;
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE(VectorDefault != VectorZero);
-  #else
-    REQUIRE(VectorDefault != VectorZero);
-  #endif
+  static_assert(Vector4::UNIT.dot(Vector4::UNIT) == 4.0f);
 
-  REQUIRE(VectorZero.x == Approx(0.0f));
-  REQUIRE(VectorZero.y == Approx(0.0f));
-  REQUIRE(VectorZero.z == Approx(0.0f));
+  REQUIRE(Vector4::UNIT == Vector4(1.0f, 1.0f, 1.0f, 1.0f));
 
-  Array<float, 3> vec3Z = {0.0f, 0.0f, 0.0f};
-  Array<float, 2> vec2Z = {0.0f, 0.0f};
-  REQUIRE(VectorZero.xyz() == vec3Z);
-  REQUIRE(VectorZero.xy() == vec2Z);
+  const float values[4] = {1.0f, 20.0f, 0.0f, 1.0f};
+  REQUIRE(Vector4(values) == Vector4(1.0f, 20.0f, 0.0f, 1.0f));
 
-  REQUIRE(VectorZero.xyz()[0] == Approx(VectorZero.x));
-  REQUIRE(VectorZero.xy()[0] == Approx(VectorZero.x));
-  REQUIRE(VectorZero.xyz()[1] == Approx(VectorZero.y));
-  REQUIRE(VectorZero.xy()[1] == Approx(VectorZero.y));
-  REQUIRE(VectorZero.xyz()[2] == Approx(VectorZero.z));
+  REQUIRE(Vector4(1.0f, 2.0f, 3.0f, 4.0f).dot(Vector4(5.0f, 6.0f, 7.0f, 8.0f)) == 70.0f);
+  REQUIRE(Vector4(-1.0f, 2.0f, -3.0f, -4.0f).getAbs() == Vector4(1.0f, 2.0f, 3.0f, 4.0f));
 
-  #if USING(CH_DEBUG_MODE)
-    REQUIRE_FALSE(VectorZero.xy() == VectorDefault.xy());
-  #else
-    REQUIRE(VectorZero.xy() != VectorDefault.xy());
-  #endif
+  // Cross product of xyz; w ends up 0 whatever the inputs held.
+  const Vector4 crossed =
+      Vector4(0.0f, 1.0f, 0.0f, 1.0f).cross(Vector4(0.0f, 0.0f, 1.0f, 1.0f));
+  REQUIRE(crossed == Vector4(1.0f, 0.0f, 0.0f, 0.0f));
 
-  REQUIRE(VectorZero.xy()[0] == VectorZero.x);
-  REQUIRE(VectorZero.xy()[1] == VectorZero.y);
+  // Every operation uses all four components, w included.
+  const Vector4 allOnes = Vector4::UNIT;
+  REQUIRE(allOnes.sqrMagnitude() == 4.0f);
+  REQUIRE(allOnes.magnitude() == 2.0f);
+  REQUIRE(allOnes.getNormalized() == Vector4(0.5f, 0.5f, 0.5f, 0.5f));
 
-  REQUIRE(VectorZero.xyz()[0] == VectorZero.x);
-  REQUIRE(VectorZero.xyz()[1] == VectorZero.y);
-  REQUIRE(VectorZero.xyz()[2] == VectorZero.z);
+  Vector4 point(15.0f, 0.0f, 0.0f, 1.0f);
+  REQUIRE(point.sqrMagnitude() == 226.0f);
+  const Vector4 normalized = point.getNormalized();
+  REQUIRE(point.normalize());
+  REQUIRE(point == normalized);
+  REQUIRE(point.magnitude() == Approx(1.0f));
+  REQUIRE(point.w == Approx(1.0f / Math::sqrt(226.0f)));
 
-  Vector4 VectorComponents(15.0f, 10.0f, 22.0f);
-  VectorComponents.x = 19.0f;
-  VectorComponents.y = 19.5f;
-  VectorComponents.z = 22.0f;
+  Vector4 tooShort(1.0e-4f, 0.0f, 0.0f, 0.0f);
+  REQUIRE_FALSE(tooShort.normalize());
+  REQUIRE(tooShort == Vector4(1.0e-4f, 0.0f, 0.0f, 0.0f));
+  REQUIRE(tooShort.getNormalized() == Vector4::ZERO);
 
-  REQUIRE(VectorComponents.x == Approx(19.0f));
-  REQUIRE(VectorComponents.y == Approx(19.5f));
-  REQUIRE(VectorComponents.xyz()[2] == Approx(22.0f));
+  REQUIRE(Vector4::UNIT.nearEqual(Vector4(1.0f, 1.0f, 1.0f, 1.0f + 1.0e-7f)));
+  REQUIRE_FALSE(Vector4::UNIT.nearEqual(Vector4(1.0f, 1.0f, 1.0f, 1.001f)));
 
-  const Vector4 VectorFromFloat2(1.0f, 1.0f, 1.0f);
-  const Vector4 VectorUnity = Vector4::UNIT;
-  REQUIRE(VectorFromFloat2 == VectorUnity);
+  const Vector4 a(1.0f, 2.0f, 3.0f, 4.0f);
+  REQUIRE(a + Vector4::UNIT == Vector4(2.0f, 3.0f, 4.0f, 5.0f));
+  REQUIRE(a - Vector4::UNIT == Vector4(0.0f, 1.0f, 2.0f, 3.0f));
+  REQUIRE(-a == Vector4(-1.0f, -2.0f, -3.0f, -4.0f));
+  REQUIRE(a * 2.0f == Vector4(2.0f, 4.0f, 6.0f, 8.0f));
+  REQUIRE(2.0f * a == Vector4(2.0f, 4.0f, 6.0f, 8.0f));
 
-  const Vector4 VectorFromFloat1X(1.0f, 0.0f, 0.0f);
-  const Vector4 VectorUnity_X = Vector4(1.0f, 0.0f, 0.0f, 1.0f);
-  REQUIRE(VectorFromFloat1X == VectorUnity_X);
-
-  const Vector4 VectorFromFloat1Y(0.0f, 1.0f, 0.0f);
-  const Vector4 VectorUnity_Y = Vector4(0.0f, 1.0f, 0.0f, 1.0f);
-  REQUIRE(VectorFromFloat1Y == VectorUnity_Y);
-
-  const Vector4 VectorFromFloat1Z(0.0f, 0.0f, 1.0f);
-  const Vector4 VectorUnity_Z = Vector4(0.0f, 0.0f, 1.0f, 1.0f);
-  REQUIRE(VectorFromFloat1Z == VectorUnity_Z);
-
-  Vector4 Vector4Crossed = VectorFromFloat1X.cross(VectorUnity_Y);
-  Vector4 Totest(VectorUnity_Z);
-  Totest.w = 0.0f;
-  REQUIRE(Vector4Crossed == Totest);
-
-  float ScalatDot = VectorFromFloat1Y.dot(VectorFromFloat1X);
-  REQUIRE(ScalatDot == Approx(1.0f));
-
-  Vector4 VectorToNormalize(15.0f, 0.0f, 0.0f);
-  Vector4 VectorNormalized = VectorToNormalize.getNormalized();
-  float Magnitude = VectorToNormalize.magnitude();
-  float SqrtMagnitude = VectorToNormalize.sqrMagnitude();
-  VectorToNormalize.normalize();
-  REQUIRE(VectorToNormalize == VectorNormalized);
-  REQUIRE(VectorToNormalize.magnitude() == Approx(1.0f));
-  REQUIRE(Magnitude == Approx(15.0332963f));
-  REQUIRE(SqrtMagnitude == Approx(226.0f));
-
-  const Vector4 VectorMultScalar = Vector4(0.0f, 1.0f, 0.0f, 1.0f) * 5;
-  Vector4 VectorMultScalarThis = Vector4(0.0f, 1.0f, 0.0f, 1.0f);
-  VectorMultScalarThis *= 5.0f;
-
-  REQUIRE(VectorMultScalarThis == VectorMultScalar);
-
-  float ArrayToV4[4] = {1.0f, 20.0f, 0.0f, 1.0f};
-  Vector4 V2FromArrayConstructor(ArrayToV4);
-  Vector4 V2ToCheckArray(ArrayToV4[0], ArrayToV4[1], ArrayToV4[2], ArrayToV4[3]);
-  REQUIRE(V2FromArrayConstructor == V2ToCheckArray);
-
-  Vector4 V4Add(1.0f, 2.0f, 3.0f);
-  const Vector4 V4ToAdd(1.0f, 2.0f, 3.0f);
-  const Vector4 AddedVector = V4Add + V4ToAdd;
-  V4Add += V4ToAdd;
-  REQUIRE(V4Add == AddedVector);
-
-  Vector4 V4Subtract(1.0f, 2.0f, 3.0f);
-  const Vector4 V4ToSubtract(1.0f, 2.0f, 3.0f);
-  const Vector4 SubtractedVector = V4Subtract - V4ToSubtract;
-  V4Subtract -= V4ToSubtract;
-  REQUIRE(V4Subtract == SubtractedVector);
+  Vector4 compound = a;
+  compound += Vector4::UNIT;
+  REQUIRE(compound == Vector4(2.0f, 3.0f, 4.0f, 5.0f));
+  compound -= Vector4(2.0f, 2.0f, 2.0f, 2.0f);
+  REQUIRE(compound == Vector4(0.0f, 1.0f, 2.0f, 3.0f));
+  compound *= 2.0f;
+  REQUIRE(compound == Vector4(0.0f, 2.0f, 4.0f, 6.0f));
 }
 
 /************************************************************************/
@@ -908,7 +777,7 @@ bool
 isSameRotation(const Matrix4& matrix, const Quaternion& quaternion)
 {
   for (const Vector3& axis : {Vector3::FORWARD, Vector3::RIGHT, Vector3::UP}) {
-    if (!Vector3(matrix.transformVector(axis)).nearEqual(quaternion.rotateVector(axis), 1e-5f)) {
+    if (!xyzOf(matrix.transformVector(axis)).nearEqual(quaternion.rotateVector(axis), 1e-5f)) {
       return false;
     }
   }
@@ -1037,11 +906,11 @@ TEST_CASE("chUtilities - Matrix4") {
   // positive roll turns right down.
   const float c30 = Math::cos(Degree(30.0f));
   const float s30 = Math::sin(Degree(30.0f));
-  REQUIRE(Vector3(RotationMatrix(Rotator(30.0f, 0.0f, 0.0f)).transformVector(Vector3::FORWARD))
+  REQUIRE(xyzOf(RotationMatrix(Rotator(30.0f, 0.0f, 0.0f)).transformVector(Vector3::FORWARD))
               .nearEqual(Vector3(c30, 0.0f, s30), 1e-6f));
-  REQUIRE(Vector3(RotationMatrix(Rotator(0.0f, 30.0f, 0.0f)).transformVector(Vector3::FORWARD))
+  REQUIRE(xyzOf(RotationMatrix(Rotator(0.0f, 30.0f, 0.0f)).transformVector(Vector3::FORWARD))
               .nearEqual(Vector3(c30, s30, 0.0f), 1e-6f));
-  REQUIRE(Vector3(RotationMatrix(Rotator(0.0f, 0.0f, 30.0f)).transformVector(Vector3::RIGHT))
+  REQUIRE(xyzOf(RotationMatrix(Rotator(0.0f, 0.0f, 30.0f)).transformVector(Vector3::RIGHT))
               .nearEqual(Vector3(0.0f, c30, -s30), 1e-6f));
 
   for (const Rotator& rotator : kTestRotators) {
@@ -1127,8 +996,8 @@ TEST_CASE("chUtilities - Matrix4") {
   const Vector3 eyePos(3.0f, 2.0f, 1.0f);
   const Vector3 target(-1.0f, 4.0f, 2.0f);
   const LookAtMatrix lookAtMatrix(eyePos, target, Vector3::UP);
-  REQUIRE(Vector3(lookAtMatrix.transformPosition(eyePos)).nearEqual(Vector3::ZERO, 1e-5f));
-  REQUIRE(Vector3(lookAtMatrix.transformPosition(target))
+  REQUIRE(xyzOf(lookAtMatrix.transformPosition(eyePos)).nearEqual(Vector3::ZERO, 1e-5f));
+  REQUIRE(xyzOf(lookAtMatrix.transformPosition(target))
               .nearEqual(Vector3(0.0f, 0.0f, (target - eyePos).magnitude()), 1e-5f));
   REQUIRE((lookAtMatrix * lookAtMatrix.getInverseAffine()).nearEqual(Matrix4::IDENTITY, 1e-5f));
   REQUIRE(lookAtMatrix.getDeterminant() == Approx(1.0f));
@@ -1136,7 +1005,7 @@ TEST_CASE("chUtilities - Matrix4") {
   // Looking straight up still gives a valid view.
   const LookAtMatrix lookUp(Vector3::ZERO, Vector3::UP, Vector3::UP);
   REQUIRE(lookUp.getDeterminant() == Approx(1.0f));
-  REQUIRE(Vector3(lookUp.transformPosition(Vector3::UP)).nearEqual(Vector3(0.0f, 0.0f, 1.0f),
+  REQUIRE(xyzOf(lookUp.transformPosition(Vector3::UP)).nearEqual(Vector3(0.0f, 0.0f, 1.0f),
                                                                      1e-5f));
 
   // Clip space is X right, Y up, depth 0 at near and 1 at far.

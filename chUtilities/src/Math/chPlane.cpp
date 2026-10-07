@@ -17,6 +17,6 @@ namespace chEngineSDK{
 
 /*
 */
-Plane::Plane(const Vector4& v) : Vector3(v), w(v.w) {}
+Plane::Plane(const Vector4& v) : Vector3(v.x, v.y, v.z), w(v.w) {}
 
 } // namespace chEngineSDK

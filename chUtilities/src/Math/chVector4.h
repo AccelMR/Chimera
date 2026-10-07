@@ -3,485 +3,294 @@
  * @file chVector4.h
  * @author AccelMR
  * @date 2022/02/15
- *   Vector 4D spaced composed by ( X, Y, Z, W ) with floating points.
+ * @brief Vector with four float components.
  *
- * Coordinate system being X = right, Z = up, Y = front
+ * Coordinate system: X = forward, Y = right, Z = up, left-handed.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
-
-
-#ifndef  CH_VECTOR_4
-#define CH_VECTOR_4
-#endif // CH_VECTOR_4
-
 
 /************************************************************************/
 /*
  * Includes
  */
- /************************************************************************/
+/************************************************************************/
 #include "chPrerequisitesUtilities.h"
+
+#include <type_traits>
 
 #include "chMath.h"
 
 namespace chEngineSDK {
-
-/*
- * Description:
- *     A Vector 4D spaced composed by ( X, Y, Z, W ) with floating points.
+/**
+ * Holds four floats: a point (w = 1) or a direction (w = 0) in homogeneous form, or any
+ * other 4D value. Every operation uses the four components.
  *
- * Sample usage:
- *    Vector4 v4();
- *    v4.x = 10.0f;
- *    v4.normalize();
+ * No vector class includes another, so the math headers stay independent; convert
+ * between them by components. The class is not exported, so the constants are inline
+ * constexpr and other modules fold them at compile time.
  */
-class CH_UTILITY_EXPORT Vector4
+class Vector4
 {
-public:
-  /*
-   * @brief Default constructor
+ public:
+  /**
+   * Leaves the values uninitialized, so a vector filled right after is written once.
+   * Use Vector4::ZERO or Vector4{} when it must start at zero.
    */
-  FORCEINLINE Vector4() = default;
+  Vector4() = default;
+
+  FORCEINLINE constexpr
+  Vector4(float inX, float inY, float inZ, float inW) noexcept;
+
+  FORCEINLINE explicit constexpr
+  Vector4(const float values[4]) noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  dot(const Vector4& other) const noexcept;
 
   /**
-   *   Constructor from 4 floats.
-   * NOTE: W can be ignored since it initializes as 1.0f
-   **/
-  FORCEINLINE Vector4(float _x, const float& _y, const float& _z, const float& _w = 1.0f);
-
-  /**
-   *   Constructor from an 4 Array.
-   **/
-  explicit FORCEINLINE Vector4(const float arrayV4[4]);
-
-
-  /**
-   *   Constructor from an 4 Array.
-   **/
-  explicit FORCEINLINE Vector4(const Array<float, 4> arrayV4);
-
-  /**
-   *   Constructor from Vector4
-   * NOTE: W can be ignored since it initializes as 1.0f
-   **/
-  explicit Vector4(const Vector3& vector3, const float& _w = 1.0f);
-
-  /**
-   *   Copy constructor.
-   **/
-  FORCEINLINE Vector4(const Vector4& copyVector4);
-  /*
-   * @brief Default destructor
+   * Cross product of xyz, with w = 0, for directions in homogeneous form.
    */
-  ~Vector4() = default;
+  NODISCARD FORCEINLINE constexpr Vector4
+  cross(const Vector4& other) const noexcept;
 
-  /************************************************************************/
-  /*
-   * Methods
-   */
-   /************************************************************************/
+  NODISCARD FORCEINLINE constexpr Vector4
+  getAbs() const noexcept;
 
-   /**
-    *   Computes dot product from this vector to another.
-    *
-    * @param vector4
-    *  The other vector to calculate dot product.
-    *
-    * @return float
-    *  The dot product from this vector against param.
-    **/
-  FORCEINLINE float
-  dot(const Vector4& vector4) const;
+  NODISCARD FORCEINLINE float
+  magnitude() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  sqrMagnitude() const noexcept;
 
   /**
-   *   Computes cross product.
-   *
-   * @param vector4
-   *  The vector needed to calculate cross product.
-   *
-   * @return
-   **/
-  FORCEINLINE Vector4
-  cross(const Vector4& vector4) const;
-
-  /**
-   *   Computes a new Vector that all its values are in absolute.
-   *
-   * @return Vector4
-   *  The new created vector.
-   **/
-  FORCEINLINE Vector4
-  getAbs() const;
-
-  /**
-   *   Computes the magnitude of this vector.
-   *
-   * @return float
-   *  Magnitude computed from this vector.
-   **/
-  FORCEINLINE float
-  magnitude() const;
-
-  /**
-   *   Computes the square magnitude of this vector.
-   *
-   * @return float
-   *  Square magnitude computed from this vector.
-   **/
-  FORCEINLINE float
-  sqrMagnitude() const;
-
-  /**
-   *   Changes this vector
-   * @param
-   *
-   * @return
-   **/
-  FORCEINLINE void
-  normalize(float tolerance = Math::SMALL_NUMBER);
-
-  /**
-   *   Creates a Vector4 normalized from this caller.
-   *
-   * @return Vector4
-   *  The new normalized vector.
-   **/
-  FORCEINLINE Vector4
-  getNormalized(float tolerance = Math::SMALL_NUMBER) const;
-
-  NODISCARD FORCEINLINE bool
-  nearEqual(const Vector4& v, const float& tolerance = Math::SMALL_NUMBER) const;
-
-  /************************************************************************/
-  /*
-   * Operator overloads.
-   */
-   /************************************************************************/
-
-   /**
-    * Compares this vector against a given one.
-    *
-    * @param vector4
-    *  Vector to compare against this.
-    *
-    * @return
-    *  true if both vectors are equal.
-    */
-  FORCEINLINE bool
-  operator==(const Vector4& vector4) const;
-
-  /**
-   * Compares this vector against a given one.
-   *
-   * @param vector4
-   *  Vector to compare against this.
-   *
-   * @return
-   *  true if both vectors are equal.
+   * Makes the length 1. Returns false and leaves the vector as it was when its squared
+   * length is not above tolerance.
    */
   FORCEINLINE bool
-  operator==(const Array<float, 4>& v4) const;
+  normalize(float tolerance = Math::SMALL_NUMBER) noexcept;
 
   /**
-   * Compares this vector against a given one.
-   *
-   * @param vector4
-   *  Vector to compare against this.
-   *
-   * @return
-   *  true if both vectors are equal.
+   * Returns the vector with length 1, or ZERO when its squared length is not above
+   * tolerance.
    */
-  FORCEINLINE bool
-  operator!=(const Vector4& vector4) const;
+  NODISCARD FORCEINLINE Vector4
+  getNormalized(float tolerance = Math::SMALL_NUMBER) const noexcept;
 
-  /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *  Scalar to be multiplied.
-   *
-   * @return
-   *  Vector2 new Vector2 created from this operation.
-   */
-  FORCEINLINE Vector4
-  operator*(float scalar) const;
+  NODISCARD FORCEINLINE constexpr bool
+  nearEqual(const Vector4& other, float tolerance = Math::SMALL_NUMBER) const noexcept;
 
-  /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *  Scalar to be multiplied.
-   *
-   * @return
-   *  Vector2 new Vector2 created from this operation.
-   */
-  FORCEINLINE Vector4&
-  operator*=(float scalar);
+  NODISCARD FORCEINLINE constexpr bool
+  operator==(const Vector4& other) const noexcept;
 
-  /**
-   *   Adds two vectors and returns a new one created.
-   *
-   * @param vector4
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  The new vector created from adding other two vector.
-   **/
-  FORCEINLINE Vector4
-  operator+(const Vector4& vector4) const;
+  NODISCARD FORCEINLINE constexpr Vector4
+  operator+(const Vector4& other) const noexcept;
 
-  /**
-   *   Adds two vectors modifying this vector.
-   *
-   * @param vector4
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  This reference modified.
-   **/
-  FORCEINLINE Vector4&
-  operator+=(const Vector4& vector4);
+  NODISCARD FORCEINLINE constexpr Vector4
+  operator-(const Vector4& other) const noexcept;
 
-  /**
-   *   Subtracts this vector against other and returns a new one.
-   *
-   * @param vector4
-   *  The other vector to be subtracted.
-   *
-   * @return Vector4
-   *  The new created vector.
-   **/
-  FORCEINLINE Vector4
-  operator-(const Vector4& vector4) const;
+  NODISCARD FORCEINLINE constexpr Vector4
+  operator-() const noexcept;
 
-  /**
-   *   Subtracts this vector against other modifying this.
-   *
-   * @param vector4
-   *  The other vector to be subtracted.
-   *
-   * @return Vector4
-   *  This vector reference modified.
-   **/
-  FORCEINLINE Vector4&
-  operator-=(const Vector4& vector4);
+  NODISCARD FORCEINLINE constexpr Vector4
+  operator*(float scalar) const noexcept;
 
-  /**
-   *   Modifies sign of this vector.
-   *
-   * @return
-   *  A new vector4 created from this vector.
-   **/
-  FORCEINLINE Vector4
-  operator-() const;
+  FORCEINLINE constexpr Vector4&
+  operator+=(const Vector4& other) noexcept;
 
-  /**
-   *   Copy operator. Assign operator
-   *
-   * @param vector3
-   *  The other vector to be set.
-   **/
-  FORCEINLINE Vector4&
-  operator=(const Vector4& vector4);
+  FORCEINLINE constexpr Vector4&
+  operator-=(const Vector4& other) noexcept;
 
-
-  /**
-   *   Returns the xy as Array
-   *
-   * @return
-   *  A new Array 2 x,y
-   **/
-  FORCEINLINE Array<float, 2>
-  xy() const { return {x, y};}
-
-
-  /**
-   *   Returns the xyz as Array
-   *
-   * @return
-   *  A new Array 3 x,y,z
-   **/
-  FORCEINLINE Array<float, 3>
-  xyz() const { return {x, y, z};}
-
-  /**
-   *   Returns the xyzw as Array
-   *
-   * @return
-   *  A new Array 4 x,y,z,w
-   **/
-  FORCEINLINE Array<float, 4>
-  xyzw() const { return {x, y, z, w};}
+  FORCEINLINE constexpr Vector4&
+  operator*=(float scalar) noexcept;
 
  public:
-
-    /************************************************************************/
-    /*
-     * Static Pre-constructed Vectors.
-     */
-     /************************************************************************/
-
-    /**
-     * Global 4D zero vector constant (0.0f, 0.0f, 0.0f).
-     */
-    static const Vector4 ZERO;
-
-    /**
-     * Global 4D Unit vector constant (1.0f, 1.0f, 1.0f).
-     */
-    static const Vector4 UNIT;
-
-public:
+  static const Vector4 ZERO;
+  static const Vector4 UNIT;
 
   float x;
   float y;
   float z;
   float w;
-
 };
+
+static_assert(std::is_trivially_copyable_v<Vector4>);
+static_assert(sizeof(Vector4) == 16);
+
 /************************************************************************/
 /*
- * Implementations.
+ * Implementation
  */
- /************************************************************************/
+/************************************************************************/
 
- /*
+/*
  */
-FORCEINLINE
-Vector4::Vector4(float _x,
-                 const float& _y,
-                 const float& _z,
-                 const float& _w)
-  : x(_x),
-    y(_y),
-    z(_z),
-    w(_w)
+FORCEINLINE constexpr
+Vector4::Vector4(float inX, float inY, float inZ, float inW) noexcept
+ : x(inX),
+   y(inY),
+   z(inZ),
+   w(inW)
 {}
 
 /*
-*/
-FORCEINLINE
-Vector4::Vector4(const float arayV4[4])
-  : x(arayV4[0]),
-    y(arayV4[1]),
-    z(arayV4[2]),
-    w(arayV4[3])
+ */
+FORCEINLINE constexpr
+Vector4::Vector4(const float values[4]) noexcept
+ : x(values[0]),
+   y(values[1]),
+   z(values[2]),
+   w(values[3])
 {}
 
-/*
-*/
-FORCEINLINE
-Vector4::Vector4(const Array<float, 4> arayV4)
-  : x(arayV4[0]),
-    y(arayV4[1]),
-    z(arayV4[2]),
-    w(arayV4[3])
-{}
+inline constexpr Vector4 Vector4::ZERO{0.0f, 0.0f, 0.0f, 0.0f};
+inline constexpr Vector4 Vector4::UNIT{1.0f, 1.0f, 1.0f, 1.0f};
 
 /*
-*/
-FORCEINLINE
-Vector4::Vector4(const Vector4& copyVector)
-  : x(copyVector.x),
-    y(copyVector.y),
-    z(copyVector.z),
-    w(copyVector.w)
-{}
-
-/*
-*/
-FORCEINLINE float
-Vector4::dot(const Vector4& vector4) const
+ */
+FORCEINLINE constexpr float
+Vector4::dot(const Vector4& other) const noexcept
 {
-  return x * vector4.x + y * vector4.y + z * vector4.z + w * vector4.w;
+  return x * other.x + y * other.y + z * other.z + w * other.w;
 }
 
 /*
-*/
-FORCEINLINE Vector4
-Vector4::cross(const Vector4& vector4) const
+ */
+FORCEINLINE constexpr Vector4
+Vector4::cross(const Vector4& other) const noexcept
 {
-  return {y * vector4.z - z * vector4.y,
-          z * vector4.x - x * vector4.z,
-          x * vector4.y - y * vector4.x,
+  return {y * other.z - z * other.y,
+          z * other.x - x * other.z,
+          x * other.y - y * other.x,
           0.0f};
 }
 
 /*
-*/
-FORCEINLINE Vector4
-Vector4::getAbs() const
+ */
+FORCEINLINE constexpr Vector4
+Vector4::getAbs() const noexcept
 {
   return {Math::abs(x), Math::abs(y), Math::abs(z), Math::abs(w)};
 }
 
 /*
-*/
+ */
 FORCEINLINE float
-Vector4::magnitude() const
+Vector4::magnitude() const noexcept
 {
   return Math::sqrt(sqrMagnitude());
 }
 
 /*
-*/
-FORCEINLINE float
-Vector4::sqrMagnitude() const
+ */
+FORCEINLINE constexpr float
+Vector4::sqrMagnitude() const noexcept
 {
-  return Math::pow(x, 2.0f) + Math::pow(y, 2.0f) + Math::pow(z, 2.0f) + Math::pow(w, 2.0f);
+  return dot(*this);
 }
 
 /*
-*/
-FORCEINLINE void
-Vector4::normalize(float tolerance /*= Math::SMALL_NUMBER*/)
-{
-  const float SquareSum = x * x + y * y + z * z;
-  if (SquareSum > tolerance) {
-    const float Scale = Math::invSqrt(SquareSum);
-    x *= Scale;
-    y *= Scale;
-    z *= Scale;
-    w = 0.0f;
-    return;
-  }
-  *this = Vector4::ZERO;
-}
-
-/*
-*/
+ */
 FORCEINLINE bool
-Vector4::nearEqual(const Vector4& v, const float& tolerance /*= Math::SMALL_NUMBER*/) const
+Vector4::normalize(float tolerance) noexcept
 {
-  return (Math::abs(v.x - x) <= tolerance) &&
-         (Math::abs(v.y - y) <= tolerance) &&
-         (Math::abs(v.z - z) <= tolerance) &&
-         (Math::abs(v.w - w) <= tolerance);
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return false;
+  }
+  *this *= Math::invSqrt(squareLength);
+  return true;
 }
 
 /*
-*/
+ */
 FORCEINLINE Vector4
-Vector4::getNormalized(float tolerance /*= Math::SMALL_NUMBER*/) const
+Vector4::getNormalized(float tolerance) const noexcept
 {
-  Vector4 Res = *this;
-  Res.normalize(tolerance);
-  return Res;
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return ZERO;
+  }
+  return *this * Math::invSqrt(squareLength);
 }
 
 /*
-*/
-FORCEINLINE Vector4
-Vector4::operator*(float scalar) const
+ */
+FORCEINLINE constexpr bool
+Vector4::nearEqual(const Vector4& other, float tolerance) const noexcept
 {
-  return {x * scalar, y * scalar, z * scalar, w *scalar};
+  return Math::abs(other.x - x) <= tolerance && Math::abs(other.y - y) <= tolerance &&
+         Math::abs(other.z - z) <= tolerance && Math::abs(other.w - w) <= tolerance;
 }
 
 /*
-*/
-FORCEINLINE Vector4&
-Vector4::operator*=(float scalar)
+ */
+FORCEINLINE constexpr bool
+Vector4::operator==(const Vector4& other) const noexcept
+{
+  return x == other.x && y == other.y && z == other.z && w == other.w;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4
+Vector4::operator+(const Vector4& other) const noexcept
+{
+  return {x + other.x, y + other.y, z + other.z, w + other.w};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4
+Vector4::operator-(const Vector4& other) const noexcept
+{
+  return {x - other.x, y - other.y, z - other.z, w - other.w};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4
+Vector4::operator-() const noexcept
+{
+  return {-x, -y, -z, -w};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4
+Vector4::operator*(float scalar) const noexcept
+{
+  return {x * scalar, y * scalar, z * scalar, w * scalar};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4&
+Vector4::operator+=(const Vector4& other) noexcept
+{
+  x += other.x;
+  y += other.y;
+  z += other.z;
+  w += other.w;
+  return *this;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4&
+Vector4::operator-=(const Vector4& other) noexcept
+{
+  x -= other.x;
+  y -= other.y;
+  z -= other.z;
+  w -= other.w;
+  return *this;
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector4&
+Vector4::operator*=(float scalar) noexcept
 {
   x *= scalar;
   y *= scalar;
@@ -491,86 +300,10 @@ Vector4::operator*=(float scalar)
 }
 
 /*
-*/
-FORCEINLINE Vector4
-Vector4::operator+(const Vector4& vector4) const
+ */
+NODISCARD FORCEINLINE constexpr Vector4
+operator*(float scalar, const Vector4& vector) noexcept
 {
-  return {x + vector4.x, y + vector4.y, z + vector4.z, w + vector4.w};
+  return vector * scalar;
 }
-
-/*
-*/
-FORCEINLINE Vector4&
-Vector4::operator+=(const Vector4& vector4)
-{
-  x += vector4.x;
-  y += vector4.y;
-  z += vector4.z;
-  w += vector4.w;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector4
-Vector4::operator-(const Vector4& vector4) const
-{
-  return {x - vector4.x, y - vector4.y, z - vector4.z, w - vector4.w};
-}
-
-/*
-*/
-FORCEINLINE Vector4&
-Vector4::operator-=(const Vector4& vector4)
-{
-  x -= vector4.x;
-  y -= vector4.y;
-  z -= vector4.z;
-  w -= vector4.w;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector4
-Vector4::operator-() const
-{
-  return {-x, -y, -z, -w};
-}
-
-/*
-*/
-FORCEINLINE bool
-Vector4::operator!=(const Vector4& vector4) const
-{
-  return x != vector4.x || y != vector4.y || z != vector4.z || w != vector4.w;
-}
-
-/*
-*/
-FORCEINLINE bool
-Vector4::operator==(const Vector4& vector4) const
-{
-  return x == vector4.x && y == vector4.y && z == vector4.z && w == vector4.w;
-}
-
-/*
-*/
-FORCEINLINE bool
-Vector4::operator==(const Array<float, 4>& v4) const
-{
-  return x == v4[0] && y == v4[1] && z == v4[2] && w == v4[3];
-}
-
-/*
-*/
-FORCEINLINE Vector4&
-Vector4::operator=(const Vector4& vector4)
-{
-  x = vector4.x;
-  y = vector4.y;
-  z = vector4.z;
-  w = vector4.w;
-  return *this;
-}
-}
+} // namespace chEngineSDK

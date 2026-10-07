@@ -232,7 +232,8 @@ Camera::rotate(float pitch, float yaw, float roll)
   const Rotator orbit(Math::clamp(currentPitch + pitch, -kMaxPitch, kMaxPitch),
                       currentYaw + yaw, 0.0f);
 
-  const Vector3 newForward(RotationMatrix(orbit).transformVector(Vector3::FORWARD));
+  const Vector4 rotated = RotationMatrix(orbit).transformVector(Vector3::FORWARD);
+  const Vector3 newForward(rotated.x, rotated.y, rotated.z);
   m_position = m_lookAtPoint - newForward * distance;
 
   calculateViewMatrix();

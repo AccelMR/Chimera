@@ -3,635 +3,358 @@
  * @file chVector3.h
  * @author AccelMR <accel.mr@gmail.com>
  * @date 2021/10/31
- * Vector for 3D spaces.
+ * @brief Vector with three float components.
  *
- * A vector for 3D spaces composed by (X, Y, Z) with floating points
- *
- * Coordinate system being X = right, Z = up, Y = front
- * @bug No bug known.
+ * Coordinate system: X = forward, Y = right, Z = up, left-handed.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
 /*
  * Includes
  */
- /************************************************************************/
+/************************************************************************/
 #include "chPrerequisitesUtilities.h"
+
+#include <type_traits>
 
 #include "chMath.h"
 
 namespace chEngineSDK {
 /**
- * A vector for 3D spaces composed by (X, Y, Z) with floating points.
+ * Holds a point or a direction in 3D space.
  *
- *
+ * No vector class includes another, so the math headers stay independent; convert
+ * between them by components. The class is not exported, so the constants are inline
+ * constexpr and other modules fold them at compile time.
  */
-class CH_UTILITY_EXPORT Vector3
+class Vector3
 {
-public:
-  /*
-   * Default constructor
+ public:
+  /**
+   * Leaves the values uninitialized, so a vector filled right after is written once.
+   * Use Vector3::ZERO or Vector3{} when it must start at zero.
    */
-  FORCEINLINE Vector3() = default;
+  Vector3() = default;
+
+  FORCEINLINE constexpr
+  Vector3(float inX, float inY, float inZ) noexcept;
+
+  FORCEINLINE explicit constexpr
+  Vector3(const float values[3]) noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  dot(const Vector3& other) const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector3
+  cross(const Vector3& other) const noexcept;
+
+  NODISCARD FORCEINLINE constexpr Vector3
+  getAbs() const noexcept;
+
+  NODISCARD FORCEINLINE float
+  magnitude() const noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  sqrMagnitude() const noexcept;
+
+  NODISCARD FORCEINLINE float
+  distance(const Vector3& other) const noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  sqrDistance(const Vector3& other) const noexcept;
 
   /**
-   * Constructor using initial given values.
-   */
-  FORCEINLINE Vector3(float _x, float _y, float _z);
-
-  /**
-   * Constructor from Vector2.
-   *
-   * By default z value equals  0.0f
-   */
-  explicit Vector3(const Vector2& vector2, float _z = 0.0f);
-
-  /**
-   *   Constructor from Array 3.
-   **/
-  explicit FORCEINLINE Vector3(const float f3[3]);
-
-  /**
-   *   Copy constructor.
-   **/
-  FORCEINLINE Vector3(const Vector3& copyVector3);
-
-  /**
-   *    Constructor using the XYZ components from a 4D vector.
-   *
-   * @param v
-   *    4D Vector to copy from.
-   */
-  explicit Vector3(const Vector4& v);
-
-  /**
-   *   Constructs a Vector 3 From Vector4.
-   *  NOTE: This ignores w value.
-   *
-   * @param Vector4
-   *  The Vector4 where this vector wil;l take values.
-   **/
-   //FORCEINLINE Vector3(const Vector4& vector4);
-
-    /*
-     * Default destructor
-     */
-  ~Vector3() = default;
-
-  /************************************************************************/
-  /*
-   * Methods
-   */
-   /************************************************************************/
-
-   /**
-    *   Computes dot product from this vector to another.
-    *
-    * @param vector3
-    *  The other vector to calculate dot product.
-    *
-    * @return float
-    *  The dot product from this vector against param.
-    **/
-  FORCEINLINE float
-  dot(const Vector3& vector3) const;
-
-  /**
-   *   Computes cross product.
-   *
-   * @param vector3
-   *  The vector needed to calculate cross product.
-   *
-   * @return
-   **/
-  FORCEINLINE Vector3
-  cross(const Vector3& vector3) const;
-
-  /**
-   *   Computes a new Vector that all its values are in absolute.
-   *
-   * @return Vector3
-   *  The new created vector.
-   **/
-  FORCEINLINE Vector3
-  getAbs() const;
-
-  /**
-   *   Computes the magnitude of this vector.
-   *
-   * @return float
-   *  Magnitude computed from this vector.
-   **/
-  FORCEINLINE float
-  magnitude() const;
-
-  /**
-   *   Computes the square magnitude of this vector.
-   *
-   * @return float
-   *  Square magnitude computed from this vector.
-   **/
-  FORCEINLINE float
-  sqrMagnitude() const;
-
-  /**
-   *   Changes this vector
-   * @param
-   *
-   * @return
-   **/
-  FORCEINLINE void
-  normalize(float tolerance = Math::SMALL_NUMBER);
-
-  /**
-   *   Creates a Vector3 normalized from this caller.
-   *
-   * @return Vector3
-   *  The new normalized vector.
-   **/
-  FORCEINLINE Vector3
-  getNormalized(float tolerance = Math::SMALL_NUMBER) const;
-
-  /**
-   *   Computes projection of a vector based on z.
-   *
-   * @return Vector3
-   *  Projected version of vector based on Z.
-   **/
-  FORCEINLINE Vector3
-  projection(const Vector3& vector3) const;
-
-  /**
-   *   Compares this Vector against another taking in count a tolerance.
-   *
-   * @param v
-   *    Vector to compare against.
-   *
-   * @param tolerance
-   *    Accepted tolerance to say both vectors are almost equal.
-   *
-   * @return
-   *   True if the two vector are almost equal.
-   **/
-  FORCEINLINE bool
-  nearEqual(const Vector3& v, const float& tolerance = Math::SMALL_NUMBER) const;
-
-  /**
-   *   Computes the squared distance between this vector and a given one.
-   *      For more exact distance use distance().
-   *
-   * @param v
-   *   The vector to compute distance.
-   *
-   * @return
-   *   Squared distance between two vectors.
-   **/
-  FORCEINLINE float
-  sqrDistance(const Vector3& v) const;
-
-  /**
-   *   Computes the distance between two points.
-   *
-   * @param v
-   *    The point to check the distance.
-   *
-   * @return
-   *  Distance between two points.
-   **/
-  FORCEINLINE float
-  distance(const Vector3& v) const;
-
-  /************************************************************************/
-  /*
-   * Operator overloads.
-   */
-   /************************************************************************/
-
- /**
-  * Compares this vector against a given one.
-  *
-  * @param vector3
-  *  Vector to compare against this.
-  *
-  * @return
-  *  true if both vectors are equal.
-  */
-  FORCEINLINE bool
-  operator==(const Vector3& vector3) const;
-
-  /**
-   * Compares this vector against a given one.
-   *
-   * @param vector3
-   *  Vector to compare against this.
-   *
-   * @return
-   *  true if both vectors are equal.
+   * Makes the length 1. Returns false and leaves the vector as it was when its squared
+   * length is not above tolerance.
    */
   FORCEINLINE bool
-  operator!=(const Vector3& vector3) const;
+  normalize(float tolerance = Math::SMALL_NUMBER) noexcept;
 
   /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *  Scalar to be multiplied.
-   *
-   * @return
-   *  Vector2 new Vector2 created from this operation.
+   * Returns the vector with length 1, or ZERO when its squared length is not above
+   * tolerance.
    */
-  FORCEINLINE Vector3
-  operator*(float scalar) const;
+  NODISCARD FORCEINLINE Vector3
+  getNormalized(float tolerance = Math::SMALL_NUMBER) const noexcept;
 
   /**
-   * Calculates the multiplication of this vector against a scalar.
-   *
-   * @param scalar
-   *  Scalar to be multiplied.
-   *
-   * @return
-   *  Vector2 new Vector2 created from this operation.
+   * Projects this vector onto other, which must not be zero.
    */
-  FORCEINLINE Vector3&
-  operator*=(float scalar);
+  NODISCARD FORCEINLINE constexpr Vector3
+  projection(const Vector3& other) const noexcept;
 
-  /*
-  */
-  FORCEINLINE Vector3
-  operator/(float scale) const;
+  NODISCARD FORCEINLINE constexpr bool
+  nearEqual(const Vector3& other, float tolerance = Math::SMALL_NUMBER) const noexcept;
 
-  /**
-   *   Adds two vectors and returns a new one created.
-   *
-   * @param vector3
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  The new vector created from adding other two vector.
-   **/
-  FORCEINLINE Vector3
-  operator+(const Vector3& vector3) const;
+  NODISCARD FORCEINLINE constexpr bool
+  operator==(const Vector3& other) const noexcept;
 
-  /**
-   *   Adds two vectors modifying this vector.
-   *
-   * @param vector3
-   *  The other vector to be added.
-   *
-   * @return Vecto3
-   *  This reference modified.
-   **/
-  FORCEINLINE Vector3&
-  operator+=(const Vector3& vector3);
+  NODISCARD FORCEINLINE constexpr Vector3
+  operator+(const Vector3& other) const noexcept;
 
-  /**
-   *   Subtracts this vector against other and returns a new one.
-   *
-   * @param vector3
-   *  The other vector to be subtracted.
-   *
-   * @return Vector3
-   *  The new created vector.
-   **/
-  FORCEINLINE Vector3
-  operator-(const Vector3& vector3) const;
+  NODISCARD FORCEINLINE constexpr Vector3
+  operator-(const Vector3& other) const noexcept;
 
-  /**
-   *   Subtracts this vector against other modifying this.
-   *
-   * @param vector3
-   *  The other vector to be subtracted.
-   *
-   * @return Vector3
-   *  This vector reference modified.
-   **/
-  FORCEINLINE Vector3&
-  operator-=(const Vector3& vector3);
+  NODISCARD FORCEINLINE constexpr Vector3
+  operator-() const noexcept;
 
-  /**
-   *   Modifies sign of this vector.
-   *
-   * @return
-   *  A new vector3 created from this vector.
-   **/
-  FORCEINLINE Vector3
-  operator-() const;
+  NODISCARD FORCEINLINE constexpr Vector3
+  operator*(float scalar) const noexcept;
 
-  /**
-   *   Copy operator. Assign operator
-   *
-   * @param vector3
-   *  The other vector to be set.
-   **/
-  FORCEINLINE Vector3&
-  operator=(const Vector3& vector3);
+  NODISCARD FORCEINLINE constexpr Vector3
+  operator/(float scalar) const noexcept;
 
+  FORCEINLINE constexpr Vector3&
+  operator+=(const Vector3& other) noexcept;
 
-  /**
-   *   Returns the xy as Array
-   *
-   * @return
-   *  A new Array 2 x,y
-   **/
-  FORCEINLINE Array<float, 2>
-  xy() const { return {x, y};}
+  FORCEINLINE constexpr Vector3&
+  operator-=(const Vector3& other) noexcept;
 
-
-  /**
-   *   Returns the xy as Array
-   *
-   * @return
-   *  A new Array 3 x,y
-   **/
-  FORCEINLINE Array<float, 3>
-  xyz() const { return {x, y, z};}
+  FORCEINLINE constexpr Vector3&
+  operator*=(float scalar) noexcept;
 
  public:
-
-  /************************************************************************/
-  /*
-   * Static Pre-constructed Vectors.
-   */
-   /************************************************************************/
-
-  /**
-   * Global 3D zero vector constant (0.0f, 0.0f, 0.0f).
-   */
   static const Vector3 ZERO;
-
-  /**
-   * Global 3D Unit vector constant (1.0f, 1.0f, 1.0f).
-   */
   static const Vector3 UNIT;
-
-  /**
-   * Global 3D Unit x vector constant (1.0f, 0.0f, 0.0f).
-   */
   static const Vector3 FORWARD;
   static const Vector3 BACKWARD;
-
-  /**
-   * Global 3D Unit y vector constant (0.0f, 1.0f, 0.0f).
-   */
   static const Vector3 RIGHT;
   static const Vector3 LEFT;
-
-  /**
-   * Global 3D Unit y vector constant (0.0f, 0.0f, 1.0f).
-   */
   static const Vector3 UP;
   static const Vector3 DOWN;
 
-public:
-
-  /**
-   * Struct where you can access to x, y or z.
-   */
   float x;
   float y;
   float z;
-
 };
 
-/**
- * @brief Multiplies a vector by a scaling factor.
- * @param scale Scaling factor.
- * @param v Vector to scale.
- * @return Result of multiplication.
- */
-FORCEINLINE Vector3
-operator*(float scale, const Vector3& v) {
-  return v.operator*(scale);
-}
+static_assert(std::is_trivially_copyable_v<Vector3>);
+static_assert(sizeof(Vector3) == 12);
 
 /************************************************************************/
 /*
- * Inline Implementations
+ * Implementation
  */
- /************************************************************************/
+/************************************************************************/
 
- /*
+/*
  */
-FORCEINLINE
-Vector3::Vector3(float _x, float _y, float _z) : x(_x), y(_y), z(_z)
+FORCEINLINE constexpr
+Vector3::Vector3(float inX, float inY, float inZ) noexcept
+ : x(inX),
+   y(inY),
+   z(inZ)
 {}
 
 /*
-*/
-FORCEINLINE
-Vector3::Vector3(const float f3[3]) : x(f3[0]), y(f3[1]), z(f3[2])
+ */
+FORCEINLINE constexpr
+Vector3::Vector3(const float values[3]) noexcept
+ : x(values[0]),
+   y(values[1]),
+   z(values[2])
 {}
 
-/*
-*/
-FORCEINLINE
-Vector3::Vector3(const Vector3& copyVector)
-  : x(copyVector.x),
-    y(copyVector.y),
-    z(copyVector.z)
-{}
+inline constexpr Vector3 Vector3::ZERO{0.0f, 0.0f, 0.0f};
+inline constexpr Vector3 Vector3::UNIT{1.0f, 1.0f, 1.0f};
+inline constexpr Vector3 Vector3::FORWARD{1.0f, 0.0f, 0.0f};
+inline constexpr Vector3 Vector3::BACKWARD{-1.0f, 0.0f, 0.0f};
+inline constexpr Vector3 Vector3::RIGHT{0.0f, 1.0f, 0.0f};
+inline constexpr Vector3 Vector3::LEFT{0.0f, -1.0f, 0.0f};
+inline constexpr Vector3 Vector3::UP{0.0f, 0.0f, 1.0f};
+inline constexpr Vector3 Vector3::DOWN{0.0f, 0.0f, -1.0f};
 
 /*
-*/
-FORCEINLINE float
-Vector3::dot(const Vector3& vector3) const
+ */
+FORCEINLINE constexpr float
+Vector3::dot(const Vector3& other) const noexcept
 {
-  return x * vector3.x + y * vector3.y + z * vector3.z;
+  return x * other.x + y * other.y + z * other.z;
 }
 
 /*
-*/
-FORCEINLINE Vector3
-Vector3::cross(const Vector3& vector3) const
+ */
+FORCEINLINE constexpr Vector3
+Vector3::cross(const Vector3& other) const noexcept
 {
-  return {y * vector3.z - z * vector3.y,
-          z * vector3.x - x * vector3.z,
-          x * vector3.y - y * vector3.x};
+  return {y * other.z - z * other.y,
+          z * other.x - x * other.z,
+          x * other.y - y * other.x};
 }
 
 /*
-*/
-FORCEINLINE Vector3
-Vector3::getAbs() const
+ */
+FORCEINLINE constexpr Vector3
+Vector3::getAbs() const noexcept
 {
   return {Math::abs(x), Math::abs(y), Math::abs(z)};
 }
 
 /*
-*/
+ */
 FORCEINLINE float
-Vector3::magnitude() const
+Vector3::magnitude() const noexcept
 {
   return Math::sqrt(sqrMagnitude());
 }
 
 /*
-*/
-FORCEINLINE float
-Vector3::sqrMagnitude() const
+ */
+FORCEINLINE constexpr float
+Vector3::sqrMagnitude() const noexcept
 {
-  return Math::pow(x, 2) + Math::pow(y, 2) + Math::pow(z, 2);
+  return dot(*this);
 }
 
 /*
-*/
+ */
 FORCEINLINE float
-Vector3::sqrDistance(const Vector3& v) const
+Vector3::distance(const Vector3& other) const noexcept
 {
-  return  (*this - v).sqrMagnitude();
+  return Math::sqrt(sqrDistance(other));
 }
 
 /*
-*/
-FORCEINLINE float
-Vector3::distance(const Vector3& v) const
+ */
+FORCEINLINE constexpr float
+Vector3::sqrDistance(const Vector3& other) const noexcept
 {
-  return Math::sqrt(sqrDistance(v));
+  return (*this - other).sqrMagnitude();
 }
 
 /*
-*/
-FORCEINLINE void
-Vector3::normalize(float tolerance)
+ */
+FORCEINLINE bool
+Vector3::normalize(float tolerance) noexcept
 {
-  const float SquareMag = sqrMagnitude();
-  if (SquareMag > tolerance) {
-    const float Scale = Math::invSqrt(SquareMag);
-    x *= Scale;
-    y *= Scale;
-    z *= Scale;
-    return;
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return false;
   }
-  *this = Vector3::ZERO;
+  *this *= Math::invSqrt(squareLength);
+  return true;
 }
 
 /*
-*/
+ */
 FORCEINLINE Vector3
-Vector3::getNormalized(float tolerance) const
+Vector3::getNormalized(float tolerance) const noexcept
 {
-  Vector3 Res = *this;
-  Res.normalize(tolerance);
-  return Res;
-}
-
-FORCEINLINE Vector3
-Vector3::projection(const Vector3& vector3) const
-{
-  return (vector3 * ((dot(vector3)) / (vector3.dot( vector3))));
+  const float squareLength = sqrMagnitude();
+  if (squareLength <= tolerance) {
+    return ZERO;
+  }
+  return *this * Math::invSqrt(squareLength);
 }
 
 /*
-*/
-FORCEINLINE bool
-Vector3::nearEqual( const Vector3 &v, const float &tolerance /*= Math::SMALL_NUMBER*/ ) const
+ */
+FORCEINLINE constexpr Vector3
+Vector3::projection(const Vector3& other) const noexcept
 {
-  return (Math::abs(v.x - x) <= tolerance) &&
-         (Math::abs(v.y - y) <= tolerance) &&
-         (Math::abs(v.z - z) <= tolerance);
+  return other * (dot(other) / other.dot(other));
 }
 
 /*
-*/
-FORCEINLINE bool
-Vector3::operator==(const Vector3& vector3) const
+ */
+FORCEINLINE constexpr bool
+Vector3::nearEqual(const Vector3& other, float tolerance) const noexcept
 {
-  return x == vector3.x && y == vector3.y && z == vector3.z;
+  return Math::abs(other.x - x) <= tolerance && Math::abs(other.y - y) <= tolerance &&
+         Math::abs(other.z - z) <= tolerance;
 }
 
 /*
-*/
-FORCEINLINE bool
-Vector3::operator!=(const Vector3& vector3) const
+ */
+FORCEINLINE constexpr bool
+Vector3::operator==(const Vector3& other) const noexcept
 {
-  return x != vector3.x || y != vector3.y || z != vector3.z;
+  return x == other.x && y == other.y && z == other.z;
 }
 
-
 /*
-*/
-FORCEINLINE Vector3
-Vector3::operator*(float scalar) const
+ */
+FORCEINLINE constexpr Vector3
+Vector3::operator+(const Vector3& other) const noexcept
 {
-  return {x * scalar, y * scalar, z * scalar};
+  return {x + other.x, y + other.y, z + other.z};
 }
 
 /*
-*/
-FORCEINLINE Vector3&
-Vector3::operator*=(float scalar)
+ */
+FORCEINLINE constexpr Vector3
+Vector3::operator-(const Vector3& other) const noexcept
 {
-  x*= scalar;
-  y*= scalar;
-  z*= scalar;
-  return *this;
-}
-/*
-*/
-FORCEINLINE Vector3
-Vector3::operator+(const Vector3& vector3) const
-{
-  return {x + vector3.x, y + vector3.y, z + vector3.z};
+  return {x - other.x, y - other.y, z - other.z};
 }
 
 /*
-*/
-FORCEINLINE Vector3&
-Vector3::operator+=(const Vector3& vector3)
-{
-  x += vector3.x;
-  y += vector3.y;
-  z += vector3.z;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector3
-Vector3::operator-(const Vector3& vector3) const
-{
-  return {x - vector3.x, y - vector3.y, z - vector3.z};
-}
-
-/*
-*/
-FORCEINLINE Vector3
-Vector3::operator/(float scale) const {
-  const float RScale = 1.f / scale;
-  return { x * RScale, y * RScale, z * RScale };
-}
-
-/*
-*/
-FORCEINLINE Vector3&
-Vector3::operator-=(const Vector3& vector3)
-{
-  x -= vector3.x;
-  y -= vector3.y;
-  z -= vector3.z;
-  return *this;
-}
-
-/*
-*/
-FORCEINLINE Vector3
-Vector3::operator-() const
+ */
+FORCEINLINE constexpr Vector3
+Vector3::operator-() const noexcept
 {
   return {-x, -y, -z};
 }
 
 /*
-*/
-FORCEINLINE Vector3&
-Vector3::operator=(const Vector3& vector3)
+ */
+FORCEINLINE constexpr Vector3
+Vector3::operator*(float scalar) const noexcept
 {
-  x = vector3.x;
-  y = vector3.y;
-  z = vector3.z;
+  return {x * scalar, y * scalar, z * scalar};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector3
+Vector3::operator/(float scalar) const noexcept
+{
+  // One division and three multiplications are cheaper than three divisions; the result
+  // can differ from a true division in the last bit.
+  const float inverse = 1.0f / scalar;
+  return {x * inverse, y * inverse, z * inverse};
+}
+
+/*
+ */
+FORCEINLINE constexpr Vector3&
+Vector3::operator+=(const Vector3& other) noexcept
+{
+  x += other.x;
+  y += other.y;
+  z += other.z;
   return *this;
 }
 
-
+/*
+ */
+FORCEINLINE constexpr Vector3&
+Vector3::operator-=(const Vector3& other) noexcept
+{
+  x -= other.x;
+  y -= other.y;
+  z -= other.z;
+  return *this;
 }
+
+/*
+ */
+FORCEINLINE constexpr Vector3&
+Vector3::operator*=(float scalar) noexcept
+{
+  x *= scalar;
+  y *= scalar;
+  z *= scalar;
+  return *this;
+}
+
+/*
+ */
+NODISCARD FORCEINLINE constexpr Vector3
+operator*(float scalar, const Vector3& vector) noexcept
+{
+  return vector * scalar;
+}
+} // namespace chEngineSDK
