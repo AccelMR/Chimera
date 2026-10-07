@@ -65,19 +65,17 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Optimizaciones de compilador
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
-  if(UNIX AND NOT APPLE)
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
-  endif()
+# CMake's default Release flags already optimize and define NDEBUG for every compiler.
+if(UNIX AND NOT APPLE)
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
 endif()
 
-# Configuración de warnings
-if(UNIX AND NOT APPLE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
-elseif(WIN32)
+# Flags follow the compiler's command line style, not the platform: clang on Windows takes
+# GCC-style flags, while MSVC and clang-cl take /flags (both set MSVC).
+if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 endif()
 
 if(MSVC)
@@ -102,8 +100,11 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/chEditor")
   set(SDL_EXAMPLES     OFF CACHE BOOL "" FORCE)
 
   set(SDL_LIBC ON  CACHE BOOL "" FORCE)
-  set(HAVE_LIBM   ON  CACHE BOOL "" FORCE)
-  set(LIBM m)
+  # Windows has no separate math library; with clang there SDL would try to link m.lib.
+  if(UNIX)
+    set(HAVE_LIBM   ON  CACHE BOOL "" FORCE)
+    set(LIBM m)
+  endif()
 
   add_subdirectory(Externals/SDL3)
   set_target_properties(SDL3-shared PROPERTIES

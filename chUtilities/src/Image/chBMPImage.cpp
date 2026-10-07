@@ -312,6 +312,7 @@ BMPImage::calculateSourceCoordinates(int32 x, int32 y,
                                      BMP_TEXTURE_MODE mode,
                                      int32& srcX,
                                      int32& srcY) {
+  const Vector2 srcWidthHeight = srcRect.getSize();
   switch (mode) {
   case BMP_TEXTURE_MODE::NONE:
     srcX = static_cast<int32>(srcRect.minPoint.x) + x;

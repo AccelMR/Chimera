@@ -39,6 +39,9 @@ set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "Disable assimp samples" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "Disable assimp tools" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "Disable assimp install" FORCE)
 set(ASSIMP_NO_EXPORT ON CACHE BOOL "Disable assimp export functionality" FORCE)
+# Assimp turns its warnings into errors, so a newer compiler can stop the build in code that is
+# not ours.
+set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "Do not stop on assimp warnings" FORCE)
 set(BUILD_SHARED_LIBS_SAVED ${BUILD_SHARED_LIBS})
 set(BUILD_SHARED_LIBS OFF)
 message(STATUS "Assimp configured for static linking")
