@@ -12,14 +12,12 @@
 #include "chUUID.h"
 
 namespace chEngineSDK {
-class EditorCamera;
-class ModelAsset;
-class TextureAsset;
 
 /**
  * Editor window that lists the project assets in a grid or a table, with search and
  * type filters. The filtered list is only rebuilt when the assets or the filters
- * change, and only the visible rows are drawn.
+ * change, and only the visible rows are drawn. Models are dragged from here onto the
+ * scene.
  */
 class ContentAssetUI
 {
@@ -36,12 +34,6 @@ class ContentAssetUI
   void
   refreshAssets();
 
-  /**
-   * Opening a model frames it with this camera. Not owned; it outlives this window.
-   */
-  FORCEINLINE void
-  setEditorCamera(EditorCamera* editorCamera) { m_editorCamera = editorCamera; }
-
   void
   saveUnsavedAssets();
 
@@ -50,19 +42,7 @@ class ContentAssetUI
   renderDeleteConfirmationPopup();
 
   void
-  handleAssetSelection(const SPtr<IAsset>& asset);
-
-  /**
-   * Adds a GameObject with the model to the active scene, selects it and frames it.
-   */
-  void
-  addModelToScene(const ModelAsset& modelAsset);
-
-  /**
-   * Draws the texture on the model of the selected GameObject.
-   */
-  void
-  applyTextureToSelection(const TextureAsset& textureAsset);
+  loadAsset(const SPtr<IAsset>& asset);
 
   void
   renderAssetContextMenu(const SPtr<IAsset>& asset);
@@ -162,7 +142,6 @@ class ContentAssetUI
 
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
-  EditorCamera* m_editorCamera = nullptr;
 
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
   UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;

@@ -121,6 +121,15 @@ AssetManager::unloadAsset(const SPtr<IAsset>& asset) {
 }
 
 /*
+ */
+SPtr<IAsset>
+AssetManager::getAsset(const UUID& assetUUID) const
+{
+  const auto it = m_assets.find(assetUUID);
+  return it != m_assets.end() ? it->second : nullptr;
+}
+
+/*
 */
 bool
 AssetManager::syncLoadAsset(const UUID& assetUUID) {

@@ -9,6 +9,7 @@
 /************************************************************************/
 
 #include "chEditorApplication.h"
+#include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chEditorCamera.h"
 #include "chConsoleVariable.h"
@@ -16,14 +17,19 @@
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
+#include "chGameObject.h"
 #include "chICommandList.h"
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
 #include "chImGuiRenderer.h"
 #include "chLogger.h"
+#include "chMath.h"
 #include "chModelAsset.h"
 #include "chPath.h"
+#include "chPlane.h"
+#include "chRayCast.h"
 #include "chUIHelpers.h"
+#include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
 
@@ -57,6 +63,10 @@ ConsoleVariable<String> g_cvarStartupScene("Editor.StartupScene",
                                            "DefaultScene",
                                            "Scene asset opened when the editor starts.",
                                            "scene");
+
+// A drop meets the ground at most this many look at distances away; farther is too close
+// to the horizon to place anything usefully.
+constexpr float kMaxDropDistanceScale = 10.0f;
 } // namespace
 
 
@@ -273,7 +283,7 @@ EditorApplication::initializeEditorComponents() {
   m_inspectorUI = chMakeUnique<InspectorUI>();
   m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
-  m_contentAssetUI->setEditorCamera(m_editorCamera.get());
+  m_sceneGraphUI->setEditorCamera(m_editorCamera.get());
   m_outputLogUI->updateAvailableCategories();
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -396,12 +406,82 @@ EditorApplication::renderUI()
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   m_gameObjectAssetUI->renderGameObjectAssetUI();
+  renderViewportDropTarget();
 
   ImGui::Render();
   // Opens, closes and resizes the windows outside the main one before they are drawn.
   if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
   }
+}
+
+/*
+ */
+void
+EditorApplication::renderViewportDropTarget()
+{
+  // The scene has no window of its own, so a window covers it, but only while something is
+  // dragged: at other times it would take the mouse from the camera.
+  if (!ImGui::GetDragDropPayload()) {
+    return;
+  }
+
+  // Behind every other window, so dropping on a panel still goes to the panel.
+  constexpr ImGuiWindowFlags kFlags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+      ImGuiWindowFlags_NoDocking;
+
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  if (ImGui::Begin("##SceneDropTarget", nullptr, kFlags)) {
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+    ImGui::InvisibleButton("##drop", ImVec2(Math::max(available.x, 1.0f),
+                                            Math::max(available.y, 1.0f)));
+    if (ImGui::BeginDragDropTarget()) {
+      if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+        addModelAtMouse(*model);
+      }
+      ImGui::EndDragDropTarget();
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+}
+
+/*
+ */
+void
+EditorApplication::addModelAtMouse(const ModelAsset& modelAsset)
+{
+  const SPtr<GameObject> gameObject =
+      AssetDragDrop::createModelObject(*m_activeScene, modelAsset, nullptr);
+  if (!gameObject) {
+    return;
+  }
+
+  // The swap chain covers the whole main viewport, menu bar included.
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImVec2 mouse = ImGui::GetMousePos();
+  const Vector2 screenPoint((mouse.x - viewport->Pos.x) / viewport->Size.x,
+                            (mouse.y - viewport->Pos.y) / viewport->Size.y);
+  const Camera& camera = m_editorCamera->getCamera();
+  const Ray ray = camera.screenToWorldRay(screenPoint);
+
+  // Models land on the ground (Z = 0) under the mouse. When the ray misses the ground, or
+  // meets it near the horizon, they stay under the mouse at the look at distance instead.
+  const float lookAtDistance = (camera.getLookAt() - camera.getPosition()).magnitude();
+  float distance = 0.0f;
+  if (!RayCast::plane(ray, Plane(Vector3::UP, 0.0f), distance) ||
+      distance > lookAtDistance * kMaxDropDistanceScale) {
+    distance = lookAtDistance;
+  }
+  gameObject->getTransform().setLocalPosition(ray.origin + ray.direction * distance);
 }
 
 /*

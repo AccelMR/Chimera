@@ -17,6 +17,7 @@
 #include "chAssetCodecManager.h"
 #endif // USING(CH_CODECS)
 
+#include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chImGuiRenderer.h"
@@ -24,14 +25,8 @@
 #include "chEditorSelection.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
-#include "chEditorCamera.h"
-#include "chGameObject.h"
-#include "chModelComponent.h"
-#include "chScene.h"
-#include "chSceneManager.h"
 
 #include "chGameObjectAsset.h"
-#include "chModelAsset.h"
 #include "chTextureAsset.h"
 
 #include "imgui.h"
@@ -441,13 +436,13 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
 
   const uint64 thumbnail = assetIcon.type == AssetType::Texture ? getThumbnail(asset) : 0;
 
-  const bool clicked =
-      thumbnail != 0
-          ? ImGui::ImageButton("##asset", static_cast<ImTextureID>(thumbnail), buttonSize)
-          : ImGui::Button("##asset", buttonSize);
-  if (clicked) {
-    handleAssetSelection(asset);
+  if (thumbnail != 0) {
+    ImGui::ImageButton("##asset", static_cast<ImTextureID>(thumbnail), buttonSize);
   }
+  else {
+    ImGui::Button("##asset", buttonSize);
+  }
+  AssetDragDrop::source(*asset);
 
   ImGui::PopStyleColor(3);
 
@@ -498,9 +493,8 @@ ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset)
 void
 ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
 {
-  if (ImGui::Selectable(asset->getName(), false, ImGuiSelectableFlags_SpanAllColumns)) {
-    handleAssetSelection(asset);
-  }
+  ImGui::Selectable(asset->getName(), false, ImGuiSelectableFlags_SpanAllColumns);
+  AssetDragDrop::source(*asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     startInlineRename(asset);
@@ -679,58 +673,11 @@ ContentAssetUI::renderDeleteConfirmationPopup()
 /*
  */
 void
-ContentAssetUI::handleAssetSelection(const SPtr<IAsset>& asset)
+ContentAssetUI::loadAsset(const SPtr<IAsset>& asset)
 {
-  CH_LOG_DEBUG(ContentAssetUILog, "Selected asset: {0}", asset->getName());
-
-  if (AssetManager::instance().syncLoadAsset(asset)) {
-    CH_LOG_DEBUG(ContentAssetUILog, "Loading asset: {0}", asset->getName());
-
-    if (asset->isTypeOf<ModelAsset>()) {
-      addModelToScene(*std::static_pointer_cast<ModelAsset>(asset));
-    }
-    else if (asset->isTypeOf<TextureAsset>()) {
-      applyTextureToSelection(*std::static_pointer_cast<TextureAsset>(asset));
-    }
-  }
-  else {
+  if (!AssetManager::instance().syncLoadAsset(asset)) {
     CH_LOG_ERROR(ContentAssetUILog, "Failed to load asset: {0}", asset->getName());
   }
-}
-
-/*
- */
-void
-ContentAssetUI::addModelToScene(const ModelAsset& modelAsset)
-{
-  const SPtr<Scene> scene = SceneManager::instance().getActiveScene().lock();
-  if (!scene || !modelAsset.getModel()) {
-    return;
-  }
-
-  SPtr<GameObject> gameObject = scene->createGameObject(modelAsset.getName());
-  const ModelComponent& modelComponent =
-      gameObject->addComponent<ModelComponent>(modelAsset.getModel());
-  if (m_editorCamera) {
-    m_editorCamera->focus(modelComponent.getWorldBounds());
-  }
-  EditorSelection::setSelectedGameObject(std::move(gameObject));
-}
-
-/*
- */
-void
-ContentAssetUI::applyTextureToSelection(const TextureAsset& textureAsset)
-{
-  const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
-  ModelComponent* modelComponent =
-      selected ? selected->getComponent<ModelComponent>() : nullptr;
-  if (!modelComponent) {
-    CH_LOG_WARNING(ContentAssetUILog, "Select an object with a model to apply '{0}' to.",
-                   textureAsset.getName());
-    return;
-  }
-  modelComponent->setTexture(textureAsset.getTexture());
 }
 
 /*
@@ -765,7 +712,7 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
   }
 
   if (ImGui::MenuItem("Load")) {
-    handleAssetSelection(asset);
+    loadAsset(asset);
   }
 
   if (ImGui::MenuItem("Unload", nullptr, false, asset->isLoaded())) {

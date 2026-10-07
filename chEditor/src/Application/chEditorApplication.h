@@ -26,6 +26,7 @@ class InspectorUI;
 class GameObjectAssetUI;
 class ImGuiRenderer;
 class EditorCamera;
+class ModelAsset;
 
 class EditorApplication : public WindowedApplication
 {
@@ -68,6 +69,12 @@ class EditorApplication : public WindowedApplication
 
   void
   renderUI();
+
+  void
+  renderViewportDropTarget();
+
+  void
+  addModelAtMouse(const ModelAsset& modelAsset);
 
   void
   loadCodecs();

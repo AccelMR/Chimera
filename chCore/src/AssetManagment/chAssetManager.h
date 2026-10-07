@@ -65,6 +65,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   bool
   renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName);
 
+  /**
+   * The asset with this UUID, loaded or not, or null when there is none.
+   */
+  NODISCARD SPtr<IAsset>
+  getAsset(const UUID& assetUUID) const;
+
   void
   lazyLoadAssetsFromDirectory(const Path& directory);
 

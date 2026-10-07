@@ -10,8 +10,13 @@
 
 #include "chSceneGraphUI.h"
 
+#include "chAssetDragDrop.h"
+#include "chEditorCamera.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
+#include "chMath.h"
+#include "chModelAsset.h"
+#include "chModelComponent.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
@@ -57,7 +62,11 @@ SceneGraphUI::renderSceneGraphUI()
       renderGameObject(*scene, root);
     }
     renderEmptyAreaContextMenu(*scene);
+    renderEmptyAreaDropTarget();
 
+    if (m_pendingModel) {
+      addPendingModel(*scene);
+    }
     if (m_pendingDelete) {
       const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
       if (isInSubtree(selected.get(), *m_pendingDelete)) {
@@ -90,6 +99,14 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
   const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s", gameObject->getName().c_str());
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
     EditorSelection::setSelectedGameObject(gameObject);
+  }
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+      m_pendingModel = std::move(model);
+      m_pendingModelParent = gameObject;
+    }
+    ImGui::EndDragDropTarget();
   }
 
   // Inside the PushID of this object, so a fixed popup name is unique.
@@ -125,6 +142,48 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
     }
     ImGui::EndPopup();
   }
+}
+
+/*
+ */
+void
+SceneGraphUI::renderEmptyAreaDropTarget()
+{
+  // Only while dragging: at other times the button would cover the empty area and keep
+  // its context menu from opening.
+  if (!ImGui::GetDragDropPayload()) {
+    return;
+  }
+
+  const ImVec2 available = ImGui::GetContentRegionAvail();
+  ImGui::InvisibleButton("##emptyAreaDrop", ImVec2(Math::max(available.x, 1.0f),
+                                                   Math::max(available.y,
+                                                             ImGui::GetFrameHeight())));
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+      m_pendingModel = std::move(model);
+      m_pendingModelParent.reset();
+    }
+    ImGui::EndDragDropTarget();
+  }
+}
+
+/*
+ */
+void
+SceneGraphUI::addPendingModel(Scene& scene)
+{
+  const SPtr<GameObject> gameObject =
+      AssetDragDrop::createModelObject(scene, *m_pendingModel, m_pendingModelParent.get());
+  m_pendingModel.reset();
+  m_pendingModelParent.reset();
+  if (!gameObject || !m_editorCamera) {
+    return;
+  }
+
+  // Under a moved parent the render items are only in place after the transform update.
+  scene.updateTransforms();
+  m_editorCamera->focus(gameObject->getComponent<ModelComponent>()->getWorldBounds());
 }
 
 } // namespace chEngineSDK
