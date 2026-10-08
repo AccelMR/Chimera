@@ -423,7 +423,7 @@ UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
   }
 
   SPtr<IAsset> importedAsset = codec->importAsset(filePath, filePath.getFileName(false),
-                                                  EnginePaths::getGameAssetDirectory());
+                                                  EnginePaths::getGameAssetDirectory(), {});
   if (!importedAsset) {
     CH_LOG_ERROR(UIImguiHelper, "Failed to import asset: {0}", filePath);
     return nullptr;

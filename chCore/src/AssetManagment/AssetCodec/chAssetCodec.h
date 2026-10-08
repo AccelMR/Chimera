@@ -22,6 +22,18 @@ namespace chEngineSDK {
 class IAsset;
 
 /**
+ * Exists so whoever starts an import (the user, or a codec importing what a file uses) can
+ * say how the data is meant to be used. Each codec reads only the fields it understands.
+ */
+struct ImportSettings
+{
+  // Textures: color data (base color, emissive) is stored as sRGB, so the GPU turns it into
+  // linear values when it samples; normals and masks are data and stay linear.
+  bool srgb = true;
+  bool generateMips = true;
+};
+
+/**
  * Turns an external file (image, mesh...) into an engine asset. Codecs live in plugins
  * and register themselves with AssetCodecManager, which picks one by file extension.
  */
@@ -44,7 +56,10 @@ class CH_CORE_EXPORT IAssetCodec {
    * The name gets a suffix when the folder already has an asset with it.
    */
   virtual SPtr<IAsset>
-  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) = 0;
+  importAsset(const Path& filePath,
+              const String& assetName,
+              const Path& assetFolder,
+              const ImportSettings& settings) = 0;
 
   /**
    * Same as importAsset for a file already in memory (a texture inside a model file).
@@ -55,12 +70,14 @@ class CH_CORE_EXPORT IAssetCodec {
   importAssetFromMemory(Span<const uint8> data,
                         const String& assetName,
                         const Path& assetFolder,
-                        StringView importedPath)
+                        StringView importedPath,
+                        const ImportSettings& settings)
   {
     CH_PARAMETER_UNUSED(data);
     CH_PARAMETER_UNUSED(assetName);
     CH_PARAMETER_UNUSED(assetFolder);
     CH_PARAMETER_UNUSED(importedPath);
+    CH_PARAMETER_UNUSED(settings);
     return nullptr;
   }
 
@@ -81,12 +98,6 @@ class CH_CORE_EXPORT IAssetCodec {
 
   virtual Vector<UUID>
   getSupportedAssetTypes() const = 0;
-
-  template <typename AssetType = IAsset>
-  FORCEINLINE SPtr<AssetType>
-  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) {
-    return std::static_pointer_cast<AssetType>(importAsset(filePath, assetName, assetFolder));
-  }
 
   void
   registerNewAsset(const SPtr<IAsset>& asset) {

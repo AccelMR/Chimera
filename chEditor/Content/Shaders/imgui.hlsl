@@ -7,6 +7,7 @@ struct PushConstants
   float2 scale;
   float2 translate;
   uint textureIndex;
+  uint encodeSrgb;
   uint samplerIndex;
 };
 
@@ -27,6 +28,15 @@ struct VSOutput
   float4 color : COLOR0;
 };
 
+// sRGB textures are sampled as linear values, but every other UI color is sRGB.
+float3
+linearToSrgb(float3 color)
+{
+  const float3 low = color * 12.92f;
+  const float3 high = 1.055f * pow(color, 1.0f / 2.4f) - 0.055f;
+  return select(color <= 0.0031308f, low, high);
+}
+
 VSOutput
 VSMain(VSInput input)
 {
@@ -42,5 +52,9 @@ PSMain(VSOutput input) : SV_Target0
 {
   Texture2D uiTexture = ResourceDescriptorHeap[g_push.textureIndex];
   SamplerState uiSampler = SamplerDescriptorHeap[g_push.samplerIndex];
-  return input.color * uiTexture.Sample(uiSampler, input.texCoord);
+  float4 textureColor = uiTexture.Sample(uiSampler, input.texCoord);
+  if (g_push.encodeSrgb != 0) {
+    textureColor.rgb = linearToSrgb(textureColor.rgb);
+  }
+  return input.color * textureColor;
 }

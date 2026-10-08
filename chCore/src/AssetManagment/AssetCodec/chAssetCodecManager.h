@@ -29,15 +29,10 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
    *         its extension, or the codec fails.
    */
   SPtr<IAsset>
-  importAsset(const Path& importPath, const String& assetName, const Path& assetFolder);
-
-  template <typename AssetType>
-  FORCEINLINE SPtr<AssetType>
-  importAsset(const Path& importPath, const String& assetName, const Path& assetFolder)
-  {
-    return std::static_pointer_cast<AssetType>(
-        importAsset(importPath, assetName, assetFolder));
-  }
+  importAsset(const Path& importPath,
+              const String& assetName,
+              const Path& assetFolder,
+              const ImportSettings& settings = {});
 
   /**
    * Same as importAsset for a file already in memory; the codec is picked by extension
@@ -48,7 +43,8 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
                         StringView extension,
                         const String& assetName,
                         const Path& assetFolder,
-                        StringView importedPath);
+                        StringView importedPath,
+                        const ImportSettings& settings = {});
 
   template<typename AssetCodecType>
   NODISCARD FORCEINLINE SPtr<AssetCodecType>

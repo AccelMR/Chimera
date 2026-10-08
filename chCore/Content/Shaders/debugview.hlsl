@@ -2,6 +2,7 @@
 // normals, depth and texture coordinates, plus a flat color for wireframe lines.
 
 #include "chBindless.hlsli"
+#include "chColor.hlsli"
 #include "chTransforms.hlsli"
 
 // Must match DebugMode in chDebugRenderPath.cpp.
@@ -88,5 +89,7 @@ PSMain(VSOutput input) : SV_Target0
 
   Texture2D albedoTexture = ResourceDescriptorHeap[g_push.textureIndex];
   SamplerState albedoSampler = SamplerDescriptorHeap[g_push.samplerIndex];
-  return albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.color;
+  // Written straight to the back buffer, which holds sRGB values.
+  const float4 albedo = albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.color;
+  return float4(linearToSrgb(albedo.rgb), albedo.a);
 }

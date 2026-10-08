@@ -40,6 +40,8 @@ struct ImGuiPushConstants
   float translateX;
   float translateY;
   uint32 textureIndex;
+  // Next to textureIndex, so both are pushed together when the texture changes.
+  uint32 encodeSrgb;
   uint32 samplerIndex;
 };
 static_assert(sizeof(ImGuiPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
@@ -344,7 +346,7 @@ ImGuiRenderer::drawGeometry(ICommandList& commandList,
   const float maxX = static_cast<float>(targetWidth);
   const float maxY = static_cast<float>(targetHeight);
 
-  uint32 boundTextureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+  ImTextureID boundTextureId = ImTextureID_Invalid;
   uint32 globalIndexOffset = 0;
   int32 globalVertexOffset = 0;
   for (const ImDrawList* drawList : drawData.CmdLists) {
@@ -353,7 +355,7 @@ ImGuiRenderer::drawGeometry(ICommandList& commandList,
         if (drawCommand.UserCallback == ImDrawCallback_ResetRenderState) {
           setupRenderState(commandList, drawData, frameBuffers, geometry, pipeline,
                            targetWidth, targetHeight);
-          boundTextureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+          boundTextureId = ImTextureID_Invalid;
         }
         else {
           drawCommand.UserCallback(drawList, &drawCommand);
@@ -379,11 +381,13 @@ ImGuiRenderer::drawGeometry(ICommandList& commandList,
 
       const ImTextureID textureId = drawCommand.GetTexID();
       CH_ASSERT(textureId != ImTextureID_Invalid);
-      const uint32 textureIndex = static_cast<uint32>(textureId - 1);
-      if (textureIndex != boundTextureIndex) {
-        commandList.pushConstants(&textureIndex, sizeof(textureIndex),
+      if (textureId != boundTextureId) {
+        const uint32 textureConstants[2] = {
+            static_cast<uint32>((textureId & ~TEXTURE_ID_SRGB_BIT) - 1),
+            (textureId & TEXTURE_ID_SRGB_BIT) != 0 ? 1u : 0u};
+        commandList.pushConstants(textureConstants, sizeof(textureConstants),
                                   offsetof(ImGuiPushConstants, textureIndex));
-        boundTextureIndex = textureIndex;
+        boundTextureId = textureId;
       }
 
       commandList.drawIndexed(drawCommand.ElemCount,
@@ -412,7 +416,7 @@ ImGuiRenderer::updateTexture(ImTextureData& texture)
          .height = static_cast<uint32>(texture.Height),
          .initialData = texture.GetPixels(),
          .initialDataSize = static_cast<SIZE_T>(texture.GetSizeInBytes())});
-    texture.SetTexID(getTextureId(gpuTexture->getBindlessIndex()));
+    texture.SetTexID(getTextureId(*gpuTexture));
     m_textures[texture.UniqueID] = std::move(gpuTexture);
     texture.SetStatus(ImTextureStatus_OK);
   }
@@ -502,6 +506,7 @@ ImGuiRenderer::setupRenderState(ICommandList& commandList,
       .translateX = -1.0f - drawData.DisplayPos.x * scaleX,
       .translateY = 1.0f - drawData.DisplayPos.y * scaleY,
       .textureIndex = GraphicsLimits::INVALID_BINDLESS_INDEX,
+      .encodeSrgb = 0,
       .samplerIndex = m_sampler->getBindlessIndex()};
   commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 }

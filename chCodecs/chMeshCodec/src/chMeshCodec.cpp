@@ -24,6 +24,7 @@
 #include "chMesh.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
+#include "chTextureMips.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -233,8 +234,13 @@ MeshCodec::MeshCodec()
 /*
  */
 SPtr<IAsset>
-MeshCodec::importAsset(const Path& filePath, const String& assetName, const Path& assetFolder)
+MeshCodec::importAsset(const Path& filePath,
+                       const String& assetName,
+                       const Path& assetFolder,
+                       const ImportSettings& settings)
 {
+  // Each texture of a model gets the settings of the material input it feeds.
+  CH_PARAMETER_UNUSED(settings);
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
@@ -338,6 +344,8 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
 SPtr<TextureAsset>
 MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial& source)
 {
+  constexpr ImportSettings kColorSettings{.srgb = true};
+
   aiString reference;
   if (source.GetTexture(aiTextureType_BASE_COLOR, 0, &reference) != AI_SUCCESS &&
       source.GetTexture(aiTextureType_DIFFUSE, 0, &reference) != AI_SUCCESS) {
@@ -345,7 +353,7 @@ MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial
   }
 
   if (const aiTexture* embedded = context.scene->GetEmbeddedTexture(reference.C_Str())) {
-    return importEmbeddedTexture(context, *embedded, reference.C_Str());
+    return importEmbeddedTexture(context, *embedded, reference.C_Str(), kColorSettings);
   }
 
   // Files often keep the path of the machine that made them, so the texture is also looked
@@ -373,7 +381,7 @@ MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial
   }
 
   const SPtr<IAsset> asset = AssetCodecManager::instance().importAsset(
-      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder);
+      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder, kColorSettings);
   return asset ? asset->as<TextureAsset>() : nullptr;
 }
 
@@ -382,7 +390,8 @@ MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial
 SPtr<TextureAsset>
 MeshCodec::importEmbeddedTexture(const ImportContext& context,
                                  const aiTexture& texture,
-                                 StringView reference)
+                                 StringView reference,
+                                 const ImportSettings& settings)
 {
   const String importedPath = makePartPath(context.sourceFile, reference);
   if (SPtr<TextureAsset> existing = findImported<TextureAsset>(importedPath)) {
@@ -399,7 +408,7 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
     const Span<const uint8> data(reinterpret_cast<const uint8*>(texture.pcData),
                                  texture.mWidth);
     const SPtr<IAsset> asset = AssetCodecManager::instance().importAssetFromMemory(
-        data, texture.achFormatHint, assetName, context.assetFolder, importedPath);
+        data, texture.achFormatHint, assetName, context.assetFolder, importedPath, settings);
     return asset ? asset->as<TextureAsset>() : nullptr;
   }
 
@@ -415,8 +424,13 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
 
   const AssetMetadata metadata =
       makeMetadata<TextureAsset>(assetName, importedPath, context.assetFolder);
-  SPtr<TextureAsset> textureAsset =
-      chMakeShared<TextureAsset>(metadata, std::move(pixels), texture.mWidth, texture.mHeight);
+  const uint32 mipLevels = settings.generateMips
+                               ? TextureMips::appendChainRGBA8(pixels, texture.mWidth,
+                                                               texture.mHeight, settings.srgb)
+                               : 1;
+  const Format format = settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
+  SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
+      metadata, std::move(pixels), texture.mWidth, texture.mHeight, format, mipLevels);
   if (!saveAndRegister(textureAsset)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save texture asset: {0}", assetName);
     return nullptr;

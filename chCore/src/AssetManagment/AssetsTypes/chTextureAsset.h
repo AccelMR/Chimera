@@ -20,14 +20,16 @@ class ITexture;
 // Written after the common asset start, before the pixels.
 struct TextureAssetHeader
 {
-  static constexpr uint32 VERSION = 1;
+  static constexpr uint32 VERSION = 2;
 
   uint32 version = VERSION;
   uint32 width = 0;
   uint32 height = 0;
   Format format = Format::Unknown;
+  // The pixels hold every level, one after the other, largest first.
+  uint32 mipLevels = 1;
 };
-static_assert(sizeof(TextureAssetHeader) == 16, "TextureAssetHeader must have no padding");
+static_assert(sizeof(TextureAssetHeader) == 20, "TextureAssetHeader must have no padding");
 
 /**
  * @class TextureAsset
@@ -41,13 +43,16 @@ class CH_CORE_EXPORT TextureAsset : public IAsset
  public:
   TextureAsset() = delete;
   TextureAsset(const AssetMetadata& metadata) : IAsset(metadata) {}
+
+  /**
+   * textureData holds mipLevels levels of the format, one after the other, largest first.
+   */
   TextureAsset(const AssetMetadata& metadata,
                Vector<uint8> textureData,
                uint32 width,
-               uint32 height)
-    : IAsset(metadata), m_textureData(std::move(textureData)), m_width(width), m_height(height) {
-    createTextureFromData();
-  }
+               uint32 height,
+               Format format,
+               uint32 mipLevels);
 
   ~TextureAsset() = default;
 
@@ -72,6 +77,8 @@ class CH_CORE_EXPORT TextureAsset : public IAsset
   Vector<uint8> m_textureData; ///< Compressed texture data for serialization
   uint32 m_width = 0; ///< Width of the texture
   uint32 m_height = 0; ///< Height of the texture
+  Format m_format = Format::Unknown;
+  uint32 m_mipLevels = 1;
 };
 DECLARE_ASSET_TYPE(TextureAsset);
 

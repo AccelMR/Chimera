@@ -57,7 +57,10 @@ class MeshCodec  : public IAssetCodec {
   }
 
   SPtr<IAsset>
-  importAsset(const Path& filePath, const String& assetName, const Path& assetFolder) override;
+  importAsset(const Path& filePath,
+              const String& assetName,
+              const Path& assetFolder,
+              const ImportSettings& settings) override;
 
  private:
   struct ImportContext
@@ -78,7 +81,8 @@ class MeshCodec  : public IAssetCodec {
   NODISCARD SPtr<TextureAsset>
   importEmbeddedTexture(const ImportContext& context,
                         const aiTexture& texture,
-                        StringView reference);
+                        StringView reference,
+                        const ImportSettings& settings);
 
   Vector<String> m_extensions;
 };

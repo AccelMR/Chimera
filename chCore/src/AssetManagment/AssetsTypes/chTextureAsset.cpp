@@ -11,9 +11,43 @@
 #include "chIGraphicsAPI.h"
 #include "chFileStream.h"
 #include "chLogger.h"
+#include "chMath.h"
+#include "chTextureMips.h"
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_STATIC(TextureAssetLog, All);
+
+namespace {
+SIZE_T
+getChainSize(Format format, uint32 width, uint32 height, uint32 mipLevels)
+{
+  SIZE_T size = 0;
+  for (uint32 mip = 0; mip < mipLevels; ++mip) {
+    size += FormatUtils::getMipSize(format, Math::max(width >> mip, 1u),
+                                    Math::max(height >> mip, 1u));
+  }
+  return size;
+}
+} // namespace
+
+/*
+ */
+TextureAsset::TextureAsset(const AssetMetadata& metadata,
+                           Vector<uint8> textureData,
+                           uint32 width,
+                           uint32 height,
+                           Format format,
+                           uint32 mipLevels)
+  : IAsset(metadata),
+    m_textureData(std::move(textureData)),
+    m_width(width),
+    m_height(height),
+    m_format(format),
+    m_mipLevels(mipLevels)
+{
+  CH_ASSERT(m_textureData.size() == getChainSize(format, width, height, mipLevels));
+  createTextureFromData();
+}
 
 /*
  */
@@ -30,7 +64,8 @@ TextureAsset::serialize(SPtr<DataStream> stream) {
   }
   const TextureAssetHeader header{.width = m_width,
                                   .height = m_height,
-                                  .format = Format::R8G8B8A8_UNORM};
+                                  .format = m_format,
+                                  .mipLevels = m_mipLevels};
   stream << header;
 
   stream->write(m_textureData.data(), m_textureData.size());
@@ -55,19 +90,27 @@ TextureAsset::deserialize(SPtr<DataStream> stream) {
   TextureAssetHeader header;
   if (stream->read(&header, sizeof(header)) != sizeof(header) ||
       header.version != TextureAssetHeader::VERSION) {
-    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset {0}: bad header",
+    CH_LOG_ERROR(TextureAssetLog,
+                 "Failed to deserialize texture asset {0}: bad header or old version, import "
+                 "it again",
                  getName());
+    return false;
+  }
+  // The values come from the file, so they are checked before they index the format table
+  // or size the data.
+  if (static_cast<uint32>(header.format) >= static_cast<uint32>(Format::COUNT) ||
+      header.mipLevels == 0 ||
+      header.mipLevels > TextureMips::getMipCount(header.width, header.height)) {
+    CH_LOG_ERROR(TextureAssetLog,
+                 "Failed to deserialize texture asset {0}: format {1} with {2} mips",
+                 getName(), header.format, header.mipLevels);
     return false;
   }
   m_width = header.width;
   m_height = header.height;
-  // The value comes from the file, so it is checked before it indexes the format table.
-  if (static_cast<uint32>(header.format) >= static_cast<uint32>(Format::COUNT)) {
-    CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: unknown format {0}",
-                 header.format);
-    return false;
-  }
-  m_textureData.resize(FormatUtils::getMipSize(header.format, m_width, m_height));
+  m_format = header.format;
+  m_mipLevels = header.mipLevels;
+  m_textureData.resize(getChainSize(m_format, m_width, m_height, m_mipLevels));
   if (m_textureData.empty()) {
     CH_LOG_ERROR(TextureAssetLog, "Failed to deserialize texture asset: texture data is empty");
     return false;
@@ -104,11 +147,11 @@ TextureAsset::createTextureFromData() {
 
   IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
   TextureCreateInfo textureCreateInfo{.type = TextureType::Texture2D,
-                                      .format = Format::R8G8B8A8_UNORM,
-                                      .width = static_cast<uint32>(m_width),
-                                      .height = static_cast<uint32>(m_height),
+                                      .format = m_format,
+                                      .width = m_width,
+                                      .height = m_height,
                                       .depth = 1,
-                                      .mipLevels = 1,
+                                      .mipLevels = m_mipLevels,
                                       .arrayLayers = 1,
                                       .samples = SampleCount::Count1,
                                       .usage = TextureUsage::Sampled |

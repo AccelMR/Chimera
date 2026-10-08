@@ -206,7 +206,7 @@ InspectorUI::renderMaterial(const SPtr<MaterialAsset>& materialAsset)
   const SPtr<TextureAsset>& texture = material.getBaseColorTexture();
   const ITexture* gpuTexture = material.getBaseColorGpuTexture();
   const uint64 textureId =
-      gpuTexture ? ImGuiRenderer::getTextureId(gpuTexture->getBindlessIndex()) : 0;
+      gpuTexture ? ImGuiRenderer::getTextureId(*gpuTexture) : 0;
   constexpr float kThumbnailSize = 48.0f;
   if (textureId != 0) {
     ImGui::Image(static_cast<ImTextureID>(textureId), ImVec2(kThumbnailSize, kThumbnailSize));

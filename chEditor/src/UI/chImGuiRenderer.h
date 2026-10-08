@@ -12,6 +12,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chGraphicsTypes.h"
+#include "chITexture.h"
 #include "chPipelineCache.h"
 #include "chVertexLayout.h"
 
@@ -67,16 +68,22 @@ class ImGuiRenderer
   presentFloatingWindows();
 
   /**
-   * ImTextureID that shows the texture with this bindless index; 0 (ImGui's invalid id)
-   * when the texture cannot be sampled.
+   * ImTextureID that shows the texture; 0 (ImGui's invalid id) when it cannot be sampled.
    */
   NODISCARD static FORCEINLINE uint64
-  getTextureId(uint32 bindlessIndex)
+  getTextureId(const ITexture& texture)
   {
-    return bindlessIndex == GraphicsLimits::INVALID_BINDLESS_INDEX
-               ? 0
-               : static_cast<uint64>(bindlessIndex) + 1;
+    const uint32 bindlessIndex = texture.getBindlessIndex();
+    if (bindlessIndex == GraphicsLimits::INVALID_BINDLESS_INDEX) {
+      return 0;
+    }
+    const bool isSrgb = FormatUtils::getInfo(texture.getFormat()).isSrgb;
+    return (static_cast<uint64>(bindlessIndex) + 1) | (isSrgb ? TEXTURE_ID_SRGB_BIT : 0);
   }
+
+  // Set in an ImTextureID when the texture is sRGB: sampling gives linear values, and the UI
+  // writes sRGB values, so the shader turns them back.
+  static constexpr uint64 TEXTURE_ID_SRGB_BIT = 1ull << 32;
 
  private:
   struct FrameBuffers

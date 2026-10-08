@@ -32,6 +32,7 @@
 #include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
+#include "chTextureMips.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
@@ -957,5 +958,54 @@ TEST_CASE("chCore - Model material slots")
   {
     body->getMaterial().setBaseColorFactor(LinearColor(1.0f, 0.0f, 0.0f, 1.0f));
     REQUIRE(materialOf(mesh.get())->getBaseColorFactor().g == 0.0f);
+  }
+}
+
+TEST_CASE("chCore - Texture mips")
+{
+  REQUIRE(TextureMips::getMipCount(1, 1) == 1);
+  REQUIRE(TextureMips::getMipCount(256, 256) == 9);
+  REQUIRE(TextureMips::getMipCount(300, 17) == 9);
+
+  SECTION("1x1 has no levels to add")
+  {
+    Vector<uint8> pixels = {10, 20, 30, 40};
+    REQUIRE(TextureMips::appendChainRGBA8(pixels, 1, 1, true) == 1);
+    REQUIRE(pixels.size() == 4);
+  }
+
+  SECTION("Sizes of a non square chain")
+  {
+    Vector<uint8> pixels(4 * 2 * 4, 255);
+    REQUIRE(TextureMips::appendChainRGBA8(pixels, 4, 2, false) == 3);
+    // 4x2, 2x1, 1x1.
+    REQUIRE(pixels.size() == (8 + 2 + 1) * 4);
+    for (uint8 value : pixels) {
+      REQUIRE(value == 255);
+    }
+  }
+
+  // A black and a white pixel, alpha 0 and 255.
+  const Vector<uint8> blackAndWhite = {0, 0, 0, 0, 255, 255, 255, 255};
+
+  SECTION("Linear data is averaged as is")
+  {
+    Vector<uint8> pixels = blackAndWhite;
+    REQUIRE(TextureMips::appendChainRGBA8(pixels, 2, 1, false) == 2);
+    REQUIRE(pixels.size() == 12);
+    for (SIZE_T i = 8; i < 12; ++i) {
+      REQUIRE(pixels[i] == 128);
+    }
+  }
+
+  SECTION("sRGB colors are averaged as linear light, alpha as is")
+  {
+    Vector<uint8> pixels = blackAndWhite;
+    REQUIRE(TextureMips::appendChainRGBA8(pixels, 2, 1, true) == 2);
+    // Half the light is 0.735 in sRGB, not 0.5.
+    REQUIRE(pixels[8] == 188);
+    REQUIRE(pixels[9] == 188);
+    REQUIRE(pixels[10] == 188);
+    REQUIRE(pixels[11] == 128);
   }
 }

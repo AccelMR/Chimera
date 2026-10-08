@@ -398,9 +398,9 @@ struct DepthState {
  * attachment formats replace a render pass.
  */
 struct CH_CORE_EXPORT GraphicsPipelineDesc {
-  SPtr<IShader> vertexShader;
-  SPtr<IShader> fragmentShader;
-  VertexLayout vertexLayout;
+  SPtr<IShader> vertexShader{};
+  SPtr<IShader> fragmentShader{};
+  VertexLayout vertexLayout{};
   PrimitiveTopology topology = PrimitiveTopology::TriangleList;
   RasterState raster{};
   DepthState depth{};

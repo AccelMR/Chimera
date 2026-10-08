@@ -18,13 +18,16 @@
 namespace chEngineSDK {
 
 class DebugRenderPath;
+class TonemapPass;
 
 /**
  * Exists so an application only says where the frame goes and what it draws on top: it
  * owns the frame's render graph, the textures the graph makes, and the render path that
- * draws a scene. A frame is beginFrame(), imports and addScenePasses() (plus any passes of
- * the application, the editor UI), then execute(). What the scene passes show follows the
- * Renderer.ViewMode console variable, read once per frame.
+ * draws a scene. Lit view modes draw into an HDR scene color that a tonemap pass takes to
+ * the output; the debug views write the output directly. A frame is beginFrame(), imports
+ * and addScenePasses() (plus any passes of the application, the editor UI), then execute().
+ * What the scene passes show follows the Renderer.ViewMode console variable, read once per
+ * frame.
  *
  * Needs a started IGraphicsAPI and must be destroyed before it shuts down.
  */
@@ -73,6 +76,12 @@ class CH_CORE_EXPORT SceneRenderer
   execute(ICommandList& commandList);
 
  private:
+  /**
+   * The active render path into an HDR scene color, then the tonemap into output.
+   */
+  RGTextureHandle
+  addLitPasses(const RenderView& view, RGTextureHandle output);
+
   void
   updateViewMode();
 
@@ -81,6 +90,7 @@ class CH_CORE_EXPORT SceneRenderer
   // Draws the Lit view mode.
   UniquePtr<IRenderPath> m_renderPath;
   UniquePtr<DebugRenderPath> m_debugRenderPath;
+  UniquePtr<TonemapPass> m_tonemapPass;
 
   ViewMode m_viewMode = ViewMode::Lit;
   // The console variable text m_viewMode was parsed from, so it is parsed only on change.

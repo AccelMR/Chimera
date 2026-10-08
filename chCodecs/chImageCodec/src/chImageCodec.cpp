@@ -15,6 +15,7 @@
 #include "chFileSystem.h"
 #include "chIGraphicsAPI.h"
 #include "chLogger.h"
+#include "chTextureMips.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -44,7 +45,8 @@ takeImage(uint8* data, int32 width, int32 height) {
 SPtr<IAsset>
 ImageCodec::importAsset(const Path& filePath,
                         const String& assetName,
-                        const Path& assetFolder) {
+                        const Path& assetFolder,
+                        const ImportSettings& settings) {
   CH_ASSERT(FileSystem::isFile(filePath) && "File does not exist");
 
   int32 width = 0;
@@ -60,7 +62,7 @@ ImageCodec::importAsset(const Path& filePath,
 
   const Path importedPath = FileSystem::absolutePath(filePath);
   return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
-                            importedPath.toString());
+                            importedPath.toString(), settings);
 }
 
 /*
@@ -69,7 +71,8 @@ SPtr<IAsset>
 ImageCodec::importAssetFromMemory(Span<const uint8> data,
                                   const String& assetName,
                                   const Path& assetFolder,
-                                  StringView importedPath) {
+                                  StringView importedPath,
+                                  const ImportSettings& settings) {
   int32 width = 0;
   int32 height = 0;
   int32 channels = 0;
@@ -83,7 +86,7 @@ ImageCodec::importAssetFromMemory(Span<const uint8> data,
   }
 
   return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
-                            importedPath);
+                            importedPath, settings);
 }
 
 /*
@@ -94,13 +97,21 @@ ImageCodec::createTextureAsset(Vector<uint8> pixels,
                                int32 height,
                                const String& assetName,
                                const Path& assetFolder,
-                               StringView importedPath) {
+                               StringView importedPath,
+                               const ImportSettings& settings) {
   CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
 
   const AssetMetadata metadata =
       makeMetadata<TextureAsset>(assetName, importedPath, assetFolder);
+  const uint32 textureWidth = static_cast<uint32>(width);
+  const uint32 textureHeight = static_cast<uint32>(height);
+  const uint32 mipLevels =
+      settings.generateMips
+          ? TextureMips::appendChainRGBA8(pixels, textureWidth, textureHeight, settings.srgb)
+          : 1;
+  const Format format = settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
-      metadata, std::move(pixels), static_cast<uint32>(width), static_cast<uint32>(height));
+      metadata, std::move(pixels), textureWidth, textureHeight, format, mipLevels);
 
   if (!saveAndRegister(textureAsset)) {
     CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: {0}", assetName);

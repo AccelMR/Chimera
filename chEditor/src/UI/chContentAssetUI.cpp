@@ -602,7 +602,7 @@ ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
 
   SPtr<ITexture> texture = textureAsset->getTexture();
   const uint64 textureId =
-      texture ? ImGuiRenderer::getTextureId(texture->getBindlessIndex()) : 0;
+      texture ? ImGuiRenderer::getTextureId(*texture) : 0;
   if (textureId != 0) {
     // Keeping the texture keeps the thumbnail valid after the asset is unloaded below.
     thumbnail = {std::move(texture), textureId};
