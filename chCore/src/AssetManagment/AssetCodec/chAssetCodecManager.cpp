@@ -12,6 +12,12 @@ CH_LOG_DEFINE_CATEGORY_SHARED(AssetCodecSystem, All);
 #include "chPath.h"
 
 namespace chEngineSDK {
+
+// The editor starts this module and the codec plugins use it, so its storage must live
+// here: without this, Linux gives a plugin opened with dlopen its own copy, which was never
+// started (an executable does not export its symbols).
+template class Module<AssetCodecManager>;
+
 /*
 */
 void
