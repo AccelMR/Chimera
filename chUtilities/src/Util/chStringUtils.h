@@ -577,6 +577,11 @@ StringUtils::makeFormatArg(T&& value, String*& nextString)
   else if constexpr (type == FormatArgType::Float) {
     arg.floatValue = static_cast<double>(value);
   }
+  else if constexpr (std::is_array_v<std::remove_reference_t<T>> &&
+                     std::is_convertible_v<Type, StringView>) {
+    // An array is never null; GCC rejects the check that pointers need.
+    arg.text = StringView(value);
+  }
   else if constexpr (std::is_pointer_v<Type> && std::is_convertible_v<Type, StringView>) {
     arg.text = value ? StringView(value) : StringView("(null)");
   }
