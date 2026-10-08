@@ -9,8 +9,8 @@ build/
 CMakeSettings.json
 
 # Exclude Resource
-[Rr]esources/
-[Aa]ssets/
+/[Rr]esources/
+/[Aa]ssets/
 
 !resources/shaders/
 
@@ -20,6 +20,8 @@ CMakeSettings.json
 chEditor/Content/fonts/fa-brands-400.ttf chEditor/Content/fonts/fa-regular-400.ttf chEditor/Content/fonts/fa-solid-900.ttf chEditor/Content/fonts/FiraCodeNerdFont-Regular.ttf
 #exclude .ini
 *.ini
+# Config defaults shipped with the engine and the editor
+!*/Content/Config/*.ini
 
 [Pp]rojects/
 
