@@ -45,10 +45,14 @@ class UIHelpers {
   static Path
   openFileExplorer(const Path& pathToOpen, const Vector<String>& filters = {});
 
-  // Opens a file dialog filtered to the codec's extensions and imports the chosen file.
-  // Returns nullptr if the dialog was cancelled or the import failed.
+  // Opens a file dialog filtered to the codec's extensions and imports the chosen file into
+  // assetFolder (a virtual folder under /Game). Returns nullptr if the dialog was cancelled
+  // or the import failed.
   static SPtr<IAsset>
-  importAssetWithDialog(const SPtr<IAssetCodec>& codec);
+  importAssetWithDialog(const SPtr<IAssetCodec>& codec, const Path& assetFolder);
+
+  NODISCARD static const ANSICHAR*
+  getFolderIcon(bool bOpen);
 
   // Variable to control the visibility of the ImGui demo window
   static bool bShowDemoWindow;

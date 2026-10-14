@@ -60,15 +60,19 @@ createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
 void
 renderCreateLightItems(Scene& scene, GameObject* parent)
 {
-  if (ImGui::MenuItem("Create Directional Light")) {
+  if (!ImGui::BeginMenu("Create Light")) {
+    return;
+  }
+  if (ImGui::MenuItem("Directional Light")) {
     createLight<DirectionalLightComponent>(scene, "Directional Light", parent);
   }
-  if (ImGui::MenuItem("Create Point Light")) {
+  if (ImGui::MenuItem("Point Light")) {
     createLight<PointLightComponent>(scene, "Point Light", parent);
   }
-  if (ImGui::MenuItem("Create Spot Light")) {
+  if (ImGui::MenuItem("Spot Light")) {
     createLight<SpotLightComponent>(scene, "Spot Light", parent);
   }
+  ImGui::EndMenu();
 }
 } // namespace
 

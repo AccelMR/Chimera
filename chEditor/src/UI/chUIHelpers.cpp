@@ -413,7 +413,7 @@ UIHelpers::openFileExplorer(const Path& pathToOpen, const Vector<String>& filter
 /*
  */
 SPtr<IAsset>
-UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
+UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec, const Path& assetFolder)
 {
   const Path filePath = openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
                                          codec->getSupportedExtensions());
@@ -423,7 +423,7 @@ UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
   }
 
   SPtr<IAsset> importedAsset = codec->importAsset(filePath, filePath.getFileName(false),
-                                                  EnginePaths::getGameAssetDirectory(), {});
+                                                  assetFolder, {});
   if (!importedAsset) {
     CH_LOG_ERROR(UIImguiHelper, "Failed to import asset: {0}", filePath);
     return nullptr;
@@ -431,6 +431,15 @@ UIHelpers::importAssetWithDialog(const SPtr<IAssetCodec>& codec)
 
   CH_LOG_INFO(UIImguiHelper, "Imported asset {0} as {1}", filePath, importedAsset->getUUID());
   return importedAsset;
+}
+
+
+/*
+ */
+const ANSICHAR*
+UIHelpers::getFolderIcon(bool bOpen)
+{
+  return bOpen ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
 }
 
 } // namespace chUIHelpers

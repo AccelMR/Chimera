@@ -17,12 +17,15 @@
 #include "chAssetCodecManager.h"
 #endif // USING(CH_CODECS)
 
+#include "chAlgorithm.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chImGuiRenderer.h"
 #include "chITexture.h"
 #include "chEditorSelection.h"
+#include "chEnginePaths.h"
+#include "chFileSystem.h"
 #include "chMath.h"
 #include "chUIHelpers.h"
 
@@ -90,6 +93,20 @@ getAssetStateString(AssetState state) noexcept
   }
 }
 
+// Long names are cut so they fit under a grid icon.
+using ShortName = ANSICHAR[13];
+
+NODISCARD const ANSICHAR*
+shortenName(const ANSICHAR* name, ShortName& outBuffer)
+{
+  if (std::strlen(name) <= 12) {
+    return name;
+  }
+  std::memcpy(outBuffer, name, 9);
+  std::memcpy(outBuffer + 9, "...", 4);
+  return outBuffer;
+}
+
 } // namespace
 
 /*
@@ -105,6 +122,7 @@ void
 ContentAssetUI::refreshAssets()
 {
   m_assets = AssetManager::instance().getAllAssets();
+  rebuildFolderTree();
   m_needsFilterUpdate = true;
 }
 
@@ -123,7 +141,20 @@ ContentAssetUI::renderContentAssetUI()
   renderSearchBar();
   renderAssetTypeFilters();
   renderViewModeControls();
+
+  // The folder tree on the left, the current folder's contents on the right.
+  renderFolderTree();
+  ImGui::SameLine();
+  ImGui::BeginGroup();
+  renderBreadcrumb();
   renderAssetDisplayArea();
+  ImGui::EndGroup();
+
+  if (m_requestedFolder != INVALID_FOLDER) {
+    m_currentFolder = m_requestedFolder;
+    m_requestedFolder = INVALID_FOLDER;
+    m_needsFilterUpdate = true;
+  }
 
   ImGui::End();
 }
@@ -275,7 +306,22 @@ ContentAssetUI::rebuildVisibleAssets()
 bool
 ContentAssetUI::shouldShowAsset(const SPtr<IAsset>& asset) const
 {
-  return passesSearchFilter(asset) && passesTypeFilter(asset);
+  return passesFolderFilter(asset) && passesSearchFilter(asset) && passesTypeFilter(asset);
+}
+
+/*
+ */
+bool
+ContentAssetUI::passesFolderFilter(const SPtr<IAsset>& asset) const
+{
+  // A search looks in the subfolders too, as in Unreal.
+  const StringView assetFolder = asset->getAssetPath();
+  const String& folder = getCurrentFolderPath().toString();
+  if (assetFolder == folder) {
+    return true;
+  }
+  return searchBuffer[0] != '\0' && assetFolder.size() > folder.size() &&
+         assetFolder.starts_with(folder) && assetFolder[folder.size()] == '/';
 }
 
 /*
@@ -317,18 +363,26 @@ ContentAssetUI::renderGridView()
     columns = 1;
   }
 
-  // The clipper works on rows of the grid, which all have the same height.
-  const int32 visibleCount = static_cast<int32>(m_visibleAssets.size());
-  const int32 rowCount = (visibleCount + columns - 1) / columns;
+  // Subfolders come first. The clipper works on rows of the grid, which all have the same
+  // height.
+  const Vector<uint32>& folders = getVisibleSubfolders();
+  const int32 folderCount = static_cast<int32>(folders.size());
+  const int32 itemCount = folderCount + static_cast<int32>(m_visibleAssets.size());
+  const int32 rowCount = (itemCount + columns - 1) / columns;
 
   ImGuiListClipper clipper;
   clipper.Begin(rowCount);
   while (clipper.Step()) {
     for (int32 row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
       const int32 first = row * columns;
-      const int32 last = Math::min(first + columns, visibleCount);
+      const int32 last = Math::min(first + columns, itemCount);
       for (int32 i = first; i < last; ++i) {
-        renderGridAssetItem(m_assets[m_visibleAssets[i]], i - first);
+        if (i < folderCount) {
+          renderGridFolderItem(folders[i], i - first);
+        }
+        else {
+          renderGridAssetItem(m_assets[m_visibleAssets[i - folderCount]], i - first);
+        }
       }
     }
   }
@@ -347,11 +401,18 @@ ContentAssetUI::renderListView()
 
   setupTableColumns();
 
+  const Vector<uint32>& folders = getVisibleSubfolders();
+  const int32 folderCount = static_cast<int32>(folders.size());
   ImGuiListClipper clipper;
-  clipper.Begin(static_cast<int32>(m_visibleAssets.size()));
+  clipper.Begin(folderCount + static_cast<int32>(m_visibleAssets.size()));
   while (clipper.Step()) {
     for (int32 i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-      renderListAssetItem(m_assets[m_visibleAssets[i]]);
+      if (i < folderCount) {
+        renderListFolderItem(folders[i]);
+      }
+      else {
+        renderListAssetItem(m_assets[m_visibleAssets[i - folderCount]]);
+      }
     }
   }
 
@@ -464,14 +525,8 @@ ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset)
     return;
   }
 
-  // Long names are cut so they fit under the icon.
-  const ANSICHAR* displayName = asset->getName();
-  ANSICHAR shortName[13];
-  if (std::strlen(displayName) > 12) {
-    std::memcpy(shortName, displayName, 9);
-    std::memcpy(shortName + 9, "...", 4);
-    displayName = shortName;
-  }
+  ShortName shortName;
+  const ANSICHAR* displayName = shortenName(asset->getName(), shortName);
 
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                        (gridSize - ImGui::CalcTextSize(displayName).x) * 0.5f);
@@ -858,6 +913,272 @@ ContentAssetUI::handleEmptyAreaContextMenu()
 /*
  */
 void
+ContentAssetUI::rebuildFolderTree()
+{
+  const Path previous = m_folders.empty() ? EnginePaths::getGameAssetDirectory()
+                                          : getCurrentFolderPath();
+  m_folders.clear();
+  m_folders.push_back({.path = EnginePaths::getGameAssetDirectory(),
+                       .name = "Game",
+                       .parent = INVALID_FOLDER,
+                       .children = {}});
+  scanFolder(0);
+
+  const uint32 found = findFolder(previous);
+  m_currentFolder = found == INVALID_FOLDER ? 0 : found;
+  m_requestedFolder = INVALID_FOLDER;
+  m_needsFilterUpdate = true;
+}
+
+/*
+ */
+void
+ContentAssetUI::scanFolder(uint32 folderIndex)
+{
+  Vector<Path> files;
+  Vector<Path> directories;
+  FileSystem::getChildren(m_folders[folderIndex].path, files, directories);
+  Algorithm::sort(directories, [](const Path& a, const Path& b) {
+    return a.toString() < b.toString();
+  });
+
+  for (const Path& directory : directories) {
+    const uint32 childIndex = static_cast<uint32>(m_folders.size());
+    m_folders.push_back({.path = directory,
+                         .name = directory.getFileName(),
+                         .parent = folderIndex,
+                         .children = {}});
+    m_folders[folderIndex].children.push_back(childIndex);
+    scanFolder(childIndex);
+  }
+}
+
+/*
+ */
+uint32
+ContentAssetUI::findFolder(const Path& path) const
+{
+  for (uint32 i = 0; i < static_cast<uint32>(m_folders.size()); ++i) {
+    if (m_folders[i].path.toString() == path.toString()) {
+      return i;
+    }
+  }
+  return INVALID_FOLDER;
+}
+
+/*
+ */
+const Vector<uint32>&
+ContentAssetUI::getVisibleSubfolders() const
+{
+  // A search lists assets from every subfolder, so the folders themselves are hidden.
+  static const Vector<uint32> kNoFolders;
+  return searchBuffer[0] != '\0' ? kNoFolders : m_folders[m_currentFolder].children;
+}
+
+/*
+ */
+const Path&
+ContentAssetUI::getCurrentFolderPath() const
+{
+  return m_folders[m_currentFolder].path;
+}
+
+/*
+ */
+void
+ContentAssetUI::requestFolder(uint32 folderIndex)
+{
+  m_requestedFolder = folderIndex;
+}
+
+/*
+ */
+void
+ContentAssetUI::renderFolderTree()
+{
+  // Resizable by its right edge; the width given is only the first one.
+  ImGui::BeginChild("FolderTree", ImVec2(ImGui::GetFontSize() * 12.0f, 0.0f),
+                    ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+  if (!m_folders.empty()) {
+    renderFolderTreeNode(0);
+  }
+  m_bRevealCurrentFolder = false;
+  ImGui::EndChild();
+}
+
+/*
+ */
+void
+ContentAssetUI::renderFolderTreeNode(uint32 folderIndex)
+{
+  const FolderNode& folder = m_folders[folderIndex];
+
+  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+                             ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                             ImGuiTreeNodeFlags_SpanAvailWidth;
+  if (folder.children.empty()) {
+    flags |= ImGuiTreeNodeFlags_Leaf;
+  }
+  if (folderIndex == m_currentFolder) {
+    flags |= ImGuiTreeNodeFlags_Selected;
+  }
+  if (folderIndex == 0) {
+    flags |= ImGuiTreeNodeFlags_DefaultOpen;
+  }
+
+  if (m_bRevealCurrentFolder) {
+    for (uint32 i = m_folders[m_currentFolder].parent; i != INVALID_FOLDER;
+         i = m_folders[i].parent) {
+      if (i == folderIndex) {
+        ImGui::SetNextItemOpen(true);
+        break;
+      }
+    }
+  }
+
+  ImGui::PushID(static_cast<int32>(folderIndex));
+  const bool bOpen = ImGui::TreeNodeEx("##folder", flags, "%s %s",
+                                       UIHelpers::getFolderIcon(false), folder.name.c_str());
+  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+    requestFolder(folderIndex);
+  }
+  if (bOpen) {
+    for (const uint32 child : folder.children) {
+      renderFolderTreeNode(child);
+    }
+    ImGui::TreePop();
+  }
+  ImGui::PopID();
+}
+
+/*
+ */
+void
+ContentAssetUI::renderBreadcrumb()
+{
+  // From the current folder up to /Game, then drawn from the top.
+  constexpr uint32 kMaxDepth = 32;
+  Array<uint32, kMaxDepth> chain{};
+  uint32 depth = 0;
+  for (uint32 i = m_currentFolder; i != INVALID_FOLDER && depth < kMaxDepth;
+       i = m_folders[i].parent) {
+    chain[depth++] = i;
+  }
+
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+  for (uint32 i = depth; i > 0; --i) {
+    const uint32 folderIndex = chain[i - 1];
+    ImGui::PushID(static_cast<int32>(folderIndex));
+    if (ImGui::SmallButton(m_folders[folderIndex].name.c_str())) {
+      requestFolder(folderIndex);
+    }
+    ImGui::PopID();
+    if (i > 1) {
+      ImGui::SameLine(0.0f, 2.0f);
+      ImGui::TextDisabled(">");
+      ImGui::SameLine(0.0f, 2.0f);
+    }
+  }
+  ImGui::PopStyleColor();
+  ImGui::Separator();
+}
+
+/*
+ */
+void
+ContentAssetUI::renderGridFolderItem(uint32 folderIndex, int32 column)
+{
+  if (column > 0) {
+    ImGui::SameLine();
+  }
+
+  const FolderNode& folder = m_folders[folderIndex];
+  ImGui::PushID(static_cast<int32>(folderIndex));
+  ImGui::BeginGroup();
+
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+  ImGui::Button("##folder", ImVec2(gridSize, gridSize));
+  ImGui::PopStyleColor(3);
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    requestFolder(folderIndex);
+    m_bRevealCurrentFolder = true;
+  }
+
+  const ImVec2 buttonMin = ImGui::GetItemRectMin();
+  const ImVec2 iconPos =
+      ImVec2(buttonMin.x + (gridSize - 32) * 0.5f, buttonMin.y + (gridSize - 32) * 0.5f - 10);
+  ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 32.0f, iconPos,
+                                      IM_COL32(230, 190, 90, 255),
+                                      UIHelpers::getFolderIcon(false));
+
+  ShortName shortName;
+  const ANSICHAR* displayName = shortenName(folder.name.c_str(), shortName);
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                       (gridSize - ImGui::CalcTextSize(displayName).x) * 0.5f);
+  ImGui::TextUnformatted(displayName);
+
+  ImGui::EndGroup();
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", folder.path.toString().c_str());
+  }
+  ImGui::PopID();
+}
+
+/*
+ */
+void
+ContentAssetUI::renderListFolderItem(uint32 folderIndex)
+{
+  const FolderNode& folder = m_folders[folderIndex];
+  ImGui::TableNextRow();
+  ImGui::PushID(static_cast<int32>(folderIndex));
+
+  ImGui::TableSetColumnIndex(0);
+  ImGui::TextUnformatted(UIHelpers::getFolderIcon(false));
+
+  ImGui::TableSetColumnIndex(1);
+  ImGui::Selectable(folder.name.c_str(), false, ImGuiSelectableFlags_SpanAllColumns);
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    requestFolder(folderIndex);
+    m_bRevealCurrentFolder = true;
+  }
+
+  ImGui::TableSetColumnIndex(2);
+  ImGui::TextUnformatted("Folder");
+
+  ImGui::PopID();
+}
+
+/*
+ */
+void
+ContentAssetUI::createFolder()
+{
+  const Path& parent = getCurrentFolderPath();
+  String name = "NewFolder";
+  for (uint32 suffix = 1; findFolder(parent.join(Path(name))) != INVALID_FOLDER; ++suffix) {
+    name = StringUtils::format("NewFolder{0}", suffix);
+  }
+
+  const Path folder = parent.join(Path(name));
+  if (!FileSystem::createDirectory(folder)) {
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to create the folder {0}", folder);
+    return;
+  }
+  rebuildFolderTree();
+  const uint32 created = findFolder(folder);
+  if (created != INVALID_FOLDER) {
+    m_currentFolder = created;
+    m_bRevealCurrentFolder = true;
+  }
+}
+
+/*
+ */
+void
 ContentAssetUI::renderEmptyAreaContextMenu()
 {
   if (!ImGui::BeginPopup("EmptyAreaContextMenu")) {
@@ -880,7 +1201,7 @@ ContentAssetUI::renderEmptyAreaContextMenu()
       for (const auto& assetType : codec->getSupportedAssetTypes()) {
         const String& codecTypeName = assetManager.getAssetTypeName(assetType);
         if (ImGui::MenuItem(codecTypeName.c_str())) {
-          if (UIHelpers::importAssetWithDialog(codec)) {
+          if (UIHelpers::importAssetWithDialog(codec, getCurrentFolderPath())) {
             refreshAssets();
           }
           ImGui::EndMenu();
@@ -896,10 +1217,14 @@ ContentAssetUI::renderEmptyAreaContextMenu()
   ImGui::Separator();
 
   if (ImGui::BeginMenu("Create")) {
+    if (ImGui::MenuItem("Folder")) {
+      createFolder();
+    }
+    ImGui::Separator();
     if (ImGui::MenuItem("Material")) {
       // Saved at once, so a model or object can reference it before "Save All".
       AssetManager& assetManager = AssetManager::instance();
-      const Path& folder = EnginePaths::getGameAssetDirectory();
+      const Path& folder = getCurrentFolderPath();
       const SPtr<MaterialAsset> material =
           assetManager.createAsset<MaterialAsset>(
               assetManager.makeUniqueAssetName(folder, "M_New"), folder).lock();
@@ -910,7 +1235,7 @@ ContentAssetUI::renderEmptyAreaContextMenu()
     }
     if (ImGui::MenuItem("Game Object Asset")) {
       WeakPtr<IAsset> newAsset = AssetManager::instance().createAsset<GameObjectAsset>(
-          "New", EnginePaths::getGameAssetDirectory());
+          "New", getCurrentFolderPath());
       if (newAsset.expired()) {
         CH_LOG_ERROR(ContentAssetUILog, "Failed to create Game Object Asset.");
       }

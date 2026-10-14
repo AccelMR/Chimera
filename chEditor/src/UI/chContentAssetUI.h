@@ -9,6 +9,7 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+#include "chPath.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {
@@ -82,6 +83,9 @@ class ContentAssetUI
   shouldShowAsset(const SPtr<IAsset>& asset) const;
 
   NODISCARD bool
+  passesFolderFilter(const SPtr<IAsset>& asset) const;
+
+  NODISCARD bool
   passesSearchFilter(const SPtr<IAsset>& asset) const;
 
   NODISCARD bool
@@ -127,6 +131,53 @@ class ContentAssetUI
   renderEmptyAreaContextMenu();
 
   /**
+   * Reads the folders under /Game from disk again, keeping the current folder when it
+   * still exists.
+   */
+  void
+  rebuildFolderTree();
+
+  void
+  scanFolder(uint32 folderIndex);
+
+  NODISCARD uint32
+  findFolder(const Path& path) const;
+
+  void
+  renderFolderTree();
+
+  void
+  renderFolderTreeNode(uint32 folderIndex);
+
+  void
+  renderBreadcrumb();
+
+  /**
+   * Takes effect after the frame's folder and asset lists are drawn, so the lists being
+   * drawn do not change under them.
+   */
+  void
+  requestFolder(uint32 folderIndex);
+
+  void
+  renderGridFolderItem(uint32 folderIndex, int32 column);
+
+  void
+  renderListFolderItem(uint32 folderIndex);
+
+  void
+  createFolder();
+
+  NODISCARD const Path&
+  getCurrentFolderPath() const;
+
+  /**
+   * Empty while searching, because a search lists the assets of every subfolder.
+   */
+  NODISCARD const Vector<uint32>&
+  getVisibleSubfolders() const;
+
+  /**
    * Thumbnail of a texture asset, created the first time it is needed. Returns 0 if
    * it could not be created; that is only tried once.
    */
@@ -134,7 +185,25 @@ class ContentAssetUI
   getThumbnail(const SPtr<IAsset>& asset);
 
  private:
+  static constexpr uint32 INVALID_FOLDER = ~0u;
+
+  struct FolderNode
+  {
+    // Virtual, like /Game/Skeleton.
+    Path path;
+    String name;
+    uint32 parent = INVALID_FOLDER;
+    Vector<uint32> children;
+  };
+
   Vector<SPtr<IAsset>> m_assets;
+
+  // Read from disk on refresh only; [0] is /Game.
+  Vector<FolderNode> m_folders;
+  uint32 m_currentFolder = 0;
+  uint32 m_requestedFolder = INVALID_FOLDER;
+  // Opens the tree down to the current folder once, after it was picked outside the tree.
+  bool m_bRevealCurrentFolder = false;
 
   // Indices in m_assets of the assets that pass the filters.
   Vector<uint32> m_visibleAssets;
