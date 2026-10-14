@@ -85,8 +85,8 @@ class PerspectiveMatrix : public Matrix4
 {
  public:
   CH_UTILITY_EXPORT
-  PerspectiveMatrix(const Radian& halfFOV, float width, float height, float near,
-                    float far) noexcept;
+  PerspectiveMatrix(const Radian& halfFOV, float width, float height, float nearPlane,
+                    float farPlane) noexcept;
 };
 
 /**
@@ -96,11 +96,12 @@ class OrthographicMatrix : public Matrix4
 {
  public:
   FORCEINLINE
-  OrthographicMatrix(float halfWidth, float halfHeight, float near, float far) noexcept
+  OrthographicMatrix(float halfWidth, float halfHeight, float nearPlane,
+                     float farPlane) noexcept
    : Matrix4(1.0f / halfWidth, 0.0f, 0.0f, 0.0f,
              0.0f, 1.0f / halfHeight, 0.0f, 0.0f,
-             0.0f, 0.0f, 1.0f / (far - near), 0.0f,
-             0.0f, 0.0f, -near / (far - near), 1.0f)
+             0.0f, 0.0f, 1.0f / (farPlane - nearPlane), 0.0f,
+             0.0f, 0.0f, -nearPlane / (farPlane - nearPlane), 1.0f)
   {}
 };
 

@@ -9,6 +9,8 @@
 /************************************************************************/
 #include "chGameObject.h"
 
+#include "chAlgorithm.h"
+
 namespace chEngineSDK {
 
 /*
@@ -57,6 +59,20 @@ GameObject::attachComponent(UniquePtr<Component>&& component, const UUID& typeId
     attached.setRegistered(true);
   }
   return attached;
+}
+
+/*
+ */
+void
+GameObject::removeComponent(Component& component)
+{
+  CH_ASSERT(component.getOwner() == this);
+  if (component.isRegistered()) {
+    component.setRegistered(false);
+  }
+  Algorithm::removeFirstIf(m_components, [&component](const UniquePtr<Component>& owned) {
+    return owned.get() == &component;
+  });
 }
 
 /*

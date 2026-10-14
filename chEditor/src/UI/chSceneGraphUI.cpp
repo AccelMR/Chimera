@@ -18,6 +18,7 @@
 #include "chMath.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
+#include "chModelExpand.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
@@ -101,6 +102,12 @@ SceneGraphUI::renderSceneGraphUI()
     if (m_pendingModel) {
       addPendingModel(*scene);
     }
+    if (m_pendingExpand) {
+      if (ModelExpand::expand(*scene, *m_pendingExpand, m_pendingExpandMode)) {
+        m_openOnNextDraw = m_pendingExpand.get();
+      }
+      m_pendingExpand.reset();
+    }
     if (m_pendingDelete) {
       const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
       if (isInSubtree(selected.get(), *m_pendingDelete)) {
@@ -130,6 +137,11 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
 
   // Objects can share a name, so the pointer keeps their tree nodes apart.
   ImGui::PushID(gameObject.get());
+  if (gameObject.get() == m_openOnNextDraw) {
+    // A model just split into parts opens, so the parts show at once.
+    ImGui::SetNextItemOpen(true);
+    m_openOnNextDraw = nullptr;
+  }
   const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s", gameObject->getName().c_str());
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
     EditorSelection::setSelectedGameObject(gameObject);
@@ -149,6 +161,19 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
       scene.createGameObject("GameObject", gameObject.get());
     }
     renderCreateLightItems(scene, gameObject.get());
+    const ModelComponent* model = gameObject->getComponent<ModelComponent>();
+    if (model && model->isWholeModel() && model->getModel() &&
+        ImGui::BeginMenu("Expand Model")) {
+      if (ImGui::MenuItem("By Node")) {
+        m_pendingExpand = gameObject;
+        m_pendingExpandMode = ModelExpandMode::PerNode;
+      }
+      if (ImGui::MenuItem("By Mesh")) {
+        m_pendingExpand = gameObject;
+        m_pendingExpandMode = ModelExpandMode::PerMesh;
+      }
+      ImGui::EndMenu();
+    }
     if (ImGui::MenuItem("Delete")) {
       m_pendingDelete = gameObject;
     }
@@ -219,7 +244,10 @@ SceneGraphUI::addPendingModel(Scene& scene)
 
   // Under a moved parent the render items are only in place after the transform update.
   scene.updateTransforms();
-  m_editorCamera->focus(gameObject->getComponent<ModelComponent>()->getWorldBounds());
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  if (ModelComponent::getHierarchyWorldBounds(*gameObject, bounds)) {
+    m_editorCamera->focus(bounds);
+  }
 }
 
 } // namespace chEngineSDK

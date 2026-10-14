@@ -4,13 +4,15 @@
  * @author AccelMR
  * @date 2026/10/07
  * @brief
- *  Component that draws a Model at its GameObject.
+ *  Component that draws a Model, or one part of it, at its GameObject.
  */
 /************************************************************************/
 #include "chModelComponent.h"
 
+#include "chAlgorithm.h"
 #include "chGameObject.h"
 #include "chMaterialAsset.h"
+#include "chMatrixHelpers.h"
 #include "chModel.h"
 #include "chScene.h"
 
@@ -18,6 +20,44 @@ namespace chEngineSDK {
 namespace {
 // Returned by reference for slots that do not exist.
 const SPtr<MaterialAsset> kNoMaterial;
+
+/*
+ * Calls visit(mesh, localMatrix) for every mesh the part draws, localMatrix being where the
+ * mesh sits relative to the GameObject. An index past the end draws nothing.
+ */
+template<typename Visitor>
+void
+forEachDrawnMesh(const Model& model,
+                 uint32 nodeIndex,
+                 uint32 meshIndex,
+                 const Vector3& pivot,
+                 Visitor&& visit)
+{
+  const Vector<ModelNode*>& nodes = model.getAllNodes();
+  if (nodeIndex == ModelComponent::ALL) {
+    for (const ModelNode* node : nodes) {
+      for (const SPtr<Mesh>& mesh : node->getMeshes()) {
+        visit(*mesh, node->getGlobalTransform());
+      }
+    }
+    return;
+  }
+  if (nodeIndex >= nodes.size()) {
+    return;
+  }
+
+  // The node's own transform went into the GameObject; only the pivot is left.
+  const Matrix4 localMatrix = TranslationMatrix(-pivot);
+  const Vector<SPtr<Mesh>>& meshes = nodes[nodeIndex]->getMeshes();
+  if (meshIndex == ModelComponent::ALL) {
+    for (const SPtr<Mesh>& mesh : meshes) {
+      visit(*mesh, localMatrix);
+    }
+  }
+  else if (meshIndex < meshes.size()) {
+    visit(*meshes[meshIndex], localMatrix);
+  }
+}
 } // namespace
 
 /*
@@ -29,20 +69,43 @@ ModelComponent::ModelComponent(const SPtr<Model>& model)
 
 /*
  */
+ModelComponent::ModelComponent(const SPtr<Model>& model,
+                               uint32 nodeIndex,
+                               uint32 meshIndex,
+                               const Vector3& pivot)
+{
+  setModelPart(model, nodeIndex, meshIndex, pivot);
+}
+
+/*
+ */
 void
 ModelComponent::setModel(const SPtr<Model>& model)
+{
+  setModelPart(model, ALL, ALL, Vector3::ZERO);
+}
+
+/*
+ */
+void
+ModelComponent::setModelPart(const SPtr<Model>& model,
+                             uint32 nodeIndex,
+                             uint32 meshIndex,
+                             const Vector3& pivot)
 {
   if (isRegistered()) {
     removeRenderItems();
   }
 
   m_model = model;
-  m_materialOverrides.clear();
+  m_nodeIndex = nodeIndex;
+  m_meshIndex = meshIndex;
+  m_pivot = pivot;
   if (m_model) {
     // The node matrices are read when the items are placed, so they must be current.
     m_model->updateTransforms();
-    m_materialOverrides.resize(m_model->getMaterialSlots().size());
   }
+  rebuildUsedSlots();
 
   if (isRegistered()) {
     addRenderItems();
@@ -51,10 +114,37 @@ ModelComponent::setModel(const SPtr<Model>& model)
 
 /*
  */
-uint32
-ModelComponent::getMaterialSlotCount() const
+void
+ModelComponent::rebuildUsedSlots()
 {
-  return static_cast<uint32>(m_materialOverrides.size());
+  m_usedSlots.clear();
+  m_materialOverrides.clear();
+  if (!m_model) {
+    return;
+  }
+
+  const SIZE_T slotCount = m_model->getMaterialSlots().size();
+  forEachDrawnMesh(*m_model, m_nodeIndex, m_meshIndex, m_pivot,
+                   [this, slotCount](const Mesh& mesh, const Matrix4&) {
+                     const uint32 slot = mesh.getMaterialSlot();
+                     if (slot < slotCount && !Algorithm::contains(m_usedSlots, slot)) {
+                       m_usedSlots.push_back(slot);
+                     }
+                   });
+  Algorithm::sort(m_usedSlots);
+  m_materialOverrides.resize(m_usedSlots.size());
+}
+
+/*
+ */
+uint32
+ModelComponent::findUsedSlot(uint32 slot) const
+{
+  const SIZE_T index = Algorithm::lowerBound(m_usedSlots, slot);
+  if (index < m_usedSlots.size() && m_usedSlots[index] == slot) {
+    return static_cast<uint32>(index);
+  }
+  return ALL;
 }
 
 /*
@@ -62,11 +152,12 @@ ModelComponent::getMaterialSlotCount() const
 void
 ModelComponent::setMaterial(uint32 slot, const SPtr<MaterialAsset>& material)
 {
-  if (slot >= m_materialOverrides.size()) {
+  const uint32 index = findUsedSlot(slot);
+  if (index == ALL) {
     return;
   }
 
-  m_materialOverrides[slot] = material;
+  m_materialOverrides[index] = material;
   if (!isRegistered()) {
     return;
   }
@@ -85,7 +176,8 @@ ModelComponent::setMaterial(uint32 slot, const SPtr<MaterialAsset>& material)
 const SPtr<MaterialAsset>&
 ModelComponent::getMaterialOverride(uint32 slot) const
 {
-  return slot < m_materialOverrides.size() ? m_materialOverrides[slot] : kNoMaterial;
+  const uint32 index = findUsedSlot(slot);
+  return index != ALL ? m_materialOverrides[index] : kNoMaterial;
 }
 
 /*
@@ -93,11 +185,12 @@ ModelComponent::getMaterialOverride(uint32 slot) const
 const SPtr<MaterialAsset>&
 ModelComponent::getMaterial(uint32 slot) const
 {
-  if (slot >= m_materialOverrides.size()) {
+  if (!m_model || slot >= m_model->getMaterialSlots().size()) {
     return kNoMaterial;
   }
-  if (m_materialOverrides[slot]) {
-    return m_materialOverrides[slot];
+  const SPtr<MaterialAsset>& materialOverride = getMaterialOverride(slot);
+  if (materialOverride) {
+    return materialOverride;
   }
   return m_model->getMaterialSlots()[slot].material;
 }
@@ -131,6 +224,46 @@ ModelComponent::getWorldBounds() const
 
 /*
  */
+bool
+ModelComponent::getHierarchyWorldBounds(const GameObject& gameObject, AABox& outBounds)
+{
+  bool bFound = false;
+  for (const UniquePtr<Component>& component : gameObject.getComponents()) {
+    if (component->getTypeId() != TypeTraits<ModelComponent>::getTypeId()) {
+      continue;
+    }
+    const ModelComponent& model = static_cast<const ModelComponent&>(*component);
+    if (!model.isRegistered() || model.m_parts.empty()) {
+      continue;
+    }
+    const AABox modelBounds = model.getWorldBounds();
+    if (bFound) {
+      outBounds += modelBounds;
+    }
+    else {
+      outBounds = modelBounds;
+      bFound = true;
+    }
+  }
+
+  for (const SPtr<GameObject>& child : gameObject.getChildren()) {
+    AABox childBounds(Vector3::ZERO, Vector3::ZERO);
+    if (!getHierarchyWorldBounds(*child, childBounds)) {
+      continue;
+    }
+    if (bFound) {
+      outBounds += childBounds;
+    }
+    else {
+      outBounds = childBounds;
+      bFound = true;
+    }
+  }
+  return bFound;
+}
+
+/*
+ */
 void
 ModelComponent::onRegister()
 {
@@ -154,7 +287,7 @@ ModelComponent::onTransformChanged()
   const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
   for (const MeshPart& part : m_parts) {
     RenderItem& item = scene.getRenderItem(part.renderItemId);
-    item.worldMatrix = part.node->getGlobalTransform() * ownerWorld;
+    item.worldMatrix = part.localMatrix * ownerWorld;
     item.worldBounds = part.mesh->getBounds().getTransformed(item.worldMatrix);
   }
 }
@@ -170,19 +303,20 @@ ModelComponent::addRenderItems()
 
   Scene& scene = *getOwner()->getScene();
   const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
-  for (const ModelNode* node : m_model->getAllNodes()) {
-    for (const SPtr<Mesh>& mesh : node->getMeshes()) {
-      // Row vectors: the node's place in the model applies first, then the object's.
-      const Matrix4 world = node->getGlobalTransform() * ownerWorld;
-      const RenderItem item{.worldMatrix = world,
-                            .worldBounds = mesh->getBounds().getTransformed(world),
-                            .mesh = mesh.get(),
-                            .material = getRenderMaterial(mesh->getMaterialSlot()),
-                            .owner = getOwner()};
-      const uint32 renderItemId = scene.addRenderItem(item);
-      m_parts.push_back({.node = node, .mesh = mesh.get(), .renderItemId = renderItemId});
-    }
-  }
+  forEachDrawnMesh(
+      *m_model, m_nodeIndex, m_meshIndex, m_pivot,
+      [this, &scene, &ownerWorld](const Mesh& mesh, const Matrix4& localMatrix) {
+        // Row vectors: the mesh's place in the object applies first, then the object's.
+        const Matrix4 world = localMatrix * ownerWorld;
+        const RenderItem item{.worldMatrix = world,
+                              .worldBounds = mesh.getBounds().getTransformed(world),
+                              .mesh = &mesh,
+                              .material = getRenderMaterial(mesh.getMaterialSlot()),
+                              .owner = getOwner()};
+        const uint32 renderItemId = scene.addRenderItem(item);
+        m_parts.push_back(
+            {.localMatrix = localMatrix, .mesh = &mesh, .renderItemId = renderItemId});
+      });
 }
 
 /*

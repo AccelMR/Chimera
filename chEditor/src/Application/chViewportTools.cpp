@@ -638,8 +638,10 @@ ViewportTools::focusSelection()
     return;
   }
 
-  if (const ModelComponent* model = selected->getComponent<ModelComponent>()) {
-    m_editorCamera.focus(model->getWorldBounds());
+  // A model split into parts has its meshes on the children.
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  if (ModelComponent::getHierarchyWorldBounds(*selected, bounds)) {
+    m_editorCamera.focus(bounds);
     return;
   }
   const Vector3 position = selected->getTransform().getWorldPosition();

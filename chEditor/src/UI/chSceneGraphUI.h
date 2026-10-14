@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chModelExpand.h"
+
 namespace chEngineSDK {
 class EditorCamera;
 class ModelAsset;
@@ -51,11 +53,15 @@ class SceneGraphUI
   bool m_isVisible = true;
   EditorCamera* m_editorCamera = nullptr;
 
-  // Deleting or adding while the tree is drawn would change the vectors being iterated, so
-  // both wait until the tree is done.
+  // Deleting, adding or expanding while the tree is drawn would change the vectors being
+  // iterated, so they wait until the tree is done.
   SPtr<GameObject> m_pendingDelete;
   SPtr<ModelAsset> m_pendingModel;
   SPtr<GameObject> m_pendingModelParent;
+  SPtr<GameObject> m_pendingExpand;
+  ModelExpandMode m_pendingExpandMode = ModelExpandMode::Single;
+  // Only compared, never followed.
+  const GameObject* m_openOnNextDraw = nullptr;
 
   // Rebuilt only when the scene name changes.
   String m_windowTitle;

@@ -21,9 +21,11 @@
 #include "chMaterial.h"
 #include "chMaterialAsset.h"
 #include "chMath.h"
+#include "chMatrixHelpers.h"
 #include "chMesh.h"
 #include "chModel.h"
 #include "chModelComponent.h"
+#include "chModelExpand.h"
 #include "chQuaternion.h"
 #include "chRay.h"
 #include "chRenderGraph.h"
@@ -1087,7 +1089,7 @@ TEST_CASE("chCore - Model material slots")
   Scene scene("Test", chEngineSDK::UUID::createRandom());
   const SPtr<GameObject> gameObject = scene.createGameObject("Skeleton");
   ModelComponent& modelComponent = gameObject->addComponent<ModelComponent>(model);
-  REQUIRE(modelComponent.getMaterialSlotCount() == 2);
+  REQUIRE(modelComponent.getUsedMaterialSlots().size() == 2);
   REQUIRE(scene.getRenderItemCount() == 2);
 
   const auto materialOf = [&scene](const Mesh* itemMesh) -> const Material* {
@@ -1140,6 +1142,139 @@ TEST_CASE("chCore - Model material slots")
   {
     body->getMaterial().setBaseColorFactor(LinearColor(1.0f, 0.0f, 0.0f, 1.0f));
     REQUIRE(materialOf(mesh.get())->getBaseColorFactor().g == 0.0f);
+  }
+}
+
+TEST_CASE("chCore - Model expand")
+{
+  // Root (x + 10, one mesh) > Child (y + 5, two meshes) and Root > Empty > Leaf (z + 3).
+  // Every mesh is the test triangle, centered at (0, 1, 0) in its node.
+  const auto createMesh = [](uint32 slot) {
+    SPtr<Mesh> mesh = createTriangleModel()->getRootNodes()[0]->getMeshes()[0];
+    mesh->setMaterialSlot(slot);
+    return mesh;
+  };
+  const SPtr<Model> model = chMakeShared<Model>();
+  ModelNode* rootNode =
+      model->createNode("Root", TranslationMatrix(Vector3(10.0f, 0.0f, 0.0f)));
+  rootNode->addMesh(createMesh(0));
+  ModelNode* childNode =
+      model->createNode("Child", TranslationMatrix(Vector3(0.0f, 5.0f, 0.0f)), rootNode);
+  childNode->addMesh(createMesh(0));
+  childNode->addMesh(createMesh(1));
+  ModelNode* emptyNode = model->createNode("Empty", rootNode);
+  model->createNode("Leaf", TranslationMatrix(Vector3(0.0f, 0.0f, 3.0f)), emptyNode)
+      ->addMesh(createMesh(1));
+
+  const SPtr<MaterialAsset> body = createTestMaterialAsset("M_Body");
+  const SPtr<MaterialAsset> sword = createTestMaterialAsset("M_Sword");
+  model->addMaterialSlot({.name = "Body", .materialId = body->getUUID(), .material = body});
+  model->addMaterialSlot({.name = "Sword", .materialId = sword->getUUID(), .material = sword});
+
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Model");
+  gameObject->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 1.0f));
+  ModelComponent& whole = gameObject->addComponent<ModelComponent>(model);
+  REQUIRE(whole.isWholeModel());
+  const SPtr<MaterialAsset> gold = createTestMaterialAsset("M_Gold");
+  whole.setMaterial(1, gold);
+  scene.updateTransforms();
+  REQUIRE(scene.getRenderItemCount() == 4);
+
+  AABox wholeBounds(Vector3::ZERO, Vector3::ZERO);
+  REQUIRE(ModelComponent::getHierarchyWorldBounds(*gameObject, wholeBounds));
+
+  const auto findChild = [](const GameObject& parent, const String& name) -> GameObject* {
+    for (const SPtr<GameObject>& child : parent.getChildren()) {
+      if (child->getName() == name) {
+        return child.get();
+      }
+    }
+    return nullptr;
+  };
+  const auto partCenter = [](const GameObject& part) {
+    return part.getComponent<ModelComponent>()->getWorldBounds().getCenter();
+  };
+
+  REQUIRE_FALSE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::Single));
+
+  SECTION("Per node keeps the hierarchy and where every mesh is drawn")
+  {
+    REQUIRE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::PerNode));
+    REQUIRE(gameObject->getComponent<ModelComponent>() == nullptr);
+    REQUIRE(scene.getRenderItemCount() == 4);
+    scene.updateTransforms();
+
+    REQUIRE(gameObject->getChildren().size() == 1);
+    GameObject* root = findChild(*gameObject, "Root");
+    REQUIRE(root != nullptr);
+    GameObject* child = findChild(*root, "Child");
+    GameObject* empty = findChild(*root, "Empty");
+    REQUIRE(child != nullptr);
+    REQUIRE(empty != nullptr);
+    REQUIRE(empty->getComponent<ModelComponent>() == nullptr);
+    GameObject* leaf = findChild(*empty, "Leaf");
+    REQUIRE(leaf != nullptr);
+
+    REQUIRE(partCenter(*root).nearEqual(Vector3(10.0f, 1.0f, 1.0f)));
+    REQUIRE(partCenter(*child).nearEqual(Vector3(10.0f, 6.0f, 1.0f)));
+    REQUIRE(partCenter(*leaf).nearEqual(Vector3(10.0f, 1.0f, 4.0f)));
+
+    const ModelComponent& childPart = *child->getComponent<ModelComponent>();
+    REQUIRE(childPart.getUsedMaterialSlots().size() == 2);
+    REQUIRE(childPart.getMaterial(0) == body);
+    REQUIRE(childPart.getMaterial(1) == gold);
+    REQUIRE(root->getComponent<ModelComponent>()->getUsedMaterialSlots().size() == 1);
+
+    AABox expandedBounds(Vector3::ZERO, Vector3::ZERO);
+    REQUIRE(ModelComponent::getHierarchyWorldBounds(*gameObject, expandedBounds));
+    REQUIRE(expandedBounds.minPoint.nearEqual(wholeBounds.minPoint));
+    REQUIRE(expandedBounds.maxPoint.nearEqual(wholeBounds.maxPoint));
+
+    // Already split: nothing left to expand.
+    REQUIRE_FALSE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::PerMesh));
+  }
+
+  SECTION("Per mesh puts every mesh in its own child, standing at its center")
+  {
+    REQUIRE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::PerMesh));
+    scene.updateTransforms();
+    REQUIRE(gameObject->getChildren().size() == 4);
+    REQUIRE(scene.getRenderItemCount() == 4);
+
+    GameObject* root = findChild(*gameObject, "Root");
+    GameObject* childBody = findChild(*gameObject, "Child - Body");
+    GameObject* childSword = findChild(*gameObject, "Child - Sword");
+    GameObject* leaf = findChild(*gameObject, "Leaf");
+    REQUIRE(root != nullptr);
+    REQUIRE(childBody != nullptr);
+    REQUIRE(childSword != nullptr);
+    REQUIRE(leaf != nullptr);
+
+    REQUIRE(root->getTransform().getWorldPosition().nearEqual(Vector3(10.0f, 1.0f, 1.0f)));
+    REQUIRE(partCenter(*root).nearEqual(Vector3(10.0f, 1.0f, 1.0f)));
+    REQUIRE(childSword->getTransform().getWorldPosition().nearEqual(
+        Vector3(10.0f, 6.0f, 1.0f)));
+    REQUIRE(partCenter(*childSword).nearEqual(Vector3(10.0f, 6.0f, 1.0f)));
+    REQUIRE(partCenter(*leaf).nearEqual(Vector3(10.0f, 1.0f, 4.0f)));
+    REQUIRE(childSword->getComponent<ModelComponent>()->getMaterial(1) == gold);
+    REQUIRE(childBody->getComponent<ModelComponent>()->getUsedMaterialSlots().size() == 1);
+
+    // A click picks the part, and moving a part moves only its mesh.
+    SceneRayHit hit;
+    REQUIRE(scene.raycast(Ray(Vector3(10.0f, 0.5f, -5.0f), Vector3::UP), hit));
+    REQUIRE(hit.gameObject == root);
+    leaf->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 20.0f));
+    scene.updateTransforms();
+    REQUIRE(partCenter(*leaf).nearEqual(Vector3(0.0f, 0.0f, 21.0f)));
+    REQUIRE(partCenter(*root).nearEqual(Vector3(10.0f, 1.0f, 1.0f)));
+  }
+
+  SECTION("Hidden models stay hidden")
+  {
+    whole.setEnabled(false);
+    REQUIRE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::PerMesh));
+    REQUIRE(scene.getRenderItemCount() == 0);
   }
 }
 

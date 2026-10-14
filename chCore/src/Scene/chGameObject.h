@@ -54,6 +54,12 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD T*
   getComponent() const;
 
+  /**
+   * Unregisters and destroys a component of this object; the reference dangles after.
+   */
+  void
+  removeComponent(Component& component);
+
   NODISCARD FORCEINLINE const Vector<UniquePtr<Component>>&
   getComponents() const { return m_components; }
 

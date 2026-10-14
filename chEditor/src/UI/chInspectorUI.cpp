@@ -167,13 +167,25 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
   }
 
   const SPtr<Model>& model = modelComponent.getModel();
-  ImGui::Text("Nodes: %u", model ? model->getNodeCount() : 0u);
+  const uint32 nodeIndex = modelComponent.getNodeIndex();
+  if (modelComponent.isWholeModel()) {
+    ImGui::Text("Nodes: %u", model ? model->getNodeCount() : 0u);
+  }
+  else if (model && nodeIndex < model->getNodeCount()) {
+    const ANSICHAR* nodeName = model->getAllNodes()[nodeIndex]->getName();
+    if (modelComponent.getMeshIndex() == ModelComponent::ALL) {
+      ImGui::Text("Part: node %s", nodeName);
+    }
+    else {
+      ImGui::Text("Part: node %s, mesh %u", nodeName, modelComponent.getMeshIndex());
+    }
+  }
 
-  const uint32 slotCount = modelComponent.getMaterialSlotCount();
-  if (slotCount == 0 || !ImGui::TreeNodeEx("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+  const Vector<uint32>& usedSlots = modelComponent.getUsedMaterialSlots();
+  if (usedSlots.empty() || !ImGui::TreeNodeEx("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
-  for (uint32 slot = 0; slot < slotCount; ++slot) {
+  for (const uint32 slot : usedSlots) {
     ImGui::PushID(static_cast<int32>(slot));
     renderMaterialSlot(modelComponent, slot);
     ImGui::PopID();
