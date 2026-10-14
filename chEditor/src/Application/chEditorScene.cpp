@@ -16,8 +16,11 @@
 #include "chEditorSelection.h"
 #include "chEngineConfig.h"
 #include "chGameObject.h"
+#include "chGameObjectSerializer.h"
 #include "chLightComponent.h"
 #include "chLogger.h"
+#include "chModelComponent.h"
+#include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
 #include "chScene.h"
@@ -48,6 +51,8 @@ enum class PendingAction
   None,
   New,
   Open,
+  EditPrefab,
+  BackToScene,
   Quit
 };
 
@@ -55,6 +60,11 @@ struct EditorSceneState
 {
   SPtr<Scene> scene;
   SPtr<SceneAsset> asset;
+  // Set in prefab mode, where scene is made only to show and edit prefabRoot.
+  SPtr<PrefabAsset> prefab;
+  SPtr<GameObject> prefabRoot;
+  // The scene prefab mode goes back to; null for a new scene.
+  SPtr<SceneAsset> returnAsset;
   EditorCamera* camera = nullptr;
   bool bDirty = false;
   uint32 revision = 0;
@@ -62,6 +72,7 @@ struct EditorSceneState
   // Waits for the unsaved changes question or the Save As name, then runs in applyPending.
   PendingAction action = PendingAction::None;
   SPtr<SceneAsset> actionAsset;
+  SPtr<PrefabAsset> actionPrefab;
   bool bActionReady = false;
 
   bool bOpenUnsavedPopup = false;
@@ -90,6 +101,16 @@ setDirty(EditorSceneState& state, bool bDirty)
 }
 
 /*
+ */
+void
+addSun(Scene& scene)
+{
+  const SPtr<GameObject> sun = scene.createGameObject("Directional Light");
+  sun->getTransform().setLocalRotation(Quaternion(Rotator(-50.0f, 30.0f, 0.0f)));
+  sun->addComponent<DirectionalLightComponent>();
+}
+
+/*
  * A new scene starts with a sun, so what is dropped in it is lit.
  */
 SPtr<Scene>
@@ -98,9 +119,7 @@ makeNewScene()
   SceneManager& sceneManager = SceneManager::instance();
   const SPtr<Scene> scene = sceneManager.createAndLoadScene(String(kNewSceneName)).lock();
   if (scene) {
-    const SPtr<GameObject> sun = scene->createGameObject("Directional Light");
-    sun->getTransform().setLocalRotation(Quaternion(Rotator(-50.0f, 30.0f, 0.0f)));
-    sun->addComponent<DirectionalLightComponent>();
+    addSun(*scene);
   }
   return scene;
 }
@@ -165,6 +184,8 @@ releaseCurrent(EditorSceneState& state)
   }
   state.scene.reset();
   state.asset.reset();
+  state.prefab.reset();
+  state.prefabRoot.reset();
 }
 
 /*
@@ -184,6 +205,89 @@ saveInto(EditorSceneState& state, const SPtr<SceneAsset>& asset)
   rememberStartupScene(*asset);
   CH_LOG_INFO(EditorSceneLog, "Saved scene {0}.", asset->getName());
   return true;
+}
+
+/*
+ */
+bool
+savePrefab(EditorSceneState& state)
+{
+  PrefabAsset& prefab = *state.prefab;
+  if (!prefab.setContent(*state.prefabRoot) ||
+      !AssetManager::instance().saveAsset(state.prefab)) {
+    CH_LOG_ERROR(EditorSceneLog, "Failed to save prefab {0}.", prefab.getName());
+    return false;
+  }
+  setDirty(state, false);
+  CH_LOG_INFO(EditorSceneLog, "Saved prefab {0}.", prefab.getName());
+  return true;
+}
+
+/*
+ * The prefab in prefab mode, else the scene's asset. False when there is nothing to save
+ * into yet (a scene never saved) or saving failed.
+ */
+bool
+saveCurrent(EditorSceneState& state)
+{
+  if (state.prefab) {
+    return savePrefab(state);
+  }
+  return state.asset && saveInto(state, state.asset);
+}
+
+/*
+ */
+void
+openSceneOrNew(EditorSceneState& state, const SPtr<SceneAsset>& asset)
+{
+  const SPtr<Scene> scene = asset ? SceneManager::instance().loadScene(asset).lock() : nullptr;
+  if (scene) {
+    setCurrent(state, scene, asset);
+    return;
+  }
+  if (asset) {
+    CH_LOG_ERROR(EditorSceneLog, "Could not open scene {0}; starting a new one.",
+                 asset->getName());
+  }
+  setCurrent(state, makeNewScene(), nullptr);
+}
+
+/*
+ * The prefab's content goes into a plain object, so it can be edited, in a scene of its own.
+ * The scene also gets a sun that only lights the prefab: it is not under the root, so it is
+ * never saved into the prefab.
+ */
+void
+openPrefabMode(EditorSceneState& state, const SPtr<PrefabAsset>& prefab)
+{
+  const SPtr<SceneAsset> returnAsset = state.prefab ? state.returnAsset : state.asset;
+  releaseCurrent(state);
+
+  const String name(prefab->getName());
+  const SPtr<Scene> scene = SceneManager::instance().createAndLoadScene(name).lock();
+  if (!scene) {
+    CH_LOG_ERROR(EditorSceneLog, "Could not open prefab {0}.", name);
+    openSceneOrNew(state, returnAsset);
+    return;
+  }
+  addSun(*scene);
+  const SPtr<GameObject> root = scene->createGameObject(name);
+  if (!GameObjectSerializer::readPrefabContent(*prefab, *root)) {
+    CH_LOG_WARNING(EditorSceneLog, "Could not read all of prefab {0}.", name);
+  }
+
+  setCurrent(state, scene, nullptr);
+  state.prefab = prefab;
+  state.prefabRoot = root;
+  state.returnAsset = returnAsset;
+  ++state.revision;
+
+  scene->updateTransforms();
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  if (state.camera && ModelComponent::getHierarchyWorldBounds(*root, bounds)) {
+    state.camera->focus(bounds);
+  }
 }
 
 /*
@@ -221,11 +325,14 @@ saveAsNew(EditorSceneState& state, const Path& folder)
  * Runs at once when there is nothing to lose; otherwise asks first.
  */
 void
-requestAction(PendingAction action, const SPtr<SceneAsset>& asset)
+requestAction(PendingAction action,
+              const SPtr<SceneAsset>& asset,
+              const SPtr<PrefabAsset>& prefab = nullptr)
 {
   EditorSceneState& state = getState();
   state.action = action;
   state.actionAsset = asset;
+  state.actionPrefab = prefab;
   if (state.bDirty) {
     state.bOpenUnsavedPopup = true;
   }
@@ -244,6 +351,10 @@ getActionText(PendingAction action)
     return "making a new scene";
   case PendingAction::Open:
     return "opening another scene";
+  case PendingAction::EditPrefab:
+    return "editing the prefab";
+  case PendingAction::BackToScene:
+    return "going back to the scene";
   case PendingAction::Quit:
     return "closing the editor";
   default:
@@ -278,11 +389,11 @@ renderUnsavedPopup(EditorSceneState& state)
   ImGui::EndPopup();
 
   if (bSave) {
-    if (!state.asset) {
+    if (!state.asset && !state.prefab) {
       // The action waits for the name.
       state.bOpenSaveAsPopup = true;
     }
-    else if (saveInto(state, state.asset)) {
+    else if (saveCurrent(state)) {
       state.bActionReady = true;
     }
     else {
@@ -295,6 +406,7 @@ renderUnsavedPopup(EditorSceneState& state)
   else if (bCancel) {
     state.action = PendingAction::None;
     state.actionAsset.reset();
+    state.actionPrefab.reset();
   }
 }
 
@@ -393,7 +505,11 @@ EditorScene::shutDown()
   EditorSceneState& state = getState();
   state.scene.reset();
   state.asset.reset();
+  state.prefab.reset();
+  state.prefabRoot.reset();
+  state.returnAsset.reset();
   state.actionAsset.reset();
+  state.actionPrefab.reset();
   state.camera = nullptr;
 }
 
@@ -411,6 +527,30 @@ const SPtr<SceneAsset>&
 EditorScene::getAsset()
 {
   return getState().asset;
+}
+
+/*
+ */
+const SPtr<PrefabAsset>&
+EditorScene::getPrefab()
+{
+  return getState().prefab;
+}
+
+/*
+ */
+const SPtr<GameObject>&
+EditorScene::getPrefabRoot()
+{
+  return getState().prefabRoot;
+}
+
+/*
+ */
+GameObject*
+EditorScene::getDefaultParent()
+{
+  return getState().prefabRoot.get();
 }
 
 /*
@@ -443,7 +583,10 @@ String
 EditorScene::getDisplayName()
 {
   const EditorSceneState& state = getState();
-  String name = state.scene ? state.scene->getName() : String();
+  String name = state.prefab ? String("Prefab: ") : String();
+  if (state.scene) {
+    name += state.scene->getName();
+  }
   if (state.bDirty) {
     name += '*';
   }
@@ -476,8 +619,8 @@ void
 EditorScene::requestSave()
 {
   EditorSceneState& state = getState();
-  if (state.asset) {
-    saveInto(state, state.asset);
+  if (state.asset || state.prefab) {
+    saveCurrent(state);
   }
   else {
     state.bOpenSaveAsPopup = true;
@@ -489,7 +632,60 @@ EditorScene::requestSave()
 void
 EditorScene::requestSaveAs()
 {
-  getState().bOpenSaveAsPopup = true;
+  EditorSceneState& state = getState();
+  if (state.prefab) {
+    CH_LOG_WARNING(EditorSceneLog, "A prefab is saved with Save; go back to the scene first.");
+    return;
+  }
+  state.bOpenSaveAsPopup = true;
+}
+
+/*
+ */
+void
+EditorScene::requestEditPrefab(const SPtr<PrefabAsset>& prefab)
+{
+  if (!prefab || (prefab == getState().prefab && !getState().bDirty)) {
+    return;
+  }
+  requestAction(PendingAction::EditPrefab, nullptr, prefab);
+}
+
+/*
+ */
+void
+EditorScene::requestBackToScene()
+{
+  if (getState().prefab) {
+    requestAction(PendingAction::BackToScene, nullptr);
+  }
+}
+
+/*
+ */
+SPtr<PrefabAsset>
+EditorScene::createPrefab(GameObject& gameObject, const Path& folder)
+{
+  GameObject* instance = gameObject.getOutermostPrefabInstance();
+  if (instance && instance != &gameObject) {
+    CH_LOG_ERROR(EditorSceneLog, "{0} is part of a prefab instance.", gameObject.getName());
+    return nullptr;
+  }
+
+  AssetManager& assetManager = AssetManager::instance();
+  const String name = assetManager.makeUniqueAssetName(folder, gameObject.getName());
+  const SPtr<PrefabAsset> prefab = assetManager.createAsset<PrefabAsset>(name, folder).lock();
+  if (!prefab || !prefab->setContent(gameObject) || !assetManager.saveAsset(prefab)) {
+    CH_LOG_ERROR(EditorSceneLog, "Could not make prefab {0} in {1}.", name, folder);
+    return nullptr;
+  }
+
+  // Its content is already what the prefab holds, so nothing has to be read again.
+  gameObject.setPrefab(prefab->getUUID());
+  markDirty();
+  getState().onAssetCreated(prefab);
+  CH_LOG_INFO(EditorSceneLog, "Made prefab {0}.", name);
+  return prefab;
 }
 
 /*
@@ -548,26 +744,32 @@ EditorScene::applyPending()
   state.bActionReady = false;
   const PendingAction action = state.action;
   const SPtr<SceneAsset> asset = std::move(state.actionAsset);
+  const SPtr<PrefabAsset> prefab = std::move(state.actionPrefab);
   state.action = PendingAction::None;
 
   switch (action) {
   case PendingAction::New:
     releaseCurrent(state);
+    state.returnAsset.reset();
     setCurrent(state, makeNewScene(), nullptr);
     break;
 
-  case PendingAction::Open: {
+  case PendingAction::Open:
     // Released first, so opening the scene that was open reads its file again.
     releaseCurrent(state);
-    const SPtr<Scene> scene = SceneManager::instance().loadScene(asset).lock();
-    if (scene) {
-      setCurrent(state, scene, asset);
-    }
-    else {
-      CH_LOG_ERROR(EditorSceneLog, "Could not open scene {0}; starting a new one.",
-                   asset->getName());
-      setCurrent(state, makeNewScene(), nullptr);
-    }
+    state.returnAsset.reset();
+    openSceneOrNew(state, asset);
+    break;
+
+  case PendingAction::EditPrefab:
+    openPrefabMode(state, prefab);
+    break;
+
+  case PendingAction::BackToScene: {
+    // Read from its file again, so its instances show the prefab as it was just saved.
+    const SPtr<SceneAsset> returnAsset = std::move(state.returnAsset);
+    releaseCurrent(state);
+    openSceneOrNew(state, returnAsset);
   } break;
 
   case PendingAction::Quit:

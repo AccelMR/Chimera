@@ -30,7 +30,7 @@
 #include "chMath.h"
 #include "chUIHelpers.h"
 
-#include "chGameObjectAsset.h"
+#include "chPrefabAsset.h"
 #include "chMaterialAsset.h"
 #include "chSceneAsset.h"
 #include "chTextureAsset.h"
@@ -163,24 +163,6 @@ ContentAssetUI::renderContentAssetUI()
   }
 
   ImGui::End();
-}
-
-/*
- */
-void
-ContentAssetUI::saveUnsavedAssets()
-{
-  for (auto& weakAsset : m_unsavedAssets) {
-    if (auto asset = weakAsset.lock()) {
-      if (!AssetManager::instance().saveAsset(asset)) {
-        CH_LOG_ERROR(ContentAssetUILog, "Failed to save asset: {0}", asset->getName());
-      }
-      else {
-        CH_LOG_INFO(ContentAssetUILog, "Successfully saved asset: {0}", asset->getName());
-      }
-    }
-  }
-  m_unsavedAssets.clear();
 }
 
 /*
@@ -562,8 +544,9 @@ ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
   AssetDragDrop::source(*asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-    // Scenes open like files in a file browser; other assets have nothing to open.
-    if (asset->isTypeOf<SceneAsset>()) {
+    // Scenes and prefabs open like files in a file browser; other assets have nothing to
+    // open.
+    if (asset->isTypeOf<SceneAsset>() || asset->isTypeOf<PrefabAsset>()) {
       openAsset(asset);
     }
     else {
@@ -769,24 +752,9 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
     ImGui::Separator();
   }
 
-  if (asset->isTypeOf<GameObjectAsset>()) {
-    if (ImGui::MenuItem("Instantiate in Scene")) {
-      CH_LOG_DEBUG(ContentAssetUILog, "Instantiating GameObject asset: {0}", asset->getName());
-      ImGui::CloseCurrentPopup();
-    }
-    if (ImGui::MenuItem("Edit")) {
-      SPtr<GameObjectAsset> gameObjectAsset = std::static_pointer_cast<GameObjectAsset>(asset);
-      if (asset->isUnloaded()) {
-        if (!AssetManager::instance().syncLoadAsset(asset)) {
-          CH_LOG_ERROR(ContentAssetUILog, "Failed to load GameObject asset: {0}",
-                       asset->getName());
-          ImGui::CloseCurrentPopup();
-          return;
-        }
-      }
-      CH_LOG_DEBUG(ContentAssetUILog, "Editing GameObject asset: {0}", asset->getName());
-      EditorSelection::setGameObjectAssetPreview(gameObjectAsset->getGameObject());
-      ImGui::CloseCurrentPopup();
+  if (asset->isTypeOf<PrefabAsset>()) {
+    if (ImGui::MenuItem("Edit Prefab")) {
+      openAsset(asset);
     }
     ImGui::Separator();
   }
@@ -1184,6 +1152,9 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
   if (asset->isTypeOf<SceneAsset>()) {
     EditorScene::requestOpen(std::static_pointer_cast<SceneAsset>(asset));
   }
+  else if (asset->isTypeOf<PrefabAsset>()) {
+    EditorScene::requestEditPrefab(std::static_pointer_cast<PrefabAsset>(asset));
+  }
 }
 
 /*
@@ -1265,22 +1236,7 @@ ContentAssetUI::renderEmptyAreaContextMenu()
       }
       refreshAssets();
     }
-    if (ImGui::MenuItem("Game Object Asset")) {
-      WeakPtr<IAsset> newAsset = AssetManager::instance().createAsset<GameObjectAsset>(
-          "New", getCurrentFolderPath());
-      if (newAsset.expired()) {
-        CH_LOG_ERROR(ContentAssetUILog, "Failed to create Game Object Asset.");
-      }
-      else {
-        m_unsavedAssets.push_back(newAsset);
-        refreshAssets();
-      }
-    }
     ImGui::EndMenu();
-  }
-
-  if (ImGui::MenuItem("Save All Unsaved Assets")) {
-    saveUnsavedAssets();
   }
 
   ImGui::EndPopup();

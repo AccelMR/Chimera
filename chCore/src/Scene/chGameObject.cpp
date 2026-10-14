@@ -47,6 +47,20 @@ GameObject::update(float deltaTime)
 
 /*
  */
+GameObject*
+GameObject::getOutermostPrefabInstance()
+{
+  GameObject* outermost = nullptr;
+  for (GameObject* current = this; current; current = current->m_parent) {
+    if (!current->m_prefab.isNull()) {
+      outermost = current;
+    }
+  }
+  return outermost;
+}
+
+/*
+ */
 Component&
 GameObject::attachComponent(UniquePtr<Component>&& component, const UUID& typeId)
 {

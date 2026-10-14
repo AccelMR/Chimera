@@ -18,7 +18,7 @@
 #include "chPath.h"
 #include "chMaterialAsset.h"
 #include "chTextureAsset.h"
-#include "chGameObjectAsset.h"
+#include "chPrefabAsset.h"
 #include "chSceneAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
@@ -75,8 +75,8 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   if (asset->isTypeOf<MaterialAsset>()) {
     return {AssetType::Material, ICON_FA_PALETTE};
   }
-  if (asset->isTypeOf<GameObjectAsset>()) {
-    return {AssetType::GameObject, ICON_FA_CUBES};
+  if (asset->isTypeOf<PrefabAsset>()) {
+    return {AssetType::Prefab, ICON_FA_CUBES};
   }
   if (asset->isTypeOf<SceneAsset>()) {
     return {AssetType::Scene, ICON_FA_MAP};

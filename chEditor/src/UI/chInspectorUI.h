@@ -31,6 +31,12 @@ class InspectorUI
   renderInspectorUI();
 
  private:
+  /**
+   * Says which prefab selected comes from, with buttons to edit or unpack it.
+   */
+  void
+  renderPrefabInstance(GameObject& selected, GameObject& instance);
+
   void
   renderTransform(GameObject& gameObject);
 

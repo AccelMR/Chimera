@@ -11,10 +11,12 @@
 
 #include "chAlgorithm.h"
 #include "chAssetFile.h"
+#include "chAssetManager.h"
 #include "chComponentRegister.h"
 #include "chFileStream.h"
 #include "chGameObject.h"
 #include "chLogger.h"
+#include "chPrefabAsset.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 
@@ -24,8 +26,10 @@ namespace {
 constexpr uint32 kMaxObjectsPerList = 1u << 20;
 constexpr uint32 kMaxComponents = 1024;
 constexpr uint32 kMaxNameLength = 1024;
-// Keeps a broken file from recursing until the stack runs out.
+// Keeps a broken file, or prefabs that hold each other, from recursing until the stack runs
+// out.
 constexpr uint32 kMaxDepth = 1024;
+constexpr uint32 kFirstPrefabVersion = 2;
 
 struct GameObjectFileData
 {
@@ -68,10 +72,12 @@ writeComponent(DataStream& stream, const Component& component)
 }
 
 /*
+ * An instance writes its link and nothing below it: its content belongs to the prefab.
  */
 void
 writeObject(DataStream& stream, const GameObject& gameObject)
 {
+  const bool bInstance = !gameObject.getPrefab().isNull();
   const Transform& transform = gameObject.getTransform();
   const Vector3& position = transform.getLocalPosition();
   const Quaternion& rotation = transform.getLocalRotation();
@@ -81,10 +87,16 @@ writeObject(DataStream& stream, const GameObject& gameObject)
       .position = {position.x, position.y, position.z},
       .rotation = {rotation.x, rotation.y, rotation.z, rotation.w},
       .scale = {scale.x, scale.y, scale.z},
-      .componentCount = static_cast<uint32>(gameObject.getComponents().size()),
-      .childCount = static_cast<uint32>(gameObject.getChildren().size())};
+      .componentCount =
+          bInstance ? 0 : static_cast<uint32>(gameObject.getComponents().size()),
+      .childCount = bInstance ? 0 : static_cast<uint32>(gameObject.getChildren().size())};
   stream.write(&data, sizeof(data));
+  const UUID& prefab = gameObject.getPrefab();
+  stream.write(&prefab, sizeof(prefab));
   AssetFile::writeString(stream, gameObject.getName());
+  if (bInstance) {
+    return;
+  }
 
   for (const UniquePtr<Component>& component : gameObject.getComponents()) {
     writeComponent(stream, *component);
@@ -97,24 +109,66 @@ writeObject(DataStream& stream, const GameObject& gameObject)
 /*
  */
 void
+addReference(const UUID& reference, Vector<UUID>& outReferences)
+{
+  if (!reference.isNull() && !Algorithm::contains(outReferences, reference)) {
+    outReferences.push_back(reference);
+  }
+}
+
+/*
+ */
+void
 collectObjectReferences(const GameObject& gameObject,
                         Vector<UUID>& scratch,
                         Vector<UUID>& outReferences)
 {
+  // The prefab brings what its content uses.
+  if (!gameObject.getPrefab().isNull()) {
+    addReference(gameObject.getPrefab(), outReferences);
+    return;
+  }
+
   for (const UniquePtr<Component>& component : gameObject.getComponents()) {
     scratch.clear();
     component->collectReferences(scratch);
     for (const UUID& reference : scratch) {
-      if (!reference.isNull() && !Algorithm::contains(outReferences, reference)) {
-        outReferences.push_back(reference);
-      }
+      addReference(reference, outReferences);
     }
   }
   for (const SPtr<GameObject>& child : gameObject.getChildren()) {
     collectObjectReferences(*child, scratch, outReferences);
   }
 }
+
+/*
+ * Null when there is no such prefab or it cannot load. Without an AssetManager (tests)
+ * nothing is found.
+ */
+SPtr<PrefabAsset>
+findPrefab(const UUID& id)
+{
+  if (id.isNull() || !AssetManager::isStarted()) {
+    return nullptr;
+  }
+  AssetManager& assetManager = AssetManager::instance();
+  const SPtr<IAsset> asset = assetManager.getAsset(id);
+  SPtr<PrefabAsset> prefab = asset ? asset->as<PrefabAsset>() : nullptr;
+  if (prefab && !prefab->isLoaded() && !assetManager.syncLoadAsset(prefab)) {
+    return nullptr;
+  }
+  return prefab;
+}
 } // namespace
+
+struct GameObjectSerializer::ReadContext
+{
+  DataStream& stream;
+  Scene& scene;
+  uint32 version;
+  // Objects read from a prefab get new UUIDs, so instances do not share them.
+  bool bNewUuids;
+};
 
 /*
  */
@@ -132,6 +186,18 @@ GameObjectSerializer::write(DataStream& stream, Span<const SPtr<GameObject>> gam
 
 /*
  */
+void
+GameObjectSerializer::write(DataStream& stream, const GameObject& gameObject)
+{
+  const uint32 version = SERIALIZATION_VERSION;
+  const uint32 count = 1;
+  stream.write(&version, sizeof(version));
+  stream.write(&count, sizeof(count));
+  writeObject(stream, gameObject);
+}
+
+/*
+ */
 bool
 GameObjectSerializer::read(DataStream& stream, Scene& scene, GameObject* parent)
 {
@@ -142,7 +208,31 @@ GameObjectSerializer::read(DataStream& stream, Scene& scene, GameObject* parent)
       stream.read(&count, sizeof(count)) != sizeof(count)) {
     return false;
   }
-  return GameObjectSerializer::readList(stream, scene, parent, count, 0);
+  ReadContext context{
+      .stream = stream, .scene = scene, .version = version, .bNewUuids = false};
+  return readList(context, parent, count, 0);
+}
+
+/*
+ */
+SPtr<GameObject>
+GameObjectSerializer::instantiate(const PrefabAsset& prefab, Scene& scene, GameObject* parent)
+{
+  const SPtr<GameObject> gameObject = scene.createGameObject(prefab.getName(), parent);
+  gameObject->m_prefab = prefab.getUUID();
+  if (!readPrefabInto(prefab, *gameObject, 0)) {
+    CH_LOG_WARNING(SceneManagerLog, "Could not read the content of prefab {0}.",
+                   prefab.getName());
+  }
+  return gameObject;
+}
+
+/*
+ */
+bool
+GameObjectSerializer::readPrefabContent(const PrefabAsset& prefab, GameObject& target)
+{
+  return readPrefabInto(prefab, target, 0);
 }
 
 /*
@@ -159,9 +249,18 @@ GameObjectSerializer::collectReferences(Span<const SPtr<GameObject>> gameObjects
 
 /*
  */
+void
+GameObjectSerializer::collectReferences(const GameObject& gameObject,
+                                        Vector<UUID>& outReferences)
+{
+  Vector<UUID> scratch;
+  collectObjectReferences(gameObject, scratch, outReferences);
+}
+
+/*
+ */
 bool
-GameObjectSerializer::readList(DataStream& stream,
-                               Scene& scene,
+GameObjectSerializer::readList(ReadContext& context,
                                GameObject* parent,
                                uint32 count,
                                uint32 depth)
@@ -170,7 +269,7 @@ GameObjectSerializer::readList(DataStream& stream,
     return false;
   }
   for (uint32 i = 0; i < count; ++i) {
-    if (!readObject(stream, scene, parent, depth)) {
+    if (!readObject(context, parent, depth)) {
       return false;
     }
   }
@@ -180,41 +279,64 @@ GameObjectSerializer::readList(DataStream& stream,
 /*
  */
 bool
-GameObjectSerializer::readObject(DataStream& stream,
-                                 Scene& scene,
-                                 GameObject* parent,
-                                 uint32 depth)
+GameObjectSerializer::readObject(ReadContext& context, GameObject* parent, uint32 depth)
 {
+  DataStream& stream = context.stream;
   GameObjectFileData data;
+  UUID prefabId = UUID::null();
   String name;
   if (stream.read(&data, sizeof(data)) != sizeof(data) ||
+      (context.version >= kFirstPrefabVersion &&
+       stream.read(&prefabId, sizeof(prefabId)) != sizeof(prefabId)) ||
       !AssetFile::readString(stream, name, kMaxNameLength) ||
       data.componentCount > kMaxComponents) {
     return false;
   }
+  // An instance stores nothing below it.
+  if (!prefabId.isNull() && (data.componentCount != 0 || data.childCount != 0)) {
+    return false;
+  }
 
-  const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
-  // The saved UUID, so whatever points at the object by its id finds it again.
-  gameObject->m_uuid = data.uuid;
+  const SPtr<GameObject> gameObject = context.scene.createGameObject(name, parent);
+  if (!context.bNewUuids) {
+    // The saved UUID, so whatever points at the object by its id finds it again.
+    gameObject->m_uuid = data.uuid;
+  }
   Transform& transform = gameObject->getTransform();
   transform.setLocalPosition(Vector3(data.position[0], data.position[1], data.position[2]));
   transform.setLocalRotation(
       Quaternion(data.rotation[0], data.rotation[1], data.rotation[2], data.rotation[3]));
   transform.setLocalScale(Vector3(data.scale[0], data.scale[1], data.scale[2]));
 
+  if (!prefabId.isNull()) {
+    // Kept even when the prefab is missing, so saving again keeps the link.
+    gameObject->m_prefab = prefabId;
+    const SPtr<PrefabAsset> prefab = findPrefab(prefabId);
+    if (!prefab) {
+      CH_LOG_WARNING(SceneManagerLog, "{0} lost its prefab {1}.", name, prefabId);
+    }
+    else if (!readPrefabInto(*prefab, *gameObject, depth + 1)) {
+      // A broken prefab leaves its instances empty instead of failing the whole file.
+      CH_LOG_WARNING(SceneManagerLog, "{0} could not read its prefab {1}.", name,
+                     prefab->getName());
+    }
+    return true;
+  }
+
   for (uint32 i = 0; i < data.componentCount; ++i) {
-    if (!readComponent(stream, *gameObject)) {
+    if (!readComponent(context, *gameObject)) {
       return false;
     }
   }
-  return readList(stream, scene, gameObject.get(), data.childCount, depth + 1);
+  return readList(context, gameObject.get(), data.childCount, depth + 1);
 }
 
 /*
  */
 bool
-GameObjectSerializer::readComponent(DataStream& stream, GameObject& gameObject)
+GameObjectSerializer::readComponent(ReadContext& context, GameObject& gameObject)
 {
+  DataStream& stream = context.stream;
   ComponentFileData header;
   if (stream.read(&header, sizeof(header)) != sizeof(header)) {
     return false;
@@ -246,6 +368,63 @@ GameObjectSerializer::readComponent(DataStream& stream, GameObject& gameObject)
     gameObject.attachComponent(std::move(component), header.typeId);
   }
   return true;
+}
+
+/*
+ * The content is one object written by write(); its components and children go to target,
+ * its UUID, name and transform are left out.
+ */
+bool
+GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
+                                     GameObject& target,
+                                     uint32 depth)
+{
+  CH_ASSERT(target.getScene() && "The target must be in a scene.");
+  if (depth > kMaxDepth) {
+    return false;
+  }
+  const Span<const uint8> content = prefab.getContent();
+  if (content.empty()) {
+    return true;
+  }
+
+  // Only read, so the content is never changed through the stream.
+  MemoryDataStream stream(const_cast<uint8*>(content.data()), content.size(), false);
+  uint32 version = 0;
+  uint32 count = 0;
+  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
+      version > SERIALIZATION_VERSION ||
+      stream.read(&count, sizeof(count)) != sizeof(count) || count != 1) {
+    return false;
+  }
+
+  GameObjectFileData data;
+  UUID nestedPrefab = UUID::null();
+  String name;
+  if (stream.read(&data, sizeof(data)) != sizeof(data) ||
+      (version >= kFirstPrefabVersion &&
+       stream.read(&nestedPrefab, sizeof(nestedPrefab)) != sizeof(nestedPrefab)) ||
+      !AssetFile::readString(stream, name, kMaxNameLength) ||
+      data.componentCount > kMaxComponents) {
+    return false;
+  }
+
+  // A prefab whose root is an instance of another takes that one's content.
+  if (!nestedPrefab.isNull()) {
+    const SPtr<PrefabAsset> nested = findPrefab(nestedPrefab);
+    return nested ? readPrefabInto(*nested, target, depth + 1) : true;
+  }
+
+  ReadContext context{.stream = stream,
+                      .scene = *target.getScene(),
+                      .version = version,
+                      .bNewUuids = true};
+  for (uint32 i = 0; i < data.componentCount; ++i) {
+    if (!readComponent(context, target)) {
+      return false;
+    }
+  }
+  return readList(context, &target, data.childCount, depth + 1);
 }
 
 } // namespace chEngineSDK

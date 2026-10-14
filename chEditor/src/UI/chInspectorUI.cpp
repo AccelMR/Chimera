@@ -22,6 +22,7 @@
 #include "chMaterialAsset.h"
 #include "chModel.h"
 #include "chModelComponent.h"
+#include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
 #include "chTextureAsset.h"
@@ -163,14 +164,53 @@ InspectorUI::renderInspectorUI()
   }
 
   ImGui::TextUnformatted(selected->getName().c_str());
+  // What an instance holds comes from its prefab and is not saved with the scene, so it is
+  // shown but cannot be edited; only the instance's own transform can.
+  GameObject* instance = selected->getOutermostPrefabInstance();
+  if (instance) {
+    renderPrefabInstance(*selected, *instance);
+  }
   ImGui::Separator();
+  ImGui::BeginDisabled(instance && instance != selected.get());
   renderTransform(*selected);
+  ImGui::EndDisabled();
 
+  ImGui::BeginDisabled(instance != nullptr);
   if (ModelComponent* modelComponent = selected->getComponent<ModelComponent>()) {
     renderModelComponent(*modelComponent);
   }
   renderLightComponent(*selected);
+  ImGui::EndDisabled();
   ImGui::End();
+}
+
+/*
+ */
+void
+InspectorUI::renderPrefabInstance(GameObject& selected, GameObject& instance)
+{
+  const SPtr<IAsset> asset = AssetManager::instance().getAsset(instance.getPrefab());
+  const SPtr<PrefabAsset> prefab = asset ? asset->as<PrefabAsset>() : nullptr;
+  const ANSICHAR* prefabName = prefab ? prefab->getName() : "(missing)";
+  if (&selected == &instance) {
+    ImGui::TextDisabled(ICON_FA_CUBES "  Instance of %s", prefabName);
+  }
+  else {
+    ImGui::TextDisabled(ICON_FA_CUBES "  Part of %s, an instance of %s",
+                        instance.getName().c_str(), prefabName);
+  }
+
+  if (prefab && ImGui::SmallButton("Edit Prefab")) {
+    EditorScene::requestEditPrefab(prefab);
+  }
+  if (&selected == &instance) {
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Unpack")) {
+      // The content stays; it is saved with the scene from now on.
+      instance.setPrefab(UUID::null());
+      EditorScene::markDirty();
+    }
+  }
 }
 
 /*
@@ -188,7 +228,6 @@ InspectorUI::renderTransform(GameObject& gameObject)
   if (m_rotationOwner != &gameObject || transform.getLocalRotation() != m_rotationShown) {
     m_rotationOwner = &gameObject;
     m_rotationShown = transform.getLocalRotation();
-    EditorScene::markDirty();
     const Rotator rotator = transform.getLocalRotation().toRotator();
     m_rotationDegrees[0] = rotator.roll.valueDegree();
     m_rotationDegrees[1] = rotator.pitch.valueDegree();
@@ -213,6 +252,7 @@ InspectorUI::renderTransform(GameObject& gameObject)
     transform.setLocalRotation(
         Quaternion(Rotator(m_rotationDegrees[1], m_rotationDegrees[2], m_rotationDegrees[0])));
     m_rotationShown = transform.getLocalRotation();
+    EditorScene::markDirty();
   }
 
   const Vector3& scale = transform.getLocalScale();

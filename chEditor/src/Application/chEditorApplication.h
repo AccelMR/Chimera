@@ -23,7 +23,6 @@ class MainMenuBarUI;
 class OutputLogUI;
 class SceneGraphUI;
 class InspectorUI;
-class GameObjectAssetUI;
 class ImGuiRenderer;
 class EditorCamera;
 class ViewportTools;
@@ -80,8 +79,11 @@ class EditorApplication : public WindowedApplication
   void
   onCameraFlightChanged(bool bFlying);
 
+  /**
+   * Moves a just dropped object under the mouse, on the ground when it can.
+   */
   void
-  addModelAtMouse(const SPtr<ModelAsset>& modelAsset);
+  placeAtMouse(const SPtr<GameObject>& gameObject);
 
   /**
    * Shows the scene name, and whether it has unsaved changes, after the window title.
@@ -110,7 +112,6 @@ class EditorApplication : public WindowedApplication
   UniquePtr<OutputLogUI> m_outputLogUI; ///< Output log UI instance
   UniquePtr<SceneGraphUI> m_sceneGraphUI; ///< Scene graph UI instance
   UniquePtr<InspectorUI> m_inspectorUI; ///< Inspector UI instance
-  UniquePtr<GameObjectAssetUI> m_gameObjectAssetUI; ///< GameObject Asset UI instance
 
   HEvent m_updateInjection; ///< Event for updating ImGui with SDL events
 

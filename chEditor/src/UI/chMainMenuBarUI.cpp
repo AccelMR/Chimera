@@ -20,6 +20,7 @@
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
+#include "chPrefabAsset.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
 #include "chUIHelpers.h"
@@ -91,6 +92,16 @@ MainMenuBarUI::renderMainMenuBar() {
     renderImportMenu();
     ImGui::EndMenu();
   }
+
+  // Prefab mode looks like a scene, so the bar says what is being edited.
+  if (const SPtr<PrefabAsset>& prefab = EditorScene::getPrefab()) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.45f, 0.7f, 1.0f, 1.0f), "Editing prefab %s",
+                       prefab->getName());
+    if (ImGui::SmallButton("Back to Scene")) {
+      EditorScene::requestBackToScene();
+    }
+  }
   ImGui::EndMainMenuBar();
 }
 
@@ -127,11 +138,15 @@ MainMenuBarUI::renderFileMenu()
     ImGui::EndMenu();
   }
   ImGui::Separator();
-  if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
+  const bool bEditingPrefab = EditorScene::getPrefab() != nullptr;
+  if (ImGui::MenuItem(bEditingPrefab ? "Save Prefab" : "Save Scene", "Ctrl+S")) {
     EditorScene::requestSave();
   }
-  if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) {
+  if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, !bEditingPrefab)) {
     EditorScene::requestSaveAs();
+  }
+  if (bEditingPrefab && ImGui::MenuItem("Back to Scene")) {
+    EditorScene::requestBackToScene();
   }
   ImGui::Separator();
   if (ImGui::MenuItem("Exit")) {

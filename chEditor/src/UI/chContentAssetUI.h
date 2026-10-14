@@ -36,9 +36,6 @@ class ContentAssetUI
   void
   refreshAssets();
 
-  void
-  saveUnsavedAssets();
-
   /**
    * The folder the browser shows, where new assets go.
    */
@@ -176,7 +173,7 @@ class ContentAssetUI
   createFolder();
 
   /**
-   * Opens what can be opened (scenes); does nothing for the rest.
+   * Opens what can be opened (scenes, and prefabs in prefab mode); does nothing for the rest.
    */
   void
   openAsset(const SPtr<IAsset>& asset);
@@ -225,7 +222,6 @@ class ContentAssetUI
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
   UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;
 
-  Vector<WeakPtr<IAsset>> m_unsavedAssets;
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;

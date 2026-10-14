@@ -81,6 +81,27 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD FORCEINLINE const Vector<SPtr<GameObject>>&
   getChildren() const { return m_children; }
 
+  /**
+   * The prefab asset this object is an instance of, or null. The components and children of
+   * an instance come from the prefab when it loads, so only its name and transform are its
+   * own.
+   */
+  NODISCARD FORCEINLINE const UUID&
+  getPrefab() const { return m_prefab; }
+
+  /**
+   * Null turns an instance into plain objects (its content stays as it is).
+   */
+  void
+  setPrefab(const UUID& prefab) { m_prefab = prefab; }
+
+  /**
+   * The highest object, this one included, that is a prefab instance; null when this object
+   * is not part of one. What is below it comes from a prefab and is not saved with the scene.
+   */
+  NODISCARD GameObject*
+  getOutermostPrefabInstance();
+
  private:
   friend class Scene;
   friend class GameObjectSerializer;
@@ -103,6 +124,7 @@ class CH_CORE_EXPORT GameObject : public Object
   Vector<SPtr<GameObject>> m_children;
   GameObject* m_parent = nullptr;
   Scene* m_scene = nullptr;
+  UUID m_prefab = UUID::null();
 };
 
 /*

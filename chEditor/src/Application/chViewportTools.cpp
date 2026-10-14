@@ -495,6 +495,11 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
   if (!selected || selected->getScene() != &scene) {
     return;
   }
+  // Below an instance the transforms come from the prefab.
+  const GameObject* instance = selected->getOutermostPrefabInstance();
+  if (instance && instance != selected) {
+    return;
+  }
 
   Transform& transform = selected->getTransform();
   Matrix4 world = transform.getWorldMatrix();
@@ -659,6 +664,12 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
     SceneRayHit hit;
     if (scene.raycast(camera.screenToWorldRay(screenPoint), hit)) {
       picked = hit.gameObject;
+    }
+  }
+  // The parts of an instance cannot be edited one by one, so a click picks the instance.
+  if (picked) {
+    if (GameObject* instance = picked->getOutermostPrefabInstance()) {
+      picked = instance;
     }
   }
 

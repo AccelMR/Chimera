@@ -21,6 +21,8 @@
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
+#include "chGameObjectSerializer.h"
+#include "chPrefabAsset.h"
 #include "chScene.h"
 #include "chTextureAsset.h"
 
@@ -38,6 +40,7 @@ static_assert(std::is_trivially_copyable_v<UUID>);
 constexpr const ANSICHAR* kModelPayload = "CH_MODEL";
 constexpr const ANSICHAR* kTexturePayload = "CH_TEXTURE";
 constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
+constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
 
 /*
  * Null for asset types that cannot be dropped anywhere.
@@ -53,6 +56,9 @@ getPayloadName(const IAsset& asset)
   }
   if (asset.isTypeOf<MaterialAsset>()) {
     return kMaterialPayload;
+  }
+  if (asset.isTypeOf<PrefabAsset>()) {
+    return kPrefabPayload;
   }
   return nullptr;
 }
@@ -125,6 +131,34 @@ SPtr<MaterialAsset>
 AssetDragDrop::acceptMaterial()
 {
   return acceptAsset<MaterialAsset>(kMaterialPayload);
+}
+
+/*
+ */
+SPtr<PrefabAsset>
+AssetDragDrop::acceptPrefab()
+{
+  return acceptAsset<PrefabAsset>(kPrefabPayload);
+}
+
+/*
+ */
+SPtr<GameObject>
+AssetDragDrop::createPrefabObject(Scene& scene,
+                                  const SPtr<PrefabAsset>& prefab,
+                                  GameObject* parent)
+{
+  // In prefab mode the edited prefab would end up inside itself.
+  const SPtr<PrefabAsset>& edited = EditorScene::getPrefab();
+  if (!prefab || (edited && prefab->dependsOn(edited->getUUID()))) {
+    CH_LOG_WARNING(AssetDragDropLog, "A prefab cannot be placed inside itself.");
+    return nullptr;
+  }
+
+  const SPtr<GameObject> gameObject = GameObjectSerializer::instantiate(*prefab, scene, parent);
+  EditorSelection::setSelectedGameObject(gameObject);
+  EditorScene::markDirty();
+  return gameObject;
 }
 
 /*

@@ -290,6 +290,12 @@ class CH_UTILITY_EXPORT MemoryDataStream: public DataStream
 {
  public:
   /**
+   * An empty stream that grows as it is written, for data whose size is only known once it
+   * is written. It owns its memory.
+   */
+  MemoryDataStream();
+
+  /**
    *   Default constructor
    */
   MemoryDataStream(SIZE_T _size);
@@ -416,12 +422,18 @@ class CH_UTILITY_EXPORT MemoryDataStream: public DataStream
   clone() const override;
 
  private:
+  SIZE_T
+  writeGrowing(const void* buf, SIZE_T size);
+
  friend class FileDataStream;
   uint8* m_data;
   uint8* m_currPos;
   uint8* m_end;
+  // Allocated bytes of a stream that grows; m_end marks what was written.
+  SIZE_T m_capacity = 0;
 
   bool m_freeOnClose;
+  bool m_bGrowable = false;
 };
 
 /*

@@ -27,6 +27,7 @@
 #include "chLogger.h"
 #include "chMath.h"
 #include "chModelAsset.h"
+#include "chPrefabAsset.h"
 #include "chPath.h"
 #include "chPlane.h"
 #include "chQuaternion.h"
@@ -45,7 +46,6 @@
 #include "chOutputLogUI.h"
 #include "chSceneGraphUI.h"
 #include "chInspectorUI.h"
-#include "chGameObjAssetUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -118,7 +118,6 @@ EditorApplication::destroyModules()
     ImGui::DestroyContext();
   }
 
-  m_gameObjectAssetUI.reset();
   m_inspectorUI.reset();
   m_sceneGraphUI.reset();
   m_outputLogUI.reset();
@@ -132,7 +131,6 @@ EditorApplication::destroyModules()
   }
   m_sceneRenderer.reset();
   EditorSelection::setSelectedGameObject(nullptr);
-  EditorSelection::setGameObjectAssetPreview(nullptr);
   EditorScene::shutDown();
 
   if (SceneManager::isStarted()) {
@@ -301,10 +299,10 @@ EditorApplication::initializeEditorComponents() {
   m_outputLogUI = chMakeUnique<OutputLogUI>();
   m_sceneGraphUI = chMakeUnique<SceneGraphUI>();
   m_inspectorUI = chMakeUnique<InspectorUI>();
-  m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
   m_viewportTools = chMakeUnique<ViewportTools>(*m_editorCamera);
   m_sceneGraphUI->setEditorCamera(m_editorCamera.get());
+  m_sceneGraphUI->setContentBrowser(m_contentAssetUI.get());
   m_outputLogUI->updateAvailableCategories();
 
   CH_LOG_INFO(EditorApp, "Editor components initialized successfully.");
@@ -431,7 +429,6 @@ EditorApplication::renderUI()
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
-  m_gameObjectAssetUI->renderGameObjectAssetUI();
   m_viewportTools->render(*EditorScene::getScene());
   ImportDialog::render();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
@@ -486,8 +483,13 @@ EditorApplication::renderViewportDropTarget()
     ImGui::InvisibleButton("##drop", ImVec2(Math::max(available.x, 1.0f),
                                             Math::max(available.y, 1.0f)));
     if (ImGui::BeginDragDropTarget()) {
+      GameObject* parent = EditorScene::getDefaultParent();
+      Scene& scene = *EditorScene::getScene();
       if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
-        addModelAtMouse(model);
+        placeAtMouse(AssetDragDrop::createModelObject(scene, model, parent));
+      }
+      if (const SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
+        placeAtMouse(AssetDragDrop::createPrefabObject(scene, prefab, parent));
       }
       ImGui::EndDragDropTarget();
     }
@@ -499,10 +501,8 @@ EditorApplication::renderViewportDropTarget()
 /*
  */
 void
-EditorApplication::addModelAtMouse(const SPtr<ModelAsset>& modelAsset)
+EditorApplication::placeAtMouse(const SPtr<GameObject>& gameObject)
 {
-  const SPtr<GameObject> gameObject =
-      AssetDragDrop::createModelObject(*EditorScene::getScene(), modelAsset, nullptr);
   if (!gameObject) {
     return;
   }

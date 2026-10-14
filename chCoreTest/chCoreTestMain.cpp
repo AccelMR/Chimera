@@ -34,6 +34,7 @@
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
+#include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRay.h"
 #include "chRenderGraph.h"
@@ -1620,6 +1621,107 @@ TEST_CASE("chCore - GameObject serializer")
   future.write(&noObjects, sizeof(noObjects));
   future.seek(0);
   REQUIRE_FALSE(GameObjectSerializer::read(future, broken, nullptr));
+}
+
+TEST_CASE("chCore - Prefabs")
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<PrefabAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, "PF_LampPost");
+  PrefabAsset prefab(metadata);
+  REQUIRE(prefab.getContent().empty());
+
+  // Lamp Post (point light, moved away) > Bulb (spot light)
+  Scene source("Source", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> post = source.createGameObject("Lamp Post");
+  post->getTransform().setLocalPosition(Vector3(50.0f, 0.0f, 0.0f));
+  post->addComponent<PointLightComponent>().setRange(12.0f);
+  const SPtr<GameObject> bulb = source.createGameObject("Bulb", post.get());
+  bulb->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 3.0f));
+  bulb->addComponent<SpotLightComponent>();
+  REQUIRE(prefab.setContent(*post));
+  REQUIRE_FALSE(prefab.getContent().empty());
+
+  Scene scene("Scene", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> first = GameObjectSerializer::instantiate(prefab, scene, nullptr);
+  const SPtr<GameObject> second = GameObjectSerializer::instantiate(prefab, scene, nullptr);
+  second->getTransform().setLocalPosition(Vector3(0.0f, 10.0f, 0.0f));
+  REQUIRE(first->getName() == "PF_LampPost");
+  REQUIRE(first->getPrefab() == prefab.getUUID());
+  REQUIRE(first->getOutermostPrefabInstance() == first.get());
+  // An instance stands where it is placed, not where the prefab's root was.
+  REQUIRE(first->getTransform().getLocalPosition() == Vector3::ZERO);
+  const PointLightComponent* firstLight = first->getComponent<PointLightComponent>();
+  REQUIRE(firstLight != nullptr);
+  REQUIRE(firstLight->getRange() == 12.0f);
+  REQUIRE(first->getChildren().size() == 1);
+  const SPtr<GameObject>& firstBulb = first->getChildren()[0];
+  REQUIRE(firstBulb->getName() == "Bulb");
+  REQUIRE(firstBulb->getTransform().getLocalPosition() == Vector3(0.0f, 0.0f, 3.0f));
+  REQUIRE(firstBulb->getOutermostPrefabInstance() == first.get());
+  REQUIRE(firstBulb->getPrefab().isNull());
+  // Every instance gets its own UUIDs.
+  REQUIRE(firstBulb->getUUID() != bulb->getUUID());
+  REQUIRE(firstBulb->getUUID() != second->getChildren()[0]->getUUID());
+  REQUIRE(scene.getLightCount() == 4);
+
+  SECTION("A scene stores an instance as its link alone")
+  {
+    Vector<chEngineSDK::UUID> references;
+    GameObjectSerializer::collectReferences(scene.getRootGameObjects(), references);
+    REQUIRE(references.size() == 1);
+    REQUIRE(references[0] == prefab.getUUID());
+
+    MemoryDataStream stream;
+    GameObjectSerializer::write(stream, scene.getRootGameObjects());
+    stream.seek(0);
+    Scene loaded("Loaded", chEngineSDK::UUID::createRandom());
+    REQUIRE(GameObjectSerializer::read(stream, loaded, nullptr));
+    REQUIRE(loaded.getRootGameObjects().size() == 2);
+    // Without an AssetManager the prefab is not found: the instance is empty but keeps the
+    // link and its own transform.
+    const GameObject& loadedSecond = *loaded.getRootGameObjects()[1];
+    REQUIRE(loadedSecond.getPrefab() == prefab.getUUID());
+    REQUIRE(loadedSecond.getUUID() == second->getUUID());
+    REQUIRE(loadedSecond.getTransform().getLocalPosition() == Vector3(0.0f, 10.0f, 0.0f));
+    REQUIRE(loadedSecond.getComponents().empty());
+    REQUIRE(loadedSecond.getChildren().empty());
+  }
+
+  SECTION("The content can be read into a plain object, to edit the prefab")
+  {
+    const SPtr<GameObject> editable = scene.createGameObject("Editable");
+    REQUIRE(GameObjectSerializer::readPrefabContent(prefab, *editable));
+    REQUIRE(editable->getPrefab().isNull());
+    REQUIRE(editable->getOutermostPrefabInstance() == nullptr);
+    REQUIRE(editable->getComponent<PointLightComponent>() != nullptr);
+    REQUIRE(editable->getChildren().size() == 1);
+  }
+
+  SECTION("A prefab cannot hold an instance of itself")
+  {
+    const SPtr<GameObject> holder = scene.createGameObject("Holder");
+    GameObjectSerializer::instantiate(prefab, scene, holder.get());
+    const SIZE_T sizeBefore = prefab.getContent().size();
+    REQUIRE_FALSE(prefab.setContent(*holder));
+    REQUIRE_FALSE(prefab.setContent(*first));
+    REQUIRE(prefab.getContent().size() == sizeBefore);
+    REQUIRE(prefab.dependsOn(prefab.getUUID()));
+  }
+
+  SECTION("Unpacking keeps the content as plain objects")
+  {
+    first->setPrefab(chEngineSDK::UUID::null());
+    REQUIRE(firstBulb->getOutermostPrefabInstance() == nullptr);
+    MemoryDataStream stream;
+    GameObjectSerializer::write(stream, scene.getRootGameObjects());
+    stream.seek(0);
+    Scene loaded("Loaded", chEngineSDK::UUID::createRandom());
+    REQUIRE(GameObjectSerializer::read(stream, loaded, nullptr));
+    REQUIRE(loaded.getRootGameObjects()[0]->getChildren().size() == 1);
+    REQUIRE(loaded.getRootGameObjects()[0]->getComponent<PointLightComponent>() != nullptr);
+  }
 }
 
 TEST_CASE("chCore - Texture mips")
