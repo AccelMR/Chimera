@@ -2,8 +2,11 @@
 # SPIRV for Vulkan on every platform and DXIL for Direct3D 12 on Windows.
 #
 # Each .hlsl file is one shader; its entry points are found by name (VSMain, PSMain,
-# CSMain) and each one becomes <name>.<vs|ps|cs>.<spv|dxil>. A change to any .hlsli in the
-# same folder recompiles every shader of that folder.
+# CSMain) and each one becomes <name>.<vs|ps|cs>.<spv|dxil>. A line "CH_VARIANT <suffix>
+# <DEFINE>" in the file (in a comment) also builds every entry point with <DEFINE> defined
+# into <name>_<suffix>.<stage>.<format>, so a shader can have versions without copies of
+# its source. A change to any .hlsli in the same folder recompiles every shader of that
+# folder.
 
 find_program(CH_DXC_EXECUTABLE dxc
   HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin"
@@ -31,40 +34,64 @@ function(ch_add_shaders TARGET_NAME SOURCE_DIR)
     get_filename_component(SHADER_NAME ${HLSL_FILE} NAME_WE)
     file(READ ${HLSL_FILE} HLSL_TEXT)
 
-    foreach(STAGE vs ps cs)
-      string(TOUPPER ${STAGE} STAGE_UPPER)
-      set(ENTRY_POINT "${STAGE_UPPER}Main")
-      if(NOT HLSL_TEXT MATCHES "(^|[^A-Za-z0-9_])${ENTRY_POINT}[ \t]*\\(")
-        continue()
+    # "base" is the shader as written; each CH_VARIANT line adds one built with its define.
+    set(VARIANTS base)
+    string(REGEX MATCHALL "CH_VARIANT[ \t]+[A-Za-z0-9_]+[ \t]+[A-Za-z0-9_]+"
+           VARIANT_LINES "${HLSL_TEXT}")
+    foreach(VARIANT_LINE ${VARIANT_LINES})
+      string(REGEX REPLACE "CH_VARIANT[ \t]+([A-Za-z0-9_]+)[ \t]+([A-Za-z0-9_]+)" "\\1:\\2"
+             VARIANT "${VARIANT_LINE}")
+      list(APPEND VARIANTS ${VARIANT})
+    endforeach()
+
+    foreach(VARIANT ${VARIANTS})
+      if(VARIANT STREQUAL "base")
+        set(OUTPUT_NAME ${SHADER_NAME})
+        set(DEFINE_FLAGS "")
+      else()
+        string(REPLACE ":" ";" VARIANT_PARTS ${VARIANT})
+        list(GET VARIANT_PARTS 0 VARIANT_SUFFIX)
+        list(GET VARIANT_PARTS 1 VARIANT_DEFINE)
+        set(OUTPUT_NAME ${SHADER_NAME}_${VARIANT_SUFFIX})
+        set(DEFINE_FLAGS -D ${VARIANT_DEFINE})
       endif()
 
-      foreach(FORMAT ${FORMATS})
-        if(FORMAT STREQUAL "SPIRV")
-          set(EXTENSION spv)
-          set(FORMAT_FLAGS -spirv -fspv-target-env=vulkan1.3)
-        else()
-          set(EXTENSION dxil)
-          # DXIL has no use for the [[vk::...]] attributes, so their warnings are noise.
-          set(FORMAT_FLAGS -Wno-ignored-attributes)
+      foreach(STAGE vs ps cs)
+        string(TOUPPER ${STAGE} STAGE_UPPER)
+        set(ENTRY_POINT "${STAGE_UPPER}Main")
+        if(NOT HLSL_TEXT MATCHES "(^|[^A-Za-z0-9_])${ENTRY_POINT}[ \t]*\\(")
+          continue()
         endif()
 
-        # CH_OUTPUT_DIR holds $<CONFIG> with Visual Studio; OUTPUT accepts it since CMake 3.20.
-        set(OUTPUT_FILE
-            "${CH_SHADER_OUTPUT_DIR}/${FORMAT}/${SHADER_NAME}.${STAGE}.${EXTENSION}")
-        add_custom_command(
-          OUTPUT ${OUTPUT_FILE}
-          COMMAND ${CMAKE_COMMAND} -E make_directory "${CH_SHADER_OUTPUT_DIR}/${FORMAT}"
-          COMMAND ${CH_DXC_EXECUTABLE}
-                  -T ${STAGE}_${CH_SHADER_MODEL} -E ${ENTRY_POINT} -HV 2021
-                  ${FORMAT_FLAGS}
-                  "$<IF:$<CONFIG:Debug>,-Od;-Zi;-Qembed_debug,-O3>"
-                  -I "${SOURCE_DIR}"
-                  -Fo ${OUTPUT_FILE} ${HLSL_FILE}
-          DEPENDS ${HLSL_FILE} ${HLSL_INCLUDES}
-          COMMENT "Compiling ${SHADER_NAME}.${STAGE} (${FORMAT})"
-          COMMAND_EXPAND_LISTS
-          VERBATIM)
-        list(APPEND OUTPUTS ${OUTPUT_FILE})
+        foreach(FORMAT ${FORMATS})
+          if(FORMAT STREQUAL "SPIRV")
+            set(EXTENSION spv)
+            set(FORMAT_FLAGS -spirv -fspv-target-env=vulkan1.3)
+          else()
+            set(EXTENSION dxil)
+            # DXIL has no use for the [[vk::...]] attributes, so their warnings are noise.
+            set(FORMAT_FLAGS -Wno-ignored-attributes)
+          endif()
+
+          # CH_OUTPUT_DIR holds $<CONFIG> with Visual Studio; OUTPUT accepts it since
+          # CMake 3.20.
+          set(OUTPUT_FILE
+              "${CH_SHADER_OUTPUT_DIR}/${FORMAT}/${OUTPUT_NAME}.${STAGE}.${EXTENSION}")
+          add_custom_command(
+            OUTPUT ${OUTPUT_FILE}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CH_SHADER_OUTPUT_DIR}/${FORMAT}"
+            COMMAND ${CH_DXC_EXECUTABLE}
+                    -T ${STAGE}_${CH_SHADER_MODEL} -E ${ENTRY_POINT} -HV 2021
+                    ${FORMAT_FLAGS} ${DEFINE_FLAGS}
+                    "$<IF:$<CONFIG:Debug>,-Od;-Zi;-Qembed_debug,-O3>"
+                    -I "${SOURCE_DIR}"
+                    -Fo ${OUTPUT_FILE} ${HLSL_FILE}
+            DEPENDS ${HLSL_FILE} ${HLSL_INCLUDES}
+            COMMENT "Compiling ${OUTPUT_NAME}.${STAGE} (${FORMAT})"
+            COMMAND_EXPAND_LISTS
+            VERBATIM)
+          list(APPEND OUTPUTS ${OUTPUT_FILE})
+        endforeach()
       endforeach()
     endforeach()
   endforeach()

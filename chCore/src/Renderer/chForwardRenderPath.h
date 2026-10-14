@@ -12,6 +12,7 @@
 
 #include "chIRenderPath.h"
 #include "chMaterial.h"
+#include "chMaterialPipelines.h"
 #include "chPipelineCache.h"
 #include "chSceneViewBuffers.h"
 
@@ -46,10 +47,11 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
 
   SPtr<IShader> m_vertexShader;
   SPtr<IShader> m_fragmentShader;
+  SPtr<IShader> m_maskedFragmentShader;
   PipelineCache m_pipelineCache;
   // Looked up again only when the output format changes, because building the description
   // allocates (VertexLayout).
-  const IPipeline* m_pipeline = nullptr;
+  MaterialPipelines m_pipelines;
   Format m_pipelineFormat = Format::Unknown;
 
   SceneViewBuffers m_viewBuffers;

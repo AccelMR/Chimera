@@ -34,6 +34,20 @@ enum class MaterialTexture : uint32
 };
 
 /**
+ * How the alpha of the base color is used. Stored in material files, so the values are
+ * fixed.
+ */
+enum class MaterialAlphaMode : uint32
+{
+  // The alpha is ignored.
+  Opaque = 0,
+  // Pixels whose alpha is under the cutoff are not drawn (leaves, fences, chains).
+  Mask = 1,
+
+  COUNT
+};
+
+/**
  * Exists to keep how a surface looks apart from its shape, so many meshes can share it and
  * the renderer reads one place per draw. It keeps the UUID of each texture even when that
  * asset is missing, so saving it again does not lose the reference.
@@ -91,6 +105,31 @@ class CH_CORE_EXPORT Material
   NODISCARD FORCEINLINE const LinearColor&
   getEmissiveFactor() const noexcept { return m_emissiveFactor; }
 
+  void
+  setAlphaMode(MaterialAlphaMode mode);
+
+  NODISCARD FORCEINLINE MaterialAlphaMode
+  getAlphaMode() const noexcept { return m_alphaMode; }
+
+  /**
+   * Only used by MaterialAlphaMode::Mask.
+   */
+  void
+  setAlphaCutoff(float cutoff);
+
+  NODISCARD FORCEINLINE float
+  getAlphaCutoff() const noexcept { return m_alphaCutoff; }
+
+  /**
+   * Draws the back of every triangle too, lit with the normal turned around, for surfaces
+   * that have no thickness (leaves, cloth).
+   */
+  void
+  setTwoSided(bool bTwoSided);
+
+  NODISCARD FORCEINLINE bool
+  isTwoSided() const noexcept { return m_bTwoSided; }
+
   /**
    * Null clears it.
    */
@@ -145,7 +184,7 @@ class CH_CORE_EXPORT Material
   NODISCARD bool
   deserialize(DataStream& stream);
 
-  static constexpr uint32 SERIALIZATION_VERSION = 2;
+  static constexpr uint32 SERIALIZATION_VERSION = 3;
 
  private:
   struct TextureSlot
@@ -166,6 +205,10 @@ class CH_CORE_EXPORT Material
   float m_roughnessFactor = 0.5f;
   float m_normalScale = 1.0f;
   float m_occlusionStrength = 1.0f;
+  // glTF's default cutoff.
+  float m_alphaCutoff = 0.5f;
+  MaterialAlphaMode m_alphaMode = MaterialAlphaMode::Opaque;
+  bool m_bTwoSided = false;
   TextureSlot m_textures[static_cast<uint32>(MaterialTexture::COUNT)];
 
   mutable SPtr<IBuffer> m_constantBuffer;

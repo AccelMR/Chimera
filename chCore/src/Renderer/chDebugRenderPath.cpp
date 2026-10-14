@@ -111,6 +111,7 @@ DebugRenderPath::DebugRenderPath()
 
   m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "debugview");
   m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "debugview");
+  m_maskedFragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "debugview_masked");
 }
 
 /*
@@ -138,7 +139,7 @@ DebugRenderPath::addPasses(RenderGraph& graph, const RenderView& view, RGTexture
     const DrawSettings settings{
         .camera = &view.camera,
         .items = view.items,
-        .pipeline = &getPipeline(PipelineKind::Lines, outputDesc.format, Format::Unknown),
+        .pipelines = &getPipelines(PipelineKind::Lines, outputDesc.format, Format::Unknown),
         .shaderMode = static_cast<uint32>(DebugMode::Color),
         .color = kLineColor};
     graph.addPass("Wireframe")
@@ -154,7 +155,7 @@ DebugRenderPath::addPasses(RenderGraph& graph, const RenderView& view, RGTexture
   const DrawSettings settings{
       .camera = &view.camera,
       .items = view.items,
-      .pipeline = &getPipeline(PipelineKind::Solid, outputDesc.format, kDepthFormat),
+      .pipelines = &getPipelines(PipelineKind::Solid, outputDesc.format, kDepthFormat),
       .shaderMode = static_cast<uint32>(toDebugMode(m_viewMode)),
       .color = kLineColor};
   graph.addPass("DebugView")
@@ -177,7 +178,7 @@ DebugRenderPath::addWireframeOverlay(RenderGraph& graph,
   const DrawSettings settings{
       .camera = &view.camera,
       .items = view.items,
-      .pipeline = &getPipeline(PipelineKind::LinesOverDepth,
+      .pipelines = &getPipelines(PipelineKind::LinesOverDepth,
                                graph.getTextureDesc(output).format,
                                graph.getTextureDesc(depth).format),
       .shaderMode = static_cast<uint32>(DebugMode::Color),
@@ -207,8 +208,6 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
                                    .padding = {0.0f, 0.0f}};
   cameraBuffer.update(&cameraData, sizeof(cameraData));
 
-  commandList.bindPipeline(*settings.pipeline);
-
   const float* color = settings.color;
   DebugPushConstants pushConstants{.model = Matrix4::IDENTITY,
                                    .color = {color[0], color[1], color[2], color[3]},
@@ -216,33 +215,24 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
                                    .materialIndex = 0,
                                    .samplerIndex = m_sampler->getBindlessIndex(),
                                    .mode = settings.shaderMode};
-  for (const RenderItem* item : settings.items) {
-    const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
-    const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
-    if (!vertexBuffer || !indexBuffer) {
-      continue;
-    }
-
-    const Material& material = item->material ? *item->material : m_defaultMaterial;
-    pushConstants.model = item->worldMatrix;
-    pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
-    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
-
-    commandList.bindVertexBuffer(*vertexBuffer);
-    commandList.bindIndexBuffer(*indexBuffer, item->mesh->getIndexType());
-    commandList.drawIndexed(item->mesh->getIndexCount());
-  }
+  settings.pipelines->recordDraws(
+      commandList, settings.items, m_defaultMaterial,
+      [&commandList, &pushConstants](const RenderItem& item, const Material& material) {
+        pushConstants.model = item.worldMatrix;
+        pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
+        commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+      });
 }
 
 /*
  */
-const IPipeline&
-DebugRenderPath::getPipeline(PipelineKind kind, Format colorFormat, Format depthFormat)
+const MaterialPipelines&
+DebugRenderPath::getPipelines(PipelineKind kind, Format colorFormat, Format depthFormat)
 {
   PipelineEntry& entry = m_pipelines[static_cast<uint32>(kind)];
-  if (entry.pipeline != nullptr && entry.colorFormat == colorFormat &&
+  if (entry.pipelines.isBuilt() && entry.colorFormat == colorFormat &&
       entry.depthFormat == depthFormat) {
-    return *entry.pipeline;
+    return entry.pipelines;
   }
 
   GraphicsPipelineDesc pipelineDesc{.vertexShader = m_vertexShader,
@@ -251,9 +241,12 @@ DebugRenderPath::getPipeline(PipelineKind kind, Format colorFormat, Format depth
                                     .colorAttachmentCount = 1,
                                     .depthFormat = depthFormat};
   pipelineDesc.colorFormats[0] = colorFormat;
+  // Lines show every triangle, also the parts a masked material cuts away.
+  const SPtr<IShader>* maskedFragmentShader = &m_maskedFragmentShader;
   if (kind != PipelineKind::Solid) {
     pipelineDesc.raster.polygonMode = PolygonMode::Line;
     pipelineDesc.raster.cullMode = CullMode::None;
+    maskedFragmentShader = &m_fragmentShader;
   }
   if (kind == PipelineKind::LinesOverDepth) {
     // Pulled towards the camera, so the edges of a surface pass the test against the depth
@@ -264,10 +257,10 @@ DebugRenderPath::getPipeline(PipelineKind kind, Format colorFormat, Format depth
     pipelineDesc.depth.compareOp = CompareOp::LessOrEqual;
   }
 
-  entry = {.pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get(),
-           .colorFormat = colorFormat,
-           .depthFormat = depthFormat};
-  return *entry.pipeline;
+  entry.pipelines.build(m_pipelineCache, pipelineDesc, *maskedFragmentShader);
+  entry.colorFormat = colorFormat;
+  entry.depthFormat = depthFormat;
+  return entry.pipelines;
 }
 
 } // namespace chEngineSDK

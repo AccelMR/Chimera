@@ -22,6 +22,8 @@ struct MaterialData
   uint normalTexture;
   uint emissiveTexture;
   uint occlusionTexture;
+  float alphaCutoff;
+  float3 padding;
 };
 
 // White when the material has no texture there, so the factor is used alone. The index is
@@ -41,6 +43,21 @@ getBaseColor(MaterialData material, SamplerState textureSampler, float2 texCoord
 {
   return sampleMaterialTexture(material.baseColorTexture, textureSampler, texCoord) *
          material.baseColorFactor;
+}
+
+// Only the _masked variants call it: a shader that can discard loses the early depth test,
+// so opaque materials are drawn with shaders that never do.
+void
+clipAlphaMask(MaterialData material, float alpha)
+{
+  clip(alpha - material.alphaCutoff);
+}
+
+// Back faces are only drawn for two-sided materials, and they are lit from their own side.
+float3
+faceNormal(float3 normal, bool isFrontFace)
+{
+  return isFrontFace ? normal : -normal;
 }
 
 // x metallic, y roughness. The texture keeps roughness in green and metallic in blue.

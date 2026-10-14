@@ -12,6 +12,7 @@
 
 #include "chIRenderPath.h"
 #include "chMaterial.h"
+#include "chMaterialPipelines.h"
 #include "chPipelineCache.h"
 #include "chRenderSettings.h"
 #include "chSceneViewBuffers.h"
@@ -90,7 +91,8 @@ class CH_CORE_EXPORT DeferredRenderPath : public IRenderPath
 
   SPtr<IShader> m_gbufferVertexShader;
   SPtr<IShader> m_gbufferFragmentShader;
-  const IPipeline* m_gbufferPipeline = nullptr;
+  SPtr<IShader> m_gbufferMaskedFragmentShader;
+  MaterialPipelines m_gbufferPipelines;
   FullscreenPipeline m_lighting;
   FullscreenPipeline m_gbufferView;
   PipelineCache m_pipelineCache;

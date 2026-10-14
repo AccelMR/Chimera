@@ -59,6 +59,14 @@ class CH_CORE_EXPORT TextureAsset : public IAsset
   NODISCARD FORCEINLINE const SPtr<ITexture>&
   getTexture() const { return m_texture; }
 
+  /**
+   * Whether a pixel of the largest level has an alpha below alpha (0 to 1). Only 8-bit
+   * RGBA and BGRA formats are read; other formats give false. It scans the CPU copy, so it
+   * is meant for import time.
+   */
+  NODISCARD bool
+  hasAlphaBelow(float alpha) const;
+
  protected:
   bool
   serialize(SPtr<DataStream>) override;

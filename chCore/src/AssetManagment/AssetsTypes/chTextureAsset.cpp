@@ -32,6 +32,28 @@ getChainSize(Format format, uint32 width, uint32 height, uint32 mipLevels)
 
 /*
  */
+bool
+TextureAsset::hasAlphaBelow(float alpha) const
+{
+  if (m_format != Format::R8G8B8A8_UNORM && m_format != Format::R8G8B8A8_SRGB &&
+      m_format != Format::B8G8R8A8_UNORM && m_format != Format::B8G8R8A8_SRGB) {
+    return false;
+  }
+
+  // Alpha is linear in every one of these formats, sRGB included.
+  const float threshold = Math::clamp(alpha, 0.0f, 1.0f) * 255.0f;
+  const SIZE_T levelSize = Math::min(m_textureData.size(),
+                                     static_cast<SIZE_T>(m_width) * m_height * 4);
+  for (SIZE_T i = 3; i < levelSize; i += 4) {
+    if (static_cast<float>(m_textureData[i]) < threshold) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ */
 TextureAsset::TextureAsset(const AssetMetadata& metadata,
                            Vector<uint8> textureData,
                            uint32 width,

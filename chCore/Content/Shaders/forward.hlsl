@@ -1,6 +1,7 @@
 // Mesh lit by the scene lights with its metallic-roughness material, plus a constant ambient.
 // Matrices come from the engine stored row by row, and the engine uses row vectors,
 // so they are declared row_major and applied as mul(vector, matrix).
+// CH_VARIANT masked CH_ALPHA_MASK
 
 #include "chBindless.hlsli"
 #include "chLights.hlsli"
@@ -53,13 +54,16 @@ VSMain(VSInput input)
 }
 
 float4
-PSMain(VSOutput input) : SV_Target0
+PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
 {
   const ViewData view = loadConstants<ViewData>(g_push.viewIndex);
   const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
   SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
 
   const float4 baseColor = getBaseColor(material, textureSampler, input.texCoord);
+#if defined(CH_ALPHA_MASK)
+  clipAlphaMask(material, baseColor.a);
+#endif
   const float2 metallicRoughness =
       getMetallicRoughness(material, textureSampler, input.texCoord);
 
@@ -67,8 +71,9 @@ PSMain(VSOutput input) : SV_Target0
   surface.baseColor = baseColor.rgb;
   surface.metallic = metallicRoughness.x;
   surface.roughness = metallicRoughness.y;
-  surface.normal = getSurfaceNormal(material, textureSampler, input.texCoord,
-                                    normalize(input.normal), input.tangent);
+  surface.normal = faceNormal(getSurfaceNormal(material, textureSampler, input.texCoord,
+                                               normalize(input.normal), input.tangent),
+                              isFrontFace);
 
   const float3 viewDirection = normalize(view.cameraPosition - input.worldPosition);
   float3 color = evaluateLights(surface, input.worldPosition, viewDirection,

@@ -961,6 +961,9 @@ TEST_CASE("chCore - Material")
   REQUIRE(material.getMetallicFactor() == 0.0f);
   REQUIRE(material.getRoughnessFactor() == 0.5f);
   REQUIRE(material.getEmissiveFactor().r == 0.0f);
+  REQUIRE(material.getAlphaMode() == MaterialAlphaMode::Opaque);
+  REQUIRE(material.getAlphaCutoff() == 0.5f);
+  REQUIRE_FALSE(material.isTwoSided());
   for (uint32 i = 0; i < static_cast<uint32>(MaterialTexture::COUNT); ++i) {
     REQUIRE(material.getTextureId(static_cast<MaterialTexture>(i)).isNull());
     REQUIRE(material.getGpuTexture(static_cast<MaterialTexture>(i)) == nullptr);
@@ -979,6 +982,9 @@ TEST_CASE("chCore - Material")
   material.setNormalScale(2.0f);
   material.setOcclusionStrength(0.5f);
   material.setEmissiveFactor(LinearColor(4.0f, 2.0f, 1.0f, 1.0f));
+  material.setAlphaMode(MaterialAlphaMode::Mask);
+  material.setAlphaCutoff(0.25f);
+  material.setTwoSided(true);
   material.setTexture(MaterialTexture::BaseColor, baseColorId, nullptr);
   material.setTexture(MaterialTexture::Normal, normalId, nullptr);
   material.collectReferences(references);
@@ -988,6 +994,7 @@ TEST_CASE("chCore - Material")
 
   MemoryDataStream stream(256);
   material.serialize(stream);
+  const SIZE_T writtenSize = stream.tell();
   stream.seek(0);
 
   Material loaded;
@@ -1004,12 +1011,41 @@ TEST_CASE("chCore - Material")
   REQUIRE(loaded.getTextureId(MaterialTexture::Normal) == normalId);
   REQUIRE(loaded.getTextureId(MaterialTexture::MetallicRoughness).isNull());
   REQUIRE(loaded.getTexture(MaterialTexture::BaseColor) == nullptr);
+  REQUIRE(loaded.getAlphaMode() == MaterialAlphaMode::Mask);
+  REQUIRE(loaded.getAlphaCutoff() == 0.25f);
+  REQUIRE(loaded.isTwoSided());
 
-  SECTION("Another version is rejected")
+  SECTION("A newer version is rejected")
   {
     stream.seek(0);
     const uint32 otherVersion = Material::SERIALIZATION_VERSION + 1;
     stream.write(&otherVersion, sizeof(otherVersion));
+    stream.seek(0);
+    REQUIRE_FALSE(loaded.deserialize(stream));
+  }
+
+  SECTION("Version 2 has no alpha data and gets the defaults")
+  {
+    // Version 2 ends where the alpha data of version 3 starts, so the same bytes with
+    // version 2 written over the first ones read like an old file.
+    stream.seek(0);
+    const uint32 oldVersion = 2;
+    stream.write(&oldVersion, sizeof(oldVersion));
+    stream.seek(0);
+    Material oldMaterial;
+    REQUIRE(oldMaterial.deserialize(stream));
+    REQUIRE(oldMaterial.getMetallicFactor() == 0.75f);
+    REQUIRE(oldMaterial.getAlphaMode() == MaterialAlphaMode::Opaque);
+    REQUIRE(oldMaterial.getAlphaCutoff() == 0.5f);
+    REQUIRE_FALSE(oldMaterial.isTwoSided());
+  }
+
+  SECTION("An unknown alpha mode is rejected")
+  {
+    const uint32 badMode = static_cast<uint32>(MaterialAlphaMode::COUNT);
+    // The mode follows the cutoff at the end of the data.
+    stream.seek(writtenSize - sizeof(uint32) * 2);
+    stream.write(&badMode, sizeof(badMode));
     stream.seek(0);
     REQUIRE_FALSE(loaded.deserialize(stream));
   }

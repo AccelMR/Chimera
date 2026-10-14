@@ -51,6 +51,7 @@ ForwardRenderPath::ForwardRenderPath()
 
   m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "forward");
   m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "forward");
+  m_maskedFragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "forward_masked");
 }
 
 /*
@@ -89,29 +90,18 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
                                uint32 viewIndex)
 {
   ICommandList& commandList = context.getCommandList();
-  commandList.bindPipeline(*m_pipeline);
-
   DrawPushConstants pushConstants{.model = Matrix4::IDENTITY,
                                   .viewIndex = viewIndex,
                                   .materialIndex = 0,
                                   .samplerIndex = m_sampler->getBindlessIndex(),
                                   .padding = 0};
-  for (const RenderItem* item : items) {
-    const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
-    const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
-    if (!vertexBuffer || !indexBuffer) {
-      continue;
-    }
-
-    const Material& material = item->material ? *item->material : m_defaultMaterial;
-    pushConstants.model = item->worldMatrix;
-    pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
-    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
-
-    commandList.bindVertexBuffer(*vertexBuffer);
-    commandList.bindIndexBuffer(*indexBuffer, item->mesh->getIndexType());
-    commandList.drawIndexed(item->mesh->getIndexCount());
-  }
+  m_pipelines.recordDraws(
+      commandList, items, m_defaultMaterial,
+      [&commandList, &pushConstants](const RenderItem& item, const Material& material) {
+        pushConstants.model = item.worldMatrix;
+        pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
+        commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+      });
 }
 
 /*
@@ -119,7 +109,7 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
 void
 ForwardRenderPath::updatePipeline(Format colorFormat)
 {
-  if (m_pipeline != nullptr && m_pipelineFormat == colorFormat) {
+  if (m_pipelines.isBuilt() && m_pipelineFormat == colorFormat) {
     return;
   }
 
@@ -129,7 +119,7 @@ ForwardRenderPath::updatePipeline(Format colorFormat)
                                     .colorAttachmentCount = 1,
                                     .depthFormat = kDepthFormat};
   pipelineDesc.colorFormats[0] = colorFormat;
-  m_pipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
+  m_pipelines.build(m_pipelineCache, pipelineDesc, m_maskedFragmentShader);
   m_pipelineFormat = colorFormat;
 }
 

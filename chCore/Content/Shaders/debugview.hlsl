@@ -1,5 +1,6 @@
 // View modes that show scene data instead of the lit scene: the unlit texture, world
 // normals, depth and texture coordinates, plus a flat color for wireframe lines.
+// CH_VARIANT masked CH_ALPHA_MASK
 
 #include "chBindless.hlsli"
 #include "chColor.hlsli"
@@ -71,8 +72,15 @@ VSMain(VSInput input)
 }
 
 float4
-PSMain(VSOutput input) : SV_Target0
+PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
 {
+  const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
+  SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+#if defined(CH_ALPHA_MASK)
+  // Every mode shows the shape the lit view shows, so the cut pixels are dropped first.
+  clipAlphaMask(material, getBaseColor(material, textureSampler, input.texCoord).a);
+#endif
+
   if (g_push.mode == kModeDepth) {
     // Logarithmic between the clip planes: a linear ramp over a far plane hundreds of units
     // away leaves everything near the camera black.
@@ -88,12 +96,12 @@ PSMain(VSOutput input) : SV_Target0
     return g_push.color;
   }
 
-  const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
-  SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
   if (g_push.mode == kModeNormals) {
     // With the normal map, as the lighting sees it.
-    const float3 normal = getSurfaceNormal(material, textureSampler, input.texCoord,
-                                           normalize(input.normal), input.tangent);
+    const float3 normal =
+        faceNormal(getSurfaceNormal(material, textureSampler, input.texCoord,
+                                    normalize(input.normal), input.tangent),
+                   isFrontFace);
     return float4(normal * 0.5f + 0.5f, 1.0f);
   }
 

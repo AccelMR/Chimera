@@ -383,6 +383,48 @@ readMaterialFactors(const aiMaterial& source, Material& material)
     material.setOcclusionStrength(occlusionStrength);
   }
 }
+
+/*
+ * Reads how the base color alpha is used, after the textures are set. glTF says it; other
+ * formats do not, so there a base color texture with pixels under the cutoff makes a mask.
+ */
+static void
+readAlphaMode(const aiMaterial& source, Material& material)
+{
+  int32 twoSided = 0;
+  if (source.Get(AI_MATKEY_TWOSIDED, twoSided) == AI_SUCCESS) {
+    material.setTwoSided(twoSided != 0);
+  }
+
+  float cutoff = material.getAlphaCutoff();
+  if (source.Get(AI_MATKEY_GLTF_ALPHACUTOFF, cutoff) == AI_SUCCESS) {
+    material.setAlphaCutoff(cutoff);
+  }
+
+  aiString alphaMode;
+  if (source.Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+    const StringView mode(alphaMode.C_Str(), alphaMode.length);
+    if (mode == "MASK") {
+      material.setAlphaMode(MaterialAlphaMode::Mask);
+    }
+    else if (mode == "BLEND") {
+      // Blended materials are mostly foliage and decals, which a mask keeps the shape of.
+      CH_LOG_WARNING(MeshSystem,
+                     "Material {0} blends its alpha, which is not supported; it is drawn as "
+                     "a mask",
+                     source.GetName().C_Str());
+      material.setAlphaMode(MaterialAlphaMode::Mask);
+    }
+    return;
+  }
+
+  const SPtr<TextureAsset>& baseColor = material.getTexture(MaterialTexture::BaseColor);
+  if (baseColor && baseColor->hasAlphaBelow(material.getAlphaCutoff())) {
+    CH_LOG_INFO(MeshSystem, "Material {0} is masked: its base color texture has alpha",
+                source.GetName().C_Str());
+    material.setAlphaMode(MaterialAlphaMode::Mask);
+  }
+}
 } // namespace MeshManagerHelpers
 
 using namespace MeshManagerHelpers;
@@ -527,6 +569,7 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
   }
 
   readMaterialFactors(source, material);
+  readAlphaMode(source, material);
 
   if (!saveAndRegister(materialAsset)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);

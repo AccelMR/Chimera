@@ -31,6 +31,11 @@ namespace chEngineSDK {
 CH_LOG_DECLARE_STATIC(InspectorLog, All);
 
 namespace {
+// In MaterialAlphaMode order.
+constexpr const ANSICHAR* kAlphaModeNames[] = {"Opaque", "Mask"};
+static_assert(sizeof(kAlphaModeNames) / sizeof(kAlphaModeNames[0]) ==
+              static_cast<SIZE_T>(MaterialAlphaMode::COUNT));
+
 /*
  * Makes the last item a drop target for textures; true when one was set this frame.
  */
@@ -321,6 +326,27 @@ InspectorUI::renderMaterial(const SPtr<MaterialAsset>& materialAsset)
     material.setOcclusionStrength(occlusionStrength);
   }
   bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+  // A combo and a checkbox finish their edit in the frame they change, so they save then.
+  int32 alphaMode = static_cast<int32>(material.getAlphaMode());
+  if (ImGui::Combo("Alpha Mode", &alphaMode, kAlphaModeNames,
+                   static_cast<int32>(MaterialAlphaMode::COUNT))) {
+    material.setAlphaMode(static_cast<MaterialAlphaMode>(alphaMode));
+    bSave = true;
+  }
+  if (material.getAlphaMode() == MaterialAlphaMode::Mask) {
+    float alphaCutoff = material.getAlphaCutoff();
+    if (ImGui::SliderFloat("Alpha Cutoff", &alphaCutoff, 0.0f, 1.0f)) {
+      material.setAlphaCutoff(alphaCutoff);
+    }
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+  }
+
+  bool bTwoSided = material.isTwoSided();
+  if (ImGui::Checkbox("Two Sided", &bTwoSided)) {
+    material.setTwoSided(bTwoSided);
+    bSave = true;
+  }
 
   for (uint32 i = 0; i < static_cast<uint32>(MaterialTexture::COUNT); ++i) {
     ImGui::PushID(static_cast<int32>(i));

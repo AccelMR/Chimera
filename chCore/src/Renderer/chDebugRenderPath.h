@@ -12,6 +12,7 @@
 
 #include "chIRenderPath.h"
 #include "chMaterial.h"
+#include "chMaterialPipelines.h"
 #include "chPipelineCache.h"
 #include "chRenderSettings.h"
 
@@ -62,7 +63,7 @@ class CH_CORE_EXPORT DebugRenderPath : public IRenderPath
 
   struct PipelineEntry
   {
-    const IPipeline* pipeline = nullptr;
+    MaterialPipelines pipelines;
     Format colorFormat = Format::Unknown;
     Format depthFormat = Format::Unknown;
   };
@@ -71,7 +72,7 @@ class CH_CORE_EXPORT DebugRenderPath : public IRenderPath
   {
     const Camera* camera;
     Span<const RenderItem* const> items;
-    const IPipeline* pipeline;
+    const MaterialPipelines* pipelines;
     uint32 shaderMode;
     // Four floats, used by the line modes.
     const float* color;
@@ -80,13 +81,14 @@ class CH_CORE_EXPORT DebugRenderPath : public IRenderPath
   void
   recordDraws(RenderPassContext& context, const DrawSettings& settings);
 
-  NODISCARD const IPipeline&
-  getPipeline(PipelineKind kind, Format colorFormat, Format depthFormat);
+  NODISCARD const MaterialPipelines&
+  getPipelines(PipelineKind kind, Format colorFormat, Format depthFormat);
 
   ViewMode m_viewMode = ViewMode::Unlit;
 
   SPtr<IShader> m_vertexShader;
   SPtr<IShader> m_fragmentShader;
+  SPtr<IShader> m_maskedFragmentShader;
   PipelineCache m_pipelineCache;
   // Looked up again only when a target format changes, because building the description
   // allocates (VertexLayout).

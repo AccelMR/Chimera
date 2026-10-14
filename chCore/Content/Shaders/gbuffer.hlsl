@@ -1,6 +1,7 @@
 // First pass of the deferred path: writes what the lighting needs of each visible surface
 // into the GBuffer, so every light is evaluated once per pixel instead of once per drawn
 // fragment. Matrices are row_major and applied as mul(vector, matrix), as in the engine.
+// CH_VARIANT masked CH_ALPHA_MASK
 
 #include "chBindless.hlsli"
 #include "chMaterial.hlsli"
@@ -62,18 +63,25 @@ VSMain(VSInput input)
 }
 
 PSOutput
-PSMain(VSOutput input)
+PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace)
 {
   const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
   SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
 
+  const float4 baseColor = getBaseColor(material, textureSampler, input.texCoord);
+#if defined(CH_ALPHA_MASK)
+  clipAlphaMask(material, baseColor.a);
+#endif
+
   const float2 metallicRoughness =
       getMetallicRoughness(material, textureSampler, input.texCoord);
-  const float3 normal = getSurfaceNormal(material, textureSampler, input.texCoord,
-                                         normalize(input.normal), input.tangent);
+  const float3 normal =
+      faceNormal(getSurfaceNormal(material, textureSampler, input.texCoord,
+                                  normalize(input.normal), input.tangent),
+                 isFrontFace);
 
   PSOutput output;
-  output.baseColor = float4(getBaseColor(material, textureSampler, input.texCoord).rgb, 1.0f);
+  output.baseColor = float4(baseColor.rgb, 1.0f);
   output.normal = float4(normal * 0.5f + 0.5f, 1.0f);
   output.surface = float4(metallicRoughness,
                           getOcclusion(material, textureSampler, input.texCoord), 1.0f);

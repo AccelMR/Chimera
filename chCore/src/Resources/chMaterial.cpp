@@ -32,8 +32,10 @@ struct MaterialConstants
   uint32 normalTexture;
   uint32 emissiveTexture;
   uint32 occlusionTexture;
+  float alphaCutoff;
+  float padding[3];
 };
-static_assert(sizeof(MaterialConstants) == 64);
+static_assert(sizeof(MaterialConstants) == 80);
 
 // Must match kNoTexture in chMaterial.hlsli: shaders skip the sample and use the factor.
 constexpr uint32 kNoTexture = 0xFFFFFFFF;
@@ -53,6 +55,18 @@ struct MaterialFileData
 };
 static_assert(sizeof(MaterialFileData) == 44 + sizeof(UUID) * kTextureCount,
               "MaterialFileData must have no padding");
+
+// Written after MaterialFileData since version 3; version 2 files get the defaults.
+struct MaterialAlphaFileData
+{
+  float alphaCutoff;
+  uint32 alphaMode;
+  uint32 twoSided;
+};
+static_assert(sizeof(MaterialAlphaFileData) == 12);
+
+constexpr uint32 kFirstAlphaVersion = 3;
+constexpr uint32 kOldestReadVersion = 2;
 } // namespace
 
 /*
@@ -107,6 +121,32 @@ Material::setEmissiveFactor(const LinearColor& color)
 {
   m_emissiveFactor = color;
   m_bConstantsDirty = true;
+}
+
+/*
+ */
+void
+Material::setAlphaMode(MaterialAlphaMode mode)
+{
+  CH_ASSERT(mode < MaterialAlphaMode::COUNT);
+  m_alphaMode = mode;
+}
+
+/*
+ */
+void
+Material::setAlphaCutoff(float cutoff)
+{
+  m_alphaCutoff = cutoff;
+  m_bConstantsDirty = true;
+}
+
+/*
+ */
+void
+Material::setTwoSided(bool bTwoSided)
+{
+  m_bTwoSided = bTwoSided;
 }
 
 /*
@@ -174,7 +214,9 @@ Material::updateConstantBuffer() const
           textureIndexes[static_cast<uint32>(MaterialTexture::MetallicRoughness)],
       .normalTexture = textureIndexes[static_cast<uint32>(MaterialTexture::Normal)],
       .emissiveTexture = textureIndexes[static_cast<uint32>(MaterialTexture::Emissive)],
-      .occlusionTexture = textureIndexes[static_cast<uint32>(MaterialTexture::Occlusion)]};
+      .occlusionTexture = textureIndexes[static_cast<uint32>(MaterialTexture::Occlusion)],
+      .alphaCutoff = m_alphaCutoff,
+      .padding = {0.0f, 0.0f, 0.0f}};
   m_constantBuffer->update(&constants, sizeof(constants));
   m_bConstantsDirty = false;
 }
@@ -209,8 +251,12 @@ Material::serialize(DataStream& stream) const
   for (uint32 i = 0; i < kTextureCount; ++i) {
     data.textures[i] = m_textures[i].id;
   }
+  const MaterialAlphaFileData alphaData{.alphaCutoff = m_alphaCutoff,
+                                        .alphaMode = static_cast<uint32>(m_alphaMode),
+                                        .twoSided = m_bTwoSided ? 1u : 0u};
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
+  stream.write(&alphaData, sizeof(alphaData));
 }
 
 /*
@@ -221,7 +267,17 @@ Material::deserialize(DataStream& stream)
   uint32 version = 0;
   MaterialFileData data;
   if (stream.read(&version, sizeof(version)) != sizeof(version) ||
-      version != SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data)) {
+      version < kOldestReadVersion || version > SERIALIZATION_VERSION ||
+      stream.read(&data, sizeof(data)) != sizeof(data)) {
+    return false;
+  }
+
+  MaterialAlphaFileData alphaData{.alphaCutoff = 0.5f,
+                                  .alphaMode = static_cast<uint32>(MaterialAlphaMode::Opaque),
+                                  .twoSided = 0};
+  if (version >= kFirstAlphaVersion &&
+      (stream.read(&alphaData, sizeof(alphaData)) != sizeof(alphaData) ||
+       alphaData.alphaMode >= static_cast<uint32>(MaterialAlphaMode::COUNT))) {
     return false;
   }
 
@@ -233,6 +289,9 @@ Material::deserialize(DataStream& stream)
   m_roughnessFactor = data.roughnessFactor;
   m_normalScale = data.normalScale;
   m_occlusionStrength = data.occlusionStrength;
+  m_alphaCutoff = alphaData.alphaCutoff;
+  m_alphaMode = static_cast<MaterialAlphaMode>(alphaData.alphaMode);
+  m_bTwoSided = alphaData.twoSided != 0;
   for (uint32 i = 0; i < kTextureCount; ++i) {
     setTexture(static_cast<MaterialTexture>(i), data.textures[i], nullptr);
   }

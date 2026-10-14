@@ -131,6 +131,8 @@ DeferredRenderPath::DeferredRenderPath()
 
   m_gbufferVertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "gbuffer");
   m_gbufferFragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "gbuffer");
+  m_gbufferMaskedFragmentShader =
+      graphicsAPI.loadShader(ShaderStage::Fragment, "gbuffer_masked");
   m_lighting.vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "deferredlighting");
   m_lighting.fragmentShader =
       graphicsAPI.loadShader(ShaderStage::Fragment, "deferredlighting");
@@ -255,29 +257,18 @@ DeferredRenderPath::recordGBufferDraws(RenderPassContext& context,
                                        uint32 viewIndex)
 {
   ICommandList& commandList = context.getCommandList();
-  commandList.bindPipeline(*m_gbufferPipeline);
-
   GBufferPushConstants pushConstants{.model = Matrix4::IDENTITY,
                                      .viewIndex = viewIndex,
                                      .materialIndex = 0,
                                      .samplerIndex = m_sampler->getBindlessIndex(),
                                      .padding = 0};
-  for (const RenderItem* item : items) {
-    const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
-    const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
-    if (!vertexBuffer || !indexBuffer) {
-      continue;
-    }
-
-    const Material& material = item->material ? *item->material : m_defaultMaterial;
-    pushConstants.model = item->worldMatrix;
-    pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
-    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
-
-    commandList.bindVertexBuffer(*vertexBuffer);
-    commandList.bindIndexBuffer(*indexBuffer, item->mesh->getIndexType());
-    commandList.drawIndexed(item->mesh->getIndexCount());
-  }
+  m_gbufferPipelines.recordDraws(
+      commandList, items, m_defaultMaterial,
+      [&commandList, &pushConstants](const RenderItem& item, const Material& material) {
+        pushConstants.model = item.worldMatrix;
+        pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
+        commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+      });
 }
 
 /*
@@ -285,7 +276,7 @@ DeferredRenderPath::recordGBufferDraws(RenderPassContext& context,
 void
 DeferredRenderPath::updateGBufferPipeline()
 {
-  if (m_gbufferPipeline != nullptr) {
+  if (m_gbufferPipelines.isBuilt()) {
     return;
   }
 
@@ -298,7 +289,7 @@ DeferredRenderPath::updateGBufferPipeline()
   pipelineDesc.colorFormats[1] = kNormalFormat;
   pipelineDesc.colorFormats[2] = kSurfaceFormat;
   pipelineDesc.colorFormats[3] = kEmissiveFormat;
-  m_gbufferPipeline = m_pipelineCache.getOrCreate(pipelineDesc).get();
+  m_gbufferPipelines.build(m_pipelineCache, pipelineDesc, m_gbufferMaskedFragmentShader);
 }
 
 /*
