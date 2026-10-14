@@ -20,6 +20,17 @@ namespace chEngineSDK {
 class Frustum;
 
 /**
+ * What a ray hit in a scene: the nearest render item along it and the object it draws for.
+ */
+struct SceneRayHit
+{
+  GameObject* gameObject = nullptr;
+  const RenderItem* item = nullptr;
+  // Along the ray, in world units.
+  float distance = 0.0f;
+};
+
+/**
  * Exists to own a hierarchy of GameObjects and the flat list of what they draw. Components
  * add and update render items here, so the renderer only asks for the items a camera sees
  * and never walks the hierarchy.
@@ -87,6 +98,14 @@ class CH_CORE_EXPORT Scene : public Object
    */
   void
   gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outItems) const;
+
+  /**
+   * Nearest render item the ray hits, by its triangles. Tests every item's bounds first,
+   * then the triangles of those the ray reaches, all on the CPU: meant for picking, not
+   * for every frame. ray.direction must be unit length.
+   */
+  NODISCARD bool
+  raycast(const Ray& ray, SceneRayHit& outHit) const;
 
   /**
    * Returns an id that stays valid until removeLight.

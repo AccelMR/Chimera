@@ -89,6 +89,15 @@ class Matrix4
   toQuaternion() const noexcept;
 
   /**
+   * Splits a scale, rotation and translation matrix (ScaleRotationTranslationMatrix) back
+   * into its parts. A mirrored matrix gives a negative X scale. Returns false, leaving the
+   * outputs as they were, when a scale is zero.
+   */
+  NODISCARD CH_UTILITY_EXPORT bool
+  decompose(Vector3& outScale, Quaternion& outRotation, Vector3& outTranslation) const noexcept;
+
+
+  /**
    * Transforms a point (w = 1), so the translation is applied.
    */
   NODISCARD FORCEINLINE Vector4

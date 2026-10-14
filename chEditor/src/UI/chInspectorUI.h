@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chQuaternion.h"
+
 namespace chEngineSDK {
 class Material;
 class MaterialAsset;
@@ -53,6 +55,8 @@ class InspectorUI
   // So the angles are kept while the same object stays selected.
   const GameObject* m_rotationOwner = nullptr;
   float m_rotationDegrees[3] = {0.0f, 0.0f, 0.0f};
+  // The rotation the angles were last read from or written to.
+  Quaternion m_rotationShown = Quaternion::IDENTITY;
 };
 
 } // namespace chEngineSDK

@@ -13,7 +13,13 @@ target_compile_definitions(chImgui PUBLIC
 add_library(chImguiSDL3 STATIC ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp)
 target_link_libraries(chImguiSDL3 PUBLIC chImgui SDL3::SDL3)
 
-set(IMGUI_TARGETS chImgui chImguiSDL3)
+# Move, rotate and scale gizmos and the view cube of the editor viewport.
+set(IMGUIZMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Externals/ImGuizmo/src)
+add_library(chImGuizmo STATIC ${IMGUIZMO_DIR}/ImGuizmo.cpp ${IMGUIZMO_DIR}/ImGuizmo.h)
+target_include_directories(chImGuizmo PUBLIC ${IMGUIZMO_DIR})
+target_link_libraries(chImGuizmo PUBLIC chImgui)
+
+set(IMGUI_TARGETS chImgui chImguiSDL3 chImGuizmo)
 
 set_target_properties(${IMGUI_TARGETS} PROPERTIES
   SYSTEM ON

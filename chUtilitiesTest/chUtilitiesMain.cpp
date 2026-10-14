@@ -823,6 +823,30 @@ TEST_CASE("chUtilities - Matrix4") {
                            1e-5f));
   }
 
+  // decompose gives back the parts, a mirror included, and refuses a zero scale.
+  {
+    Vector3 outScale;
+    Quaternion outRotation;
+    Vector3 outTranslation;
+    const ScaleRotationTranslationMatrix srt(scale, Quaternion(rotation), origin);
+    REQUIRE(srt.decompose(outScale, outRotation, outTranslation));
+    REQUIRE(outScale.nearEqual(scale, 1e-4f));
+    REQUIRE(outTranslation.nearEqual(origin, 1e-4f));
+    REQUIRE(ScaleRotationTranslationMatrix(outScale, outRotation, outTranslation)
+                .nearEqual(srt, 1e-4f));
+
+    const Vector3 mirrored(-2.0f, 3.0f, 0.5f);
+    const ScaleRotationTranslationMatrix mirror(mirrored, Quaternion(rotation), origin);
+    REQUIRE(mirror.decompose(outScale, outRotation, outTranslation));
+    REQUIRE(outScale.x < 0.0f);
+    REQUIRE(ScaleRotationTranslationMatrix(outScale, outRotation, outTranslation)
+                .nearEqual(mirror, 1e-4f));
+
+    const ScaleRotationTranslationMatrix zeroScale(Vector3(1.0f, 0.0f, 1.0f), Rotator::ZERO,
+                                                   origin);
+    REQUIRE_FALSE(zeroScale.decompose(outScale, outRotation, outTranslation));
+  }
+
   // Test PerspectiveMatrix
   Radian halfFOV(Math::PI / 4.0f); // 45 degrees
   PerspectiveMatrix perspective(halfFOV, 800.0f, 600.0f, 0.1f, 1000.0f);

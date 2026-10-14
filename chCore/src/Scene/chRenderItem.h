@@ -30,6 +30,8 @@ struct RenderItem
   const Mesh* mesh = nullptr;
   // Null draws with the renderer's default look.
   const Material* material = nullptr;
+  // The object the item draws for, so a hit on the item (picking) finds it.
+  GameObject* owner = nullptr;
 };
 
 } // namespace chEngineSDK

@@ -52,7 +52,8 @@ LightComponent::setIntensity(float intensity)
 void
 LightComponent::onRegister()
 {
-  m_lightId = getOwner()->getScene()->addLight(LightItem{.type = m_type});
+  m_lightId =
+      getOwner()->getScene()->addLight(LightItem{.type = m_type, .owner = getOwner()});
   updateLightItem();
 }
 

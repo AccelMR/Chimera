@@ -239,6 +239,42 @@ Matrix4::toQuaternion() const noexcept
 
 /*
  */
+bool
+Matrix4::decompose(Vector3& outScale,
+                   Quaternion& outRotation,
+                   Vector3& outTranslation) const noexcept
+{
+  Vector3 rows[3] = {Vector3(m_data[0][0], m_data[0][1], m_data[0][2]),
+                     Vector3(m_data[1][0], m_data[1][1], m_data[1][2]),
+                     Vector3(m_data[2][0], m_data[2][1], m_data[2][2])};
+  Vector3 scale(rows[0].magnitude(), rows[1].magnitude(), rows[2].magnitude());
+  if (scale.x <= Math::SMALL_NUMBER || scale.y <= Math::SMALL_NUMBER ||
+      scale.z <= Math::SMALL_NUMBER) {
+    return false;
+  }
+
+  // A mirror makes the determinant negative; the sign goes on X so the rows left are a
+  // rotation.
+  if (rows[0].dot(rows[1].cross(rows[2])) < 0.0f) {
+    scale.x = -scale.x;
+  }
+  rows[0] = rows[0] / scale.x;
+  rows[1] = rows[1] / scale.y;
+  rows[2] = rows[2] / scale.z;
+
+  const Matrix4 rotation(rows[0].x, rows[0].y, rows[0].z, 0.0f,
+                         rows[1].x, rows[1].y, rows[1].z, 0.0f,
+                         rows[2].x, rows[2].y, rows[2].z, 0.0f,
+                         0.0f, 0.0f, 0.0f, 1.0f);
+  outScale = scale;
+  outRotation = rotation.toQuaternion();
+  outTranslation = Vector3(m_data[3][0], m_data[3][1], m_data[3][2]);
+  return true;
+}
+
+
+/*
+ */
 RotationTranslationMatrix::RotationTranslationMatrix(const Rotator& rotator,
                                                      const Vector3& origin) noexcept
 {

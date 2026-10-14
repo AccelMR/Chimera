@@ -32,6 +32,7 @@
 #include "chRayCast.h"
 #include "chRotator.h"
 #include "chUIHelpers.h"
+#include "chViewportTools.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
@@ -125,6 +126,7 @@ EditorApplication::destroyModules()
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
   m_contentAssetUI.reset();
+  m_viewportTools.reset();
 
   if (m_editorCamera) {
     m_editorCamera->unbindInputEvents();
@@ -186,7 +188,8 @@ EditorApplication::onRender(ICommandList& commandList,
   // window wants.
   const ImGuiIO& io = ImGui::GetIO();
   m_editorCamera->setFocused(!UIHelpers::bRenderImGui ||
-                             (!io.WantCaptureMouse && !io.WantCaptureKeyboard));
+                             (!io.WantCaptureMouse && !io.WantCaptureKeyboard &&
+                              !m_viewportTools->isUsingMouse()));
 
   // After the UI, which may have moved or added objects.
   m_activeScene->updateTransforms();
@@ -292,6 +295,7 @@ EditorApplication::initializeEditorComponents() {
   m_inspectorUI = chMakeUnique<InspectorUI>();
   m_gameObjectAssetUI = chMakeUnique<GameObjectAssetUI>();
 
+  m_viewportTools = chMakeUnique<ViewportTools>(*m_editorCamera);
   m_sceneGraphUI->setEditorCamera(m_editorCamera.get());
   m_outputLogUI->updateAvailableCategories();
 
@@ -408,6 +412,7 @@ void
 EditorApplication::renderUI()
 {
   UIHelpers::newFrame();
+  m_viewportTools->beginFrame();
 
   m_mainMenuBar->renderMainMenuBar();
   m_contentAssetUI->renderContentAssetUI();
@@ -415,6 +420,7 @@ EditorApplication::renderUI()
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   m_gameObjectAssetUI->renderGameObjectAssetUI();
+  m_viewportTools->render(*m_activeScene);
   renderViewportDropTarget();
 
   ImGui::Render();

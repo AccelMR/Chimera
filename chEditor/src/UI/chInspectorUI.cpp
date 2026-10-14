@@ -116,8 +116,10 @@ InspectorUI::renderTransform(GameObject& gameObject)
   }
 
   Transform& transform = gameObject.getTransform();
-  if (m_rotationOwner != &gameObject) {
+  // Read again also when something else (the viewport gizmo) turned the object.
+  if (m_rotationOwner != &gameObject || transform.getLocalRotation() != m_rotationShown) {
     m_rotationOwner = &gameObject;
+    m_rotationShown = transform.getLocalRotation();
     const Rotator rotator = transform.getLocalRotation().toRotator();
     m_rotationDegrees[0] = rotator.pitch.valueDegree();
     m_rotationDegrees[1] = rotator.yaw.valueDegree();
@@ -135,6 +137,7 @@ InspectorUI::renderTransform(GameObject& gameObject)
   if (ImGui::DragFloat3("Rotation", m_rotationDegrees, 0.5f)) {
     transform.setLocalRotation(
         Quaternion(Rotator(m_rotationDegrees[0], m_rotationDegrees[1], m_rotationDegrees[2])));
+    m_rotationShown = transform.getLocalRotation();
   }
 
   const Vector3& scale = transform.getLocalScale();

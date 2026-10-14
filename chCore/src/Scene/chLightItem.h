@@ -42,6 +42,8 @@ struct LightItem
   // outer one.
   float innerConeCos = 1.0f;
   float outerConeCos = 0.0f;
+  // The object the light belongs to, so the editor can find it from the light.
+  GameObject* owner = nullptr;
   // False marks a free slot of the scene.
   bool bInUse = false;
 };

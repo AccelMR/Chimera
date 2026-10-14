@@ -11,9 +11,20 @@
 
 #include "chAlgorithm.h"
 #include "chFrustum.h"
+#include "chMesh.h"
+#include "chRay.h"
+#include "chRayCast.h"
 #include "chShapeOverlap.h"
 
 namespace chEngineSDK {
+
+namespace {
+NODISCARD FORCEINLINE Vector3
+toVector3(const Vector4& vector)
+{
+  return Vector3(vector.x, vector.y, vector.z);
+}
+} // namespace
 
 /*
  */
@@ -129,6 +140,49 @@ Scene::gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outI
       outItems.push_back(&item);
     }
   }
+}
+
+/*
+ */
+bool
+Scene::raycast(const Ray& ray, SceneRayHit& outHit) const
+{
+  bool bHit = false;
+  for (const RenderItem& item : m_renderItems) {
+    if (!item.mesh) {
+      continue;
+    }
+
+    const AABox worldBox(item.worldBounds.center - item.worldBounds.boxExtent,
+                         item.worldBounds.center + item.worldBounds.boxExtent);
+    float boxDistance = 0.0f;
+    if (!RayCast::box(ray, worldBox, boxDistance) || (bHit && boxDistance > outHit.distance)) {
+      continue;
+    }
+
+    // The triangles stay in the mesh's own space; the ray goes there instead, and its
+    // direction is made unit again because the matrix may scale.
+    const Matrix4 worldToLocal = item.worldMatrix.getInverseAffine();
+    Vector3 localDirection = toVector3(worldToLocal.transformVector(ray.direction));
+    if (!localDirection.normalize()) {
+      continue;
+    }
+    const Ray localRay(toVector3(worldToLocal.transformPosition(ray.origin)),
+                       localDirection);
+
+    float localDistance = 0.0f;
+    if (!item.mesh->raycast(localRay, localDistance)) {
+      continue;
+    }
+    const Vector3 worldPoint =
+        toVector3(item.worldMatrix.transformPosition(localRay.getPoint(localDistance)));
+    const float distance = worldPoint.distance(ray.origin);
+    if (!bHit || distance < outHit.distance) {
+      outHit = {.gameObject = item.owner, .item = &item, .distance = distance};
+      bHit = true;
+    }
+  }
+  return bHit;
 }
 
 /*

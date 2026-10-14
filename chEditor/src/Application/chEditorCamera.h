@@ -52,6 +52,9 @@ class EditorCamera
   void
   focus(const AABox& bounds);
 
+  void
+  setView(const Vector3& position, const Vector3& lookAt);
+
   NODISCARD FORCEINLINE const Camera&
   getCamera() const { return m_camera; }
 

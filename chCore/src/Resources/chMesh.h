@@ -191,6 +191,13 @@ class CH_CORE_EXPORT Mesh
   getBounds() const;
 
   /**
+   * Nearest triangle the ray hits, from either side; the ray is in the mesh's own space.
+   * Walks every triangle on the CPU, so it is meant for picking, not for every frame.
+   */
+  NODISCARD bool
+  raycast(const Ray& localRay, float& outDistance) const;
+
+  /**
    * GPU copy of the vertices, made on the first call after the data changes (the copy runs
    * with the next frame submit). Main thread only. Null when the mesh has no vertices.
    */
@@ -224,6 +231,15 @@ class CH_CORE_EXPORT Mesh
     m_vertexBuffer.reset();
     m_indexBuffer.reset();
   }
+
+  /**
+   * The position of vertex 0, or null when the mesh has no Float3 positions.
+   */
+  NODISCARD const uint8*
+  getFirstPosition() const;
+
+  NODISCARD static Vector3
+  readPositionAt(const uint8* firstPosition, uint32 stride, uint32 index);
 
   void
   createGpuBuffers() const;

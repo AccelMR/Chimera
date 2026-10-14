@@ -459,6 +459,38 @@ TEST_CASE("chCore - Scene render items")
   }
 }
 
+TEST_CASE("chCore - Scene raycast")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  // The triangle lies flat at its object's Z, covering x -1..1 and y 0..2 (times scale).
+  const SPtr<GameObject> back = scene.createGameObject("Back");
+  back->addComponent<ModelComponent>(createTriangleModel());
+  const SPtr<GameObject> front = scene.createGameObject("Front");
+  front->addComponent<ModelComponent>(createTriangleModel());
+  front->getTransform().setLocalPosition(Vector3(3.0f, 0.0f, -2.0f));
+  front->getTransform().setLocalScale(Vector3(2.0f, 3.0f, 1.0f));
+  scene.updateTransforms();
+
+  SceneRayHit hit;
+  REQUIRE(scene.raycast(Ray(Vector3(3.0f, 0.5f, -5.0f), Vector3::UP), hit));
+  REQUIRE(hit.gameObject == front.get());
+  REQUIRE(hit.distance == Approx(3.0f));
+
+  REQUIRE(scene.raycast(Ray(Vector3(0.0f, 0.5f, -5.0f), Vector3::UP), hit));
+  REQUIRE(hit.gameObject == back.get());
+  REQUIRE(hit.distance == Approx(5.0f));
+
+  // Inside the back triangle's box but outside the triangle, and behind the ray.
+  REQUIRE_FALSE(scene.raycast(Ray(Vector3(0.95f, 1.95f, -5.0f), Vector3::UP), hit));
+  REQUIRE_FALSE(scene.raycast(Ray(Vector3(3.0f, 0.5f, -5.0f), -Vector3::UP), hit));
+
+  // In front of the back triangle, the front one is picked.
+  back->getTransform().setLocalPosition(Vector3(3.0f, 0.0f, 0.0f));
+  scene.updateTransforms();
+  REQUIRE(scene.raycast(Ray(Vector3(3.0f, 0.5f, -5.0f), Vector3::UP), hit));
+  REQUIRE(hit.gameObject == front.get());
+}
+
 TEST_CASE("chCore - Scene lights")
 {
   Scene scene("Test", chEngineSDK::UUID::createRandom());
@@ -477,6 +509,7 @@ TEST_CASE("chCore - Scene lights")
   scene.gatherLights(camera.getFrustum(), visible);
   REQUIRE(visible.size() == 1);
   REQUIRE(visible[0]->type == LightType::Directional);
+  REQUIRE(visible[0]->owner == sun.get());
   REQUIRE(visible[0]->direction.nearEqual(Vector3(0.0f, 0.0f, -1.0f)));
   REQUIRE(visible[0]->color.r == 2.0f);
   REQUIRE(visible[0]->color.g == 1.0f);

@@ -26,6 +26,7 @@ class InspectorUI;
 class GameObjectAssetUI;
 class ImGuiRenderer;
 class EditorCamera;
+class ViewportTools;
 class ModelAsset;
 
 class EditorApplication : public WindowedApplication
@@ -85,6 +86,7 @@ class EditorApplication : public WindowedApplication
   uint32 m_viewportWidth = 0;
   uint32 m_viewportHeight = 0;
   UniquePtr<EditorCamera> m_editorCamera;
+  UniquePtr<ViewportTools> m_viewportTools;
   SPtr<Scene> m_activeScene;
 
   UniquePtr<ImGuiRenderer> m_imguiRenderer;

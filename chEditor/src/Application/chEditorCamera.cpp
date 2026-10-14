@@ -48,8 +48,11 @@ EditorCamera::bindInputEvents()
 {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
-  m_keyDownListener = eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
-    if (!m_bFocused) {
+  m_keyDownListener = eventDispatcher.OnKeyDown.connect(
+      [this, &eventDispatcher](const KeyBoardData& data) {
+    // Only while flying with the right button held, as in Unreal, so the same keys pick the
+    // viewport tools the rest of the time.
+    if (!m_bFocused || !eventDispatcher.isMouseButtonDown(MouseButton::Right)) {
       return;
     }
     switch (data.key) {
@@ -70,10 +73,6 @@ EditorCamera::bindInputEvents()
       break;
     case Key::E:
       m_camera.moveUp(-kKeyMoveDistance);
-      break;
-    case Key::R:
-      m_camera.setPosition(kStartPosition);
-      m_camera.lookAt(Vector3::ZERO);
       break;
     case Key::P: {
       const Vector3& position = m_camera.getPosition();
@@ -142,6 +141,15 @@ EditorCamera::focus(const AABox& bounds)
   const Vector3 center = bounds.getCenter();
   m_camera.setPosition(center - m_camera.getForwardVector() * distance);
   m_camera.lookAt(center);
+}
+
+/*
+ */
+void
+EditorCamera::setView(const Vector3& position, const Vector3& lookAt)
+{
+  m_camera.setPosition(position);
+  m_camera.lookAt(lookAt);
 }
 
 } // namespace chEngineSDK

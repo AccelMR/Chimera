@@ -177,7 +177,8 @@ ModelComponent::addRenderItems()
       const RenderItem item{.worldMatrix = world,
                             .worldBounds = mesh->getBounds().getTransformed(world),
                             .mesh = mesh.get(),
-                            .material = getRenderMaterial(mesh->getMaterialSlot())};
+                            .material = getRenderMaterial(mesh->getMaterialSlot()),
+                            .owner = getOwner()};
       const uint32 renderItemId = scene.addRenderItem(item);
       m_parts.push_back({.node = node, .mesh = mesh.get(), .renderItemId = renderItemId});
     }

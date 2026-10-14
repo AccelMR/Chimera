@@ -17,3 +17,6 @@
 [submodule "chGraphicsAPIs/chDX12/Externals/D3D12MemoryAllocator"]
 	path = chGraphicsAPIs/chDX12/Externals/D3D12MemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git
+[submodule "chImgui/Externals/ImGuizmo"]
+	path = chImgui/Externals/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git
