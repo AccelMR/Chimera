@@ -68,6 +68,9 @@ class ViewportTools
   renderToolbar();
 
   void
+  renderCameraSettings();
+
+  void
   renderLights(const Camera& camera);
 
   void

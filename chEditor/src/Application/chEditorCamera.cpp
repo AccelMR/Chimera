@@ -10,25 +10,52 @@
 #include "chEditorCamera.h"
 
 #include "chBox.h"
+#include "chConsoleVariable.h"
+#include "chEngineConfig.h"
 #include "chEventDispatcherManager.h"
-#include "chLogger.h"
 #include "chMath.h"
-
-CH_LOG_DECLARE_STATIC(EditorCameraLog, All);
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 
 namespace {
+ConsoleVariable<float> g_cvarCameraSpeed("Editor.CameraSpeed",
+                                         5.0f,
+                                         "Units per second the viewport camera flies.",
+                                         "CameraSpeed");
+ConsoleVariable<float> g_cvarCameraLookSensitivity(
+    "Editor.CameraLookSensitivity",
+    0.15f,
+    "Degrees the viewport camera turns per pixel the mouse moves.",
+    "LookSensitivity");
+ConsoleVariable<float> g_cvarCameraSprintMultiplier(
+    "Editor.CameraSprintMultiplier",
+    3.0f,
+    "How many times faster the viewport camera flies while Shift is held.",
+    "SprintMultiplier");
+
 constexpr Vector3 kStartPosition(-5.0f, 0.0f, 0.0f);
 constexpr float kNearPlane = 0.1f;
 constexpr float kFarPlane = 10000.0f;
 constexpr float kFieldOfViewDegrees = 45.0f;
-constexpr float kKeyMoveDistance = 0.01f;
-constexpr float kWheelMoveDistance = 0.1f;
+// Each wheel step while flying multiplies or divides the speed by this.
+constexpr float kWheelSpeedStep = 1.2f;
+// Outside a flight a wheel step moves this fraction of a second of flight.
+constexpr float kWheelMoveSeconds = 0.1f;
 constexpr float kPanSpeed = 0.01f;
-constexpr float kRotationSpeed = 0.1f;
+// Looking straight up or down would flip the view, because world Z is always up.
+constexpr float kMaxPitchDegrees = 89.0f;
 // Keeps focus from putting the camera inside a point-sized object.
 constexpr float kMinFocusRadius = 0.1f;
+
+/*
+ */
+void
+saveSetting(StringView key, float value)
+{
+  ANSICHAR buffer[StringUtils::MAX_FLOAT_CHARS];
+  EngineConfig::setUserValue("Editor", "Editor", key, StringUtils::toChars(buffer, value));
+}
 } // namespace
 
 /*
@@ -48,60 +75,30 @@ EditorCamera::bindInputEvents()
 {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
-  m_keyDownListener = eventDispatcher.OnKeyDown.connect(
-      [this, &eventDispatcher](const KeyBoardData& data) {
-    // Only while flying with the right button held, as in Unreal, so the same keys pick the
-    // viewport tools the rest of the time.
-    if (!m_bFocused || !eventDispatcher.isMouseButtonDown(MouseButton::Right)) {
-      return;
-    }
-    switch (data.key) {
-    case Key::W:
-      m_camera.moveForward(kKeyMoveDistance);
-      break;
-    case Key::S:
-      m_camera.moveForward(-kKeyMoveDistance);
-      break;
-    case Key::A:
-      m_camera.moveRight(-kKeyMoveDistance);
-      break;
-    case Key::D:
-      m_camera.moveRight(kKeyMoveDistance);
-      break;
-    case Key::Q:
-      m_camera.moveUp(kKeyMoveDistance);
-      break;
-    case Key::E:
-      m_camera.moveUp(-kKeyMoveDistance);
-      break;
-    case Key::P: {
-      const Vector3& position = m_camera.getPosition();
-      CH_LOG_INFO(EditorCameraLog, "Camera position: ({0}, {1}, {2})", position.x,
-                  position.y, position.z);
-      break;
-    }
-    default:
-      break;
-    }
-  });
-
   m_mouseWheelListener =
       eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData& data) {
-        if (m_bFocused && data.deltaY != 0) {
-          m_camera.moveForward(data.deltaY * kWheelMoveDistance);
+        if (data.deltaY == 0) {
+          return;
+        }
+        const float steps = static_cast<float>(data.deltaY);
+        if (m_bFlying) {
+          setMoveSpeed(getMoveSpeed() * Math::pow(kWheelSpeedStep, steps));
+          m_bSpeedChanged = true;
+        }
+        else if (m_bFocused) {
+          m_camera.moveForward(steps * getMoveSpeed() * kWheelMoveSeconds);
         }
       });
 
   m_mouseMoveListener = eventDispatcher.OnMouseMove.connect(
       [this, &eventDispatcher](const MouseMoveData& data) {
-        if (!m_bFocused || (data.deltaX == 0 && data.deltaY == 0)) {
-          return;
+        if (m_bFlying) {
+          m_lookDeltaX += static_cast<float>(data.deltaX);
+          m_lookDeltaY += static_cast<float>(data.deltaY);
         }
-        if (eventDispatcher.isMouseButtonDown(MouseButton::Middle)) {
-          m_camera.pan(-data.deltaX * kPanSpeed, -data.deltaY * kPanSpeed);
-        }
-        if (eventDispatcher.isMouseButtonDown(MouseButton::Right)) {
-          m_camera.rotate(data.deltaY * kRotationSpeed, data.deltaX * kRotationSpeed);
+        else if (m_bFocused && eventDispatcher.isMouseButtonDown(MouseButton::Middle)) {
+          m_camera.pan(-static_cast<float>(data.deltaX) * kPanSpeed,
+                       -static_cast<float>(data.deltaY) * kPanSpeed);
         }
       });
 }
@@ -111,9 +108,101 @@ EditorCamera::bindInputEvents()
 void
 EditorCamera::unbindInputEvents()
 {
-  m_keyDownListener.disconnect();
   m_mouseWheelListener.disconnect();
   m_mouseMoveListener.disconnect();
+}
+
+/*
+ */
+void
+EditorCamera::update(float deltaTime)
+{
+  const bool bRightButton =
+      EventDispatcherManager::instance().isMouseButtonDown(MouseButton::Right);
+  if (!m_bFlying && bRightButton && m_bFocused) {
+    m_bFlying = true;
+    // The click that starts the flight must not turn the camera.
+    m_lookDeltaX = 0.0f;
+    m_lookDeltaY = 0.0f;
+  }
+  else if (m_bFlying && !bRightButton) {
+    m_bFlying = false;
+    if (m_bSpeedChanged) {
+      m_bSpeedChanged = false;
+      saveSettings();
+    }
+  }
+
+  if (m_bFlying) {
+    const float sensitivity = getLookSensitivity();
+    // Moving the mouse down looks down.
+    look(m_lookDeltaX * sensitivity, -m_lookDeltaY * sensitivity);
+    fly(deltaTime);
+  }
+  m_lookDeltaX = 0.0f;
+  m_lookDeltaY = 0.0f;
+}
+
+/*
+ */
+void
+EditorCamera::look(float yawDegrees, float pitchDegrees)
+{
+  if (yawDegrees == 0.0f && pitchDegrees == 0.0f) {
+    return;
+  }
+
+  // Turns around the camera itself; the look at point keeps its distance, so focus and
+  // panning still work around it afterwards.
+  const Vector3& position = m_camera.getPosition();
+  const Vector3 toLookAt = m_camera.getLookAt() - position;
+  const float distance = Math::max(toLookAt.magnitude(), kNearPlane);
+  const Vector3 forward = toLookAt * (1.0f / distance);
+
+  const float yaw = Math::atan2(forward.y, forward.x).valueDegree() + yawDegrees;
+  const float pitch = Math::clamp(Math::asin(forward.z).valueDegree() + pitchDegrees,
+                                  -kMaxPitchDegrees, kMaxPitchDegrees);
+  const float cosPitch = Math::cos(Degree(pitch));
+  const Vector3 newForward(cosPitch * Math::cos(Degree(yaw)),
+                           cosPitch * Math::sin(Degree(yaw)),
+                           Math::sin(Degree(pitch)));
+  m_camera.lookAt(position + newForward * distance);
+}
+
+/*
+ */
+void
+EditorCamera::fly(float deltaTime)
+{
+  const EventDispatcherManager& input = EventDispatcherManager::instance();
+  const auto axis = [](bool bPositive, bool bNegative) {
+    return (bPositive ? 1.0f : 0.0f) - (bNegative ? 1.0f : 0.0f);
+  };
+  const float forwardAxis = axis(input.isKeyDown(Key::W), input.isKeyDown(Key::S));
+  const float rightAxis = axis(input.isKeyDown(Key::D), input.isKeyDown(Key::A));
+  const float upAxis = axis(input.isKeyDown(Key::E), input.isKeyDown(Key::Q));
+  if (forwardAxis == 0.0f && rightAxis == 0.0f && upAxis == 0.0f) {
+    return;
+  }
+
+  // Walking ignores the pitch, so looking down does not sink the camera into the floor.
+  const Vector3 view = m_camera.getForwardVector();
+  Vector3 ground(view.x, view.y, 0.0f);
+  if (!ground.normalize()) {
+    // Never reached while the pitch stays below 90; kept for a camera set from outside.
+    ground = Vector3::FORWARD;
+  }
+  // The world is left-handed with Z up, so right is forward turned 90 degrees around Z.
+  const Vector3 right(-ground.y, ground.x, 0.0f);
+
+  Vector3 horizontal = ground * forwardAxis + right * rightAxis;
+  horizontal.normalize();
+  const bool bSprint = input.isKeyDown(Key::LShift) || input.isKeyDown(Key::RShift);
+  const float distance = getMoveSpeed() * deltaTime * (bSprint ? getSprintMultiplier() : 1.0f);
+  const Vector3 offset = (horizontal + Vector3::UP * upAxis) * distance;
+
+  m_camera.setPosition(m_camera.getPosition() + offset);
+  m_camera.lookAt(m_camera.getLookAt() + offset);
 }
 
 /*
@@ -150,6 +239,65 @@ EditorCamera::setView(const Vector3& position, const Vector3& lookAt)
 {
   m_camera.setPosition(position);
   m_camera.lookAt(lookAt);
+}
+
+/*
+ */
+float
+EditorCamera::getMoveSpeed() const
+{
+  return g_cvarCameraSpeed.get();
+}
+
+/*
+ */
+void
+EditorCamera::setMoveSpeed(float speed)
+{
+  g_cvarCameraSpeed.set(Math::clamp(speed, MIN_MOVE_SPEED, MAX_MOVE_SPEED),
+                        ConsoleVariableSource::Console);
+}
+
+/*
+ */
+float
+EditorCamera::getLookSensitivity() const
+{
+  return g_cvarCameraLookSensitivity.get();
+}
+
+/*
+ */
+void
+EditorCamera::setLookSensitivity(float degreesPerPixel)
+{
+  g_cvarCameraLookSensitivity.set(degreesPerPixel, ConsoleVariableSource::Console);
+}
+
+/*
+ */
+float
+EditorCamera::getSprintMultiplier() const
+{
+  return g_cvarCameraSprintMultiplier.get();
+}
+
+/*
+ */
+void
+EditorCamera::setSprintMultiplier(float multiplier)
+{
+  g_cvarCameraSprintMultiplier.set(multiplier, ConsoleVariableSource::Console);
+}
+
+/*
+ */
+void
+EditorCamera::saveSettings() const
+{
+  saveSetting("CameraSpeed", getMoveSpeed());
+  saveSetting("CameraLookSensitivity", getLookSensitivity());
+  saveSetting("CameraSprintMultiplier", getSprintMultiplier());
 }
 
 } // namespace chEngineSDK

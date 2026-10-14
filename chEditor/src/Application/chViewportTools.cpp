@@ -282,7 +282,68 @@ ViewportTools::renderToolbar()
         break;
     }
   }
+
+  ImGui::SameLine();
+  ImGui::TextDisabled("|");
+  ImGui::SameLine();
+  renderCameraSettings();
   ImGui::End();
+}
+
+/*
+ */
+void
+ViewportTools::renderCameraSettings()
+{
+  // Saved once an edit ends instead of on every frame of a drag.
+  bool bSave = false;
+  const auto speedField = [this, &bSave](const ANSICHAR* label) {
+    float speed = m_editorCamera.getMoveSpeed();
+    // Logarithmic, because useful speeds go from a few centimeters to hundreds of meters.
+    if (ImGui::DragFloat(label, &speed, 0.01f, EditorCamera::MIN_MOVE_SPEED,
+                         EditorCamera::MAX_MOVE_SPEED, "Speed %.2f",
+                         ImGuiSliderFlags_Logarithmic)) {
+      m_editorCamera.setMoveSpeed(speed);
+    }
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+  };
+
+  ImGui::SetNextItemWidth(130.0f);
+  speedField("##CameraSpeed");
+  ImGui::SetItemTooltip("Camera speed; the mouse wheel changes it while flying");
+  ImGui::SameLine();
+  if (ImGui::Button("Camera")) {
+    ImGui::OpenPopup("##CameraSettings");
+  }
+
+  if (ImGui::BeginPopup("##CameraSettings")) {
+    ImGui::SetNextItemWidth(160.0f);
+    speedField("##PopupCameraSpeed");
+
+    float sensitivity = m_editorCamera.getLookSensitivity();
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderFloat("Look Sensitivity", &sensitivity, 0.01f, 1.0f, "%.2f deg/px")) {
+      m_editorCamera.setLookSensitivity(sensitivity);
+    }
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+    float sprint = m_editorCamera.getSprintMultiplier();
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderFloat("Sprint (Shift)", &sprint, 1.0f, 10.0f, "x%.1f")) {
+      m_editorCamera.setSprintMultiplier(sprint);
+    }
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::Separator();
+    ImGui::TextDisabled("Hold the right mouse button to fly:");
+    ImGui::TextDisabled("WASD move, E up, Q down, Shift faster,");
+    ImGui::TextDisabled("mouse wheel changes the speed.");
+    ImGui::EndPopup();
+  }
+
+  if (bSave) {
+    m_editorCamera.saveSettings();
+  }
 }
 
 /*

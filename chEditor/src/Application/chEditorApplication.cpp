@@ -54,6 +54,7 @@
 
 #if USING(CH_DISPLAY_SDL3)
 #include "imgui_impl_sdl3.h"
+#include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 #endif // USING(CH_DISPLAY_SDL3)
 
@@ -170,8 +171,6 @@ EditorApplication::onRender(ICommandList& commandList,
                             const ISwapChain& swapChain,
                             float deltaTime)
 {
-  CH_PARAMETER_UNUSED(deltaTime);
-
   const uint32 width = swapChain.getWidth();
   const uint32 height = swapChain.getHeight();
   if (width != m_viewportWidth || height != m_viewportHeight) {
@@ -184,12 +183,17 @@ EditorApplication::onRender(ICommandList& commandList,
     renderUI();
   }
 
-  // The scene draws under the UI, so it only takes the keyboard and mouse that no ImGui
-  // window wants.
+  // The scene draws under the UI, so a flight only starts where no ImGui window wants the
+  // mouse. The keyboard is not checked: a panel keeps the keyboard focus after any click,
+  // and the camera only reads keys while flying.
   const ImGuiIO& io = ImGui::GetIO();
   m_editorCamera->setFocused(!UIHelpers::bRenderImGui ||
-                             (!io.WantCaptureMouse && !io.WantCaptureKeyboard &&
-                              !m_viewportTools->isUsingMouse()));
+                             (!io.WantCaptureMouse && !m_viewportTools->isUsingMouse()));
+  const bool bWasFlying = m_editorCamera->isFlying();
+  m_editorCamera->update(deltaTime);
+  if (m_editorCamera->isFlying() != bWasFlying) {
+    onCameraFlightChanged(m_editorCamera->isFlying());
+  }
 
   // After the UI, which may have moved or added objects.
   m_activeScene->updateTransforms();
@@ -427,6 +431,19 @@ EditorApplication::renderUI()
   // Opens, closes and resizes the windows outside the main one before they are drawn.
   if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
+  }
+}
+
+/*
+ */
+void
+EditorApplication::onCameraFlightChanged(bool bFlying)
+{
+  // Hidden and held in place, so turning never stops at the edge of the screen.
+  SDL_SetWindowRelativeMouseMode(getDisplaySurface()->getPlatformHandler(), bFlying);
+  if (bFlying) {
+    // Otherwise the focused panel also gets the flight keys.
+    ImGui::SetWindowFocus(nullptr);
   }
 }
 

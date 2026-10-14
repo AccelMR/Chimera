@@ -75,6 +75,9 @@ class EditorApplication : public WindowedApplication
   renderViewportDropTarget();
 
   void
+  onCameraFlightChanged(bool bFlying);
+
+  void
   addModelAtMouse(const ModelAsset& modelAsset);
 
   void
