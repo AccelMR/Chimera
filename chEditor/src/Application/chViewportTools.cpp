@@ -12,6 +12,7 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chEditorCamera.h"
+#include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLightItem.h"
@@ -537,6 +538,7 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
     transform.setLocalPosition(position);
     transform.setLocalRotation(rotation);
     transform.setLocalScale(scale);
+    EditorScene::markDirty();
   }
 }
 

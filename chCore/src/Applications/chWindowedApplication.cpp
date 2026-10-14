@@ -346,7 +346,11 @@ WindowedApplication::bindEvents() {
 
   auto& eventDispatcher = EventDispatcherManager::instance();
 
-  m_closeEvent = eventDispatcher.OnClose.connect([&]() { m_running = false; });
+  m_closeEvent = eventDispatcher.OnClose.connect([&]() {
+    if (onCloseRequested()) {
+      m_running = false;
+    }
+  });
   m_resizeEvent = eventDispatcher.OnResize.connect(
       [&](uint32 width, uint32 height) { resize(width, height); });
 }

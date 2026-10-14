@@ -26,6 +26,7 @@ namespace {
  */
 struct ExpandSource
 {
+  SPtr<ModelAsset> modelAsset;
   SPtr<Model> model;
   // One per material slot of the model; null uses the model's material.
   Vector<SPtr<MaterialAsset>> overrides;
@@ -61,7 +62,7 @@ addPart(const ExpandSource& source,
         const Vector3& pivot)
 {
   ModelComponent& part =
-      gameObject.addComponent<ModelComponent>(source.model, nodeIndex, meshIndex, pivot);
+      gameObject.addComponent<ModelComponent>(source.modelAsset, nodeIndex, meshIndex, pivot);
   for (const uint32 slot : part.getUsedMaterialSlots()) {
     if (source.overrides[slot]) {
       part.setMaterial(slot, source.overrides[slot]);
@@ -154,7 +155,10 @@ ModelExpand::expand(Scene& scene, GameObject& gameObject, ModelExpandMode mode)
     return false;
   }
 
-  ExpandSource source{.model = whole->getModel(), .overrides = {}, .bEnabled = true};
+  ExpandSource source{.modelAsset = whole->getModelAsset(),
+                      .model = whole->getModel(),
+                      .overrides = {},
+                      .bEnabled = true};
   source.model->updateTransforms();
   source.overrides.resize(source.model->getMaterialSlots().size());
   for (const uint32 slot : whole->getUsedMaterialSlots()) {

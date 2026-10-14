@@ -12,6 +12,7 @@
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chEditorCamera.h"
+#include "chEditorScene.h"
 #include "chConsoleVariable.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
@@ -65,11 +66,6 @@ namespace chEngineSDK {
 using namespace chEngineSDK::chUIHelpers;
 
 namespace {
-ConsoleVariable<String> g_cvarStartupScene("Editor.StartupScene",
-                                           "DefaultScene",
-                                           "Scene asset opened when the editor starts.",
-                                           "scene");
-
 // A drop meets the ground at most this many look at distances away; farther is too close
 // to the horizon to place anything usefully.
 constexpr float kMaxDropDistanceScale = 10.0f;
@@ -137,7 +133,7 @@ EditorApplication::destroyModules()
   m_sceneRenderer.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorSelection::setGameObjectAssetPreview(nullptr);
-  m_activeScene.reset();
+  EditorScene::shutDown();
 
   if (SceneManager::isStarted()) {
     SceneManager::shutDown();
@@ -183,6 +179,12 @@ EditorApplication::onRender(ICommandList& commandList,
   if (UIHelpers::bRenderImGui) {
     renderUI();
   }
+  EditorScene::applyPending();
+  if (EditorScene::shouldQuit()) {
+    quit();
+  }
+  updateWindowTitle();
+  Scene& scene = *EditorScene::getScene();
 
   // The scene draws under the UI, so a flight only starts where no ImGui window wants the
   // mouse. The keyboard is not checked: a panel keeps the keyboard focus after any click,
@@ -197,14 +199,14 @@ EditorApplication::onRender(ICommandList& commandList,
   }
 
   // After the UI, which may have moved or added objects.
-  m_activeScene->updateTransforms();
+  scene.updateTransforms();
 
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
                           swapChain.getCurrentTextureView(), ResourceState::Undefined,
                           ResourceState::Present);
-  m_sceneRenderer->addScenePasses(*m_activeScene, m_editorCamera->getCamera(), backBuffer,
+  m_sceneRenderer->addScenePasses(scene, m_editorCamera->getCamera(), backBuffer,
                                   UIHelpers::rendererColor);
 
   if (UIHelpers::bRenderImGui) {
@@ -233,6 +235,31 @@ EditorApplication::onPostPresent()
 
 /*
  */
+bool
+EditorApplication::onCloseRequested()
+{
+  return EditorScene::requestQuit();
+}
+
+/*
+ */
+void
+EditorApplication::updateWindowTitle()
+{
+  const uint32 revision = EditorScene::getRevision();
+  if (revision == m_titleRevision) {
+    return;
+  }
+  m_titleRevision = revision;
+#if USING(CH_DISPLAY_SDL3)
+  const String title =
+      StringUtils::format("{0} - {1}", m_windowTitle, EditorScene::getDisplayName());
+  SDL_SetWindowTitle(getDisplaySurface()->getPlatformHandler(), title.c_str());
+#endif // USING(CH_DISPLAY_SDL3)
+}
+
+/*
+ */
 void
 EditorApplication::initializeEditorComponents() {
   CH_LOG_INFO(EditorApp, "Initializing editor components.");
@@ -250,38 +277,6 @@ EditorApplication::initializeEditorComponents() {
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
 
-  const String& sceneName = g_cvarStartupScene.get();
-  SceneManager::startUp();
-  SceneManager& sceneManager = SceneManager::instance();
-
-  WeakPtr<SceneAsset> sceneAsset = assetManager.loadSceneByName(sceneName);
-  SPtr<Scene> scene = nullptr;
-  if (!sceneAsset.expired()) {
-    scene = sceneManager.loadScene(sceneAsset).lock();
-  }
-  if (scene == nullptr) {
-    CH_LOG_WARNING(EditorApp,
-                   "Failed to load scene '{0}'. Creating a new empty scene.",
-                   sceneName);
-    scene = sceneManager.createAndLoadScene(sceneName).lock();
-    if (scene) {
-      // A new scene starts with a sun, so what is dropped in it is lit.
-      const SPtr<GameObject> sun = scene->createGameObject("Directional Light");
-      sun->getTransform().setLocalRotation(Quaternion(Rotator(-50.0f, 30.0f, 0.0f)));
-      sun->addComponent<DirectionalLightComponent>();
-    }
-  }
-
-  const bool bSceneLoaded = sceneManager.setActiveScene(scene);
-  if (!bSceneLoaded) {
-    CH_LOG_FATAL(EditorApp,
-                 "Failed to set scene '{0}' as the active scene.",
-                 sceneName);
-    return;
-  }
-  CH_LOG_INFO(EditorApp, "Loaded scene '{0}' successfully.", sceneName);
-
-  m_activeScene = scene;
   m_sceneRenderer = chMakeUnique<SceneRenderer>();
 
   const ISwapChain& swapChain = *getSwapChain();
@@ -290,6 +285,14 @@ EditorApplication::initializeEditorComponents() {
   m_editorCamera = chMakeUnique<EditorCamera>(static_cast<float>(swapChain.getWidth()),
                                               static_cast<float>(swapChain.getHeight()));
   m_editorCamera->bindInputEvents();
+
+  // After the camera, which takes the view saved with the scene.
+  SceneManager::startUp();
+  EditorScene::initialize(*m_editorCamera);
+
+#if USING(CH_DISPLAY_SDL3)
+  m_windowTitle = SDL_GetWindowTitle(display->getPlatformHandler());
+#endif // USING(CH_DISPLAY_SDL3)
 
   initImGui(display);
 
@@ -317,16 +320,20 @@ EditorApplication::bindEvents() {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
   m_onKeyDownEvent = eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
-    // Handle key down events specific to the editor
     if (data.hasModifier(KeyBoardModifier::LCTRL) ||
         data.hasModifier(KeyBoardModifier::RCTRL)) {
+      const bool bShift = data.hasModifier(KeyBoardModifier::LSHIFT) ||
+                          data.hasModifier(KeyBoardModifier::RSHIFT);
       if (data.key == chKeyBoard::Key::S) {
-        CH_LOG_DEBUG(EditorApp, "Ctrl+S pressed, saving the current document.");
-        // Handle Ctrl+S for saving the current document
+        if (bShift) {
+          EditorScene::requestSaveAs();
+        }
+        else {
+          EditorScene::requestSave();
+        }
       }
-      else if (data.key == chKeyBoard::Key::O) {
-        CH_LOG_DEBUG(EditorApp, "Ctrl+O pressed, opening a document.");
-        // Handle Ctrl+O for opening a document
+      else if (data.key == chKeyBoard::Key::N) {
+        EditorScene::requestNew();
       }
 
       if (data.key == chKeyBoard::Key::F5) {
@@ -425,8 +432,9 @@ EditorApplication::renderUI()
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   m_gameObjectAssetUI->renderGameObjectAssetUI();
-  m_viewportTools->render(*m_activeScene);
+  m_viewportTools->render(*EditorScene::getScene());
   ImportDialog::render();
+  EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
   renderViewportDropTarget();
 
   ImGui::Render();
@@ -479,7 +487,7 @@ EditorApplication::renderViewportDropTarget()
                                             Math::max(available.y, 1.0f)));
     if (ImGui::BeginDragDropTarget()) {
       if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
-        addModelAtMouse(*model);
+        addModelAtMouse(model);
       }
       ImGui::EndDragDropTarget();
     }
@@ -491,10 +499,10 @@ EditorApplication::renderViewportDropTarget()
 /*
  */
 void
-EditorApplication::addModelAtMouse(const ModelAsset& modelAsset)
+EditorApplication::addModelAtMouse(const SPtr<ModelAsset>& modelAsset)
 {
   const SPtr<GameObject> gameObject =
-      AssetDragDrop::createModelObject(*m_activeScene, modelAsset, nullptr);
+      AssetDragDrop::createModelObject(*EditorScene::getScene(), modelAsset, nullptr);
   if (!gameObject) {
     return;
   }

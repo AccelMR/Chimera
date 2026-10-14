@@ -14,12 +14,14 @@
 #endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
+#include "chEditorScene.h"
 #include "chEnginePaths.h"
 #include "chImportDialog.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
 #include "chRenderSettings.h"
+#include "chSceneAsset.h"
 #include "chUIHelpers.h"
 
 #include "imgui.h"
@@ -37,6 +39,8 @@ MainMenuBarUI::renderMainMenuBar() {
   if (!ImGui::BeginMainMenuBar()) {
     return;
   }
+
+  renderFileMenu();
 
   if (ImGui::BeginMenu("Render")) {
     if (ImGui::BeginMenu("View Mode")) {
@@ -88,6 +92,53 @@ MainMenuBarUI::renderMainMenuBar() {
     ImGui::EndMenu();
   }
   ImGui::EndMainMenuBar();
+}
+
+/*
+ */
+void
+MainMenuBarUI::renderFileMenu()
+{
+  if (!ImGui::BeginMenu("File")) {
+    return;
+  }
+
+  if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+    EditorScene::requestNew();
+  }
+  if (ImGui::BeginMenu("Open Scene")) {
+    // Listed only while the menu is open, so the walk over every asset is rare.
+    const SPtr<SceneAsset>& current = EditorScene::getAsset();
+    bool bAny = false;
+    for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
+      if (!asset->isTypeOf<SceneAsset>()) {
+        continue;
+      }
+      bAny = true;
+      ImGui::PushID(asset.get());
+      if (ImGui::MenuItem(asset->getName(), asset->getAssetPath(), asset == current)) {
+        EditorScene::requestOpen(std::static_pointer_cast<SceneAsset>(asset));
+      }
+      ImGui::PopID();
+    }
+    if (!bAny) {
+      ImGui::TextDisabled("No scenes saved yet");
+    }
+    ImGui::EndMenu();
+  }
+  ImGui::Separator();
+  if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
+    EditorScene::requestSave();
+  }
+  if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) {
+    EditorScene::requestSaveAs();
+  }
+  ImGui::Separator();
+  if (ImGui::MenuItem("Exit")) {
+    // The editor closes once the unsaved changes are saved or discarded.
+    CH_PARAMETER_UNUSED(EditorScene::requestQuit());
+  }
+  ImGui::EndMenu();
 }
 
 /*

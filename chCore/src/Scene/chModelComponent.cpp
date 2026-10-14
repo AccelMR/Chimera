@@ -10,16 +10,57 @@
 #include "chModelComponent.h"
 
 #include "chAlgorithm.h"
+#include "chAssetManager.h"
+#include "chFileStream.h"
 #include "chGameObject.h"
 #include "chMaterialAsset.h"
 #include "chMatrixHelpers.h"
 #include "chModel.h"
+#include "chModelAsset.h"
 #include "chScene.h"
+#include "chSceneManager.h"
 
 namespace chEngineSDK {
 namespace {
 // Returned by reference for slots that do not exist.
 const SPtr<MaterialAsset> kNoMaterial;
+
+// Above the slots of any real model; only a broken file asks for more.
+constexpr uint32 kMaxOverrides = 65536;
+
+struct ModelComponentFileData
+{
+  UUID modelAsset;
+  uint32 nodeIndex;
+  uint32 meshIndex;
+  float pivot[3];
+  uint32 overrideCount;
+};
+static_assert(sizeof(ModelComponentFileData) == 40,
+              "ModelComponentFileData must have no padding");
+
+struct MaterialOverrideFileData
+{
+  UUID material;
+  uint32 slot;
+};
+static_assert(sizeof(MaterialOverrideFileData) == 20,
+              "MaterialOverrideFileData must have no padding");
+
+/*
+ * Null when there is no such asset or it is of another type. Without an AssetManager
+ * (tests) nothing is found.
+ */
+template<typename T>
+NODISCARD SPtr<T>
+findAsset(const UUID& id)
+{
+  if (id.isNull() || !AssetManager::isStarted()) {
+    return nullptr;
+  }
+  const SPtr<IAsset> asset = AssetManager::instance().getAsset(id);
+  return asset ? asset->as<T>() : nullptr;
+}
 
 /*
  * Calls visit(mesh, localMatrix) for every mesh the part draws, localMatrix being where the
@@ -62,33 +103,33 @@ forEachDrawnMesh(const Model& model,
 
 /*
  */
-ModelComponent::ModelComponent(const SPtr<Model>& model)
+ModelComponent::ModelComponent(const SPtr<ModelAsset>& modelAsset)
 {
-  setModel(model);
+  setModel(modelAsset);
 }
 
 /*
  */
-ModelComponent::ModelComponent(const SPtr<Model>& model,
+ModelComponent::ModelComponent(const SPtr<ModelAsset>& modelAsset,
                                uint32 nodeIndex,
                                uint32 meshIndex,
                                const Vector3& pivot)
 {
-  setModelPart(model, nodeIndex, meshIndex, pivot);
+  setModelPart(modelAsset, nodeIndex, meshIndex, pivot);
 }
 
 /*
  */
 void
-ModelComponent::setModel(const SPtr<Model>& model)
+ModelComponent::setModel(const SPtr<ModelAsset>& modelAsset)
 {
-  setModelPart(model, ALL, ALL, Vector3::ZERO);
+  setModelPart(modelAsset, ALL, ALL, Vector3::ZERO);
 }
 
 /*
  */
 void
-ModelComponent::setModelPart(const SPtr<Model>& model,
+ModelComponent::setModelPart(const SPtr<ModelAsset>& modelAsset,
                              uint32 nodeIndex,
                              uint32 meshIndex,
                              const Vector3& pivot)
@@ -97,7 +138,9 @@ ModelComponent::setModelPart(const SPtr<Model>& model,
     removeRenderItems();
   }
 
-  m_model = model;
+  m_modelAsset = modelAsset;
+  m_model = modelAsset ? modelAsset->getModel() : nullptr;
+  m_modelAssetId = modelAsset ? modelAsset->getUUID() : UUID::null();
   m_nodeIndex = nodeIndex;
   m_meshIndex = meshIndex;
   m_pivot = pivot;
@@ -260,6 +303,86 @@ ModelComponent::getHierarchyWorldBounds(const GameObject& gameObject, AABox& out
     }
   }
   return bFound;
+}
+
+/*
+ */
+void
+ModelComponent::serialize(DataStream& stream) const
+{
+  uint32 overrideCount = 0;
+  for (const SPtr<MaterialAsset>& material : m_materialOverrides) {
+    overrideCount += material ? 1 : 0;
+  }
+
+  const uint32 version = SERIALIZATION_VERSION;
+  const ModelComponentFileData data{.modelAsset = m_modelAssetId,
+                                    .nodeIndex = m_nodeIndex,
+                                    .meshIndex = m_meshIndex,
+                                    .pivot = {m_pivot.x, m_pivot.y, m_pivot.z},
+                                    .overrideCount = overrideCount};
+  stream.write(&version, sizeof(version));
+  stream.write(&data, sizeof(data));
+  for (SIZE_T i = 0; i < m_usedSlots.size(); ++i) {
+    if (m_materialOverrides[i]) {
+      const MaterialOverrideFileData materialOverride{
+          .material = m_materialOverrides[i]->getUUID(), .slot = m_usedSlots[i]};
+      stream.write(&materialOverride, sizeof(materialOverride));
+    }
+  }
+}
+
+/*
+ */
+bool
+ModelComponent::deserialize(DataStream& stream)
+{
+  uint32 version = 0;
+  ModelComponentFileData data;
+  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
+      version > SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data) ||
+      data.overrideCount > kMaxOverrides) {
+    return false;
+  }
+
+  const SPtr<ModelAsset> modelAsset = findAsset<ModelAsset>(data.modelAsset);
+  setModelPart(modelAsset, data.nodeIndex, data.meshIndex,
+               Vector3(data.pivot[0], data.pivot[1], data.pivot[2]));
+  m_modelAssetId = data.modelAsset;
+  if (!modelAsset && !data.modelAsset.isNull()) {
+    CH_LOG_WARNING(SceneManagerLog, "A model component lost its model {0}.", data.modelAsset);
+  }
+
+  for (uint32 i = 0; i < data.overrideCount; ++i) {
+    MaterialOverrideFileData materialOverride;
+    if (stream.read(&materialOverride, sizeof(materialOverride)) != sizeof(materialOverride)) {
+      return false;
+    }
+    const SPtr<MaterialAsset> material = findAsset<MaterialAsset>(materialOverride.material);
+    if (material) {
+      setMaterial(materialOverride.slot, material);
+    }
+    else if (modelAsset) {
+      CH_LOG_WARNING(SceneManagerLog, "A model component lost its material {0}.",
+                     materialOverride.material);
+    }
+  }
+  return true;
+}
+
+/*
+ */
+void
+ModelComponent::collectReferences(Vector<UUID>& outReferences) const
+{
+  if (!m_modelAssetId.isNull()) {
+    outReferences.push_back(m_modelAssetId);
+  }
+  for (const SPtr<MaterialAsset>& material : m_materialOverrides) {
+    if (material) {
+      outReferences.push_back(material->getUUID());
+    }
+  }
 }
 
 /*

@@ -23,6 +23,7 @@
 #include "chImGuiRenderer.h"
 #include "chImportDialog.h"
 #include "chITexture.h"
+#include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
@@ -31,6 +32,7 @@
 
 #include "chGameObjectAsset.h"
 #include "chMaterialAsset.h"
+#include "chSceneAsset.h"
 #include "chTextureAsset.h"
 
 #include "imgui.h"
@@ -116,6 +118,8 @@ ContentAssetUI::ContentAssetUI()
   refreshAssets();
   m_onAssetImported =
       ImportDialog::onAssetImported([this](const SPtr<IAsset>&) { refreshAssets(); });
+  m_onSceneCreated =
+      EditorScene::onAssetCreated([this](const SPtr<IAsset>&) { refreshAssets(); });
 }
 
 /*
@@ -507,6 +511,9 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
     ImGui::Button("##asset", buttonSize);
   }
   AssetDragDrop::source(*asset);
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    openAsset(asset);
+  }
 
   ImGui::PopStyleColor(3);
 
@@ -555,7 +562,13 @@ ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
   AssetDragDrop::source(*asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-    startInlineRename(asset);
+    // Scenes open like files in a file browser; other assets have nothing to open.
+    if (asset->isTypeOf<SceneAsset>()) {
+      openAsset(asset);
+    }
+    else {
+      startInlineRename(asset);
+    }
   }
 }
 
@@ -747,6 +760,13 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
 {
   if (!asset) {
     return;
+  }
+
+  if (asset->isTypeOf<SceneAsset>()) {
+    if (ImGui::MenuItem("Open")) {
+      openAsset(asset);
+    }
+    ImGui::Separator();
   }
 
   if (asset->isTypeOf<GameObjectAsset>()) {
@@ -1154,6 +1174,16 @@ ContentAssetUI::renderListFolderItem(uint32 folderIndex)
   ImGui::TextUnformatted("Folder");
 
   ImGui::PopID();
+}
+
+/*
+ */
+void
+ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
+{
+  if (asset->isTypeOf<SceneAsset>()) {
+    EditorScene::requestOpen(std::static_pointer_cast<SceneAsset>(asset));
+  }
 }
 
 /*

@@ -11,6 +11,7 @@
 #include "chInspectorUI.h"
 
 #include "chAssetDragDrop.h"
+#include "chEditorScene.h"
 #include "chAssetManager.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
@@ -187,6 +188,7 @@ InspectorUI::renderTransform(GameObject& gameObject)
   if (m_rotationOwner != &gameObject || transform.getLocalRotation() != m_rotationShown) {
     m_rotationOwner = &gameObject;
     m_rotationShown = transform.getLocalRotation();
+    EditorScene::markDirty();
     const Rotator rotator = transform.getLocalRotation().toRotator();
     m_rotationDegrees[0] = rotator.roll.valueDegree();
     m_rotationDegrees[1] = rotator.pitch.valueDegree();
@@ -201,6 +203,7 @@ InspectorUI::renderTransform(GameObject& gameObject)
                     kPositionTooltips)) {
     transform.setLocalPosition(
         Vector3(positionValues[0], positionValues[1], positionValues[2]));
+    EditorScene::markDirty();
   }
 
   static constexpr const ANSICHAR* kRotationTooltips[3] = {
@@ -218,6 +221,7 @@ InspectorUI::renderTransform(GameObject& gameObject)
   if (renderAxisRow(ICON_FA_EXPAND_ARROWS_ALT "  Scale", scaleValues, 0.01f, 1.0f, "%.3f",
                     kScaleTooltips)) {
     transform.setLocalScale(Vector3(scaleValues[0], scaleValues[1], scaleValues[2]));
+    EditorScene::markDirty();
   }
 }
 
@@ -233,6 +237,7 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
   bool bVisible = modelComponent.isEnabled();
   if (ImGui::Checkbox("Visible", &bVisible)) {
     modelComponent.setEnabled(bVisible);
+    EditorScene::markDirty();
   }
 
   const SPtr<Model>& model = modelComponent.getModel();
@@ -286,23 +291,27 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
   bool bEnabled = light->isEnabled();
   if (ImGui::Checkbox("Enabled", &bEnabled)) {
     light->setEnabled(bEnabled);
+    EditorScene::markDirty();
   }
 
   const LinearColor& color = light->getColor();
   float colorValues[3] = {color.r, color.g, color.b};
   if (ImGui::ColorEdit3("Color", colorValues, ImGuiColorEditFlags_Float)) {
     light->setColor(LinearColor(colorValues[0], colorValues[1], colorValues[2], 1.0f));
+    EditorScene::markDirty();
   }
 
   float intensity = light->getIntensity();
   if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 10000.0f)) {
     light->setIntensity(intensity);
+    EditorScene::markDirty();
   }
 
   if (pointLight) {
     float range = pointLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
       pointLight->setRange(range);
+      EditorScene::markDirty();
     }
   }
 
@@ -310,6 +319,7 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     float range = spotLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
       spotLight->setRange(range);
+      EditorScene::markDirty();
     }
     float inner = spotLight->getInnerConeAngle().valueDegree();
     float outer = spotLight->getOuterConeAngle().valueDegree();
@@ -317,6 +327,7 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     const bool bOuterChanged = ImGui::SliderFloat("Outer Angle", &outer, 0.0f, 89.0f);
     if (bInnerChanged || bOuterChanged) {
       spotLight->setConeAngles(Degree(inner), Degree(outer));
+      EditorScene::markDirty();
     }
   }
 }
@@ -340,6 +351,7 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
   if (ImGui::BeginDragDropTarget()) {
     if (SPtr<MaterialAsset> dropped = AssetDragDrop::acceptMaterial()) {
       modelComponent.setMaterial(slot, dropped);
+      EditorScene::markDirty();
     }
     ImGui::EndDragDropTarget();
   }
@@ -348,6 +360,7 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
     ImGui::SameLine();
     if (ImGui::SmallButton("Use model's")) {
       modelComponent.setMaterial(slot, nullptr);
+      EditorScene::markDirty();
     }
   }
 

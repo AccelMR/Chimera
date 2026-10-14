@@ -19,6 +19,7 @@
 #include "chMaterialAsset.h"
 #include "chTextureAsset.h"
 #include "chGameObjectAsset.h"
+#include "chSceneAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -76,6 +77,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<GameObjectAsset>()) {
     return {AssetType::GameObject, ICON_FA_CUBES};
+  }
+  if (asset->isTypeOf<SceneAsset>()) {
+    return {AssetType::Scene, ICON_FA_MAP};
   }
   return {AssetType::Unknown, ICON_FA_FILE};
 }

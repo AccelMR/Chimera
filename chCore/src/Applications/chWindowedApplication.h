@@ -92,6 +92,19 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   virtual void
   onPostPresent() {}
 
+  /**
+   * Called when the main window is asked to close. Returning false keeps the application
+   * running, for instance to ask about unsaved work; call quit() later to close.
+   */
+  NODISCARD virtual bool
+  onCloseRequested() { return true; }
+
+  /**
+   * Ends the main loop after the current frame.
+   */
+  void
+  quit() { m_running = false; }
+
  private:
   void
   render(const float deltaTime);

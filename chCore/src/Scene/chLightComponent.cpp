@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chLightComponent.h"
 
+#include "chFileStream.h"
 #include "chGameObject.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -20,6 +21,22 @@ namespace {
 // A cone of 90 degrees or more is a half space, which the falloff between the angles
 // cannot describe.
 constexpr float kMaxConeAngle = 89.0f;
+
+struct LightFileData
+{
+  float color[3];
+  float intensity;
+};
+static_assert(sizeof(LightFileData) == 16, "LightFileData must have no padding");
+
+struct SpotLightFileData
+{
+  float range;
+  // Half angles, in degrees.
+  float innerConeAngle;
+  float outerConeAngle;
+};
+static_assert(sizeof(SpotLightFileData) == 12, "SpotLightFileData must have no padding");
 } // namespace
 
 /*
@@ -45,6 +62,34 @@ LightComponent::setIntensity(float intensity)
 {
   m_intensity = Math::max(intensity, 0.0f);
   updateLightItem();
+}
+
+/*
+ */
+void
+LightComponent::serialize(DataStream& stream) const
+{
+  const uint32 version = SERIALIZATION_VERSION;
+  const LightFileData data{.color = {m_color.r, m_color.g, m_color.b},
+                           .intensity = m_intensity};
+  stream.write(&version, sizeof(version));
+  stream.write(&data, sizeof(data));
+}
+
+/*
+ */
+bool
+LightComponent::deserialize(DataStream& stream)
+{
+  uint32 version = 0;
+  LightFileData data;
+  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
+      version > SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data)) {
+    return false;
+  }
+  setColor(LinearColor(data.color[0], data.color[1], data.color[2], 1.0f));
+  setIntensity(data.intensity);
+  return true;
 }
 
 /*
@@ -128,6 +173,29 @@ PointLightComponent::setRange(float range)
 /*
  */
 void
+PointLightComponent::serialize(DataStream& stream) const
+{
+  LightComponent::serialize(stream);
+  stream.write(&m_range, sizeof(m_range));
+}
+
+/*
+ */
+bool
+PointLightComponent::deserialize(DataStream& stream)
+{
+  float range = 0.0f;
+  if (!LightComponent::deserialize(stream) ||
+      stream.read(&range, sizeof(range)) != sizeof(range)) {
+    return false;
+  }
+  setRange(range);
+  return true;
+}
+
+/*
+ */
+void
 PointLightComponent::writeTypeValues(LightItem& item) const
 {
   item.range = m_range;
@@ -157,6 +225,33 @@ SpotLightComponent::setConeAngles(const Degree& inner, const Degree& outer)
   m_outerConeAngle = Degree(outerDegrees);
   m_innerConeAngle = Degree(Math::clamp(inner.valueDegree(), 0.0f, outerDegrees));
   updateLightItem();
+}
+
+/*
+ */
+void
+SpotLightComponent::serialize(DataStream& stream) const
+{
+  LightComponent::serialize(stream);
+  const SpotLightFileData data{.range = m_range,
+                               .innerConeAngle = m_innerConeAngle.valueDegree(),
+                               .outerConeAngle = m_outerConeAngle.valueDegree()};
+  stream.write(&data, sizeof(data));
+}
+
+/*
+ */
+bool
+SpotLightComponent::deserialize(DataStream& stream)
+{
+  SpotLightFileData data;
+  if (!LightComponent::deserialize(stream) ||
+      stream.read(&data, sizeof(data)) != sizeof(data)) {
+    return false;
+  }
+  setRange(data.range);
+  setConeAngles(Degree(data.innerConeAngle), Degree(data.outerConeAngle));
+  return true;
 }
 
 /*

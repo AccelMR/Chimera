@@ -11,6 +11,7 @@
 #include "chSceneGraphUI.h"
 
 #include "chAssetDragDrop.h"
+#include "chEditorScene.h"
 #include "chEditorCamera.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
@@ -54,6 +55,7 @@ createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
   const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
   gameObject->addComponent<LightComponentType>();
   EditorSelection::setSelectedGameObject(gameObject);
+  EditorScene::markDirty();
 }
 
 /*
@@ -105,6 +107,7 @@ SceneGraphUI::renderSceneGraphUI()
     if (m_pendingExpand) {
       if (ModelExpand::expand(*scene, *m_pendingExpand, m_pendingExpandMode)) {
         m_openOnNextDraw = m_pendingExpand.get();
+        EditorScene::markDirty();
       }
       m_pendingExpand.reset();
     }
@@ -114,6 +117,7 @@ SceneGraphUI::renderSceneGraphUI()
         EditorSelection::setSelectedGameObject(nullptr);
       }
       scene->destroyGameObject(*m_pendingDelete);
+      EditorScene::markDirty();
       m_pendingDelete.reset();
     }
   }
@@ -159,6 +163,7 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
   if (ImGui::BeginPopupContextItem("GameObjectContext")) {
     if (ImGui::MenuItem("Create Child")) {
       scene.createGameObject("GameObject", gameObject.get());
+      EditorScene::markDirty();
     }
     renderCreateLightItems(scene, gameObject.get());
     const ModelComponent* model = gameObject->getComponent<ModelComponent>();
@@ -199,6 +204,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
                                          ImGuiPopupFlags_NoOpenOverItems)) {
     if (ImGui::MenuItem("Create Empty")) {
       scene.createGameObject("GameObject");
+      EditorScene::markDirty();
     }
     renderCreateLightItems(scene, nullptr);
     ImGui::EndPopup();
@@ -235,7 +241,7 @@ void
 SceneGraphUI::addPendingModel(Scene& scene)
 {
   const SPtr<GameObject> gameObject =
-      AssetDragDrop::createModelObject(scene, *m_pendingModel, m_pendingModelParent.get());
+      AssetDragDrop::createModelObject(scene, m_pendingModel, m_pendingModelParent.get());
   m_pendingModel.reset();
   m_pendingModelParent.reset();
   if (!gameObject || !m_editorCamera) {

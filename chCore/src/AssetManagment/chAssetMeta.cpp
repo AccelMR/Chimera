@@ -141,19 +141,6 @@ AssetMeta::save(const Path& assetFile, const AssetEditorData& data)
 
 /*
  */
-bool
-AssetMeta::load(const Path& assetFile, AssetEditorData& outData)
-{
-  ConfigFile file;
-  if (!file.load(getPath(assetFile))) {
-    return false;
-  }
-  read(file, EnginePaths::getProjectDirectory(), outData);
-  return true;
-}
-
-/*
- */
 AssetEditorData
 AssetMeta::makeNew(const Path& sourceFile, StringView sourcePart, const ImportSettings& settings)
 {

@@ -51,6 +51,9 @@ class CH_CORE_EXPORT Object
   NODISCARD const String&
   getName() const { return m_name; }
 
+  void
+  setName(const String& name) { m_name = name; }
+
   /**
    * Get the UUID of the object
    *

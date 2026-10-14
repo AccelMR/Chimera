@@ -65,12 +65,6 @@ class CH_CORE_EXPORT AssetMeta
   save(const Path& assetFile, const AssetEditorData& data);
 
   /**
-   * False, with outData untouched, when the asset has no .meta file.
-   */
-  NODISCARD static bool
-  load(const Path& assetFile, AssetEditorData& outData);
-
-  /**
    * Editor data of an asset made now from that source.
    */
   NODISCARD static AssetEditorData

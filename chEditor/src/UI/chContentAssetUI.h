@@ -39,6 +39,12 @@ class ContentAssetUI
   void
   saveUnsavedAssets();
 
+  /**
+   * The folder the browser shows, where new assets go.
+   */
+  NODISCARD const Path&
+  getCurrentFolderPath() const;
+
  private:
   void
   renderDeleteConfirmationPopup();
@@ -169,8 +175,11 @@ class ContentAssetUI
   void
   createFolder();
 
-  NODISCARD const Path&
-  getCurrentFolderPath() const;
+  /**
+   * Opens what can be opened (scenes); does nothing for the rest.
+   */
+  void
+  openAsset(const SPtr<IAsset>& asset);
 
   /**
    * Empty while searching, because a search lists the assets of every subfolder.
@@ -233,5 +242,6 @@ class ContentAssetUI
   ANSICHAR searchBuffer[256] = "";
 
   HEvent m_onAssetImported;
+  HEvent m_onSceneCreated;
 };
 } // namespace chEngineSDK

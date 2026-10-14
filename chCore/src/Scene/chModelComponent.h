@@ -20,6 +20,7 @@
 namespace chEngineSDK {
 class Material;
 class MaterialAsset;
+class ModelAsset;
 
 /**
  * Exists to put a Model in a scene. It draws the whole model, the meshes of one node or a
@@ -32,14 +33,14 @@ class CH_CORE_EXPORT ModelComponent : public Component
  public:
   ModelComponent() = default;
 
-  explicit ModelComponent(const SPtr<Model>& model);
+  explicit ModelComponent(const SPtr<ModelAsset>& modelAsset);
 
   /**
    * Draws one node (an index of Model::getAllNodes) and one of its meshes, or all of them
    * with ALL. The object stands at pivot, a point in the node's space, so the meshes are
    * drawn moved back by it.
    */
-  ModelComponent(const SPtr<Model>& model,
+  ModelComponent(const SPtr<ModelAsset>& modelAsset,
                  uint32 nodeIndex,
                  uint32 meshIndex,
                  const Vector3& pivot);
@@ -48,17 +49,23 @@ class CH_CORE_EXPORT ModelComponent : public Component
    * Draws the whole model and forgets every override.
    */
   void
-  setModel(const SPtr<Model>& model);
+  setModel(const SPtr<ModelAsset>& modelAsset);
 
   /**
    * Same as the constructor with a part; forgets every override.
    */
   void
-  setModelPart(const SPtr<Model>& model,
+  setModelPart(const SPtr<ModelAsset>& modelAsset,
                uint32 nodeIndex,
                uint32 meshIndex,
                const Vector3& pivot);
 
+  NODISCARD FORCEINLINE const SPtr<ModelAsset>&
+  getModelAsset() const { return m_modelAsset; }
+
+  /**
+   * The model of the asset, kept while the component uses it, even if the asset unloads.
+   */
   NODISCARD FORCEINLINE const SPtr<Model>&
   getModel() const { return m_model; }
 
@@ -113,7 +120,17 @@ class CH_CORE_EXPORT ModelComponent : public Component
   NODISCARD static bool
   getHierarchyWorldBounds(const GameObject& gameObject, AABox& outBounds);
 
+  void
+  serialize(DataStream& stream) const override;
+
+  NODISCARD bool
+  deserialize(DataStream& stream) override;
+
+  void
+  collectReferences(Vector<UUID>& outReferences) const override;
+
   static constexpr uint32 ALL = 0xFFFFFFFFu;
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  protected:
   void
@@ -152,7 +169,10 @@ class CH_CORE_EXPORT ModelComponent : public Component
   NODISCARD uint32
   findUsedSlot(uint32 slot) const;
 
+  SPtr<ModelAsset> m_modelAsset;
   SPtr<Model> m_model;
+  // Kept when the asset is missing, so saving again keeps the reference.
+  UUID m_modelAssetId = UUID::null();
   uint32 m_nodeIndex = ALL;
   uint32 m_meshIndex = ALL;
   Vector3 m_pivot = Vector3::ZERO;

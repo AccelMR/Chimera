@@ -182,6 +182,26 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
     CH_PARAMETER_UNUSED(outReferences);
   }
 
+#if USING(CH_EDITOR)
+  /**
+   * Adds what only this asset type keeps in its .meta file, called when it is saved.
+   */
+  virtual void
+  writeEditorValues(ConfigFile& file) const
+  {
+    CH_PARAMETER_UNUSED(file);
+  }
+
+  /**
+   * Reads what writeEditorValues wrote, called when the asset file is first found.
+   */
+  virtual void
+  readEditorValues(const ConfigFile& file)
+  {
+    CH_PARAMETER_UNUSED(file);
+  }
+#endif // USING(CH_EDITOR)
+
   NODISCARD static bool
   validateMetadata(const AssetMetadata& metadata);
 

@@ -13,6 +13,7 @@
 #include <type_traits>
 
 #include "chAssetManager.h"
+#include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLogger.h"
@@ -129,25 +130,28 @@ AssetDragDrop::acceptMaterial()
 /*
  */
 SPtr<GameObject>
-AssetDragDrop::createModelObject(Scene& scene, const ModelAsset& modelAsset,
+AssetDragDrop::createModelObject(Scene& scene,
+                                 const SPtr<ModelAsset>& modelAsset,
                                  GameObject* parent)
 {
-  if (!modelAsset.getModel()) {
-    CH_LOG_ERROR(AssetDragDropLog, "Model asset '{0}' has no model.", modelAsset.getName());
+  if (!modelAsset || !modelAsset->getModel()) {
+    CH_LOG_ERROR(AssetDragDropLog, "Model asset '{0}' has no model.",
+                 modelAsset ? modelAsset->getName() : "null");
     return nullptr;
   }
 
-  SPtr<GameObject> gameObject = scene.createGameObject(modelAsset.getName(), parent);
-  gameObject->addComponent<ModelComponent>(modelAsset.getModel());
+  SPtr<GameObject> gameObject = scene.createGameObject(modelAsset->getName(), parent);
+  gameObject->addComponent<ModelComponent>(modelAsset);
 
   // Alt places the whole model, whatever its import asked for; it can still be split later.
   const ModelExpandMode mode = ImGui::GetIO().KeyAlt
                                    ? ModelExpandMode::Single
-                                   : modelAsset.getEditorData().importSettings.expandMode;
+                                   : modelAsset->getEditorData().importSettings.expandMode;
   if (mode != ModelExpandMode::Single) {
     ModelExpand::expand(scene, *gameObject, mode);
   }
   EditorSelection::setSelectedGameObject(gameObject);
+  EditorScene::markDirty();
   return gameObject;
 }
 

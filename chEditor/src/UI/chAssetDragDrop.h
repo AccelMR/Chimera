@@ -55,7 +55,7 @@ class AssetDragDrop
    * The model is split as its import settings say, unless Alt is held.
    */
   static SPtr<GameObject>
-  createModelObject(Scene& scene, const ModelAsset& modelAsset, GameObject* parent);
+  createModelObject(Scene& scene, const SPtr<ModelAsset>& modelAsset, GameObject* parent);
 };
 
 } // namespace chEngineSDK

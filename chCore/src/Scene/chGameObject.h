@@ -83,6 +83,7 @@ class CH_CORE_EXPORT GameObject : public Object
 
  private:
   friend class Scene;
+  friend class GameObjectSerializer;
 
   Component&
   attachComponent(UniquePtr<Component>&& component, const UUID& typeId);

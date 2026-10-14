@@ -53,6 +53,13 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
   WeakPtr<Scene>
   loadScene(WeakPtr<SceneAsset> asset);
 
+  /**
+   * Forgets the scene; it is destroyed once nothing else holds it. Unloading the active
+   * scene leaves no active scene.
+   */
+  void
+  unloadScene(const Scene& scene);
+
   NODISCARD bool
   setActiveScene(WeakPtr<Scene> scene);
 

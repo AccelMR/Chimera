@@ -58,6 +58,9 @@ class EditorApplication : public WindowedApplication
   virtual void
   onPostPresent() override;
 
+  NODISCARD virtual bool
+  onCloseRequested() override;
+
  private:
   void
   initializeEditorComponents();
@@ -78,7 +81,13 @@ class EditorApplication : public WindowedApplication
   onCameraFlightChanged(bool bFlying);
 
   void
-  addModelAtMouse(const ModelAsset& modelAsset);
+  addModelAtMouse(const SPtr<ModelAsset>& modelAsset);
+
+  /**
+   * Shows the scene name, and whether it has unsaved changes, after the window title.
+   */
+  void
+  updateWindowTitle();
 
   void
   loadCodecs();
@@ -90,7 +99,9 @@ class EditorApplication : public WindowedApplication
   uint32 m_viewportHeight = 0;
   UniquePtr<EditorCamera> m_editorCamera;
   UniquePtr<ViewportTools> m_viewportTools;
-  SPtr<Scene> m_activeScene;
+  // The title the window was made with, before the scene name.
+  String m_windowTitle;
+  uint32 m_titleRevision = ~0u;
 
   UniquePtr<ImGuiRenderer> m_imguiRenderer;
 

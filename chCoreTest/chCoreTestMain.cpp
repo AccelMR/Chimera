@@ -14,6 +14,7 @@
 #include "chAngle.h"
 #include "chAssetFile.h"
 #include "chAssetMeta.h"
+#include "chComponentRegister.h"
 #include "chConfigFile.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
@@ -22,6 +23,7 @@
 #include "chLightComponent.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
+#include "chGameObjectSerializer.h"
 #include "chMaterial.h"
 #include "chMaterialAsset.h"
 #include "chMath.h"
@@ -29,6 +31,7 @@
 #include "chMesh.h"
 #include "chMeshSplit.h"
 #include "chModel.h"
+#include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
 #include "chQuaternion.h"
@@ -370,6 +373,16 @@ createTriangleModel()
   return model;
 }
 
+SPtr<ModelAsset>
+createTestModelAsset(const SPtr<Model>& model, StringView name = "SM_Test")
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<ModelAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, name);
+  return chMakeShared<ModelAsset>(metadata, model);
+}
+
 } // namespace
 
 TEST_CASE("chCore - Mesh bounds")
@@ -422,7 +435,8 @@ TEST_CASE("chCore - Scene render items")
   Scene scene("Test", chEngineSDK::UUID::createRandom());
   const SPtr<GameObject> gameObject = scene.createGameObject("Model");
   const SPtr<Model> model = createTriangleModel();
-  ModelComponent& modelComponent = gameObject->addComponent<ModelComponent>(model);
+  ModelComponent& modelComponent =
+      gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
   REQUIRE(gameObject->getComponent<ModelComponent>() == &modelComponent);
   REQUIRE(modelComponent.isRegistered());
   REQUIRE(scene.getRenderItemCount() == 1);
@@ -461,7 +475,7 @@ TEST_CASE("chCore - Scene render items")
 
     // A freed slot is reused.
     const SPtr<GameObject> other = scene.createGameObject("Other");
-    other->addComponent<ModelComponent>(createTriangleModel());
+    other->addComponent<ModelComponent>(createTestModelAsset(createTriangleModel()));
     REQUIRE(scene.getRenderItemCount() == 1);
   }
 }
@@ -471,9 +485,9 @@ TEST_CASE("chCore - Scene raycast")
   Scene scene("Test", chEngineSDK::UUID::createRandom());
   // The triangle lies flat at its object's Z, covering x -1..1 and y 0..2 (times scale).
   const SPtr<GameObject> back = scene.createGameObject("Back");
-  back->addComponent<ModelComponent>(createTriangleModel());
+  back->addComponent<ModelComponent>(createTestModelAsset(createTriangleModel()));
   const SPtr<GameObject> front = scene.createGameObject("Front");
-  front->addComponent<ModelComponent>(createTriangleModel());
+  front->addComponent<ModelComponent>(createTestModelAsset(createTriangleModel()));
   front->getTransform().setLocalPosition(Vector3(3.0f, 0.0f, -2.0f));
   front->getTransform().setLocalScale(Vector3(2.0f, 3.0f, 1.0f));
   scene.updateTransforms();
@@ -1265,7 +1279,8 @@ TEST_CASE("chCore - Model material slots")
 
   Scene scene("Test", chEngineSDK::UUID::createRandom());
   const SPtr<GameObject> gameObject = scene.createGameObject("Skeleton");
-  ModelComponent& modelComponent = gameObject->addComponent<ModelComponent>(model);
+  ModelComponent& modelComponent =
+      gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
   REQUIRE(modelComponent.getUsedMaterialSlots().size() == 2);
   REQUIRE(scene.getRenderItemCount() == 2);
 
@@ -1311,7 +1326,7 @@ TEST_CASE("chCore - Model material slots")
     REQUIRE(modelComponent.getMaterial(2) == nullptr);
     modelComponent.setMaterial(5, body);
     secondMesh->setMaterialSlot(7);
-    modelComponent.setModel(model);
+    modelComponent.setModel(modelComponent.getModelAsset());
     REQUIRE(materialOf(secondMesh.get()) == nullptr);
   }
 
@@ -1351,7 +1366,8 @@ TEST_CASE("chCore - Model expand")
   Scene scene("Test", chEngineSDK::UUID::createRandom());
   const SPtr<GameObject> gameObject = scene.createGameObject("Model");
   gameObject->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 1.0f));
-  ModelComponent& whole = gameObject->addComponent<ModelComponent>(model);
+  ModelComponent& whole =
+      gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
   REQUIRE(whole.isWholeModel());
   const SPtr<MaterialAsset> gold = createTestMaterialAsset("M_Gold");
   whole.setMaterial(1, gold);
@@ -1453,6 +1469,157 @@ TEST_CASE("chCore - Model expand")
     REQUIRE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::PerMesh));
     REQUIRE(scene.getRenderItemCount() == 0);
   }
+}
+
+namespace chEngineSDK {
+/**
+ * Exists so the tests have a component type that is not registered unless they register it.
+ */
+class TestNoteComponent : public Component
+{
+ public:
+  void
+  serialize(DataStream& stream) const override
+  {
+    stream.write(&note, sizeof(note));
+  }
+
+  NODISCARD bool
+  deserialize(DataStream& stream) override
+  {
+    return stream.read(&note, sizeof(note)) == sizeof(note);
+  }
+
+  uint32 note = 0;
+};
+DECLARE_TYPE_TRAITS(TestNoteComponent)
+} // namespace chEngineSDK
+
+TEST_CASE("chCore - GameObject serializer")
+{
+  const SPtr<Model> model = createTriangleModel();
+  const SPtr<MaterialAsset> body = createTestMaterialAsset("M_Body");
+  model->addMaterialSlot({.name = "Body", .materialId = body->getUUID(), .material = body});
+  const SPtr<ModelAsset> modelAsset = createTestModelAsset(model);
+  const SPtr<MaterialAsset> gold = createTestMaterialAsset("M_Gold");
+
+  Scene source("Source", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> sun = source.createGameObject("Sun");
+  sun->getTransform().setLocalRotation(Quaternion(Rotator(-50.0f, 30.0f, 0.0f)));
+  DirectionalLightComponent& sunLight = sun->addComponent<DirectionalLightComponent>();
+  sunLight.setColor(LinearColor(1.0f, 0.5f, 0.25f, 1.0f));
+  sunLight.setIntensity(4.0f);
+
+  const SPtr<GameObject> parent = source.createGameObject("Parent");
+  parent->getTransform().setLocalPosition(Vector3(1.0f, 2.0f, 3.0f));
+  parent->getTransform().setLocalScale(Vector3(2.0f, 2.0f, 2.0f));
+  // Not registered yet: reading must skip it and still read what follows.
+  parent->addComponent<TestNoteComponent>().note = 42;
+  ModelComponent& part =
+      parent->addComponent<ModelComponent>(modelAsset, 0, 0, Vector3(0.0f, 1.0f, 0.0f));
+  part.setMaterial(0, gold);
+
+  const SPtr<GameObject> lamp = source.createGameObject("Lamp", parent.get());
+  PointLightComponent& lampLight = lamp->addComponent<PointLightComponent>();
+  lampLight.setRange(25.0f);
+  lampLight.setEnabled(false);
+  const SPtr<GameObject> spot = source.createGameObject("Spot", parent.get());
+  spot->addComponent<SpotLightComponent>().setConeAngles(Degree(10.0f), Degree(20.0f));
+  source.createGameObject("Empty", spot.get());
+  // A second user of the same model, which must be referenced once.
+  source.createGameObject("Copy")->addComponent<ModelComponent>(modelAsset);
+
+  Vector<chEngineSDK::UUID> references;
+  GameObjectSerializer::collectReferences(source.getRootGameObjects(), references);
+  REQUIRE(references.size() == 2);
+  REQUIRE(references[0] == modelAsset->getUUID());
+  REQUIRE(references[1] == gold->getUUID());
+
+  MemoryDataStream stream(64 * 1024);
+  GameObjectSerializer::write(stream, source.getRootGameObjects());
+  const SIZE_T written = stream.tell();
+
+  Scene loaded("Loaded", chEngineSDK::UUID::createRandom());
+  stream.seek(0);
+  REQUIRE(GameObjectSerializer::read(stream, loaded, nullptr));
+  REQUIRE(stream.tell() == written);
+
+  const Vector<SPtr<GameObject>>& roots = loaded.getRootGameObjects();
+  REQUIRE(roots.size() == 3);
+  REQUIRE(roots[0]->getName() == "Sun");
+  REQUIRE(roots[0]->getUUID() == sun->getUUID());
+  REQUIRE(roots[0]->getTransform().getLocalRotation() ==
+          sun->getTransform().getLocalRotation());
+  const DirectionalLightComponent* loadedSun =
+      roots[0]->getComponent<DirectionalLightComponent>();
+  REQUIRE(loadedSun != nullptr);
+  REQUIRE(loadedSun->isRegistered());
+  REQUIRE(loadedSun->getColor().g == 0.5f);
+  REQUIRE(loadedSun->getIntensity() == 4.0f);
+
+  const GameObject& loadedParent = *roots[1];
+  REQUIRE(loadedParent.getUUID() == parent->getUUID());
+  REQUIRE(loadedParent.getTransform().getLocalPosition() == Vector3(1.0f, 2.0f, 3.0f));
+  REQUIRE(loadedParent.getTransform().getLocalScale() == Vector3(2.0f, 2.0f, 2.0f));
+  REQUIRE(loadedParent.getComponents().size() == 1);
+  const ModelComponent* loadedPart = loadedParent.getComponent<ModelComponent>();
+  REQUIRE(loadedPart != nullptr);
+  REQUIRE(loadedPart->getNodeIndex() == 0);
+  REQUIRE(loadedPart->getMeshIndex() == 0);
+  REQUIRE(loadedPart->getPivot() == Vector3(0.0f, 1.0f, 0.0f));
+  // There is no AssetManager here, so the model is not found, but its reference is kept for
+  // the next save.
+  REQUIRE(loadedPart->getModelAsset() == nullptr);
+  Vector<chEngineSDK::UUID> loadedReferences;
+  GameObjectSerializer::collectReferences(roots, loadedReferences);
+  REQUIRE(loadedReferences.size() == 1);
+  REQUIRE(loadedReferences[0] == modelAsset->getUUID());
+
+  REQUIRE(loadedParent.getChildren().size() == 2);
+  const GameObject& loadedLamp = *loadedParent.getChildren()[0];
+  REQUIRE(loadedLamp.getName() == "Lamp");
+  REQUIRE(loadedLamp.getParent() == &loadedParent);
+  const PointLightComponent* loadedLampLight = loadedLamp.getComponent<PointLightComponent>();
+  REQUIRE(loadedLampLight != nullptr);
+  REQUIRE(loadedLampLight->getRange() == 25.0f);
+  REQUIRE_FALSE(loadedLampLight->isEnabled());
+  REQUIRE_FALSE(loadedLampLight->isRegistered());
+
+  const GameObject& loadedSpot = *loadedParent.getChildren()[1];
+  const SpotLightComponent* loadedSpotLight = loadedSpot.getComponent<SpotLightComponent>();
+  REQUIRE(loadedSpotLight != nullptr);
+  REQUIRE(loadedSpotLight->getInnerConeAngle().valueDegree() == Approx(10.0f));
+  REQUIRE(loadedSpotLight->getOuterConeAngle().valueDegree() == Approx(20.0f));
+  REQUIRE(loadedSpot.getChildren().size() == 1);
+  REQUIRE(loadedSpot.getChildren()[0]->getName() == "Empty");
+  REQUIRE(loadedSpot.getChildren()[0]->getComponents().empty());
+  REQUIRE(roots[2]->getName() == "Copy");
+  // The sun and the spot; the lamp is disabled.
+  REQUIRE(loaded.getLightCount() == 2);
+
+  // Once its type is registered, the same bytes bring the component back.
+  ComponentRegister::registerType<TestNoteComponent>();
+  Scene again("Again", chEngineSDK::UUID::createRandom());
+  stream.seek(0);
+  REQUIRE(GameObjectSerializer::read(stream, again, nullptr));
+  const TestNoteComponent* note =
+      again.getRootGameObjects()[1]->getComponent<TestNoteComponent>();
+  REQUIRE(note != nullptr);
+  REQUIRE(note->note == 42);
+
+  // A file cut short fails instead of reading past its end.
+  MemoryDataStream cut(stream.getStartPtr(), written - 10, false);
+  Scene broken("Broken", chEngineSDK::UUID::createRandom());
+  REQUIRE_FALSE(GameObjectSerializer::read(cut, broken, nullptr));
+
+  // So does a version from a newer engine.
+  MemoryDataStream future(64);
+  const uint32 futureVersion = GameObjectSerializer::SERIALIZATION_VERSION + 1;
+  const uint32 noObjects = 0;
+  future.write(&futureVersion, sizeof(futureVersion));
+  future.write(&noObjects, sizeof(noObjects));
+  future.seek(0);
+  REQUIRE_FALSE(GameObjectSerializer::read(future, broken, nullptr));
 }
 
 TEST_CASE("chCore - Texture mips")
