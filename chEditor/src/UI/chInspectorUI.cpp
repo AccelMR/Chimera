@@ -25,7 +25,11 @@
 #include "chRotator.h"
 #include "chTextureAsset.h"
 
+#include "chMath.h"
+
 #include "imgui.h"
+
+#include "../../Content/Fonts/IconsFontAwsome5.h"
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_STATIC(InspectorLog, All);
@@ -85,6 +89,63 @@ saveMaterial(const SPtr<MaterialAsset>& materialAsset)
     CH_LOG_ERROR(InspectorLog, "Failed to save material {0}", materialAsset->getName());
   }
 }
+
+// The colors most editors and the gizmo give each axis: X red, Y green, Z blue.
+constexpr ImVec4 kAxisColors[3] = {ImVec4(0.75f, 0.18f, 0.18f, 1.0f),
+                                   ImVec4(0.25f, 0.60f, 0.18f, 1.0f),
+                                   ImVec4(0.18f, 0.38f, 0.82f, 1.0f)};
+constexpr ImVec4 kAxisHoverColors[3] = {ImVec4(0.90f, 0.30f, 0.30f, 1.0f),
+                                        ImVec4(0.38f, 0.75f, 0.30f, 1.0f),
+                                        ImVec4(0.30f, 0.50f, 0.95f, 1.0f)};
+constexpr const ANSICHAR* kAxisLabels[3] = {"X", "Y", "Z"};
+constexpr const ANSICHAR* kAxisFieldIds[3] = {"##X", "##Y", "##Z"};
+
+/*
+ * One row with the label, then a colored axis button and a drag field per component.
+ * Clicking an axis button puts that component back to resetValue. True when a value
+ * changed.
+ */
+bool
+renderAxisRow(const ANSICHAR* label,
+              float (&values)[3],
+              float speed,
+              float resetValue,
+              const ANSICHAR* format,
+              const ANSICHAR* const (&tooltips)[3])
+{
+  ImGui::PushID(label);
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted(label);
+  ImGui::SameLine(ImGui::GetFontSize() * 6.5f);
+
+  const float buttonSize = ImGui::GetFrameHeight();
+  const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+  const float fieldWidth = Math::max(
+      (ImGui::GetContentRegionAvail().x - 3.0f * buttonSize - 2.0f * spacing) / 3.0f, 1.0f);
+
+  bool bChanged = false;
+  for (uint32 axis = 0; axis < 3; ++axis) {
+    if (axis > 0) {
+      ImGui::SameLine(0.0f, spacing);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, kAxisColors[axis]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAxisHoverColors[axis]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAxisColors[axis]);
+    if (ImGui::Button(kAxisLabels[axis], ImVec2(buttonSize, buttonSize))) {
+      values[axis] = resetValue;
+      bChanged = true;
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::SetItemTooltip("%s, click to reset", tooltips[axis]);
+
+    // The field touches its button, so both read as one control.
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::SetNextItemWidth(fieldWidth);
+    bChanged |= ImGui::DragFloat(kAxisFieldIds[axis], &values[axis], speed, 0.0f, 0.0f, format);
+  }
+  ImGui::PopID();
+  return bChanged;
+}
 } // namespace
 
 /*
@@ -116,7 +177,8 @@ InspectorUI::renderInspectorUI()
 void
 InspectorUI::renderTransform(GameObject& gameObject)
 {
-  if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_FA_VECTOR_SQUARE "  Transform###Transform",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -126,28 +188,35 @@ InspectorUI::renderTransform(GameObject& gameObject)
     m_rotationOwner = &gameObject;
     m_rotationShown = transform.getLocalRotation();
     const Rotator rotator = transform.getLocalRotation().toRotator();
-    m_rotationDegrees[0] = rotator.pitch.valueDegree();
-    m_rotationDegrees[1] = rotator.yaw.valueDegree();
-    m_rotationDegrees[2] = rotator.roll.valueDegree();
+    m_rotationDegrees[0] = rotator.roll.valueDegree();
+    m_rotationDegrees[1] = rotator.pitch.valueDegree();
+    m_rotationDegrees[2] = rotator.yaw.valueDegree();
   }
 
   const Vector3& position = transform.getLocalPosition();
   float positionValues[3] = {position.x, position.y, position.z};
-  if (ImGui::DragFloat3("Position", positionValues, 0.01f)) {
+  static constexpr const ANSICHAR* kPositionTooltips[3] = {"X (forward)", "Y (right)",
+                                                           "Z (up)"};
+  if (renderAxisRow(ICON_FA_ARROWS_ALT "  Position", positionValues, 0.01f, 0.0f, "%.3f",
+                    kPositionTooltips)) {
     transform.setLocalPosition(
         Vector3(positionValues[0], positionValues[1], positionValues[2]));
   }
 
-  // Pitch, yaw, roll, in the order Rotator takes them.
-  if (ImGui::DragFloat3("Rotation", m_rotationDegrees, 0.5f)) {
+  static constexpr const ANSICHAR* kRotationTooltips[3] = {
+      "Roll (around X)", "Pitch (around Y)", "Yaw (around Z)"};
+  if (renderAxisRow(ICON_FA_SYNC_ALT "  Rotation", m_rotationDegrees, 0.5f, 0.0f, "%.1f",
+                    kRotationTooltips)) {
     transform.setLocalRotation(
-        Quaternion(Rotator(m_rotationDegrees[0], m_rotationDegrees[1], m_rotationDegrees[2])));
+        Quaternion(Rotator(m_rotationDegrees[1], m_rotationDegrees[2], m_rotationDegrees[0])));
     m_rotationShown = transform.getLocalRotation();
   }
 
   const Vector3& scale = transform.getLocalScale();
   float scaleValues[3] = {scale.x, scale.y, scale.z};
-  if (ImGui::DragFloat3("Scale", scaleValues, 0.01f)) {
+  static constexpr const ANSICHAR* kScaleTooltips[3] = {"X", "Y", "Z"};
+  if (renderAxisRow(ICON_FA_EXPAND_ARROWS_ALT "  Scale", scaleValues, 0.01f, 1.0f, "%.3f",
+                    kScaleTooltips)) {
     transform.setLocalScale(Vector3(scaleValues[0], scaleValues[1], scaleValues[2]));
   }
 }

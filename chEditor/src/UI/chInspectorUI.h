@@ -54,6 +54,7 @@ class InspectorUI
   // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).
   // So the angles are kept while the same object stays selected.
   const GameObject* m_rotationOwner = nullptr;
+  // Roll, pitch, yaw: the turns around X, Y and Z, so they share the axis colors.
   float m_rotationDegrees[3] = {0.0f, 0.0f, 0.0f};
   // The rotation the angles were last read from or written to.
   Quaternion m_rotationShown = Quaternion::IDENTITY;
