@@ -196,15 +196,16 @@ TEST_CASE("chCore - VertexLayout")
   // Each predefined layout must describe its vertex struct byte for byte, or the GPU reads
   // the vertices with the wrong offsets.
   REQUIRE(VertexPosColor::getLayout().getVertexSize() == sizeof(VertexPosColor));
-  REQUIRE(VertexNormalTexCoord::getLayout().getVertexSize() == sizeof(VertexNormalTexCoord));
-  REQUIRE(VertexGBuffer::getLayout().getVertexSize() == sizeof(VertexGBuffer));
+  REQUIRE(VertexStatic::getLayout().getVertexSize() == sizeof(VertexStatic));
 
-  const VertexLayout layout = VertexNormalTexCoord::getLayout();
+  const VertexLayout layout = VertexStatic::getLayout();
   const Vector<VertexAttributeDesc>& attributes = layout.getAttributes();
-  REQUIRE(attributes.size() == 3);
-  REQUIRE(attributes[0].offset == offsetof(VertexNormalTexCoord, position));
-  REQUIRE(attributes[1].offset == offsetof(VertexNormalTexCoord, normal));
-  REQUIRE(attributes[2].offset == offsetof(VertexNormalTexCoord, texCoord));
+  REQUIRE(attributes.size() == 4);
+  REQUIRE(attributes[0].offset == offsetof(VertexStatic, position));
+  REQUIRE(attributes[1].offset == offsetof(VertexStatic, normal));
+  REQUIRE(attributes[2].offset == offsetof(VertexStatic, texCoord));
+  REQUIRE(attributes[3].offset == offsetof(VertexStatic, tangent));
+  REQUIRE(attributes[3].format == VertexFormat::Float4);
 
   // Without an explicit offset, each attribute goes right after the previous one, and each
   // binding has its own stride.
@@ -248,7 +249,7 @@ makeTestPipelineDesc(const SPtr<IShader>& vertexShader, const SPtr<IShader>& fra
 {
   GraphicsPipelineDesc desc{.vertexShader = vertexShader,
                             .fragmentShader = fragmentShader,
-                            .vertexLayout = VertexLayout::createPositionNormalTexCoordLayout(),
+                            .vertexLayout = VertexLayout::createStaticLayout(),
                             .colorAttachmentCount = 1,
                             .depthFormat = Format::D32_SFLOAT};
   desc.colorFormats[0] = Format::R8G8B8A8_UNORM;
@@ -347,10 +348,13 @@ SPtr<Model>
 createTriangleModel()
 {
   SPtr<Mesh> mesh = chMakeShared<Mesh>();
-  mesh->setVertexData(Vector<VertexNormalTexCoord>{
-      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f)},
-      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f)},
-      {Vector3(0.0f, 2.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f)}});
+  mesh->setVertexData(Vector<VertexStatic>{
+      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)},
+      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)},
+      {Vector3(0.0f, 2.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)}});
   mesh->setIndexData(Vector<uint16>{0, 1, 2});
 
   SPtr<Model> model = chMakeShared<Model>();
@@ -837,20 +841,33 @@ TEST_CASE("chCore - Material")
 {
   Material material;
   REQUIRE(material.getBaseColorFactor().r == 1.0f);
-  REQUIRE(material.getBaseColorTextureId().isNull());
-  REQUIRE(material.getBaseColorGpuTexture() == nullptr);
+  REQUIRE(material.getMetallicFactor() == 0.0f);
+  REQUIRE(material.getRoughnessFactor() == 0.5f);
+  REQUIRE(material.getEmissiveFactor().r == 0.0f);
+  for (uint32 i = 0; i < static_cast<uint32>(MaterialTexture::COUNT); ++i) {
+    REQUIRE(material.getTextureId(static_cast<MaterialTexture>(i)).isNull());
+    REQUIRE(material.getGpuTexture(static_cast<MaterialTexture>(i)) == nullptr);
+  }
 
   Vector<chEngineSDK::UUID> references;
   material.collectReferences(references);
   REQUIRE(references.empty());
 
   // A texture that is missing keeps its id, so saving again does not lose it.
-  const chEngineSDK::UUID textureId = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID baseColorId = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID normalId = chEngineSDK::UUID::createRandom();
   material.setBaseColorFactor(LinearColor(0.25f, 0.5f, 0.75f, 1.0f));
-  material.setBaseColorTexture(textureId, nullptr);
+  material.setMetallicFactor(0.75f);
+  material.setRoughnessFactor(0.125f);
+  material.setNormalScale(2.0f);
+  material.setOcclusionStrength(0.5f);
+  material.setEmissiveFactor(LinearColor(4.0f, 2.0f, 1.0f, 1.0f));
+  material.setTexture(MaterialTexture::BaseColor, baseColorId, nullptr);
+  material.setTexture(MaterialTexture::Normal, normalId, nullptr);
   material.collectReferences(references);
-  REQUIRE(references.size() == 1);
-  REQUIRE(references[0] == textureId);
+  REQUIRE(references.size() == 2);
+  REQUIRE(references[0] == baseColorId);
+  REQUIRE(references[1] == normalId);
 
   MemoryDataStream stream(256);
   material.serialize(stream);
@@ -860,8 +877,16 @@ TEST_CASE("chCore - Material")
   REQUIRE(loaded.deserialize(stream));
   REQUIRE(loaded.getBaseColorFactor().g == 0.5f);
   REQUIRE(loaded.getBaseColorFactor().b == 0.75f);
-  REQUIRE(loaded.getBaseColorTextureId() == textureId);
-  REQUIRE(loaded.getBaseColorTexture() == nullptr);
+  REQUIRE(loaded.getMetallicFactor() == 0.75f);
+  REQUIRE(loaded.getRoughnessFactor() == 0.125f);
+  REQUIRE(loaded.getNormalScale() == 2.0f);
+  REQUIRE(loaded.getOcclusionStrength() == 0.5f);
+  REQUIRE(loaded.getEmissiveFactor().r == 4.0f);
+  REQUIRE(loaded.getEmissiveFactor().b == 1.0f);
+  REQUIRE(loaded.getTextureId(MaterialTexture::BaseColor) == baseColorId);
+  REQUIRE(loaded.getTextureId(MaterialTexture::Normal) == normalId);
+  REQUIRE(loaded.getTextureId(MaterialTexture::MetallicRoughness).isNull());
+  REQUIRE(loaded.getTexture(MaterialTexture::BaseColor) == nullptr);
 
   SECTION("Another version is rejected")
   {
@@ -872,10 +897,11 @@ TEST_CASE("chCore - Material")
     REQUIRE_FALSE(loaded.deserialize(stream));
   }
 
-  SECTION("Clearing the texture clears its id")
+  SECTION("Clearing a texture clears only its id")
   {
-    material.setBaseColorTexture(nullptr);
-    REQUIRE(material.getBaseColorTextureId().isNull());
+    material.setTexture(MaterialTexture::BaseColor, nullptr);
+    REQUIRE(material.getTextureId(MaterialTexture::BaseColor).isNull());
+    REQUIRE(material.getTextureId(MaterialTexture::Normal) == normalId);
   }
 }
 
@@ -887,10 +913,13 @@ TEST_CASE("chCore - Model material slots")
 
   // A second mesh on another node uses slot 1.
   SPtr<Mesh> secondMesh = chMakeShared<Mesh>();
-  secondMesh->setVertexData(Vector<VertexNormalTexCoord>{
-      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f)},
-      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f)},
-      {Vector3(0.0f, 1.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f)}});
+  secondMesh->setVertexData(Vector<VertexStatic>{
+      {Vector3(1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(0.0f, 0.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)},
+      {Vector3(-1.0f, 0.0f, 0.0f), Vector3::UP, Vector2(1.0f, 0.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)},
+      {Vector3(0.0f, 1.0f, 0.0f), Vector3::UP, Vector2(0.0f, 1.0f),
+       Vector4(1.0f, 0.0f, 0.0f, 1.0f)}});
   secondMesh->setIndexData(Vector<uint16>{0, 1, 2});
   secondMesh->setMaterialSlot(1);
   model->createNode("Sword", model->getRootNodes()[0])->addMesh(secondMesh);

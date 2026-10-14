@@ -25,7 +25,7 @@ static_assert(sizeof(ModelHeader) == 16, "ModelHeader must have no padding");
 
 // Mesh header structure
 struct MeshHeader {
-  static constexpr uint32 VERSION = 1;
+  static constexpr uint32 VERSION = 2;
 
   uint32 version;
   uint32 vertexCount;

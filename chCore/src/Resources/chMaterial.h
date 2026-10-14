@@ -18,6 +18,22 @@ namespace chEngineSDK {
 class TextureAsset;
 
 /**
+ * Texture inputs of a metallic-roughness material. Their channels follow glTF:
+ * MetallicRoughness keeps roughness in green and metallic in blue, Occlusion reads red, and
+ * Normal is a tangent space map with green pointing up the image.
+ */
+enum class MaterialTexture : uint32
+{
+  BaseColor,
+  MetallicRoughness,
+  Normal,
+  Emissive,
+  Occlusion,
+
+  COUNT
+};
+
+/**
  * Exists to keep how a surface looks apart from its shape, so many meshes can share it and
  * the renderer reads one place per draw. It keeps the UUID of each texture even when that
  * asset is missing, so saving it again does not lose the reference.
@@ -25,35 +41,96 @@ class TextureAsset;
 class CH_CORE_EXPORT Material
 {
  public:
+  Material() = default;
+  Material(const Material&) = delete;
+  Material(Material&&) noexcept = default;
+  ~Material() = default;
+
+  Material&
+  operator=(const Material&) = delete;
+
+  Material&
+  operator=(Material&&) noexcept = default;
+
   void
   setBaseColorFactor(const LinearColor& color);
 
   NODISCARD FORCEINLINE const LinearColor&
   getBaseColorFactor() const noexcept { return m_baseColorFactor; }
 
+  void
+  setMetallicFactor(float metallic);
+
+  NODISCARD FORCEINLINE float
+  getMetallicFactor() const noexcept { return m_metallicFactor; }
+
+  void
+  setRoughnessFactor(float roughness);
+
+  NODISCARD FORCEINLINE float
+  getRoughnessFactor() const noexcept { return m_roughnessFactor; }
+
+  void
+  setNormalScale(float scale);
+
+  NODISCARD FORCEINLINE float
+  getNormalScale() const noexcept { return m_normalScale; }
+
+  void
+  setOcclusionStrength(float strength);
+
+  NODISCARD FORCEINLINE float
+  getOcclusionStrength() const noexcept { return m_occlusionStrength; }
+
+  /**
+   * Only red, green and blue are used.
+   */
+  void
+  setEmissiveFactor(const LinearColor& color);
+
+  NODISCARD FORCEINLINE const LinearColor&
+  getEmissiveFactor() const noexcept { return m_emissiveFactor; }
+
   /**
    * Null clears it.
    */
   void
-  setBaseColorTexture(const SPtr<TextureAsset>& texture);
+  setTexture(MaterialTexture slot, const SPtr<TextureAsset>& texture);
 
   /**
    * Used while loading: keeps the id even when the asset is missing (null).
    */
   void
-  setBaseColorTexture(const UUID& textureId, const SPtr<TextureAsset>& texture);
+  setTexture(MaterialTexture slot, const UUID& textureId, const SPtr<TextureAsset>& texture);
 
   NODISCARD FORCEINLINE const UUID&
-  getBaseColorTextureId() const noexcept { return m_baseColorTextureId; }
+  getTextureId(MaterialTexture slot) const noexcept
+  {
+    return m_textures[static_cast<uint32>(slot)].id;
+  }
 
   NODISCARD FORCEINLINE const SPtr<TextureAsset>&
-  getBaseColorTexture() const noexcept { return m_baseColorTexture; }
+  getTexture(MaterialTexture slot) const noexcept
+  {
+    return m_textures[static_cast<uint32>(slot)].asset;
+  }
 
   /**
-   * Null when there is no texture or it has no GPU copy; the renderer then uses its default.
+   * Null when there is no texture or it has no GPU copy.
    */
   NODISCARD FORCEINLINE const ITexture*
-  getBaseColorGpuTexture() const noexcept { return m_baseColorGpuTexture; }
+  getGpuTexture(MaterialTexture slot) const noexcept
+  {
+    return m_textures[static_cast<uint32>(slot)].gpuTexture;
+  }
+
+  /**
+   * GPU copy of the factors and texture indexes that shaders read by bindless index, made
+   * on the first call and sent again after a change (the copy runs with the next frame
+   * submit). Main thread only.
+   */
+  NODISCARD const IBuffer&
+  getConstantBuffer() const;
 
   void
   collectReferences(Vector<UUID>& outReferences) const;
@@ -68,14 +145,31 @@ class CH_CORE_EXPORT Material
   NODISCARD bool
   deserialize(DataStream& stream);
 
-  static constexpr uint32 SERIALIZATION_VERSION = 1;
+  static constexpr uint32 SERIALIZATION_VERSION = 2;
 
  private:
+  struct TextureSlot
+  {
+    UUID id = UUID::null();
+    SPtr<TextureAsset> asset;
+    // Taken from the texture asset when it is set, so a draw does not go through the asset.
+    const ITexture* gpuTexture = nullptr;
+  };
+
+  void
+  updateConstantBuffer() const;
+
+  // Defaults of a plain dielectric, so a model without PBR data does not look like metal.
   LinearColor m_baseColorFactor{1.0f, 1.0f, 1.0f, 1.0f};
-  UUID m_baseColorTextureId = UUID::null();
-  SPtr<TextureAsset> m_baseColorTexture;
-  // Taken from the texture asset when it is set, so a draw does not go through the asset.
-  const ITexture* m_baseColorGpuTexture = nullptr;
+  LinearColor m_emissiveFactor{0.0f, 0.0f, 0.0f, 1.0f};
+  float m_metallicFactor = 0.0f;
+  float m_roughnessFactor = 0.5f;
+  float m_normalScale = 1.0f;
+  float m_occlusionStrength = 1.0f;
+  TextureSlot m_textures[static_cast<uint32>(MaterialTexture::COUNT)];
+
+  mutable SPtr<IBuffer> m_constantBuffer;
+  mutable bool m_bConstantsDirty = true;
 };
 
 } // namespace chEngineSDK

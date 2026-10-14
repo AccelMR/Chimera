@@ -38,18 +38,20 @@ MaterialAsset::deserialize(SPtr<DataStream> stream)
     return false;
   }
 
-  // IAsset::load already loaded the references, so the texture is ready when it exists.
-  const UUID& textureId = m_material.getBaseColorTextureId();
-  if (textureId.isNull()) {
-    return true;
+  // IAsset::load already loaded the references, so the textures are ready when they exist.
+  for (uint32 i = 0; i < static_cast<uint32>(MaterialTexture::COUNT); ++i) {
+    const MaterialTexture slot = static_cast<MaterialTexture>(i);
+    const UUID& textureId = m_material.getTextureId(slot);
+    if (textureId.isNull()) {
+      continue;
+    }
+    const SPtr<IAsset> asset = AssetManager::instance().getAsset(textureId);
+    SPtr<TextureAsset> texture = asset ? asset->as<TextureAsset>() : nullptr;
+    if (!texture) {
+      CH_LOG_WARNING(AssetSystem, "Material {0} lost its texture {1}", getName(), textureId);
+    }
+    m_material.setTexture(slot, textureId, texture);
   }
-  const SPtr<IAsset> asset = AssetManager::instance().getAsset(textureId);
-  SPtr<TextureAsset> texture = asset ? asset->as<TextureAsset>() : nullptr;
-  if (!texture) {
-    CH_LOG_WARNING(AssetSystem, "Material {0} lost its base color texture {1}", getName(),
-                   textureId);
-  }
-  m_material.setBaseColorTexture(textureId, texture);
   return true;
 }
 

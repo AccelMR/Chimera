@@ -3,6 +3,7 @@
 
 #include "chBindless.hlsli"
 #include "chColor.hlsli"
+#include "chMaterial.hlsli"
 #include "chTransforms.hlsli"
 
 // Must match DebugMode in chDebugRenderPath.cpp.
@@ -28,7 +29,7 @@ struct PushConstants
   row_major float4x4 model;
   float4 color;
   uint cameraIndex;
-  uint textureIndex;
+  uint materialIndex;
   uint samplerIndex;
   uint mode;
 };
@@ -40,6 +41,7 @@ struct VSInput
   float3 position : POSITION;
   float3 normal : NORMAL;
   float2 texCoord : TEXCOORD0;
+  float4 tangent : TANGENT;
 };
 
 struct VSOutput
@@ -48,6 +50,7 @@ struct VSOutput
   float3 normal : NORMAL;
   float2 texCoord : TEXCOORD0;
   float viewDepth : TEXCOORD1;
+  float4 tangent : TANGENT;
 };
 
 VSOutput
@@ -61,6 +64,7 @@ VSMain(VSInput input)
   output.position = mul(viewPosition, camera.projection);
   output.normal = transformNormal(input.normal, g_push.model);
   output.texCoord = input.texCoord;
+  output.tangent = transformTangent(input.tangent, g_push.model);
   // View space Z points forward.
   output.viewDepth = viewPosition.z;
   return output;
@@ -69,9 +73,6 @@ VSMain(VSInput input)
 float4
 PSMain(VSOutput input) : SV_Target0
 {
-  if (g_push.mode == kModeNormals) {
-    return float4(normalize(input.normal) * 0.5f + 0.5f, 1.0f);
-  }
   if (g_push.mode == kModeDepth) {
     // Logarithmic between the clip planes: a linear ramp over a far plane hundreds of units
     // away leaves everything near the camera black.
@@ -87,9 +88,16 @@ PSMain(VSOutput input) : SV_Target0
     return g_push.color;
   }
 
-  Texture2D albedoTexture = ResourceDescriptorHeap[g_push.textureIndex];
-  SamplerState albedoSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+  const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
+  SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+  if (g_push.mode == kModeNormals) {
+    // With the normal map, as the lighting sees it.
+    const float3 normal = getSurfaceNormal(material, textureSampler, input.texCoord,
+                                           normalize(input.normal), input.tangent);
+    return float4(normal * 0.5f + 0.5f, 1.0f);
+  }
+
   // Written straight to the back buffer, which holds sRGB values.
-  const float4 albedo = albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.color;
+  const float4 albedo = getBaseColor(material, textureSampler, input.texCoord);
   return float4(linearToSrgb(albedo.rgb), albedo.a);
 }

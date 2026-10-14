@@ -3,7 +3,7 @@
  * @file chForwardRenderPath.cpp
  * @author AccelMR
  * @date 2026/10/07
- * @brief Draws the scene items textured, in one pass, straight into the output.
+ * @brief Draws the scene items with their materials, in one pass, into the output.
  */
 /************************************************************************/
 
@@ -16,7 +16,6 @@
 #include "chIPipeline.h"
 #include "chISampler.h"
 #include "chIShader.h"
-#include "chITexture.h"
 #include "chMaterial.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
@@ -36,15 +35,13 @@ struct CameraData
 struct DrawPushConstants
 {
   Matrix4 model;
-  float baseColorFactor[4];
   uint32 cameraIndex;
-  uint32 textureIndex;
+  uint32 materialIndex;
   uint32 samplerIndex;
   uint32 padding;
 };
 static_assert(sizeof(DrawPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
 
-constexpr Format kTextureFormat = Format::R8G8B8A8_UNORM;
 constexpr Format kDepthFormat = Format::D32_SFLOAT;
 } // namespace
 
@@ -66,11 +63,6 @@ ForwardRenderPath::ForwardRenderPath()
                                          .addressModeU = SamplerAddressMode::Repeat,
                                          .addressModeV = SamplerAddressMode::Repeat,
                                          .addressModeW = SamplerAddressMode::Repeat});
-
-  constexpr uint32 kWhitePixel = 0xFFFFFFFF;
-  m_defaultTexture = graphicsAPI.createTexture({.format = kTextureFormat,
-                                                .initialData = &kWhitePixel,
-                                                .initialDataSize = sizeof(kWhitePixel)});
 
   m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "cube");
   m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "cube");
@@ -120,9 +112,8 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
   commandList.bindPipeline(*m_pipeline);
 
   DrawPushConstants pushConstants{.model = Matrix4::IDENTITY,
-                                  .baseColorFactor = {1.0f, 1.0f, 1.0f, 1.0f},
                                   .cameraIndex = cameraBuffer.getBindlessIndex(),
-                                  .textureIndex = 0,
+                                  .materialIndex = 0,
                                   .samplerIndex = m_sampler->getBindlessIndex(),
                                   .padding = 0};
   for (const RenderItem* item : items) {
@@ -132,16 +123,9 @@ ForwardRenderPath::recordDraws(RenderPassContext& context,
       continue;
     }
 
-    const Material* material = item->material;
-    const ITexture* texture = material ? material->getBaseColorGpuTexture() : nullptr;
-    const LinearColor& baseColor =
-        material ? material->getBaseColorFactor() : LinearColor::White;
+    const Material& material = item->material ? *item->material : m_defaultMaterial;
     pushConstants.model = item->worldMatrix;
-    pushConstants.baseColorFactor[0] = baseColor.r;
-    pushConstants.baseColorFactor[1] = baseColor.g;
-    pushConstants.baseColorFactor[2] = baseColor.b;
-    pushConstants.baseColorFactor[3] = baseColor.a;
-    pushConstants.textureIndex = (texture ? *texture : *m_defaultTexture).getBindlessIndex();
+    pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
     commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 
     commandList.bindVertexBuffer(*vertexBuffer);
@@ -161,7 +145,7 @@ ForwardRenderPath::updatePipeline(Format colorFormat)
 
   GraphicsPipelineDesc pipelineDesc{.vertexShader = m_vertexShader,
                                     .fragmentShader = m_fragmentShader,
-                                    .vertexLayout = VertexNormalTexCoord::getLayout(),
+                                    .vertexLayout = VertexStatic::getLayout(),
                                     .colorAttachmentCount = 1,
                                     .depthFormat = kDepthFormat};
   pipelineDesc.colorFormats[0] = colorFormat;

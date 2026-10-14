@@ -12,7 +12,9 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
+class Material;
 class MaterialAsset;
+enum class MaterialTexture : uint32;
 
 /**
  * Editor window that shows and edits the transform and components of the selected
@@ -38,6 +40,10 @@ class InspectorUI
 
   void
   renderMaterial(const SPtr<MaterialAsset>& materialAsset);
+
+  // True when the texture changed, so the material needs saving.
+  NODISCARD bool
+  renderMaterialTexture(Material& material, MaterialTexture slot);
 
   // The rotation is edited as angles but stored as a quaternion, and converting back each
   // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).

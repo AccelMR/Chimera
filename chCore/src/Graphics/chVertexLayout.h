@@ -114,8 +114,7 @@ class CH_CORE_EXPORT VertexLayout {
 
  public:
   static VertexLayout createPostionColorLayout();
-  static VertexLayout createPositionNormalTexCoordLayout();
-  static VertexLayout createGBufferLayout();
+  static VertexLayout createStaticLayout();
 
  private:
   Vector<VertexAttributeDesc> m_attributes;
@@ -138,27 +137,18 @@ struct VertexPosColor {
   }
 };
 
-struct VertexNormalTexCoord {
+struct VertexStatic {
   Vector3 position;
   Vector3 normal;
   Vector2 texCoord;
-
-  static VertexLayout getLayout() {
-    return VertexLayout::createPositionNormalTexCoordLayout();
-  }
-};
-
-struct VertexGBuffer {
-  Vector3 position;
-  Vector3 normal;
-  Vector2 texCoord;
-  Vector3 tangent;
-  Vector3 bitangent;
-  Vector4 color;
+  // xyz along the texture U; w gives the bitangent, cross(normal, tangent) * w, which points
+  // up the image (towards smaller V).
+  Vector4 tangent;
 
   static VertexLayout
-  getLayout() {
-    return VertexLayout::createGBufferLayout();
+  getLayout()
+  {
+    return VertexLayout::createStaticLayout();
   }
 };
 } // namespace chEngineSDK

@@ -20,12 +20,14 @@
 #include "chFileSystem.h"
 #include "chLogger.h"
 #include "chMaterialAsset.h"
+#include "chMath.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
 #include "chTextureMips.h"
 
+#include <assimp/GltfMaterial.h>
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
@@ -65,52 +67,116 @@ convertAssimpMatrix(const aiMatrix4x4& matrix)
 }
 
 /*
+ * Any unit vector perpendicular to the normal, for vertices whose tangent cannot come from
+ * texture coordinates. Only normal maps read it, and they need coordinates anyway.
+ */
+static Vector4
+makeAnyTangent(const Vector3& normal)
+{
+  const Vector3& axis = Math::abs(normal.z) < 0.9f ? Vector3::UP : Vector3::FORWARD;
+  Vector3 tangent = axis.cross(normal);
+  if (!tangent.normalize()) {
+    return Vector4(Vector3::RIGHT.x, Vector3::RIGHT.y, Vector3::RIGHT.z, 1.0f);
+  }
+  return Vector4(tangent.x, tangent.y, tangent.z, 1.0f);
+}
+
+/*
+ * Whether the mesh's bitangents point up the image (towards smaller V), the side the engine
+ * keeps. Tangents written in the file follow coordinates that grow up the image, so theirs
+ * point up; the ones assimp computes follow the coordinates after aiProcess_FlipUVs and point
+ * down. Each face tells the direction in which V grows, so the faces decide.
+ */
+static bool
+bitangentsPointUp(const aiMesh& mesh)
+{
+  float agreement = 0.0f;
+  for (uint32 i = 0; i < mesh.mNumFaces; ++i) {
+    const aiFace& face = mesh.mFaces[i];
+    if (face.mNumIndices != 3) {
+      continue;
+    }
+    const uint32 i0 = face.mIndices[0];
+    const uint32 i1 = face.mIndices[1];
+    const uint32 i2 = face.mIndices[2];
+    const aiVector3D edge1 = mesh.mVertices[i1] - mesh.mVertices[i0];
+    const aiVector3D edge2 = mesh.mVertices[i2] - mesh.mVertices[i0];
+    const aiVector3D uvEdge1 = mesh.mTextureCoords[0][i1] - mesh.mTextureCoords[0][i0];
+    const aiVector3D uvEdge2 = mesh.mTextureCoords[0][i2] - mesh.mTextureCoords[0][i0];
+    const float determinant = uvEdge1.x * uvEdge2.y - uvEdge2.x * uvEdge1.y;
+    if (determinant == 0.0f) {
+      continue;
+    }
+    // Direction of growing V on this face.
+    const aiVector3D alongV = (edge2 * uvEdge1.x - edge1 * uvEdge2.x) / determinant;
+    const aiVector3D bitangents =
+        mesh.mBitangents[i0] + mesh.mBitangents[i1] + mesh.mBitangents[i2];
+    const float dot = alongV * bitangents;
+    if (Math::isFinite(dot)) {
+      agreement += dot;
+    }
+  }
+  return agreement < 0.0f;
+}
+
+/*
+ * Packs the tangent and the side of the bitangent into one vector, with the bitangent
+ * pointing up the image. The tangent is made perpendicular to the normal again, because
+ * joining vertices and smoothing normals can tilt it.
+ */
+static Vector4
+makeTangent(const Vector3& normal,
+            const Vector3& sourceTangent,
+            const Vector3& bitangent,
+            bool bBitangentPointsUp)
+{
+  if (!Math::isFinite(sourceTangent.x) || !Math::isFinite(sourceTangent.y) ||
+      !Math::isFinite(sourceTangent.z)) {
+    return makeAnyTangent(normal);
+  }
+  Vector3 tangent = sourceTangent - normal * normal.dot(sourceTangent);
+  if (!tangent.normalize()) {
+    return makeAnyTangent(normal);
+  }
+  const bool bSameSide = normal.cross(tangent).dot(bitangent) >= 0.0f;
+  const float sign = bSameSide == bBitangentPointsUp ? 1.0f : -1.0f;
+  return Vector4(tangent.x, tangent.y, tangent.z, sign);
+}
+
+/*
  */
 static SPtr<Mesh>
 processMesh(const aiMesh& mesh)
 {
-  SPtr<Mesh> newMesh = chMakeShared<Mesh>();
-
-  const bool hasPositions = mesh.HasPositions();
-  const bool hasNormals = mesh.HasNormals();
-  const bool hasTexCoords = mesh.HasTextureCoords(0);
-  const bool hasColors = mesh.HasVertexColors(0);
-
-  if (hasPositions && hasNormals && hasTexCoords) {
-    Vector<VertexNormalTexCoord> vertices(mesh.mNumVertices);
-
-    for (uint32 i = 0; i < mesh.mNumVertices; ++i) {
-      vertices[i].position = convertAssimpVector(mesh.mVertices[i]);
-      vertices[i].normal = convertAssimpVector(mesh.mNormals[i]);
-      vertices[i].texCoord = {mesh.mTextureCoords[0][i].x, mesh.mTextureCoords[0][i].y};
-    }
-
-    newMesh->setVertexData(std::move(vertices));
-  }
-  else if (hasPositions) {
-    if (!hasColors) {
-      CH_LOG_WARNING(MeshSystem, "Mesh does not have color data, using default color");
-    }
-    Vector<VertexPosColor> vertices(mesh.mNumVertices);
-
-    for (uint32 i = 0; i < mesh.mNumVertices; ++i) {
-      vertices[i].position = convertAssimpVector(mesh.mVertices[i]);
-      if (hasColors) {
-        const aiColor4D& color = mesh.mColors[0][i];
-        vertices[i].color = {color.r, color.g, color.b, color.a};
-      }
-      else {
-        vertices[i].color = {0.7f, 0.7f, 0.7f, 1.0f};
-      }
-    }
-
-    newMesh->setVertexData(std::move(vertices));
-  }
-  else {
+  if (!mesh.HasPositions()) {
     CH_LOG_ERROR(MeshSystem, "Mesh does not have position data");
     return nullptr;
   }
 
+  // The import asks for smooth normals, so they are missing only on points and lines;
+  // tangents are missing without texture coordinates.
+  const bool hasNormals = mesh.HasNormals();
+  const bool hasTexCoords = mesh.HasTextureCoords(0);
+  const bool hasTangents = mesh.HasTangentsAndBitangents();
+  const bool bBitangentsPointUp = hasTangents && hasTexCoords && bitangentsPointUp(mesh);
+
+  Vector<VertexStatic> vertices(mesh.mNumVertices);
+  for (uint32 i = 0; i < mesh.mNumVertices; ++i) {
+    VertexStatic& vertex = vertices[i];
+    vertex.position = convertAssimpVector(mesh.mVertices[i]);
+    vertex.normal = hasNormals ? convertAssimpVector(mesh.mNormals[i]) : Vector3::UP;
+    vertex.texCoord = hasTexCoords
+                          ? Vector2(mesh.mTextureCoords[0][i].x, mesh.mTextureCoords[0][i].y)
+                          : Vector2::ZERO;
+    vertex.tangent = hasTangents ? makeTangent(vertex.normal,
+                                               convertAssimpVector(mesh.mTangents[i]),
+                                               convertAssimpVector(mesh.mBitangents[i]),
+                                               bBitangentsPointUp)
+                                 : makeAnyTangent(vertex.normal);
+  }
+
+  SPtr<Mesh> newMesh = chMakeShared<Mesh>();
+  newMesh->setVertexData(vertices);
   newMesh->setMaterialSlot(mesh.mMaterialIndex);
 
   if (mesh.HasFaces()) {
@@ -207,6 +273,115 @@ findImported(StringView importedPath)
 {
   const SPtr<IAsset> asset = AssetManager::instance().findAssetByImportedPath(importedPath);
   return asset ? asset->as<AssetType>() : nullptr;
+}
+
+/*
+ * The first texture the material has among the types, which go from the most to the least
+ * specific.
+ */
+static bool
+findTextureReference(const aiMaterial& source,
+                     Span<const aiTextureType> types,
+                     aiString& outReference)
+{
+  for (const aiTextureType type : types) {
+    if (source.GetTexture(type, 0, &outReference) == AI_SUCCESS) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ * The material keeps metallic and roughness in one texture, as glTF does. Assimp also lists
+ * that texture as both metalness and roughness, so the two count only when they are the same
+ * file.
+ */
+static bool
+findMetallicRoughnessReference(const aiMaterial& source, aiString& outReference)
+{
+  if (source.GetTexture(aiTextureType_GLTF_METALLIC_ROUGHNESS, 0, &outReference) ==
+      AI_SUCCESS) {
+    return true;
+  }
+
+  aiString roughness;
+  const bool bHasMetalness =
+      source.GetTexture(aiTextureType_METALNESS, 0, &outReference) == AI_SUCCESS;
+  const bool bHasRoughness =
+      source.GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &roughness) == AI_SUCCESS;
+  if (bHasMetalness && bHasRoughness && outReference == roughness) {
+    return true;
+  }
+  if (bHasMetalness || bHasRoughness) {
+    CH_LOG_WARNING(MeshSystem,
+                   "Material {0} has separate metallic and roughness textures, which are "
+                   "not supported; its factors are used instead",
+                   source.GetName().C_Str());
+  }
+  return false;
+}
+
+/*
+ * Reads the factors after the textures are set, because what a factor means depends on
+ * whether its texture exists.
+ */
+static void
+readMaterialFactors(const aiMaterial& source, Material& material)
+{
+  // PBR formats (glTF) define every factor as a multiplier of its texture. Older formats
+  // have no metallic or roughness, and tools ignore their diffuse and emissive colors once
+  // a texture is set, so there a texture gets a factor of one.
+  float metallic = 0.0f;
+  float roughness = 0.0f;
+  const bool bPbrSource = source.Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS;
+  const bool bHasRoughness = source.Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS;
+  if (bPbrSource) {
+    material.setMetallicFactor(metallic);
+  }
+  if (bHasRoughness) {
+    material.setRoughnessFactor(roughness);
+  }
+  if (material.getTexture(MaterialTexture::MetallicRoughness)) {
+    if (!bPbrSource) {
+      material.setMetallicFactor(1.0f);
+    }
+    if (!bHasRoughness) {
+      material.setRoughnessFactor(1.0f);
+    }
+  }
+
+  const bool bHasBaseColorTexture = material.getTexture(MaterialTexture::BaseColor) != nullptr;
+  aiColor4D color;
+  if (source.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS ||
+      (!bHasBaseColorTexture && source.Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS)) {
+    material.setBaseColorFactor(LinearColor(color.r, color.g, color.b, color.a));
+  }
+
+  const bool bHasEmissiveTexture = material.getTexture(MaterialTexture::Emissive) != nullptr;
+  if (bHasEmissiveTexture && !bPbrSource) {
+    material.setEmissiveFactor(LinearColor(1.0f, 1.0f, 1.0f, 1.0f));
+  }
+  else if (source.Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
+    float intensity = 1.0f;
+    source.Get(AI_MATKEY_EMISSIVE_INTENSITY, intensity);
+    material.setEmissiveFactor(
+        LinearColor(color.r * intensity, color.g * intensity, color.b * intensity, 1.0f));
+  }
+
+  float normalScale = 1.0f;
+  if (source.Get(AI_MATKEY_GLTF_TEXTURE_SCALE(aiTextureType_NORMALS, 0), normalScale) ==
+      AI_SUCCESS) {
+    material.setNormalScale(normalScale);
+  }
+
+  // Assimp's glTF importer stores the occlusion strength under the texture file key plus
+  // ".strength", not under AI_MATKEY_GLTF_TEXTURE_STRENGTH.
+  float occlusionStrength = 1.0f;
+  if (source.Get(_AI_MATKEY_TEXTURE_BASE ".strength", aiTextureType_LIGHTMAP, 0,
+                 occlusionStrength) == AI_SUCCESS) {
+    material.setOcclusionStrength(occlusionStrength);
+  }
 }
 } // namespace MeshManagerHelpers
 
@@ -317,17 +492,41 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
   SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
   Material& material = materialAsset->getMaterial();
 
-  SPtr<TextureAsset> texture = importBaseColorTexture(context, source);
+  constexpr ImportSettings kColorSettings{.srgb = true};
+  constexpr ImportSettings kDataSettings{.srgb = false};
+  constexpr aiTextureType kBaseColorTypes[] = {aiTextureType_BASE_COLOR,
+                                               aiTextureType_DIFFUSE};
+  constexpr aiTextureType kNormalTypes[] = {aiTextureType_NORMALS,
+                                            aiTextureType_NORMAL_CAMERA};
+  constexpr aiTextureType kEmissiveTypes[] = {aiTextureType_EMISSIVE,
+                                              aiTextureType_EMISSION_COLOR};
+  // glTF's occlusion arrives as a lightmap.
+  constexpr aiTextureType kOcclusionTypes[] = {aiTextureType_AMBIENT_OCCLUSION,
+                                               aiTextureType_LIGHTMAP};
 
-  // A base color (glTF and other PBR formats) multiplies its texture by definition. The
-  // diffuse color of older formats is usually ignored by their tools once a texture is set,
-  // and multiplying by it would darken the texture, so it is used only without one.
-  aiColor4D color;
-  if (source.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS ||
-      (!texture && source.Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS)) {
-    material.setBaseColorFactor(LinearColor(color.r, color.g, color.b, color.a));
+  aiString reference;
+  if (findTextureReference(source, kBaseColorTypes, reference)) {
+    material.setTexture(MaterialTexture::BaseColor,
+                        importTexture(context, source, reference, kColorSettings));
   }
-  material.setBaseColorTexture(texture);
+  if (findMetallicRoughnessReference(source, reference)) {
+    material.setTexture(MaterialTexture::MetallicRoughness,
+                        importTexture(context, source, reference, kDataSettings));
+  }
+  if (findTextureReference(source, kNormalTypes, reference)) {
+    material.setTexture(MaterialTexture::Normal,
+                        importTexture(context, source, reference, kDataSettings));
+  }
+  if (findTextureReference(source, kEmissiveTypes, reference)) {
+    material.setTexture(MaterialTexture::Emissive,
+                        importTexture(context, source, reference, kColorSettings));
+  }
+  if (findTextureReference(source, kOcclusionTypes, reference)) {
+    material.setTexture(MaterialTexture::Occlusion,
+                        importTexture(context, source, reference, kDataSettings));
+  }
+
+  readMaterialFactors(source, material);
 
   if (!saveAndRegister(materialAsset)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);
@@ -342,18 +541,13 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
 /*
  */
 SPtr<TextureAsset>
-MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial& source)
+MeshCodec::importTexture(const ImportContext& context,
+                         const aiMaterial& source,
+                         const aiString& reference,
+                         const ImportSettings& settings)
 {
-  constexpr ImportSettings kColorSettings{.srgb = true};
-
-  aiString reference;
-  if (source.GetTexture(aiTextureType_BASE_COLOR, 0, &reference) != AI_SUCCESS &&
-      source.GetTexture(aiTextureType_DIFFUSE, 0, &reference) != AI_SUCCESS) {
-    return nullptr;
-  }
-
   if (const aiTexture* embedded = context.scene->GetEmbeddedTexture(reference.C_Str())) {
-    return importEmbeddedTexture(context, *embedded, reference.C_Str(), kColorSettings);
+    return importEmbeddedTexture(context, *embedded, reference.C_Str(), settings);
   }
 
   // Files often keep the path of the machine that made them, so the texture is also looked
@@ -381,7 +575,7 @@ MeshCodec::importBaseColorTexture(const ImportContext& context, const aiMaterial
   }
 
   const SPtr<IAsset> asset = AssetCodecManager::instance().importAsset(
-      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder, kColorSettings);
+      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder, settings);
   return asset ? asset->as<TextureAsset>() : nullptr;
 }
 

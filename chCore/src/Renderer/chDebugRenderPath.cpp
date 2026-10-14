@@ -16,7 +16,6 @@
 #include "chIPipeline.h"
 #include "chISampler.h"
 #include "chIShader.h"
-#include "chITexture.h"
 #include "chMaterial.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
@@ -51,13 +50,12 @@ struct DebugPushConstants
   Matrix4 model;
   float color[4];
   uint32 cameraIndex;
-  uint32 textureIndex;
+  uint32 materialIndex;
   uint32 samplerIndex;
   uint32 mode;
 };
 static_assert(sizeof(DebugPushConstants) <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
 
-constexpr Format kTextureFormat = Format::R8G8B8A8_UNORM;
 constexpr Format kDepthFormat = Format::D32_SFLOAT;
 
 // Lines alone are drawn light on the background; over the lit scene they need a color that
@@ -105,11 +103,6 @@ DebugRenderPath::DebugRenderPath()
                                          .addressModeU = SamplerAddressMode::Repeat,
                                          .addressModeV = SamplerAddressMode::Repeat,
                                          .addressModeW = SamplerAddressMode::Repeat});
-
-  constexpr uint32 kWhitePixel = 0xFFFFFFFF;
-  m_defaultTexture = graphicsAPI.createTexture({.format = kTextureFormat,
-                                                .initialData = &kWhitePixel,
-                                                .initialDataSize = sizeof(kWhitePixel)});
 
   m_vertexShader = graphicsAPI.loadShader(ShaderStage::Vertex, "debugview");
   m_fragmentShader = graphicsAPI.loadShader(ShaderStage::Fragment, "debugview");
@@ -215,10 +208,9 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
   DebugPushConstants pushConstants{.model = Matrix4::IDENTITY,
                                    .color = {color[0], color[1], color[2], color[3]},
                                    .cameraIndex = cameraBuffer.getBindlessIndex(),
-                                   .textureIndex = 0,
+                                   .materialIndex = 0,
                                    .samplerIndex = m_sampler->getBindlessIndex(),
                                    .mode = settings.shaderMode};
-  const bool bUnlit = settings.shaderMode == static_cast<uint32>(DebugMode::Unlit);
   for (const RenderItem* item : settings.items) {
     const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
     const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
@@ -226,20 +218,9 @@ DebugRenderPath::recordDraws(RenderPassContext& context, const DrawSettings& set
       continue;
     }
 
-    const Material* material = item->material;
-    const ITexture* texture = material ? material->getBaseColorGpuTexture() : nullptr;
+    const Material& material = item->material ? *item->material : m_defaultMaterial;
     pushConstants.model = item->worldMatrix;
-    pushConstants.textureIndex = (texture ? *texture : *m_defaultTexture).getBindlessIndex();
-    // Unlit multiplies the texture by the color, so it shows the material's tint; the
-    // other modes keep the color of the settings.
-    if (bUnlit) {
-      const LinearColor& baseColor =
-          material ? material->getBaseColorFactor() : LinearColor::White;
-      pushConstants.color[0] = baseColor.r;
-      pushConstants.color[1] = baseColor.g;
-      pushConstants.color[2] = baseColor.b;
-      pushConstants.color[3] = baseColor.a;
-    }
+    pushConstants.materialIndex = material.getConstantBuffer().getBindlessIndex();
     commandList.pushConstants(&pushConstants, sizeof(pushConstants));
 
     commandList.bindVertexBuffer(*vertexBuffer);
@@ -261,7 +242,7 @@ DebugRenderPath::getPipeline(PipelineKind kind, Format colorFormat, Format depth
 
   GraphicsPipelineDesc pipelineDesc{.vertexShader = m_vertexShader,
                                     .fragmentShader = m_fragmentShader,
-                                    .vertexLayout = VertexNormalTexCoord::getLayout(),
+                                    .vertexLayout = VertexStatic::getLayout(),
                                     .colorAttachmentCount = 1,
                                     .depthFormat = depthFormat};
   pipelineDesc.colorFormats[0] = colorFormat;

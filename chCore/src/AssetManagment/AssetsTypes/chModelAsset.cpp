@@ -469,7 +469,8 @@ ModelAsset::deserializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh) {
   stream >> meshHeader;
 
   if (meshHeader.version != MeshHeader::VERSION) {
-    CH_LOG(ModelAssetLog, Error, "Unsupported mesh version: {0}", meshHeader.version);
+    CH_LOG(ModelAssetLog, Error, "Unsupported mesh version {0}, import the model again",
+           meshHeader.version);
     return false;
   }
   mesh->setMaterialSlot(meshHeader.materialSlot);

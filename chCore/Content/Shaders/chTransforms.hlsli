@@ -17,3 +17,16 @@ transformNormal(float3 normal, row_major float4x4 model)
   const float determinantSign = dot(row0, cross12) < 0.0f ? -1.0f : 1.0f;
   return normalize(mul(normal, cofactor)) * determinantSign;
 }
+
+// A tangent lies on the surface, so it moves with the model matrix itself. A mirrored object
+// turns the bitangent to the other side, so w takes the determinant's sign.
+float4
+transformTangent(float4 tangent, row_major float4x4 model)
+{
+  const float3 row0 = model[0].xyz;
+  const float3 row1 = model[1].xyz;
+  const float3 row2 = model[2].xyz;
+  const float determinantSign = dot(row0, cross(row1, row2)) < 0.0f ? -1.0f : 1.0f;
+  return float4(normalize(mul(tangent.xyz, float3x3(row0, row1, row2))),
+                tangent.w * determinantSign);
+}

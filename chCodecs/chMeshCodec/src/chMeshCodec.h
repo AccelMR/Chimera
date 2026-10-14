@@ -24,6 +24,7 @@
 //Forward declarations from Assimp
 struct aiMaterial;
 struct aiScene;
+struct aiString;
 struct aiTexture;
 
 namespace chEngineSDK {
@@ -76,7 +77,10 @@ class MeshCodec  : public IAssetCodec {
   importMaterial(const ImportContext& context, const aiMaterial& source, uint32 index);
 
   NODISCARD SPtr<TextureAsset>
-  importBaseColorTexture(const ImportContext& context, const aiMaterial& source);
+  importTexture(const ImportContext& context,
+                const aiMaterial& source,
+                const aiString& reference,
+                const ImportSettings& settings);
 
   NODISCARD SPtr<TextureAsset>
   importEmbeddedTexture(const ImportContext& context,

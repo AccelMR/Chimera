@@ -1,8 +1,10 @@
-// Textured mesh with one fixed directional light.
+// Mesh lit by one fixed directional light, with its material's normal map, occlusion and
+// emissive.
 // Matrices come from the engine stored row by row, and the engine uses row vectors,
 // so they are declared row_major and applied as mul(vector, matrix).
 
 #include "chBindless.hlsli"
+#include "chMaterial.hlsli"
 #include "chTransforms.hlsli"
 
 struct CameraData
@@ -15,9 +17,8 @@ struct CameraData
 struct PushConstants
 {
   row_major float4x4 model;
-  float4 baseColorFactor;
   uint cameraIndex;
-  uint textureIndex;
+  uint materialIndex;
   uint samplerIndex;
   uint padding;
 };
@@ -29,6 +30,7 @@ struct VSInput
   float3 position : POSITION;
   float3 normal : NORMAL;
   float2 texCoord : TEXCOORD0;
+  float4 tangent : TANGENT;
 };
 
 struct VSOutput
@@ -37,6 +39,7 @@ struct VSOutput
   float3 normal : NORMAL;
   float2 texCoord : TEXCOORD0;
   float3 worldPosition : TEXCOORD1;
+  float4 tangent : TANGENT;
 };
 
 VSOutput
@@ -50,20 +53,25 @@ VSMain(VSInput input)
   output.position = mul(mul(worldPosition, camera.view), camera.projection);
   output.normal = transformNormal(input.normal, g_push.model);
   output.texCoord = input.texCoord;
+  output.tangent = transformTangent(input.tangent, g_push.model);
   return output;
 }
 
 float4
 PSMain(VSOutput input) : SV_Target0
 {
-  Texture2D albedoTexture = ResourceDescriptorHeap[g_push.textureIndex];
-  SamplerState albedoSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+  const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
+  SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
+
+  const float4 baseColor = getBaseColor(material, textureSampler, input.texCoord);
+  const float3 normal = getSurfaceNormal(material, textureSampler, input.texCoord,
+                                         normalize(input.normal), input.tangent);
+  const float occlusion = getOcclusion(material, textureSampler, input.texCoord);
+  const float3 emissive = getEmissive(material, textureSampler, input.texCoord);
 
   const float3 lightDirection = normalize(float3(1.0f, 1.0f, 1.0f));
-  const float diffuse = max(dot(normalize(input.normal), lightDirection), 0.0f);
-  const float3 ambient = float3(0.1f, 0.1f, 0.1f);
+  const float diffuse = max(dot(normal, lightDirection), 0.0f);
+  const float3 ambient = float3(0.1f, 0.1f, 0.1f) * occlusion;
 
-  const float4 textureColor =
-      albedoTexture.Sample(albedoSampler, input.texCoord) * g_push.baseColorFactor;
-  return float4(ambient + diffuse, 1.0f) * textureColor;
+  return float4(baseColor.rgb * (ambient + diffuse) + emissive, baseColor.a);
 }

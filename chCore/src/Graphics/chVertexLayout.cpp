@@ -32,25 +32,13 @@ VertexLayout::createPostionColorLayout() {
 /*
 */
 VertexLayout
-VertexLayout::createPositionNormalTexCoordLayout() {
+VertexLayout::createStaticLayout()
+{
   VertexLayout layout;
   layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
   layout.addAttribute(VertexAttributeType::Normal, VertexFormat::Float3);
   layout.addAttribute(VertexAttributeType::TexCoord0, VertexFormat::Float2);
-  return layout;
-}
-
-/*
-*/
-VertexLayout
-VertexLayout::createGBufferLayout() {
-  VertexLayout layout;
-  layout.addAttribute(VertexAttributeType::Position, VertexFormat::Float3);
-  layout.addAttribute(VertexAttributeType::Normal, VertexFormat::Float3);
-  layout.addAttribute(VertexAttributeType::TexCoord0, VertexFormat::Float2);
-  layout.addAttribute(VertexAttributeType::Tangent, VertexFormat::Float3);
-  layout.addAttribute(VertexAttributeType::Bitangent, VertexFormat::Float3);
-  layout.addAttribute(VertexAttributeType::Color, VertexFormat::Float4);
+  layout.addAttribute(VertexAttributeType::Tangent, VertexFormat::Float4);
   return layout;
 }
 

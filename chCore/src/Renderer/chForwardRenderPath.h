@@ -11,6 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chIRenderPath.h"
+#include "chMaterial.h"
 #include "chPipelineCache.h"
 
 namespace chEngineSDK {
@@ -52,8 +53,8 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
   // because the CPU writes them while the GPU may still read the previous frame's.
   Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_cameraBuffers;
 
-  // 1x1 white, for items without a texture.
-  SPtr<ITexture> m_defaultTexture;
+  // For items without a material.
+  Material m_defaultMaterial;
   SPtr<ISampler> m_sampler;
 };
 

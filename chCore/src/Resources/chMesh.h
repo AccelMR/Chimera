@@ -32,7 +32,7 @@ class CH_CORE_EXPORT Mesh
   /**
   * Set vertex data using a templated vertex type
   *
-  * @tparam T Vertex type (e.g., VertexPosColor, VertexNormalTexCoord)
+  * @tparam T Vertex type (e.g., VertexPosColor, VertexStatic)
   * @param vertices Vector of vertex data
   */
   template<typename T>
@@ -99,7 +99,7 @@ class CH_CORE_EXPORT Mesh
   /**
    * Access vertex data as specified type
    *
-   * @tparam T Vertex type (e.g., VertexPosColor, VertexNormalTexCoord)
+   * @tparam T Vertex type (e.g., VertexPosColor, VertexStatic)
    * @return Vector of vertex data
   */
   template<typename T>
