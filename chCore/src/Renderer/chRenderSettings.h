@@ -53,4 +53,7 @@ class CH_CORE_EXPORT ViewModeUtils
 // Name of a ViewMode (-ViewMode=Wireframe).
 extern CH_CORE_EXPORT ConsoleVariable<String> g_cvarViewMode;
 
+// Light that reaches every surface from all sides until image based lighting exists.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarAmbient;
+
 } // namespace chEngineSDK

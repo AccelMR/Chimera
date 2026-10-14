@@ -16,6 +16,7 @@
 #include "chGameObject.h"
 #include "chITexture.h"
 #include "chImGuiRenderer.h"
+#include "chLightComponent.h"
 #include "chLogger.h"
 #include "chMaterialAsset.h"
 #include "chModel.h"
@@ -101,6 +102,7 @@ InspectorUI::renderInspectorUI()
   if (ModelComponent* modelComponent = selected->getComponent<ModelComponent>()) {
     renderModelComponent(*modelComponent);
   }
+  renderLightComponent(*selected);
   ImGui::End();
 }
 
@@ -169,6 +171,65 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
     ImGui::PopID();
   }
   ImGui::TreePop();
+}
+
+/*
+ */
+void
+InspectorUI::renderLightComponent(GameObject& gameObject)
+{
+  PointLightComponent* pointLight = gameObject.getComponent<PointLightComponent>();
+  SpotLightComponent* spotLight = gameObject.getComponent<SpotLightComponent>();
+  LightComponent* light = gameObject.getComponent<DirectionalLightComponent>();
+  const ANSICHAR* title = "Directional Light";
+  if (pointLight) {
+    light = pointLight;
+    title = "Point Light";
+  }
+  else if (spotLight) {
+    light = spotLight;
+    title = "Spot Light";
+  }
+  if (!light || !ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+
+  bool bEnabled = light->isEnabled();
+  if (ImGui::Checkbox("Enabled", &bEnabled)) {
+    light->setEnabled(bEnabled);
+  }
+
+  const LinearColor& color = light->getColor();
+  float colorValues[3] = {color.r, color.g, color.b};
+  if (ImGui::ColorEdit3("Color", colorValues, ImGuiColorEditFlags_Float)) {
+    light->setColor(LinearColor(colorValues[0], colorValues[1], colorValues[2], 1.0f));
+  }
+
+  float intensity = light->getIntensity();
+  if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 10000.0f)) {
+    light->setIntensity(intensity);
+  }
+
+  if (pointLight) {
+    float range = pointLight->getRange();
+    if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      pointLight->setRange(range);
+    }
+  }
+
+  if (spotLight) {
+    float range = spotLight->getRange();
+    if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      spotLight->setRange(range);
+    }
+    float inner = spotLight->getInnerConeAngle().valueDegree();
+    float outer = spotLight->getOuterConeAngle().valueDegree();
+    const bool bInnerChanged = ImGui::SliderFloat("Inner Angle", &inner, 0.0f, 89.0f);
+    const bool bOuterChanged = ImGui::SliderFloat("Outer Angle", &outer, 0.0f, 89.0f);
+    if (bInnerChanged || bOuterChanged) {
+      spotLight->setConeAngles(Degree(inner), Degree(outer));
+    }
+  }
 }
 
 /*

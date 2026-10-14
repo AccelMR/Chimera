@@ -13,6 +13,7 @@
 
 #include "chGameObject.h"
 #include "chObject.h"
+#include "chLightItem.h"
 #include "chRenderItem.h"
 
 namespace chEngineSDK {
@@ -87,11 +88,37 @@ class CH_CORE_EXPORT Scene : public Object
   void
   gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outItems) const;
 
+  /**
+   * Returns an id that stays valid until removeLight.
+   */
+  NODISCARD uint32
+  addLight(const LightItem& light);
+
+  NODISCARD FORCEINLINE LightItem&
+  getLight(uint32 id) { return m_lights[id]; }
+
+  void
+  removeLight(uint32 id);
+
+  NODISCARD FORCEINLINE uint32
+  getLightCount() const { return m_lightCount; }
+
+  /**
+   * Replaces the contents of outLights with every directional light and the point and spot
+   * lights whose range touches the frustum. Same lifetime and reuse rules as
+   * gatherRenderItems.
+   */
+  void
+  gatherLights(const Frustum& frustum, Vector<const LightItem*>& outLights) const;
+
  private:
   Vector<SPtr<GameObject>> m_rootGameObjects;
   Vector<RenderItem> m_renderItems;
   Vector<uint32> m_freeRenderItems;
   uint32 m_renderItemCount = 0;
+  Vector<LightItem> m_lights;
+  Vector<uint32> m_freeLights;
+  uint32 m_lightCount = 0;
 };
 
 } // namespace chEngineSDK

@@ -36,6 +36,9 @@ class InspectorUI
   renderModelComponent(ModelComponent& modelComponent);
 
   void
+  renderLightComponent(GameObject& gameObject);
+
+  void
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
 
   void

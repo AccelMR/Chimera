@@ -1,23 +1,29 @@
-// Mesh lit by one fixed directional light, with its material's normal map, occlusion and
-// emissive.
+// Mesh lit by the scene lights with its metallic-roughness material, plus a constant ambient.
 // Matrices come from the engine stored row by row, and the engine uses row vectors,
 // so they are declared row_major and applied as mul(vector, matrix).
 
 #include "chBindless.hlsli"
+#include "chLights.hlsli"
 #include "chMaterial.hlsli"
 #include "chTransforms.hlsli"
 
-struct CameraData
+// Must match ViewData in chForwardRenderPath.cpp.
+struct ViewData
 {
   row_major float4x4 view;
   row_major float4x4 projection;
+  float3 cameraPosition;
+  uint lightCount;
+  uint lightBufferIndex;
+  float ambient;
+  float2 padding;
 };
 
 // Must match DrawPushConstants in chForwardRenderPath.cpp.
 struct PushConstants
 {
   row_major float4x4 model;
-  uint cameraIndex;
+  uint viewIndex;
   uint materialIndex;
   uint samplerIndex;
   uint padding;
@@ -45,12 +51,12 @@ struct VSOutput
 VSOutput
 VSMain(VSInput input)
 {
-  const CameraData camera = loadConstants<CameraData>(g_push.cameraIndex);
+  const ViewData view = loadConstants<ViewData>(g_push.viewIndex);
   const float4 worldPosition = mul(float4(input.position, 1.0f), g_push.model);
 
   VSOutput output;
   output.worldPosition = worldPosition.xyz;
-  output.position = mul(mul(worldPosition, camera.view), camera.projection);
+  output.position = mul(mul(worldPosition, view.view), view.projection);
   output.normal = transformNormal(input.normal, g_push.model);
   output.texCoord = input.texCoord;
   output.tangent = transformTangent(input.tangent, g_push.model);
@@ -60,18 +66,28 @@ VSMain(VSInput input)
 float4
 PSMain(VSOutput input) : SV_Target0
 {
+  const ViewData view = loadConstants<ViewData>(g_push.viewIndex);
   const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
   SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
 
   const float4 baseColor = getBaseColor(material, textureSampler, input.texCoord);
-  const float3 normal = getSurfaceNormal(material, textureSampler, input.texCoord,
-                                         normalize(input.normal), input.tangent);
+  const float2 metallicRoughness =
+      getMetallicRoughness(material, textureSampler, input.texCoord);
+
+  SurfaceData surface;
+  surface.baseColor = baseColor.rgb;
+  surface.metallic = metallicRoughness.x;
+  surface.roughness = metallicRoughness.y;
+  surface.normal = getSurfaceNormal(material, textureSampler, input.texCoord,
+                                    normalize(input.normal), input.tangent);
+
+  const float3 viewDirection = normalize(view.cameraPosition - input.worldPosition);
+  float3 color = evaluateLights(surface, input.worldPosition, viewDirection,
+                                view.lightBufferIndex, view.lightCount);
+
+  // Only diffuse: without an environment there is nothing for the ambient to reflect.
   const float occlusion = getOcclusion(material, textureSampler, input.texCoord);
-  const float3 emissive = getEmissive(material, textureSampler, input.texCoord);
-
-  const float3 lightDirection = normalize(float3(1.0f, 1.0f, 1.0f));
-  const float diffuse = max(dot(normal, lightDirection), 0.0f);
-  const float3 ambient = float3(0.1f, 0.1f, 0.1f) * occlusion;
-
-  return float4(baseColor.rgb * (ambient + diffuse) + emissive, baseColor.a);
+  color += surface.baseColor * (1.0f - surface.metallic) * view.ambient * occlusion;
+  color += getEmissive(material, textureSampler, input.texCoord);
+  return float4(color, baseColor.a);
 }

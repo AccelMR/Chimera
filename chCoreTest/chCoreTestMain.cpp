@@ -16,6 +16,7 @@
 #include "chIShader.h"
 #include "chITexture.h"
 #include "chITextureView.h"
+#include "chLightComponent.h"
 #include "chFileStream.h"
 #include "chMaterial.h"
 #include "chMaterialAsset.h"
@@ -455,6 +456,79 @@ TEST_CASE("chCore - Scene render items")
     const SPtr<GameObject> other = scene.createGameObject("Other");
     other->addComponent<ModelComponent>(createTriangleModel());
     REQUIRE(scene.getRenderItemCount() == 1);
+  }
+}
+
+TEST_CASE("chCore - Scene lights")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const Camera camera = createTestCamera();
+  Vector<const LightItem*> visible;
+
+  // Positive pitch turns forward up, so -90 makes the sun shine straight down.
+  const SPtr<GameObject> sun = scene.createGameObject("Sun");
+  sun->getTransform().setLocalRotation(Quaternion(Rotator(-90.0f, 0.0f, 0.0f)));
+  DirectionalLightComponent& sunLight = sun->addComponent<DirectionalLightComponent>();
+  sunLight.setColor(LinearColor(1.0f, 0.5f, 0.25f, 1.0f));
+  sunLight.setIntensity(2.0f);
+  scene.updateTransforms();
+  REQUIRE(scene.getLightCount() == 1);
+
+  scene.gatherLights(camera.getFrustum(), visible);
+  REQUIRE(visible.size() == 1);
+  REQUIRE(visible[0]->type == LightType::Directional);
+  REQUIRE(visible[0]->direction.nearEqual(Vector3(0.0f, 0.0f, -1.0f)));
+  REQUIRE(visible[0]->color.r == 2.0f);
+  REQUIRE(visible[0]->color.g == 1.0f);
+  REQUIRE(visible[0]->color.b == 0.5f);
+
+  const SPtr<GameObject> lamp = scene.createGameObject("Lamp");
+  PointLightComponent& lampLight = lamp->addComponent<PointLightComponent>();
+  lampLight.setRange(5.0f);
+  scene.updateTransforms();
+  REQUIRE(scene.getLightCount() == 2);
+
+  SECTION("Point lights are culled by their range")
+  {
+    lamp->getTransform().setLocalPosition(Vector3(-20.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    scene.gatherLights(camera.getFrustum(), visible);
+    REQUIRE(visible.size() == 1);
+
+    // Behind the camera, but its range reaches what the camera sees.
+    lampLight.setRange(30.0f);
+    scene.gatherLights(camera.getFrustum(), visible);
+    REQUIRE(visible.size() == 2);
+    REQUIRE(visible[1]->position.nearEqual(Vector3(-20.0f, 0.0f, 0.0f)));
+    REQUIRE(visible[1]->range == 30.0f);
+  }
+
+  SECTION("Spot cone angles are kept in order")
+  {
+    const SPtr<GameObject> spot = scene.createGameObject("Spot");
+    SpotLightComponent& spotLight = spot->addComponent<SpotLightComponent>();
+    spotLight.setConeAngles(Degree(60.0f), Degree(30.0f));
+    REQUIRE(spotLight.getOuterConeAngle().valueDegree() == 30.0f);
+    REQUIRE(spotLight.getInnerConeAngle().valueDegree() == 30.0f);
+    spotLight.setConeAngles(Degree(20.0f), Degree(120.0f));
+    REQUIRE(spotLight.getOuterConeAngle().valueDegree() == 89.0f);
+
+    scene.updateTransforms();
+    scene.gatherLights(camera.getFrustum(), visible);
+    REQUIRE(visible.size() == 3);
+    REQUIRE(visible[2]->type == LightType::Spot);
+    REQUIRE(Math::abs(visible[2]->innerConeCos - Math::cos(Degree(20.0f))) < 1e-5f);
+    REQUIRE(Math::abs(visible[2]->outerConeCos - Math::cos(Degree(89.0f))) < 1e-5f);
+  }
+
+  SECTION("Disabling or destroying removes the light")
+  {
+    lampLight.setEnabled(false);
+    REQUIRE(scene.getLightCount() == 1);
+    lampLight.setEnabled(true);
+    REQUIRE(scene.getLightCount() == 2);
+    scene.destroyGameObject(*lamp);
+    REQUIRE(scene.getLightCount() == 1);
   }
 }
 

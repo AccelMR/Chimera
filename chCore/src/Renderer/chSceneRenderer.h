@@ -96,8 +96,9 @@ class CH_CORE_EXPORT SceneRenderer
   // The console variable text m_viewMode was parsed from, so it is parsed only on change.
   String m_viewModeText;
 
-  // Kept between frames, so gathering the visible items does not allocate.
+  // Kept between frames, so gathering the visible items and lights does not allocate.
   Vector<const RenderItem*> m_visibleItems;
+  Vector<const LightItem*> m_visibleLights;
 };
 
 } // namespace chEngineSDK

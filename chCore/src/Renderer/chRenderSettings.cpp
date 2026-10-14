@@ -26,6 +26,12 @@ ConsoleVariable<String> g_cvarViewMode(
     "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords.",
     "ViewMode");
 
+ConsoleVariable<float> g_cvarAmbient(
+    "Renderer.Ambient",
+    0.03f,
+    "Light that reaches every surface from all sides, scaled by the material occlusion.",
+    "Ambient");
+
 /*
  */
 StringView

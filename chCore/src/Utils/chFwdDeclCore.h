@@ -47,6 +47,7 @@ class SceneManager;
 class Component;
 class GameObject;
 class ModelComponent;
+struct LightItem;
 struct RenderItem;
 class Transform;
 

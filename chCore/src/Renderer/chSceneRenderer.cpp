@@ -55,8 +55,13 @@ SceneRenderer::addScenePasses(const Scene& scene,
                               RGTextureHandle output,
                               const LinearColor& clearColor)
 {
-  scene.gatherRenderItems(camera.getFrustum(), m_visibleItems);
-  const RenderView view{.camera = camera, .items = m_visibleItems, .clearColor = clearColor};
+  const Frustum& frustum = camera.getFrustum();
+  scene.gatherRenderItems(frustum, m_visibleItems);
+  scene.gatherLights(frustum, m_visibleLights);
+  const RenderView view{.camera = camera,
+                        .items = m_visibleItems,
+                        .lights = m_visibleLights,
+                        .clearColor = clearColor};
 
   switch (m_viewMode) {
     case ViewMode::Lit:

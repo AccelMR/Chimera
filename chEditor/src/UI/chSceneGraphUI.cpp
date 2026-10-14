@@ -14,6 +14,7 @@
 #include "chEditorCamera.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
+#include "chLightComponent.h"
 #include "chMath.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
@@ -39,6 +40,35 @@ isInSubtree(const GameObject* gameObject, const GameObject& ancestor)
     }
   }
   return false;
+}
+
+/*
+ * The new light goes under parent (a root object when null) and is selected, so the
+ * Inspector edits it at once.
+ */
+template <typename LightComponentType>
+void
+createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
+{
+  const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
+  gameObject->addComponent<LightComponentType>();
+  EditorSelection::setSelectedGameObject(gameObject);
+}
+
+/*
+ */
+void
+renderCreateLightItems(Scene& scene, GameObject* parent)
+{
+  if (ImGui::MenuItem("Create Directional Light")) {
+    createLight<DirectionalLightComponent>(scene, "Directional Light", parent);
+  }
+  if (ImGui::MenuItem("Create Point Light")) {
+    createLight<PointLightComponent>(scene, "Point Light", parent);
+  }
+  if (ImGui::MenuItem("Create Spot Light")) {
+    createLight<SpotLightComponent>(scene, "Spot Light", parent);
+  }
 }
 } // namespace
 
@@ -114,6 +144,7 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
     if (ImGui::MenuItem("Create Child")) {
       scene.createGameObject("GameObject", gameObject.get());
     }
+    renderCreateLightItems(scene, gameObject.get());
     if (ImGui::MenuItem("Delete")) {
       m_pendingDelete = gameObject;
     }
@@ -140,6 +171,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
     if (ImGui::MenuItem("Create Empty")) {
       scene.createGameObject("GameObject");
     }
+    renderCreateLightItems(scene, nullptr);
     ImGui::EndPopup();
   }
 }

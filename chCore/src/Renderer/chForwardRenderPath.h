@@ -17,8 +17,9 @@
 namespace chEngineSDK {
 
 /**
- * The simplest way to see the scene: one pass with a depth target that draws every item
- * with its texture and no lighting, until the deferred path exists.
+ * The simplest way to light the scene: one pass with a depth target that draws every item
+ * with its material and evaluates every light per pixel. Costs grow with lights times
+ * pixels drawn, which the deferred path avoids.
  */
 class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
 {
@@ -34,9 +35,25 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
   addPasses(RenderGraph& graph, const RenderView& view, RGTextureHandle output) override;
 
  private:
+  // Must match LightData in chLights.hlsli.
+  struct GpuLight
+  {
+    float position[3];
+    uint32 type;
+    float direction[3];
+    float range;
+    float color[3];
+    float spotScale;
+    float spotOffset;
+    float padding[3];
+  };
+  static_assert(sizeof(GpuLight) == 64);
+
   void
-  recordDraws(RenderPassContext& context, const Camera& camera,
-              Span<const RenderItem* const> items);
+  updateViewData(const RenderView& view);
+
+  void
+  recordDraws(RenderPassContext& context, Span<const RenderItem* const> items);
 
   void
   updatePipeline(Format colorFormat);
@@ -49,9 +66,15 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
   const IPipeline* m_pipeline = nullptr;
   Format m_pipelineFormat = Format::Unknown;
 
-  // Camera matrices read by the shader through the bindless heap. One per frame in flight,
-  // because the CPU writes them while the GPU may still read the previous frame's.
-  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_cameraBuffers;
+  // Camera and light data read by the shader through the bindless heap. One per frame in
+  // flight, because the CPU writes them while the GPU may still read the previous frame's.
+  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_viewBuffers;
+  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBuffers;
+  // Lights each buffer of m_lightBuffers holds; a buffer is made again, bigger, when a
+  // frame has more.
+  Array<uint32, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBufferCapacities{};
+  // Kept between frames, so converting the lights does not allocate.
+  Vector<GpuLight> m_gpuLights;
 
   // For items without a material.
   Material m_defaultMaterial;

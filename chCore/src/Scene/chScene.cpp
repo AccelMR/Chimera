@@ -131,4 +131,55 @@ Scene::gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outI
   }
 }
 
+/*
+ */
+uint32
+Scene::addLight(const LightItem& light)
+{
+  ++m_lightCount;
+
+  uint32 id = 0;
+  if (!m_freeLights.empty()) {
+    id = m_freeLights.back();
+    m_freeLights.pop_back();
+    m_lights[id] = light;
+  }
+  else {
+    id = static_cast<uint32>(m_lights.size());
+    m_lights.push_back(light);
+  }
+  m_lights[id].bInUse = true;
+  return id;
+}
+
+/*
+ */
+void
+Scene::removeLight(uint32 id)
+{
+  CH_ASSERT(id < m_lights.size() && m_lights[id].bInUse);
+  m_lights[id] = LightItem{};
+  m_freeLights.push_back(id);
+  --m_lightCount;
+}
+
+/*
+ */
+void
+Scene::gatherLights(const Frustum& frustum, Vector<const LightItem*>& outLights) const
+{
+  outLights.clear();
+  for (const LightItem& light : m_lights) {
+    if (!light.bInUse) {
+      continue;
+    }
+    // A spot is tested with the sphere of its range too: a cone test would save little for
+    // what it costs.
+    if (light.type == LightType::Directional ||
+        ShapeOverlap::frustumSphere(frustum, Sphere(light.position, light.range))) {
+      outLights.push_back(&light);
+    }
+  }
+}
+
 } // namespace chEngineSDK

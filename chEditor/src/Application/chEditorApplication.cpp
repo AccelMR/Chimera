@@ -22,12 +22,15 @@
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
 #include "chImGuiRenderer.h"
+#include "chLightComponent.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chModelAsset.h"
 #include "chPath.h"
 #include "chPlane.h"
+#include "chQuaternion.h"
 #include "chRayCast.h"
+#include "chRotator.h"
 #include "chUIHelpers.h"
 #include "chScene.h"
 #include "chSceneManager.h"
@@ -253,6 +256,12 @@ EditorApplication::initializeEditorComponents() {
                    "Failed to load scene '{0}'. Creating a new empty scene.",
                    sceneName);
     scene = sceneManager.createAndLoadScene(sceneName).lock();
+    if (scene) {
+      // A new scene starts with a sun, so what is dropped in it is lit.
+      const SPtr<GameObject> sun = scene->createGameObject("Directional Light");
+      sun->getTransform().setLocalRotation(Quaternion(Rotator(-50.0f, 30.0f, 0.0f)));
+      sun->addComponent<DirectionalLightComponent>();
+    }
   }
 
   const bool bSceneLoaded = sceneManager.setActiveScene(scene);

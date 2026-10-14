@@ -16,13 +16,14 @@
 namespace chEngineSDK {
 
 /**
- * What one camera sees in one frame. The camera and the items are read when the graph
- * runs, so they must stay alive until then.
+ * What one camera sees in one frame. The camera, the items and the lights are read when
+ * the graph runs, so they must stay alive until then.
  */
 struct RenderView
 {
   const Camera& camera;
   Span<const RenderItem* const> items;
+  Span<const LightItem* const> lights;
   LinearColor clearColor = LinearColor::Black;
 };
 
