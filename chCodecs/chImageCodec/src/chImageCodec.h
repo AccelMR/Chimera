@@ -56,7 +56,8 @@ class ImageCodec : public IAssetCodec {
   importAssetFromMemory(Span<const uint8> data,
                         const String& assetName,
                         const Path& assetFolder,
-                        StringView importedPath,
+                        const Path& sourceFile,
+                        StringView sourcePart,
                         const ImportSettings& settings) override;
 
  private:
@@ -66,7 +67,8 @@ class ImageCodec : public IAssetCodec {
                      int32 height,
                      const String& assetName,
                      const Path& assetFolder,
-                     StringView importedPath,
+                     const Path& sourceFile,
+                     StringView sourcePart,
                      const ImportSettings& settings);
 
   // The formats stb_image reads. It has no EXR support.

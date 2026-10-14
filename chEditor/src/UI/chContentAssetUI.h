@@ -9,6 +9,7 @@
 #pragma once
 
 #include "chPrerequisitesCore.h"
+#include "chEventSystem.h"
 #include "chPath.h"
 #include "chUUID.h"
 
@@ -230,5 +231,7 @@ class ContentAssetUI
   bool gridView = true;
   float gridSize = 120.0f;
   ANSICHAR searchBuffer[256] = "";
+
+  HEvent m_onAssetImported;
 };
 } // namespace chEngineSDK

@@ -15,6 +15,7 @@
 
 #include "chAssetManager.h"
 #include "chEnginePaths.h"
+#include "chImportDialog.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
@@ -104,7 +105,7 @@ MainMenuBarUI::renderImportMenu()
     for (const auto& assetType : codec->getSupportedAssetTypes()) {
       const String& typeName = assetManager.getAssetTypeName(assetType);
       if (ImGui::MenuItem(typeName.c_str())) {
-        UIHelpers::importAssetWithDialog(codec, EnginePaths::getGameAssetDirectory());
+        ImportDialog::open(*codec, EnginePaths::getGameAssetDirectory());
       }
     }
   }

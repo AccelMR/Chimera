@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/07
  * @brief
- *  The common start of every asset file: header, metadata and referenced assets.
+ *  The common start of every asset file: header, identity and referenced assets.
  */
 /************************************************************************/
 #include "chAssetFile.h"
@@ -14,17 +14,49 @@
 #include "chLogger.h"
 
 namespace chEngineSDK {
+namespace {
+// The metadata block of format version 1, as it was written with a raw copy.
+struct LegacyMetadataV1
+{
+  UUID uuid;
+  UUID assetType;
+  uint64 creationTime;
+  ANSICHAR typeName[32];
+  ANSICHAR engineVersion[16];
+  ANSICHAR name[64];
+  ANSICHAR importedPath[256];
+  ANSICHAR assetPath[256];
+};
+static_assert(sizeof(LegacyMetadataV1) == AssetFile::LEGACY_METADATA_SIZE,
+              "LegacyMetadataV1 must match the files of format version 1");
+
+/*
+ * The text before the first '\0', or the whole field when a broken file has none.
+ */
+template <SIZE_T Size>
+StringView
+fieldText(const ANSICHAR (&field)[Size]) noexcept
+{
+  SIZE_T length = 0;
+  while (length < Size && field[length] != '\0') {
+    ++length;
+  }
+  return StringView(field, length);
+}
+} // namespace
 
 /*
  */
 void
 AssetFile::writeStart(DataStream& stream,
-                      const AssetMetadata& metadata,
+                      const UUID& uuid,
+                      const UUID& assetType,
                       Span<const UUID> references)
 {
   const AssetFileHeader header;
   stream.write(&header, sizeof(header));
-  stream.write(&metadata, sizeof(metadata));
+  stream.write(&uuid, sizeof(uuid));
+  stream.write(&assetType, sizeof(assetType));
 
   const uint32 referenceCount = static_cast<uint32>(references.size());
   stream.write(&referenceCount, sizeof(referenceCount));
@@ -36,7 +68,7 @@ AssetFile::writeStart(DataStream& stream,
 /*
  */
 bool
-AssetFile::readMetadata(DataStream& stream, AssetMetadata& outMetadata)
+AssetFile::readInfo(DataStream& stream, AssetFileInfo& outInfo)
 {
   AssetFileHeader header;
   if (stream.read(&header, sizeof(header)) != sizeof(header) ||
@@ -45,22 +77,34 @@ AssetFile::readMetadata(DataStream& stream, AssetMetadata& outMetadata)
                  "Not an asset file, or saved before format version 1; import it again.");
     return false;
   }
-  if (header.formatVersion != AssetFileHeader::FORMAT_VERSION) {
-    CH_LOG_ERROR(AssetSystem, "Unsupported asset format version {0} (expected {1}).",
-                 header.formatVersion, AssetFileHeader::FORMAT_VERSION);
+  if (header.formatVersion < AssetFileHeader::OLDEST_READABLE_VERSION ||
+      header.formatVersion > AssetFileHeader::FORMAT_VERSION) {
+    CH_LOG_ERROR(AssetSystem, "Unsupported asset format version {0} (expected {1} to {2}).",
+                 header.formatVersion, AssetFileHeader::OLDEST_READABLE_VERSION,
+                 AssetFileHeader::FORMAT_VERSION);
     return false;
+  }
+  outInfo.formatVersion = header.formatVersion;
+
+  if (header.formatVersion == 1) {
+    LegacyMetadataV1 legacy;
+    if (stream.read(&legacy, sizeof(legacy)) != sizeof(legacy)) {
+      CH_LOG_ERROR(AssetSystem, "Asset file ends inside its metadata.");
+      return false;
+    }
+    outInfo.uuid = legacy.uuid;
+    outInfo.assetType = legacy.assetType;
+    outInfo.legacyCreationTime = legacy.creationTime;
+    outInfo.legacyEngineVersion = fieldText(legacy.engineVersion);
+    outInfo.legacyImportedPath = fieldText(legacy.importedPath);
+    return true;
   }
 
-  if (stream.read(&outMetadata, sizeof(outMetadata)) != sizeof(outMetadata)) {
-    CH_LOG_ERROR(AssetSystem, "Asset file ends inside its metadata.");
+  if (stream.read(&outInfo.uuid, sizeof(UUID)) != sizeof(UUID) ||
+      stream.read(&outInfo.assetType, sizeof(UUID)) != sizeof(UUID)) {
+    CH_LOG_ERROR(AssetSystem, "Asset file ends inside its header.");
     return false;
   }
-  // The names are used as C strings, so a file without the terminator must not overrun them.
-  outMetadata.typeName[sizeof(outMetadata.typeName) - 1] = '\0';
-  outMetadata.engineVersion[sizeof(outMetadata.engineVersion) - 1] = '\0';
-  outMetadata.name[sizeof(outMetadata.name) - 1] = '\0';
-  outMetadata.importedPath[sizeof(outMetadata.importedPath) - 1] = '\0';
-  outMetadata.assetPath[sizeof(outMetadata.assetPath) - 1] = '\0';
   return true;
 }
 

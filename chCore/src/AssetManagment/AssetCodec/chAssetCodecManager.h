@@ -43,7 +43,8 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
                         StringView extension,
                         const String& assetName,
                         const Path& assetFolder,
-                        StringView importedPath,
+                        const Path& sourceFile,
+                        StringView sourcePart,
                         const ImportSettings& settings = {});
 
   template<typename AssetCodecType>

@@ -67,10 +67,11 @@ class MeshCodec  : public IAssetCodec {
   struct ImportContext
   {
     const aiScene* scene = nullptr;
-    // Absolute, so it can be stored as the imported path of everything made from it.
+    // Absolute, so it can be stored as the source of everything made from it.
     Path sourceFile;
     Path assetFolder;
     String modelName;
+    ImportSettings settings;
   };
 
   NODISCARD ModelMaterialSlot

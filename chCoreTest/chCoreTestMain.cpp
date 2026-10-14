@@ -7,22 +7,27 @@
  */
 /************************************************************************/
 #include <cstddef>
+#include <cstring>
 
 #include "chBox.h"
 #include "chCamera.h"
 #include "chAngle.h"
 #include "chAssetFile.h"
+#include "chAssetMeta.h"
+#include "chConfigFile.h"
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
 #include "chITexture.h"
 #include "chITextureView.h"
 #include "chLightComponent.h"
 #include "chFileStream.h"
+#include "chFileSystem.h"
 #include "chMaterial.h"
 #include "chMaterialAsset.h"
 #include "chMath.h"
 #include "chMatrixHelpers.h"
 #include "chMesh.h"
+#include "chMeshSplit.h"
 #include "chModel.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
@@ -905,26 +910,25 @@ createTestMaterialAsset(StringView name)
 
 TEST_CASE("chCore - Asset file start")
 {
-  AssetMetadata metadata;
-  metadata.uuid = chEngineSDK::UUID::createRandom();
-  metadata.assetType = AssetTypeTraits<MaterialAsset>::getTypeId();
-  StringUtils::copyToBuffer(metadata.name, "Rock");
+  const chEngineSDK::UUID uuid = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID assetType = AssetTypeTraits<MaterialAsset>::getTypeId();
   const chEngineSDK::UUID references[] = {chEngineSDK::UUID::createRandom(),
                                           chEngineSDK::UUID::createRandom()};
 
   MemoryDataStream stream(4096);
-  AssetFile::writeStart(stream, metadata, references);
+  AssetFile::writeStart(stream, uuid, assetType, references);
   const SIZE_T referenceCountOffset = stream.tell() - sizeof(references) - sizeof(uint32);
-  REQUIRE(referenceCountOffset == AssetFile::METADATA_OFFSET + sizeof(AssetMetadata));
+  // Only the identity follows the header; the name and folder come from the file's place.
+  REQUIRE(referenceCountOffset == sizeof(AssetFileHeader) + 2 * sizeof(chEngineSDK::UUID));
   AssetFile::writeString(stream, "Slot");
   stream.seek(0);
 
-  AssetMetadata readMetadata;
+  AssetFileInfo info;
   Vector<chEngineSDK::UUID> readReferences;
-  REQUIRE(AssetFile::readMetadata(stream, readMetadata));
-  REQUIRE(readMetadata.uuid == metadata.uuid);
-  REQUIRE(readMetadata.assetType == metadata.assetType);
-  REQUIRE(StringUtils::equals(readMetadata.name, "Rock"));
+  REQUIRE(AssetFile::readInfo(stream, info));
+  REQUIRE(info.formatVersion == AssetFileHeader::FORMAT_VERSION);
+  REQUIRE(info.uuid == uuid);
+  REQUIRE(info.assetType == assetType);
   REQUIRE(AssetFile::readReferences(stream, readReferences));
   REQUIRE(readReferences.size() == 2);
   REQUIRE(readReferences[0] == references[0]);
@@ -935,11 +939,52 @@ TEST_CASE("chCore - Asset file start")
 
   SECTION("A file without the magic number is rejected")
   {
-    MemoryDataStream other(sizeof(AssetFileHeader) + sizeof(AssetMetadata));
+    MemoryDataStream other(64);
     const uint32 junk[2] = {0x12345678, AssetFileHeader::FORMAT_VERSION};
     other.write(junk, sizeof(junk));
     other.seek(0);
-    REQUIRE_FALSE(AssetFile::readMetadata(other, readMetadata));
+    REQUIRE_FALSE(AssetFile::readInfo(other, info));
+  }
+
+  SECTION("A newer format version is rejected")
+  {
+    MemoryDataStream other(64);
+    const uint32 header[2] = {AssetFileHeader::MAGIC, AssetFileHeader::FORMAT_VERSION + 1};
+    other.write(header, sizeof(header));
+    other.seek(0);
+    REQUIRE_FALSE(AssetFile::readInfo(other, info));
+  }
+
+  SECTION("Format version 1 is still read, with its editor data")
+  {
+    // The 664-byte metadata block of version 1: two UUIDs, the creation time, then the type
+    // name (32), engine version (16), name (64), imported path (256) and folder (256).
+    Vector<uint8> legacy(AssetFile::LEGACY_METADATA_SIZE, 0);
+    const uint64 creationTime = 1234;
+    std::memcpy(legacy.data(), &uuid, sizeof(uuid));
+    std::memcpy(legacy.data() + 16, &assetType, sizeof(assetType));
+    std::memcpy(legacy.data() + 32, &creationTime, sizeof(creationTime));
+    std::memcpy(legacy.data() + 72, "0.1.0", 5);
+    std::memcpy(legacy.data() + 152, "C:/Art/Rock.gltf#Stone", 22);
+
+    MemoryDataStream other(1024);
+    const uint32 header[2] = {AssetFileHeader::MAGIC, 1};
+    other.write(header, sizeof(header));
+    other.write(legacy.data(), legacy.size());
+    const uint32 noReferences = 0;
+    other.write(&noReferences, sizeof(noReferences));
+    other.seek(0);
+
+    AssetFileInfo legacyInfo;
+    REQUIRE(AssetFile::readInfo(other, legacyInfo));
+    REQUIRE(legacyInfo.formatVersion == 1);
+    REQUIRE(legacyInfo.uuid == uuid);
+    REQUIRE(legacyInfo.assetType == assetType);
+    REQUIRE(legacyInfo.legacyCreationTime == creationTime);
+    REQUIRE(legacyInfo.legacyEngineVersion == "0.1.0");
+    REQUIRE(legacyInfo.legacyImportedPath == "C:/Art/Rock.gltf#Stone");
+    REQUIRE(AssetFile::readReferences(other, readReferences));
+    REQUIRE(readReferences.empty());
   }
 
   SECTION("Broken lengths are rejected")
@@ -953,6 +998,138 @@ TEST_CASE("chCore - Asset file start")
 
     stream.seek(referenceCountOffset + sizeof(uint32) + sizeof(references));
     REQUIRE_FALSE(AssetFile::readString(stream, text, 3));
+  }
+}
+
+#if USING(CH_EDITOR)
+TEST_CASE("chCore - Asset meta file")
+{
+  const Path project = FileSystem::absolutePath(Path("MetaTestProject"));
+  ImportSettings settings;
+  settings.srgb = false;
+  settings.expandMode = ModelExpandMode::PerMesh;
+  settings.splitParts = true;
+  settings.autoAlphaMask = false;
+  const AssetEditorData data{.creationTime = 1760000000,
+                             .engineVersion = "1.2.3",
+                             .sourceFile = project.join(Path("../Art/Sponza.gltf")),
+                             .sourcePart = "Material #1",
+                             .importSettings = settings};
+
+  ConfigFile file;
+  AssetMeta::write(data, project, file);
+  // Relative to the project, so the project can move together with its sources.
+  REQUIRE(file.getValue("Import", "Source"));
+  REQUIRE(*file.getValue("Import", "Source") == "../Art/Sponza.gltf");
+  REQUIRE(*file.getValue("Import", "ExpandMode") == "PerMesh");
+
+  ConfigFile parsed;
+  parsed.parse(file.toText());
+  AssetEditorData read;
+  AssetMeta::read(parsed, project, read);
+  REQUIRE(read.creationTime == data.creationTime);
+  REQUIRE(read.engineVersion == "1.2.3");
+  REQUIRE(read.sourceFile == FileSystem::absolutePath(data.sourceFile));
+  REQUIRE(read.sourcePart == "Material #1");
+  REQUIRE_FALSE(read.importSettings.srgb);
+  REQUIRE(read.importSettings.generateMips);
+  REQUIRE(read.importSettings.expandMode == ModelExpandMode::PerMesh);
+  REQUIRE(read.importSettings.splitParts);
+  REQUIRE_FALSE(read.importSettings.autoAlphaMask);
+
+  SECTION("Missing and broken values keep the defaults")
+  {
+    ConfigFile broken;
+    broken.parse("[Import]\nExpandMode=Sideways\nSplitParts=maybe\n");
+    AssetEditorData defaults;
+    AssetMeta::read(broken, project, defaults);
+    REQUIRE(defaults.creationTime == 0);
+    REQUIRE(defaults.sourceFile.empty());
+    REQUIRE(defaults.importSettings.expandMode == ModelExpandMode::Single);
+    REQUIRE_FALSE(defaults.importSettings.splitParts);
+  }
+
+  REQUIRE(AssetMeta::getPath(Path("/Game/Rock.chAss")) == Path("/Game/Rock.chAss.meta"));
+}
+#endif // USING(CH_EDITOR)
+
+namespace {
+
+// A square made of two triangles at x, with its corners repeated for each triangle (no
+// shared index), like the faces of a mesh cut along UV seams.
+void
+appendSquare(Vector<VertexStatic>& vertices, Vector<uint16>& indices, float x, float size)
+{
+  const Vector3 corners[4] = {Vector3(x, 0.0f, 0.0f), Vector3(x + size, 0.0f, 0.0f),
+                              Vector3(x + size, size, 0.0f), Vector3(x, size, 0.0f)};
+  const uint32 order[6] = {0, 1, 2, 0, 2, 3};
+  for (const uint32 corner : order) {
+    indices.push_back(static_cast<uint16>(vertices.size()));
+    vertices.push_back({corners[corner], Vector3::UP, Vector2(0.0f, 0.0f),
+                        Vector4(1.0f, 0.0f, 0.0f, 1.0f)});
+  }
+}
+
+SPtr<Mesh>
+createSquaresMesh(Span<const float> starts, float size)
+{
+  Vector<VertexStatic> vertices;
+  Vector<uint16> indices;
+  for (const float x : starts) {
+    appendSquare(vertices, indices, x, size);
+  }
+  SPtr<Mesh> mesh = chMakeShared<Mesh>();
+  mesh->setVertexData(vertices);
+  mesh->setIndexData(indices);
+  mesh->setMaterialSlot(3);
+  return mesh;
+}
+
+} // namespace
+
+TEST_CASE("chCore - Mesh split")
+{
+  SECTION("Triangles that only share positions stay one piece")
+  {
+    const float starts[] = {0.0f};
+    const SPtr<Mesh> mesh = createSquaresMesh(starts, 1.0f);
+    const Vector<SPtr<Mesh>> parts = MeshSplit::splitParts(mesh);
+    REQUIRE(parts.size() == 1);
+    REQUIRE(parts[0] == mesh);
+  }
+
+  SECTION("Pieces apart become meshes of their own")
+  {
+    const float starts[] = {0.0f, 5.0f, 10.0f};
+    const Vector<SPtr<Mesh>> parts = MeshSplit::splitParts(createSquaresMesh(starts, 1.0f));
+    REQUIRE(parts.size() == 3);
+    for (SIZE_T i = 0; i < parts.size(); ++i) {
+      const Mesh& part = *parts[i];
+      REQUIRE(part.getMaterialSlot() == 3);
+      REQUIRE(part.getIndexCount() == 6);
+      REQUIRE(part.getVertexCount() == 6);
+      REQUIRE(part.getVertexLayout().getVertexSize() == sizeof(VertexStatic));
+      // In the order the triangles meet them.
+      REQUIRE(part.getBounds().center.nearEqual(Vector3(starts[i] + 0.5f, 0.5f, 0.0f)));
+    }
+  }
+
+  SECTION("Pieces whose boxes overlap or touch are joined")
+  {
+    // The second square starts where the first ends; the third overlaps the second.
+    const float starts[] = {0.0f, 1.0f, 1.5f, 20.0f};
+    const Vector<SPtr<Mesh>> parts = MeshSplit::splitParts(createSquaresMesh(starts, 1.0f));
+    REQUIRE(parts.size() == 2);
+    REQUIRE(parts[0]->getIndexCount() == 18);
+    REQUIRE(parts[1]->getIndexCount() == 6);
+  }
+
+  SECTION("A mesh without positions is kept")
+  {
+    const SPtr<Mesh> empty = chMakeShared<Mesh>();
+    const Vector<SPtr<Mesh>> parts = MeshSplit::splitParts(empty);
+    REQUIRE(parts.size() == 1);
+    REQUIRE(parts[0] == empty);
   }
 }
 

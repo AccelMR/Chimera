@@ -14,24 +14,13 @@
 #include "chUUID.h"
 #include "chIAsset.h"
 #include "chAssetManager.h"
+#include "chImportSettings.h"
 #include "chPath.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
 
 class IAsset;
-
-/**
- * Exists so whoever starts an import (the user, or a codec importing what a file uses) can
- * say how the data is meant to be used. Each codec reads only the fields it understands.
- */
-struct ImportSettings
-{
-  // Textures: color data (base color, emissive) is stored as sRGB, so the GPU turns it into
-  // linear values when it samples; normals and masks are data and stay linear.
-  bool srgb = true;
-  bool generateMips = true;
-};
 
 /**
  * Turns an external file (image, mesh...) into an engine asset. Codecs live in plugins
@@ -63,20 +52,22 @@ class CH_CORE_EXPORT IAssetCodec {
 
   /**
    * Same as importAsset for a file already in memory (a texture inside a model file).
-   * importedPath names the source in the metadata, so a later import can find the asset.
-   * Codecs that cannot read memory return null.
+   * sourceFile and sourcePart name where the data came from in the .meta file, so a later
+   * import can find the asset. Codecs that cannot read memory return null.
    */
   virtual SPtr<IAsset>
   importAssetFromMemory(Span<const uint8> data,
                         const String& assetName,
                         const Path& assetFolder,
-                        StringView importedPath,
+                        const Path& sourceFile,
+                        StringView sourcePart,
                         const ImportSettings& settings)
   {
     CH_PARAMETER_UNUSED(data);
     CH_PARAMETER_UNUSED(assetName);
     CH_PARAMETER_UNUSED(assetFolder);
-    CH_PARAMETER_UNUSED(importedPath);
+    CH_PARAMETER_UNUSED(sourceFile);
+    CH_PARAMETER_UNUSED(sourcePart);
     CH_PARAMETER_UNUSED(settings);
     return nullptr;
   }
@@ -106,11 +97,17 @@ class CH_CORE_EXPORT IAssetCodec {
   }
 
   /**
-   * Saves the asset and adds it to the AssetManager.
+   * Records where the asset came from and how (its .meta file), saves it and adds it to the
+   * AssetManager.
    */
   NODISCARD bool
-  saveAndRegister(const SPtr<IAsset>& asset)
+  saveAndRegister(const SPtr<IAsset>& asset,
+                  const Path& sourceFile,
+                  StringView sourcePart,
+                  const ImportSettings& settings)
   {
+    CH_ASSERT(asset && "Asset cannot be null");
+    asset->m_editorData = AssetMeta::makeNew(sourceFile, sourcePart, settings);
     if (!AssetManager::instance().saveAsset(asset)) {
       return false;
     }
@@ -124,7 +121,7 @@ class CH_CORE_EXPORT IAssetCodec {
    */
   template <typename AssetType>
   NODISCARD static AssetMetadata
-  makeMetadata(StringView assetName, StringView importedPath, const Path& assetFolder);
+  makeMetadata(StringView assetName, const Path& assetFolder);
 
   /**
    * The form extensions are stored and looked up in: lowercase, without the dot.
@@ -150,17 +147,13 @@ class CH_CORE_EXPORT IAssetCodec {
  */
 template <typename AssetType>
 AssetMetadata
-IAssetCodec::makeMetadata(StringView assetName, StringView importedPath, const Path& assetFolder)
+IAssetCodec::makeMetadata(StringView assetName, const Path& assetFolder)
 {
   AssetMetadata metadata;
   metadata.uuid = UUID::createRandom();
   metadata.assetType = AssetTypeTraits<AssetType>::getTypeId();
-  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  StringUtils::copyToBuffer(metadata.typeName, AssetTypeTraits<AssetType>::getTypeName());
-  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
   StringUtils::copyToBuffer(metadata.name,
                             AssetManager::instance().makeUniqueAssetName(assetFolder, assetName));
-  StringUtils::copyToBuffer(metadata.importedPath, importedPath);
   StringUtils::copyToBuffer(metadata.assetPath, assetFolder.toString());
   return metadata;
 }

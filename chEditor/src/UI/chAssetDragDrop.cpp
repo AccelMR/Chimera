@@ -19,6 +19,7 @@
 #include "chMaterialAsset.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
+#include "chModelExpand.h"
 #include "chScene.h"
 #include "chTextureAsset.h"
 
@@ -138,6 +139,14 @@ AssetDragDrop::createModelObject(Scene& scene, const ModelAsset& modelAsset,
 
   SPtr<GameObject> gameObject = scene.createGameObject(modelAsset.getName(), parent);
   gameObject->addComponent<ModelComponent>(modelAsset.getModel());
+
+  // Alt places the whole model, whatever its import asked for; it can still be split later.
+  const ModelExpandMode mode = ImGui::GetIO().KeyAlt
+                                   ? ModelExpandMode::Single
+                                   : modelAsset.getEditorData().importSettings.expandMode;
+  if (mode != ModelExpandMode::Single) {
+    ModelExpand::expand(scene, *gameObject, mode);
+  }
   EditorSelection::setSelectedGameObject(gameObject);
   return gameObject;
 }

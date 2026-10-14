@@ -8,7 +8,6 @@
 /************************************************************************/
 #include "chContentAssetUI.h"
 
-#include <chrono>
 #include <cstring>
 #include <ctime>
 
@@ -22,6 +21,7 @@
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chImGuiRenderer.h"
+#include "chImportDialog.h"
 #include "chITexture.h"
 #include "chEditorSelection.h"
 #include "chEnginePaths.h"
@@ -114,6 +114,8 @@ shortenName(const ANSICHAR* name, ShortName& outBuffer)
 ContentAssetUI::ContentAssetUI()
 {
   refreshAssets();
+  m_onAssetImported =
+      ImportDialog::onAssetImported([this](const SPtr<IAsset>&) { refreshAssets(); });
 }
 
 /*
@@ -599,10 +601,8 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
     return;
   }
 
-  auto createdAt = asset->getCreatedAt();
-  auto timePoint =
-      std::chrono::system_clock::time_point(std::chrono::system_clock::duration(createdAt));
-  std::time_t createdAtTimeT = std::chrono::system_clock::to_time_t(timePoint);
+  const AssetEditorData& editorData = asset->getEditorData();
+  const std::time_t createdAtTimeT = static_cast<std::time_t>(editorData.creationTime);
 
   // std::localtime returns a pointer to shared static data, so it is not thread-safe; the
   // platform versions fill a local struct instead.
@@ -613,7 +613,7 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
 #else
   const bool hasLocalTime = localtime_r(&createdAtTimeT, &timeInfo) != nullptr;
 #endif
-  if (hasLocalTime) {
+  if (editorData.creationTime != 0 && hasLocalTime) {
     std::strftime(createdAtStr, sizeof(createdAtStr), "%Y-%m-%d %H:%M:%S", &timeInfo);
   }
   else {
@@ -627,7 +627,8 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
   ImGui::Text("Type UUID: %s", asset->getAssetTypeId().toString().c_str());
   ImGui::Text("Created At: %s", createdAtStr);
   ImGui::Text("State: %s", getAssetStateString(asset->getState()));
-  ImGui::Text("Imported Path: %s", asset->getImportedPath());
+  ImGui::Text("Source: %s%s%s", editorData.sourceFile.toString().c_str(),
+              editorData.sourcePart.empty() ? "" : " # ", editorData.sourcePart.c_str());
   ImGui::Text("Asset Path: %s", asset->getAssetPath());
   ImGui::EndTooltip();
 }
@@ -694,10 +695,13 @@ ContentAssetUI::renderDeleteConfirmationPopup()
       ImGui::Text("This action cannot be undone!");
 
       if (ImGui::Button("Delete", ImVec2(120, 0))) {
-        const String fullAssetToDelete =
-            StringUtils::format("{0}/{1}.chAss", m_assetToDelete->getAssetPath(),
-                                m_assetToDelete->getName());
-        const bool bRemovedCorrectly = FileSystem::removeFile(Path(fullAssetToDelete));
+        const Path assetFile = m_assetToDelete->getFilePath();
+        const bool bRemovedCorrectly = FileSystem::removeFile(assetFile);
+        const Path metaFile = AssetMeta::getPath(assetFile);
+        if (bRemovedCorrectly && FileSystem::isFile(metaFile) &&
+            !FileSystem::removeFile(metaFile)) {
+          CH_LOG_WARNING(ContentAssetUILog, "Failed to delete {0}", metaFile);
+        }
 
         if (bRemovedCorrectly) {
           m_assetThumbnails.erase(m_assetToDelete->getUUID());
@@ -1201,9 +1205,7 @@ ContentAssetUI::renderEmptyAreaContextMenu()
       for (const auto& assetType : codec->getSupportedAssetTypes()) {
         const String& codecTypeName = assetManager.getAssetTypeName(assetType);
         if (ImGui::MenuItem(codecTypeName.c_str())) {
-          if (UIHelpers::importAssetWithDialog(codec, getCurrentFolderPath())) {
-            refreshAssets();
-          }
+          ImportDialog::open(*codec, getCurrentFolderPath());
           ImGui::EndMenu();
           ImGui::EndPopup();
           return;

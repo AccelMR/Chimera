@@ -110,6 +110,56 @@ Mesh::raycast(const Ray& localRay, float& outDistance) const
 
 /*
  */
+bool
+Mesh::readPositions(Vector<Vector3>& outPositions) const
+{
+  outPositions.clear();
+  const uint8* firstPosition = getFirstPosition();
+  if (!firstPosition) {
+    return false;
+  }
+  const uint32 stride = m_vertexLayout.getVertexSize();
+  outPositions.resize(m_vertexCount);
+  for (uint32 i = 0; i < m_vertexCount; ++i) {
+    outPositions[i] = readPositionAt(firstPosition, stride, i);
+  }
+  return true;
+}
+
+/*
+ */
+bool
+Mesh::readIndices(Vector<uint32>& outIndices) const
+{
+  outIndices.clear();
+  if (m_indexCount == 0) {
+    outIndices.resize(m_vertexCount);
+    for (uint32 i = 0; i < m_vertexCount; ++i) {
+      outIndices[i] = i;
+    }
+    return true;
+  }
+
+  const bool bShort = m_indexType == IndexType::UInt16;
+  const SIZE_T indexSize = bShort ? sizeof(uint16) : sizeof(uint32);
+  if (indexSize * m_indexCount > m_indexData.size()) {
+    return false;
+  }
+  outIndices.resize(m_indexCount);
+  if (!bShort) {
+    std::memcpy(outIndices.data(), m_indexData.data(), indexSize * m_indexCount);
+    return true;
+  }
+  for (uint32 i = 0; i < m_indexCount; ++i) {
+    uint16 index;
+    std::memcpy(&index, m_indexData.data() + i * indexSize, sizeof(index));
+    outIndices[i] = index;
+  }
+  return true;
+}
+
+/*
+ */
 const uint8*
 Mesh::getFirstPosition() const
 {

@@ -104,6 +104,13 @@ class CH_UTILITY_EXPORT FileSystem
   NODISCARD static Path
   absolutePath(const Path& path);
 
+  /**
+   *   Returns path written from basePath ("../Art/rock.png"), both resolved first like
+   *   absolutePath. Empty when there is no such form (another drive on Windows).
+   **/
+  NODISCARD static Path
+  relativePath(const Path& basePath, const Path& path);
+
   NODISCARD static bool
   isFile(const Path& path);
 

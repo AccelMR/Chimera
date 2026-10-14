@@ -60,9 +60,8 @@ ImageCodec::importAsset(const Path& filePath,
     return nullptr;
   }
 
-  const Path importedPath = FileSystem::absolutePath(filePath);
   return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
-                            importedPath.toString(), settings);
+                            FileSystem::absolutePath(filePath), StringView(), settings);
 }
 
 /*
@@ -71,7 +70,8 @@ SPtr<IAsset>
 ImageCodec::importAssetFromMemory(Span<const uint8> data,
                                   const String& assetName,
                                   const Path& assetFolder,
-                                  StringView importedPath,
+                                  const Path& sourceFile,
+                                  StringView sourcePart,
                                   const ImportSettings& settings) {
   int32 width = 0;
   int32 height = 0;
@@ -80,13 +80,13 @@ ImageCodec::importAssetFromMemory(Span<const uint8> data,
                                         &height, &channels, STBI_rgb_alpha);
   Vector<uint8> imageData = ImageImpoterHelpers::takeImage(pixels, width, height);
   if (imageData.empty()) {
-    CH_LOG_ERROR(ImageCodecLog, "Failed to read image {0}: {1}", importedPath,
-                 stbi_failure_reason());
+    CH_LOG_ERROR(ImageCodecLog, "Failed to read image {0} of {1}: {2}", sourcePart,
+                 sourceFile, stbi_failure_reason());
     return nullptr;
   }
 
   return createTextureAsset(std::move(imageData), width, height, assetName, assetFolder,
-                            importedPath, settings);
+                            sourceFile, sourcePart, settings);
 }
 
 /*
@@ -97,12 +97,13 @@ ImageCodec::createTextureAsset(Vector<uint8> pixels,
                                int32 height,
                                const String& assetName,
                                const Path& assetFolder,
-                               StringView importedPath,
+                               const Path& sourceFile,
+                               StringView sourcePart,
                                const ImportSettings& settings) {
   CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
 
   const AssetMetadata metadata =
-      makeMetadata<TextureAsset>(assetName, importedPath, assetFolder);
+      makeMetadata<TextureAsset>(assetName, assetFolder);
   const uint32 textureWidth = static_cast<uint32>(width);
   const uint32 textureHeight = static_cast<uint32>(height);
   const uint32 mipLevels =
@@ -113,13 +114,13 @@ ImageCodec::createTextureAsset(Vector<uint8> pixels,
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
       metadata, std::move(pixels), textureWidth, textureHeight, format, mipLevels);
 
-  if (!saveAndRegister(textureAsset)) {
+  if (!saveAndRegister(textureAsset, sourceFile, sourcePart, settings)) {
     CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: {0}", assetName);
     return nullptr;
   }
 
   CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", textureAsset->getName(),
-              importedPath);
+              sourceFile);
   return textureAsset;
 }
 

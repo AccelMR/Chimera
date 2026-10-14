@@ -61,7 +61,8 @@ AssetCodecManager::importAssetFromMemory(Span<const uint8> data,
                                          StringView extension,
                                          const String& assetName,
                                          const Path& assetFolder,
-                                         StringView importedPath,
+                                         const Path& sourceFile,
+                                         StringView sourcePart,
                                          const ImportSettings& settings)
 {
   CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
@@ -71,7 +72,8 @@ AssetCodecManager::importAssetFromMemory(Span<const uint8> data,
     CH_LOG_ERROR(AssetCodecSystem, "No codec found for file extension {0}", extension);
     return nullptr;
   }
-  return codec->importAssetFromMemory(data, assetName, assetFolder, importedPath, settings);
+  return codec->importAssetFromMemory(data, assetName, assetFolder, sourceFile, sourcePart,
+                                      settings);
 }
 
 /*

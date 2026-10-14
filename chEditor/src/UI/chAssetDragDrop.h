@@ -52,6 +52,7 @@ class AssetDragDrop
 
   /**
    * Adds a GameObject with the model under parent (a root object when null) and selects it.
+   * The model is split as its import settings say, unless Alt is held.
    */
   static SPtr<GameObject>
   createModelObject(Scene& scene, const ModelAsset& modelAsset, GameObject* parent);

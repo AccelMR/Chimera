@@ -13,8 +13,6 @@
 
 #include "chPrerequisitesCore.h"
 
-#include <chrono>
-
 #include "chAssetRegister.h"
 #include "chEnginePaths.h"
 #include "chEventSystem.h"
@@ -137,11 +135,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   removeAsset(const UUID& assetUUID);
 
   /**
-   * The asset imported from this source (as stored in its metadata), or null. Lets an
-   * import reuse what an earlier one made instead of making a copy. Walks every asset.
+   * The asset imported from this source file and part (as stored in its .meta file), or
+   * null. Lets an import reuse what an earlier one made instead of making a copy. Walks
+   * every asset.
    */
   NODISCARD SPtr<IAsset>
-  findAssetByImportedPath(StringView importedPath) const;
+  findAssetBySource(const Path& sourceFile, StringView sourcePart) const;
 
   /**
    * The name, cut to fit the metadata, plus "_1", "_2"... when an asset in that folder (in
@@ -184,8 +183,11 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
     m_assets[asset->getUUID()] = asset;
   }
 
+  /**
+   * Reads only the start of the file; the name and the folder come from where it is.
+   */
   SPtr<IAsset>
-  lazyDeserialize(const SPtr<DataStream>& stream);
+  lazyLoadAssetFile(const Path& file);
 
   void
   cacheSceneAssets();
@@ -240,9 +242,6 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   AssetMetadata metadata;
   metadata.uuid = refUUID;
   metadata.assetType = assetUUID;
-  metadata.creationTime = std::chrono::system_clock::now().time_since_epoch().count();
-  StringUtils::copyToBuffer(metadata.typeName, AssetTypeName);
-  StringUtils::copyToBuffer(metadata.engineVersion, CH_ENGINE_VERSION_STRING);
   StringUtils::copyToBuffer(metadata.name, name);
   StringUtils::copyToBuffer(metadata.assetPath, assetPath.toString());
 
@@ -260,6 +259,9 @@ AssetManager::createAsset(const String& name, const Path& assetPath) {
   // Its data is the default made in memory, so loading it from a file that does not exist
   // yet must not be tried.
   asset->m_state = AssetState::Loaded;
+#if USING(CH_EDITOR)
+  asset->m_editorData = AssetMeta::makeNew(Path(), StringView(), ImportSettings{});
+#endif // USING(CH_EDITOR)
 
   // DeleteMe
   m_loadedAssets[refUUID] = asset;

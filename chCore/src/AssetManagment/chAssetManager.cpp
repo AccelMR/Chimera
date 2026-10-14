@@ -12,6 +12,8 @@
 
 #include "chAssetManager.h"
 
+#include <chrono>
+
 #include "chAssetFile.h"
 #include "chTypeTraits.h"
 #include "chEnginePaths.h"
@@ -200,45 +202,14 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
     return;
   }
 
-  Vector<Path> assetFiles;
-  Vector<Path> assetDirectories;
-  // FileSystem::getChildren(directory, assetFiles, assetDirectories);
-
   FileSystem::forEachFileChildRecursive(directory, [&](const Path& file) {
     if (file.getExtension() != EnginePaths::getEngineAssetExtension()) {
-      CH_LOG_DEBUG(AssetSystem, "Skipping non-asset file: {0}", file.toString());
       return;
     }
-    SPtr<DataStream> stream = FileSystem::openFile(file, true);
-    if (!stream) {
-      CH_LOG_ERROR(AssetSystem, "Failed to open asset file: {0}", file.toString());
-      return;
-    }
-    SPtr<IAsset> asset = lazyDeserialize(stream);
+    SPtr<IAsset> asset = lazyLoadAssetFile(file);
     if (!asset) {
       CH_LOG_ERROR(AssetSystem, "Failed to lazy load asset from file: {0}", file.toString());
       return;
-    }
-    stream->close();
-
-    // The stored folder must match where the file really is. This also fixes files
-    // moved by hand and assets saved before virtual paths, which stored "Assets/...".
-    const Path assetDirectory = FileSystem::toVirtualPath(file).getDirectory();
-
-    if (!StringUtils::equals(asset->getAssetPath(), assetDirectory.toString())) {
-      CH_LOG_WARNING(AssetSystem,
-                       "Asset path mismatch for {0}: stored {1}, found {2}.\n"
-                       "Will update asset path to match file location.",
-                       asset->getName(),
-                       asset->getAssetPath(),
-                       assetDirectory);
-
-      asset->setAssetPath(assetDirectory.toString().c_str());
-      //TODO: this is nasty fix it.
-      // we can probably set a dirtyu flag and then save it later?
-      // Main issue ius that we are soft loading here so model data does not exist yet.
-      // This is a hacky fix, we should probably have a better way to handle this
-      asset->updateMetadata(asset->m_metadata);
     }
 
     m_assets[asset->getUUID()] = asset;
@@ -298,10 +269,11 @@ AssetManager::removeAsset(const UUID& assetUUID) {
 /*
  */
 SPtr<IAsset>
-AssetManager::findAssetByImportedPath(StringView importedPath) const
+AssetManager::findAssetBySource(const Path& sourceFile, StringView sourcePart) const
 {
   for (const auto& [uuid, asset] : m_assets) {
-    if (importedPath == asset->getImportedPath()) {
+    const AssetEditorData& editorData = asset->getEditorData();
+    if (editorData.sourceFile == sourceFile && editorData.sourcePart == sourcePart) {
       return asset;
     }
   }
@@ -351,22 +323,36 @@ AssetManager::makeUniqueAssetName(const Path& folder, StringView name) const
 /*
  */
 SPtr<IAsset>
-AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
+AssetManager::lazyLoadAssetFile(const Path& file) {
+  SPtr<DataStream> stream = FileSystem::openFile(file, true);
   if (!stream || !stream->isReadable()) {
-    CH_LOG_ERROR(AssetSystem, "Invalid data stream for deserializing asset");
+    CH_LOG_ERROR(AssetSystem, "Failed to open asset file: {0}", file.toString());
     return nullptr;
+  }
+
+  AssetFileInfo info;
+  const bool bReadInfo = AssetFile::readInfo(*stream, info);
+  stream->close();
+  if (!bReadInfo) {
+    return nullptr;
+  }
+
+  auto it = m_assets.find(info.uuid);
+  if (it != m_assets.end()) {
+    CH_LOG(AssetSystem, Debug, "Asset {0} already exists, reusing existing instance",
+           it->second->getName());
+    return it->second;
   }
 
   AssetMetadata metadata;
-  if (!AssetFile::readMetadata(*stream, metadata)) {
+  metadata.uuid = info.uuid;
+  metadata.assetType = info.assetType;
+  const String name = file.getFileName(false);
+  const String folder = FileSystem::toVirtualPath(file).getDirectory().toString();
+  if (!StringUtils::copyToBuffer(metadata.name, name) ||
+      !StringUtils::copyToBuffer(metadata.assetPath, folder)) {
+    CH_LOG_ERROR(AssetSystem, "Asset file name or folder is too long: {0}", file);
     return nullptr;
-  }
-
-  auto it = m_assets.find(metadata.uuid);
-  if (it != m_assets.end()) {
-    CH_LOG(AssetSystem, Debug, "Asset {0} already exists, reusing existing instance",
-           metadata.name);
-    return it->second;
   }
 
   CH_ASSERT(m_assetRegister);
@@ -377,11 +363,35 @@ AssetManager::lazyDeserialize(const SPtr<DataStream>& stream) {
     return nullptr;
   }
 
-  SPtr<IAsset> asset = creator(metadata);
-  if (!asset->validateMetadata(metadata)) {
+  if (!IAsset::validateMetadata(metadata)) {
     CH_LOG_ERROR(AssetSystem, "Invalid asset metadata: {0}", metadata.name);
     return nullptr;
   }
+  SPtr<IAsset> asset = creator(metadata);
+
+#if USING(CH_EDITOR)
+  if (!AssetMeta::load(file, asset->m_editorData) && info.formatVersion == 1) {
+    // Files of format version 1 kept this data inside; it moves to the .meta file, and the
+    // asset file itself loses it the next time it is saved.
+    AssetEditorData& editorData = asset->m_editorData;
+    const auto legacyTime =
+        std::chrono::system_clock::time_point(std::chrono::system_clock::duration(
+            static_cast<std::chrono::system_clock::rep>(info.legacyCreationTime)));
+    editorData.creationTime = static_cast<uint64>(
+        std::chrono::duration_cast<std::chrono::seconds>(legacyTime.time_since_epoch())
+            .count());
+    editorData.engineVersion = info.legacyEngineVersion;
+    // Parts of a file were stored as "<file>#<part>".
+    const SIZE_T partStart = info.legacyImportedPath.find('#');
+    editorData.sourceFile = Path(info.legacyImportedPath.substr(0, partStart));
+    if (partStart != String::npos) {
+      editorData.sourcePart = info.legacyImportedPath.substr(partStart + 1);
+    }
+    if (AssetMeta::save(file, editorData)) {
+      CH_LOG_INFO(AssetSystem, "Wrote the .meta file of {0} from its old format", file);
+    }
+  }
+#endif // USING(CH_EDITOR)
 
   return asset;
 }
@@ -402,6 +412,5 @@ AssetManager::cacheSceneAssets() {
 #if USING(CH_DEBUG_MODE)
   CH_LOG_DEBUG(AssetSystem, "Total scene assets cached: {0}", m_sceneAssets.size());
 #endif
-#include "chTypeTraits.h"
 }
 } // namespace chEngineSDK

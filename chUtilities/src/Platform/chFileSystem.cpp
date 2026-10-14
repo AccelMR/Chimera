@@ -584,6 +584,17 @@ FileSystem::absolutePath(const Path& path)
   return Path(toRealPath(path, Access::Read));
 }
 
+Path
+FileSystem::relativePath(const Path& basePath, const Path& path)
+{
+  const fs::path relative = fs::path(toRealPath(path, Access::Read))
+                                .lexically_relative(fs::path(toRealPath(basePath, Access::Read)));
+  if (relative.empty()) {
+    return Path();
+  }
+  return Path(relative.generic_string());
+}
+
 bool
 FileSystem::isFile(const Path& path)
 {

@@ -12,6 +12,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chAssetMeta.h"
+#include "chPath.h"
 #include "chSTDThreading.h"
 #include "chTypeTraits.h"
 #include "chUUID.h"
@@ -30,21 +32,19 @@ enum class AssetState : uint16 {
   COUNT
 };
 
-// Align AssetMetadata to 8 bytes for optimal memory access on most platforms
-struct MS_ALIGN(8) AssetMetadata {
-  UUID uuid = UUID::null();      // 16 bytes
-  UUID assetType = UUID::null(); // 16 bytes
-  uint64 creationTime = 1;
-
-  ANSICHAR typeName[32] = "Unknown";    // 32 bytes
-  ANSICHAR engineVersion[16] = "x.x.x"; // 16 bytes
-  ANSICHAR name[64] = "Unnamed";        // 64 bytes
-  ANSICHAR importedPath[256] = "";      // 256 bytes
-  ANSICHAR assetPath[256] = "";         // 256 bytes
-
-  // Total size: 16 + 16 + 8 + 32 + 16 + 64 + 256 + 256 = 664 bytes
-} GCC_PACK(8);
-static_assert(sizeof(AssetMetadata) % 8 == 0, "AssetMetadata is not 8-byte aligned!");
+/**
+ * What identifies an asset in memory. Only uuid and assetType are stored in its file; the
+ * name and the folder come from where the file is, so moving or renaming the file never
+ * leaves them out of date.
+ */
+struct AssetMetadata
+{
+  UUID uuid = UUID::null();
+  UUID assetType = UUID::null();
+  ANSICHAR name[64] = "Unnamed";
+  // Virtual folder of the file, such as /Game/Sponza.
+  ANSICHAR assetPath[256] = "";
+};
 
 class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 {
@@ -108,20 +108,28 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD FORCEINLINE const UUID&
   getAssetTypeId() const { return m_metadata.assetType; }
 
-  NODISCARD FORCEINLINE const ANSICHAR*
-  getTypeName() const { return m_metadata.typeName; }
+  /**
+   * Name of the asset type, from its registration ("Unknown" when it is not registered).
+   */
+  NODISCARD const ANSICHAR*
+  getTypeName() const;
 
   NODISCARD FORCEINLINE const ANSICHAR*
   getName() const { return m_metadata.name; }
 
   NODISCARD FORCEINLINE const ANSICHAR*
-  getImportedPath() const { return m_metadata.importedPath; }
-
-  NODISCARD FORCEINLINE const ANSICHAR*
   getAssetPath() const { return m_metadata.assetPath; }
 
-  NODISCARD FORCEINLINE uint64
-  getCreatedAt() const { return m_metadata.creationTime; }
+  /**
+   * The asset file: "<asset path>/<name>.chAss".
+   */
+  NODISCARD Path
+  getFilePath() const;
+
+#if USING(CH_EDITOR)
+  NODISCARD FORCEINLINE const AssetEditorData&
+  getEditorData() const { return m_editorData; }
+#endif // USING(CH_EDITOR)
 
   /**
    * The assets this one points to, as saved in its file. They are loaded before it.
@@ -144,17 +152,11 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
  protected:
 
+  /**
+   * Renames the asset file (and its .meta file in the editor).
+   */
   NODISCARD bool
   rename(const ANSICHAR* newName);
-
-  bool
-  updateMetadata(const AssetMetadata& newMetadata);
-
-  FORCEINLINE void
-  setMetadata(const AssetMetadata& metadata) { m_metadata = metadata; }
-
-  void
-  setAssetPath(const ANSICHAR* assetPath);
 
   virtual void
   clearAssetData() = 0;
@@ -180,14 +182,18 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
     CH_PARAMETER_UNUSED(outReferences);
   }
 
-  bool
-  validateMetadata(const AssetMetadata&) const;
+  NODISCARD static bool
+  validateMetadata(const AssetMetadata& metadata);
 
   AssetMetadata m_metadata;  ///< Metadata for the asset
   AssetState m_state;        ///< State of the asset
   Atomic<uint32> m_refCount; ///< Reference count for the asset
 
   Vector<UUID> m_referencedAssets; ///< Filled by collectReferences on save, read on load
+
+#if USING(CH_EDITOR)
+  AssetEditorData m_editorData; ///< Saved in the .meta file, never in the asset file
+#endif // USING(CH_EDITOR)
 }; // class IAsset
 
 /*

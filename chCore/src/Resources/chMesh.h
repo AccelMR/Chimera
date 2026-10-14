@@ -198,6 +198,20 @@ class CH_CORE_EXPORT Mesh
   raycast(const Ray& localRay, float& outDistance) const;
 
   /**
+   * Copies every vertex position. False, with outPositions empty, when the mesh has no
+   * Float3 positions.
+   */
+  NODISCARD bool
+  readPositions(Vector<Vector3>& outPositions) const;
+
+  /**
+   * Copies the indices as 32 bits; a mesh without indices gives 0, 1, 2... False when the
+   * index data is shorter than the count says.
+   */
+  NODISCARD bool
+  readIndices(Vector<uint32>& outIndices) const;
+
+  /**
    * GPU copy of the vertices, made on the first call after the data changes (the copy runs
    * with the next frame submit). Main thread only. Null when the mesh has no vertices.
    */

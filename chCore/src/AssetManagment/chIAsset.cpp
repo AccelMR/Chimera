@@ -35,19 +35,20 @@ assetFilePath(const Path& folder, StringView assetName)
 } // namespace
 
 /*
-*/
-void
-IAsset::setAssetPath(const ANSICHAR* assetPath) {
-  if (!assetPath || !*assetPath) {
-    CH_LOG(AssetSystem, Error, "Invalid asset path for asset {0}", m_metadata.name);
-    return;
-  }
-  StringUtils::copyToBuffer(m_metadata.assetPath, assetPath);
-  CH_LOG(AssetSystem, Debug, "Set asset path for asset {0} to {1}", m_metadata.name,
-         m_metadata.assetPath);
-  //updateMetadata(m_metadata);
+ */
+const ANSICHAR*
+IAsset::getTypeName() const
+{
+  return AssetManager::instance().getAssetTypeName(m_metadata.assetType).c_str();
 }
 
+/*
+ */
+Path
+IAsset::getFilePath() const
+{
+  return assetFilePath(Path(m_metadata.assetPath), m_metadata.name);
+}
 
 /*
  */
@@ -69,7 +70,7 @@ IAsset::save() {
 
   m_referencedAssets.clear();
   collectReferences(m_referencedAssets);
-  AssetFile::writeStart(*stream, m_metadata, m_referencedAssets);
+  AssetFile::writeStart(*stream, m_metadata.uuid, m_metadata.assetType, m_referencedAssets);
 
   const bool success = serialize(stream);
   if (!success) {
@@ -79,13 +80,20 @@ IAsset::save() {
 
   stream->close();
 
+#if USING(CH_EDITOR)
+  if (!AssetMeta::save(fullFilePath, m_editorData)) {
+    CH_LOG(AssetSystem, Warning, "Failed to write the .meta file of asset {0}",
+           m_metadata.name);
+  }
+#endif // USING(CH_EDITOR)
+
   CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name,
          assetPath.toString());
   return true;
 }
 
 /*
-*/
+ */
 bool
 IAsset::rename(const ANSICHAR* newName) {
   if (!newName || !*newName) {
@@ -107,45 +115,23 @@ IAsset::rename(const ANSICHAR* newName) {
   }
 
   const Path assetPath(m_metadata.assetPath);
-  const Path assetAbsPath =
-      FileSystem::absolutePath(assetFilePath(assetPath, m_metadata.name));
-  const Path newAssetPath = FileSystem::absolutePath(assetFilePath(assetPath, newName));
-
-  const bool success = FileSystem::renameFile(assetAbsPath,
-                                              newAssetPath);
-  if (!success) {
+  const Path oldFile = assetFilePath(assetPath, m_metadata.name);
+  const Path newFile = assetFilePath(assetPath, newName);
+  if (!FileSystem::renameFile(oldFile, newFile)) {
     CH_LOG(AssetSystem, Error, "Failed to rename asset {0} to {1}", m_metadata.name, newName);
     return false;
   }
 
-  // Update the metadata
+#if USING(CH_EDITOR)
+  const Path oldMeta = AssetMeta::getPath(oldFile);
+  if (FileSystem::isFile(oldMeta) &&
+      !FileSystem::renameFile(oldMeta, AssetMeta::getPath(newFile))) {
+    CH_LOG(AssetSystem, Warning, "Failed to rename the .meta file of asset {0}",
+           m_metadata.name);
+  }
+#endif // USING(CH_EDITOR)
+
   StringUtils::copyToBuffer(m_metadata.name, newName);
-
-  return updateMetadata(m_metadata);
-}
-
-/*
- */
-bool
-IAsset::updateMetadata(const AssetMetadata& newMetadata) {
-  const Path assetPath(m_metadata.assetPath);
-  if (!FileSystem::isVirtual(assetPath)) {
-    return false;
-  }
-
-  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
-
-  // Open file in read/write mode instead of create mode
-  SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, false); // read/write
-  if (!stream) {
-    return false;
-  }
-
-  stream->seek(AssetFile::METADATA_OFFSET);
-  stream->write(&newMetadata, sizeof(AssetMetadata));
-  stream->close();
-
-  m_metadata = newMetadata;
   return true;
 }
 
@@ -174,14 +160,14 @@ IAsset::load() {
     m_state = AssetState::Failed;
     return false;
   }
-  AssetMetadata metadata;
-  if (!AssetFile::readMetadata(*stream, metadata) || !validateMetadata(metadata) ||
+  AssetFileInfo info;
+  if (!AssetFile::readInfo(*stream, info) || info.uuid != m_metadata.uuid ||
+      info.assetType != m_metadata.assetType ||
       !AssetFile::readReferences(*stream, m_referencedAssets)) {
     CH_LOG(AssetSystem, Error, "Invalid asset file {0}", m_metadata.name);
     m_state = AssetState::Failed;
     return false;
   }
-  m_metadata = metadata;
 
   // Loaded first, so deserialize finds the assets it points to already loaded.
   AssetManager& assetManager = AssetManager::instance();
@@ -230,7 +216,7 @@ IAsset::unload() {
 /*
  */
 bool
-IAsset::validateMetadata(const AssetMetadata& metadata) const {
+IAsset::validateMetadata(const AssetMetadata& metadata) {
   bool isValid = true;
   const auto validateAsset = [&isValid](bool condition, const String& errorMessage) {
     if (!condition) {

@@ -33,6 +33,7 @@
 #include "chRotator.h"
 #include "chUIHelpers.h"
 #include "chViewportTools.h"
+#include "chImportDialog.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
@@ -425,6 +426,7 @@ EditorApplication::renderUI()
   m_inspectorUI->renderInspectorUI();
   m_gameObjectAssetUI->renderGameObjectAssetUI();
   m_viewportTools->render(*m_activeScene);
+  ImportDialog::render();
   renderViewportDropTarget();
 
   ImGui::Render();

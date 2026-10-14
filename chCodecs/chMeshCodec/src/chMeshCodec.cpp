@@ -23,6 +23,7 @@
 #include "chMath.h"
 #include "chMatrix4.h"
 #include "chMesh.h"
+#include "chMeshSplit.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
 #include "chTextureMips.h"
@@ -214,7 +215,7 @@ processMesh(const aiMesh& mesh)
  */
 static void
 processNode(const aiNode& node,
-            const Vector<SPtr<Mesh>>& meshes,
+            const Vector<Vector<SPtr<Mesh>>>& meshes,
             Model& model,
             ModelNode* parentNode)
 {
@@ -225,8 +226,10 @@ processNode(const aiNode& node,
             Algorithm::contains(parentNode->getChildren(), modelNode));
 
   for (uint32 i = 0; i < node.mNumMeshes; i++) {
-    if (const SPtr<Mesh>& mesh = meshes[node.mMeshes[i]]) {
-      modelNode->addMesh(mesh);
+    for (const SPtr<Mesh>& mesh : meshes[node.mMeshes[i]]) {
+      if (mesh) {
+        modelNode->addMesh(mesh);
+      }
     }
   }
 
@@ -253,25 +256,13 @@ makeUniqueFolder(const Path& parent, const String& name)
 }
 
 /*
- * The name an asset made from a part of a file stores as its imported path, so importing
- * the file again finds it.
- */
-static String
-makePartPath(const Path& sourceFile, StringView part)
-{
-  String importedPath = sourceFile.toString();
-  importedPath += '#';
-  importedPath += part;
-  return importedPath;
-}
-
-/*
  */
 template <typename AssetType>
 static SPtr<AssetType>
-findImported(StringView importedPath)
+findImported(const Path& sourceFile, StringView sourcePart)
 {
-  const SPtr<IAsset> asset = AssetManager::instance().findAssetByImportedPath(importedPath);
+  const SPtr<IAsset> asset =
+      AssetManager::instance().findAssetBySource(sourceFile, sourcePart);
   return asset ? asset->as<AssetType>() : nullptr;
 }
 
@@ -389,7 +380,7 @@ readMaterialFactors(const aiMaterial& source, Material& material)
  * formats do not, so there a base color texture with pixels under the cutoff makes a mask.
  */
 static void
-readAlphaMode(const aiMaterial& source, Material& material)
+readAlphaMode(const aiMaterial& source, Material& material, bool bAutoMask)
 {
   int32 twoSided = 0;
   if (source.Get(AI_MATKEY_TWOSIDED, twoSided) == AI_SUCCESS) {
@@ -419,7 +410,7 @@ readAlphaMode(const aiMaterial& source, Material& material)
   }
 
   const SPtr<TextureAsset>& baseColor = material.getTexture(MaterialTexture::BaseColor);
-  if (baseColor && baseColor->hasAlphaBelow(material.getAlphaCutoff())) {
+  if (bAutoMask && baseColor && baseColor->hasAlphaBelow(material.getAlphaCutoff())) {
     CH_LOG_INFO(MeshSystem, "Material {0} is masked: its base color texture has alpha",
                 source.GetName().C_Str());
     material.setAlphaMode(MaterialAlphaMode::Mask);
@@ -456,8 +447,6 @@ MeshCodec::importAsset(const Path& filePath,
                        const Path& assetFolder,
                        const ImportSettings& settings)
 {
-  // Each texture of a model gets the settings of the material input it feeds.
-  CH_PARAMETER_UNUSED(settings);
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
   if (!FileSystem::isFile(filePath)) {
     CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
@@ -483,25 +472,27 @@ MeshCodec::importAsset(const Path& filePath,
   const ImportContext context{.scene = scene,
                               .sourceFile = FileSystem::absolutePath(filePath),
                               .assetFolder = modelFolder,
-                              .modelName = assetName};
+                              .modelName = assetName,
+                              .settings = settings};
 
   SPtr<Model> model = chMakeShared<Model>();
   for (uint32 i = 0; i < scene->mNumMaterials; ++i) {
     model->addMaterialSlot(importMaterial(context, *scene->mMaterials[i], i));
   }
 
-  // Converted once per assimp mesh, so nodes that share one share the Mesh too.
-  Vector<SPtr<Mesh>> meshes(scene->mNumMeshes);
+  // Converted once per assimp mesh, so nodes that share one share the Meshes too.
+  Vector<Vector<SPtr<Mesh>>> meshes(scene->mNumMeshes);
   for (uint32 i = 0; i < scene->mNumMeshes; ++i) {
-    meshes[i] = processMesh(*scene->mMeshes[i]);
+    SPtr<Mesh> mesh = processMesh(*scene->mMeshes[i]);
+    meshes[i] = settings.splitParts ? MeshSplit::splitParts(mesh) : Vector<SPtr<Mesh>>{mesh};
   }
   processNode(*scene->mRootNode, meshes, *model, nullptr);
   model->updateTransforms();
 
   const AssetMetadata metadata =
-      makeMetadata<ModelAsset>(assetName, context.sourceFile.toString(), modelFolder);
+      makeMetadata<ModelAsset>(assetName, modelFolder);
   SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
-  if (!saveAndRegister(modelAsset)) {
+  if (!saveAndRegister(modelAsset, context.sourceFile, StringView(), settings)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
     return nullptr;
   }
@@ -522,15 +513,15 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
     slot.name += StringUtils::toChars(numberBuffer, index);
   }
 
-  const String importedPath = makePartPath(context.sourceFile, slot.name);
-  if (SPtr<MaterialAsset> existing = findImported<MaterialAsset>(importedPath)) {
+  if (SPtr<MaterialAsset> existing =
+          findImported<MaterialAsset>(context.sourceFile, slot.name)) {
     slot.materialId = existing->getUUID();
     slot.material = std::move(existing);
     return slot;
   }
 
   const AssetMetadata metadata =
-      makeMetadata<MaterialAsset>("M_" + slot.name, importedPath, context.assetFolder);
+      makeMetadata<MaterialAsset>("M_" + slot.name, context.assetFolder);
   SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
   Material& material = materialAsset->getMaterial();
 
@@ -569,9 +560,9 @@ MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source
   }
 
   readMaterialFactors(source, material);
-  readAlphaMode(source, material);
+  readAlphaMode(source, material, context.settings.autoAlphaMask);
 
-  if (!saveAndRegister(materialAsset)) {
+  if (!saveAndRegister(materialAsset, context.sourceFile, slot.name, context.settings)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);
     return slot;
   }
@@ -613,7 +604,7 @@ MeshCodec::importTexture(const ImportContext& context,
   }
 
   const Path texturePath = FileSystem::absolutePath(*found);
-  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(texturePath.toString())) {
+  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(texturePath, StringView())) {
     return existing;
   }
 
@@ -630,8 +621,8 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
                                  StringView reference,
                                  const ImportSettings& settings)
 {
-  const String importedPath = makePartPath(context.sourceFile, reference);
-  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(importedPath)) {
+  if (SPtr<TextureAsset> existing =
+          findImported<TextureAsset>(context.sourceFile, reference)) {
     return existing;
   }
 
@@ -645,7 +636,8 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
     const Span<const uint8> data(reinterpret_cast<const uint8*>(texture.pcData),
                                  texture.mWidth);
     const SPtr<IAsset> asset = AssetCodecManager::instance().importAssetFromMemory(
-        data, texture.achFormatHint, assetName, context.assetFolder, importedPath, settings);
+        data, texture.achFormatHint, assetName, context.assetFolder, context.sourceFile,
+        reference, settings);
     return asset ? asset->as<TextureAsset>() : nullptr;
   }
 
@@ -660,7 +652,7 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
   }
 
   const AssetMetadata metadata =
-      makeMetadata<TextureAsset>(assetName, importedPath, context.assetFolder);
+      makeMetadata<TextureAsset>(assetName, context.assetFolder);
   const uint32 mipLevels = settings.generateMips
                                ? TextureMips::appendChainRGBA8(pixels, texture.mWidth,
                                                                texture.mHeight, settings.srgb)
@@ -668,7 +660,7 @@ MeshCodec::importEmbeddedTexture(const ImportContext& context,
   const Format format = settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
       metadata, std::move(pixels), texture.mWidth, texture.mHeight, format, mipLevels);
-  if (!saveAndRegister(textureAsset)) {
+  if (!saveAndRegister(textureAsset, context.sourceFile, reference, settings)) {
     CH_LOG_ERROR(MeshSystem, "Failed to save texture asset: {0}", assetName);
     return nullptr;
   }
