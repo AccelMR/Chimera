@@ -185,21 +185,17 @@ EditorCamera::fly(float deltaTime)
     return;
   }
 
-  // Walking ignores the pitch, so looking down does not sink the camera into the floor.
-  const Vector3 view = m_camera.getForwardVector();
-  Vector3 ground(view.x, view.y, 0.0f);
-  if (!ground.normalize()) {
-    // Never reached while the pitch stays below 90; kept for a camera set from outside.
-    ground = Vector3::FORWARD;
+  // Forward follows the view, pitch included, so looking up and pressing W climbs. E and Q
+  // stay on the world's up axis. The camera never rolls, so its right is level.
+  Vector3 direction = m_camera.getForwardVector() * forwardAxis +
+                      m_camera.getRightVector() * rightAxis + Vector3::UP * upAxis;
+  // Normalized so a diagonal is not faster than a single key.
+  if (!direction.normalize()) {
+    return;
   }
-  // The world is left-handed with Z up, so right is forward turned 90 degrees around Z.
-  const Vector3 right(-ground.y, ground.x, 0.0f);
-
-  Vector3 horizontal = ground * forwardAxis + right * rightAxis;
-  horizontal.normalize();
   const bool bSprint = input.isKeyDown(Key::LShift) || input.isKeyDown(Key::RShift);
   const float distance = getMoveSpeed() * deltaTime * (bSprint ? getSprintMultiplier() : 1.0f);
-  const Vector3 offset = (horizontal + Vector3::UP * upAxis) * distance;
+  const Vector3 offset = direction * distance;
 
   m_camera.setPosition(m_camera.getPosition() + offset);
   m_camera.lookAt(m_camera.getLookAt() + offset);

@@ -19,7 +19,7 @@ namespace chEngineSDK {
 /**
  * Exists because the viewport camera belongs to the editor, not to the scene: it is not a
  * GameObject and is never saved. Holding the right button flies it like a first person
- * camera (WASD on the ground plane, E up, Q down, Shift faster); it starts
+ * camera (WASD along the view, E up, Q down, Shift faster); it starts
  * only while focused, so ImGui windows keep their keys and clicks.
  */
 class EditorCamera
