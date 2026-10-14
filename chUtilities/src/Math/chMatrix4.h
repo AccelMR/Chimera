@@ -22,9 +22,8 @@ namespace chEngineSDK {
  * Holds a 4x4 matrix for transforms and projections. It uses row vectors: a point is
  * transformed as point * matrix, so matrices are combined in the order they apply
  * (local * parent, world * view * projection) and the translation lives in row 3.
- * It is stored row by row, which is byte for byte what GLSL reads as a column-major
- * matrix for column vectors, so it is uploaded as is and the shader writes
- * projection * view * model * position.
+ * It is stored row by row, so it is uploaded as is: shaders declare it row_major and
+ * apply it as mul(vector, matrix), in the same order as the engine.
  *
  * The class itself is not exported, only its functions that live in the .cpp, so the
  * constants can be inline constexpr and other modules fold them at compile time.
