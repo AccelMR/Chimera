@@ -78,6 +78,11 @@ toDebugMode(ViewMode mode)
       return DebugMode::Color;
     case ViewMode::Lit:
     case ViewMode::Unlit:
+    case ViewMode::BaseColor:
+    case ViewMode::Metallic:
+    case ViewMode::Roughness:
+    case ViewMode::AmbientOcclusion:
+    case ViewMode::Emissive:
     case ViewMode::COUNT:
       break;
   }

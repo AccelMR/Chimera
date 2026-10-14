@@ -38,13 +38,15 @@ toDX12State(ResourceState state, bool isDepth)
     return {D3D12_BARRIER_SYNC_DEPTH_STENCIL, D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE,
             D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE};
   case ResourceState::DepthRead:
+    // The depth read layout allows no shader access; the generic read layout of the direct
+    // queue allows depth tests and sampling together.
     return {D3D12_BARRIER_SYNC_DEPTH_STENCIL | D3D12_BARRIER_SYNC_ALL_SHADING,
             D3D12_BARRIER_ACCESS_DEPTH_STENCIL_READ | D3D12_BARRIER_ACCESS_SHADER_RESOURCE,
-            D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_READ};
+            D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_GENERIC_READ};
   case ResourceState::ShaderRead:
-    // A depth texture keeps the depth read layout, which shaders can also sample.
+    // A sampled depth texture takes the layout of DepthRead, for the same reason.
     return {D3D12_BARRIER_SYNC_ALL_SHADING, D3D12_BARRIER_ACCESS_SHADER_RESOURCE,
-            isDepth ? D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_READ
+            isDepth ? D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_GENERIC_READ
                     : D3D12_BARRIER_LAYOUT_SHADER_RESOURCE};
   case ResourceState::UnorderedAccess:
     return {D3D12_BARRIER_SYNC_ALL_SHADING, D3D12_BARRIER_ACCESS_UNORDERED_ACCESS,

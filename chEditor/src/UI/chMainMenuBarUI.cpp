@@ -38,14 +38,27 @@ MainMenuBarUI::renderMainMenuBar() {
 
   if (ImGui::BeginMenu("Render")) {
     if (ImGui::BeginMenu("View Mode")) {
-      const Optional<ViewMode> current = ViewModeUtils::fromName(g_cvarViewMode.get());
+      const Optional<ViewMode> current =
+          RenderSettingsUtils::viewModeFromName(g_cvarViewMode.get());
       for (uint32 i = 0; i < static_cast<uint32>(ViewMode::COUNT); ++i) {
         const ViewMode mode = static_cast<ViewMode>(i);
-        const StringView name = ViewModeUtils::getName(mode);
+        const StringView name = RenderSettingsUtils::getName(mode);
         if (ImGui::MenuItem(name.data(), nullptr, current == mode)) {
           // Console wins over the command line and config files, as a choice made in the
           // editor should.
           g_cvarViewMode.set(String(name), ConsoleVariableSource::Console);
+        }
+      }
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Render Path")) {
+      const Optional<RenderPathType> current =
+          RenderSettingsUtils::renderPathFromName(g_cvarRenderPath.get());
+      for (uint32 i = 0; i < static_cast<uint32>(RenderPathType::COUNT); ++i) {
+        const RenderPathType path = static_cast<RenderPathType>(i);
+        const StringView name = RenderSettingsUtils::getName(path);
+        if (ImGui::MenuItem(name.data(), nullptr, current == path)) {
+          g_cvarRenderPath.set(String(name), ConsoleVariableSource::Console);
         }
       }
       ImGui::EndMenu();

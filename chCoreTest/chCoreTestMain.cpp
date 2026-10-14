@@ -832,15 +832,25 @@ TEST_CASE("chCore - RenderGraph")
   }
 }
 
-TEST_CASE("chCore - ViewMode names")
+TEST_CASE("chCore - Render settings names")
 {
   for (uint32 i = 0; i < static_cast<uint32>(ViewMode::COUNT); ++i) {
     const ViewMode mode = static_cast<ViewMode>(i);
-    REQUIRE(ViewModeUtils::fromName(ViewModeUtils::getName(mode)) == mode);
+    REQUIRE(RenderSettingsUtils::viewModeFromName(RenderSettingsUtils::getName(mode)) == mode);
   }
-  REQUIRE(ViewModeUtils::fromName("wireFRAME") == ViewMode::Wireframe);
-  REQUIRE_FALSE(ViewModeUtils::fromName("Unknown").has_value());
-  REQUIRE(ViewModeUtils::fromName(g_cvarViewMode.getDefault()) == ViewMode::Lit);
+  REQUIRE(RenderSettingsUtils::viewModeFromName("wireFRAME") == ViewMode::Wireframe);
+  REQUIRE_FALSE(RenderSettingsUtils::viewModeFromName("Unknown").has_value());
+  REQUIRE(RenderSettingsUtils::viewModeFromName(g_cvarViewMode.getDefault()) == ViewMode::Lit);
+
+  for (uint32 i = 0; i < static_cast<uint32>(RenderPathType::COUNT); ++i) {
+    const RenderPathType path = static_cast<RenderPathType>(i);
+    REQUIRE(RenderSettingsUtils::renderPathFromName(RenderSettingsUtils::getName(path)) ==
+            path);
+  }
+  REQUIRE(RenderSettingsUtils::renderPathFromName("forward") == RenderPathType::Forward);
+  REQUIRE_FALSE(RenderSettingsUtils::renderPathFromName("Unknown").has_value());
+  REQUIRE(RenderSettingsUtils::renderPathFromName(g_cvarRenderPath.getDefault()) ==
+          RenderPathType::Deferred);
 }
 
 namespace {

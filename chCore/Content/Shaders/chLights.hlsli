@@ -9,7 +9,7 @@ static const uint kLightDirectional = 0;
 static const uint kLightPoint = 1;
 static const uint kLightSpot = 2;
 
-// Must match GpuLight in chForwardRenderPath.cpp.
+// Must match GpuLight in chSceneViewBuffers.h.
 struct LightData
 {
   float3 position;
@@ -71,4 +71,12 @@ evaluateLights(SurfaceData surface,
     }
   }
   return result;
+}
+
+// The constant light from all sides that stands in for the environment. Only diffuse:
+// without an environment there is nothing for it to reflect.
+float3
+evaluateAmbient(SurfaceData surface, float ambient, float occlusion)
+{
+  return surface.baseColor * (1.0f - surface.metallic) * ambient * occlusion;
 }

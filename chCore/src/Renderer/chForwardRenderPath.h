@@ -3,7 +3,7 @@
  * @file chForwardRenderPath.h
  * @author AccelMR
  * @date 2026/10/07
- * @brief Draws the scene items textured, in one pass, straight into the output.
+ * @brief Draws the scene items lit by the scene lights, in one pass, into the output.
  */
 /************************************************************************/
 #pragma once
@@ -13,6 +13,7 @@
 #include "chIRenderPath.h"
 #include "chMaterial.h"
 #include "chPipelineCache.h"
+#include "chSceneViewBuffers.h"
 
 namespace chEngineSDK {
 
@@ -35,25 +36,10 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
   addPasses(RenderGraph& graph, const RenderView& view, RGTextureHandle output) override;
 
  private:
-  // Must match LightData in chLights.hlsli.
-  struct GpuLight
-  {
-    float position[3];
-    uint32 type;
-    float direction[3];
-    float range;
-    float color[3];
-    float spotScale;
-    float spotOffset;
-    float padding[3];
-  };
-  static_assert(sizeof(GpuLight) == 64);
-
   void
-  updateViewData(const RenderView& view);
-
-  void
-  recordDraws(RenderPassContext& context, Span<const RenderItem* const> items);
+  recordDraws(RenderPassContext& context,
+              Span<const RenderItem* const> items,
+              uint32 viewIndex);
 
   void
   updatePipeline(Format colorFormat);
@@ -66,15 +52,7 @@ class CH_CORE_EXPORT ForwardRenderPath : public IRenderPath
   const IPipeline* m_pipeline = nullptr;
   Format m_pipelineFormat = Format::Unknown;
 
-  // Camera and light data read by the shader through the bindless heap. One per frame in
-  // flight, because the CPU writes them while the GPU may still read the previous frame's.
-  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_viewBuffers;
-  Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBuffers;
-  // Lights each buffer of m_lightBuffers holds; a buffer is made again, bigger, when a
-  // frame has more.
-  Array<uint32, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBufferCapacities{};
-  // Kept between frames, so converting the lights does not allocate.
-  Vector<GpuLight> m_gpuLights;
+  SceneViewBuffers m_viewBuffers;
 
   // For items without a material.
   Material m_defaultMaterial;

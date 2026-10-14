@@ -16,7 +16,8 @@ namespace chEngineSDK {
 
 /**
  * What the scene renderer shows. Lit uses the active render path; the others are views for
- * looking at the scene data.
+ * looking at the scene data. The GBuffer modes (BaseColor to Emissive) show what the
+ * deferred path stores, whichever path is active.
  */
 enum class ViewMode : uint32
 {
@@ -27,31 +28,50 @@ enum class ViewMode : uint32
   Normals,
   Depth,
   TexCoords,
+  BaseColor,
+  Metallic,
+  Roughness,
+  AmbientOcclusion,
+  Emissive,
   COUNT
 };
 
 /**
- * Exists so the view mode can be written as a name in .ini files, on the command line and
- * in menus.
+ * How the Lit view modes light the scene.
  */
-class CH_CORE_EXPORT ViewModeUtils
+enum class RenderPathType : uint32
+{
+  Forward,
+  Deferred,
+  COUNT
+};
+
+/**
+ * Exists so the view mode and the render path can be written as names in .ini files, on
+ * the command line and in menus. Names are null terminated literals, so they can be handed
+ * to C APIs as they are; lookups ignore case, and an unknown name gives nothing.
+ */
+class CH_CORE_EXPORT RenderSettingsUtils
 {
  public:
-  /**
-   * A null terminated literal, so it can be handed to C APIs as is.
-   */
   NODISCARD static StringView
   getName(ViewMode mode);
 
-  /**
-   * Ignores case; an unknown name gives nothing.
-   */
+  NODISCARD static StringView
+  getName(RenderPathType path);
+
   NODISCARD static Optional<ViewMode>
-  fromName(StringView name);
+  viewModeFromName(StringView name);
+
+  NODISCARD static Optional<RenderPathType>
+  renderPathFromName(StringView name);
 };
 
 // Name of a ViewMode (-ViewMode=Wireframe).
 extern CH_CORE_EXPORT ConsoleVariable<String> g_cvarViewMode;
+
+// Name of a RenderPathType (-RenderPath=Forward).
+extern CH_CORE_EXPORT ConsoleVariable<String> g_cvarRenderPath;
 
 // Light that reaches every surface from all sides until image based lighting exists.
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarAmbient;

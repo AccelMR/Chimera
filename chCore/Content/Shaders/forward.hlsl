@@ -6,18 +6,7 @@
 #include "chLights.hlsli"
 #include "chMaterial.hlsli"
 #include "chTransforms.hlsli"
-
-// Must match ViewData in chForwardRenderPath.cpp.
-struct ViewData
-{
-  row_major float4x4 view;
-  row_major float4x4 projection;
-  float3 cameraPosition;
-  uint lightCount;
-  uint lightBufferIndex;
-  float ambient;
-  float2 padding;
-};
+#include "chView.hlsli"
 
 // Must match DrawPushConstants in chForwardRenderPath.cpp.
 struct PushConstants
@@ -84,10 +73,8 @@ PSMain(VSOutput input) : SV_Target0
   const float3 viewDirection = normalize(view.cameraPosition - input.worldPosition);
   float3 color = evaluateLights(surface, input.worldPosition, viewDirection,
                                 view.lightBufferIndex, view.lightCount);
-
-  // Only diffuse: without an environment there is nothing for the ambient to reflect.
-  const float occlusion = getOcclusion(material, textureSampler, input.texCoord);
-  color += surface.baseColor * (1.0f - surface.metallic) * view.ambient * occlusion;
+  color += evaluateAmbient(surface, view.ambient,
+                           getOcclusion(material, textureSampler, input.texCoord));
   color += getEmissive(material, textureSampler, input.texCoord);
   return float4(color, baseColor.a);
 }

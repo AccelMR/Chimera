@@ -1,7 +1,7 @@
 // Takes the HDR scene color to the back buffer: exposure, ACES curve, then sRGB encoding.
-// A single triangle that covers the screen, so it needs no vertex buffer.
 
 #include "chColor.hlsli"
+#include "chFullscreen.hlsli"
 
 // Must match TonemapPushConstants in chTonemapPass.cpp.
 struct PushConstants
@@ -15,9 +15,7 @@ struct PushConstants
 float4
 VSMain(uint vertexId : SV_VertexID) : SV_Position
 {
-  // (-1, -1), (3, -1), (-1, 3): the screen fits inside.
-  const float2 position = float2((vertexId << 1) & 2, vertexId & 2) * 2.0f - 1.0f;
-  return float4(position, 0.0f, 1.0f);
+  return fullscreenTrianglePosition(vertexId);
 }
 
 float4

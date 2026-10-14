@@ -14,17 +14,50 @@
 namespace chEngineSDK {
 
 namespace {
-constexpr StringView kViewModeNames[] = {
-    "Lit", "LitWireframe", "Wireframe", "Unlit", "Normals", "Depth", "TexCoords"};
+constexpr StringView kViewModeNames[] = {"Lit",
+                                         "LitWireframe",
+                                         "Wireframe",
+                                         "Unlit",
+                                         "Normals",
+                                         "Depth",
+                                         "TexCoords",
+                                         "BaseColor",
+                                         "Metallic",
+                                         "Roughness",
+                                         "AmbientOcclusion",
+                                         "Emissive"};
 static_assert(sizeof(kViewModeNames) / sizeof(kViewModeNames[0]) ==
               static_cast<SIZE_T>(ViewMode::COUNT));
+
+constexpr StringView kRenderPathNames[] = {"Forward", "Deferred"};
+static_assert(sizeof(kRenderPathNames) / sizeof(kRenderPathNames[0]) ==
+              static_cast<SIZE_T>(RenderPathType::COUNT));
+
+template<typename Enum>
+NODISCARD Optional<Enum>
+findByName(Span<const StringView> names, StringView name)
+{
+  for (SIZE_T i = 0; i < names.size(); ++i) {
+    if (StringUtils::equalsIgnoreCase(name, names[i])) {
+      return static_cast<Enum>(i);
+    }
+  }
+  return {};
+}
 } // namespace
 
 ConsoleVariable<String> g_cvarViewMode(
     "Renderer.ViewMode",
     "Lit",
-    "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords.",
+    "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords, "
+    "or a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive.",
     "ViewMode");
+
+ConsoleVariable<String> g_cvarRenderPath("Renderer.Path",
+                                         "Deferred",
+                                         "How the Lit view modes light the scene: Forward or "
+                                         "Deferred.",
+                                         "RenderPath");
 
 ConsoleVariable<float> g_cvarAmbient(
     "Renderer.Ambient",
@@ -35,7 +68,7 @@ ConsoleVariable<float> g_cvarAmbient(
 /*
  */
 StringView
-ViewModeUtils::getName(ViewMode mode)
+RenderSettingsUtils::getName(ViewMode mode)
 {
   CH_ASSERT(mode < ViewMode::COUNT);
   return kViewModeNames[static_cast<uint32>(mode)];
@@ -43,15 +76,27 @@ ViewModeUtils::getName(ViewMode mode)
 
 /*
  */
-Optional<ViewMode>
-ViewModeUtils::fromName(StringView name)
+StringView
+RenderSettingsUtils::getName(RenderPathType path)
 {
-  for (uint32 i = 0; i < static_cast<uint32>(ViewMode::COUNT); ++i) {
-    if (StringUtils::equalsIgnoreCase(name, kViewModeNames[i])) {
-      return static_cast<ViewMode>(i);
-    }
-  }
-  return {};
+  CH_ASSERT(path < RenderPathType::COUNT);
+  return kRenderPathNames[static_cast<uint32>(path)];
+}
+
+/*
+ */
+Optional<ViewMode>
+RenderSettingsUtils::viewModeFromName(StringView name)
+{
+  return findByName<ViewMode>(kViewModeNames, name);
+}
+
+/*
+ */
+Optional<RenderPathType>
+RenderSettingsUtils::renderPathFromName(StringView name)
+{
+  return findByName<RenderPathType>(kRenderPathNames, name);
 }
 
 } // namespace chEngineSDK

@@ -11,6 +11,7 @@
 
 #include "chCamera.h"
 #include "chDebugRenderPath.h"
+#include "chDeferredRenderPath.h"
 #include "chForwardRenderPath.h"
 #include "chLogger.h"
 #include "chScene.h"
@@ -28,7 +29,9 @@ constexpr Format kSceneColorFormat = Format::R16G16B16A16_SFLOAT;
 /*
  */
 SceneRenderer::SceneRenderer()
-  : m_renderPath(new ForwardRenderPath()),
+  : m_forwardRenderPath(new ForwardRenderPath()),
+    m_deferredRenderPath(new DeferredRenderPath()),
+    m_renderPath(m_deferredRenderPath.get()),
     m_debugRenderPath(new DebugRenderPath()),
     m_tonemapPass(new TonemapPass())
 {}
@@ -42,7 +45,7 @@ SceneRenderer::~SceneRenderer() = default;
 RenderGraph&
 SceneRenderer::beginFrame()
 {
-  updateViewMode();
+  updateSettings();
   m_graph.reset();
   return m_graph;
 }
@@ -80,6 +83,12 @@ SceneRenderer::addScenePasses(const Scene& scene,
     case ViewMode::TexCoords:
       m_debugRenderPath->setViewMode(m_viewMode);
       return m_debugRenderPath->addPasses(m_graph, view, output);
+    case ViewMode::BaseColor:
+    case ViewMode::Metallic:
+    case ViewMode::Roughness:
+    case ViewMode::AmbientOcclusion:
+    case ViewMode::Emissive:
+      return m_deferredRenderPath->addGBufferViewPasses(m_graph, view, output, m_viewMode);
     case ViewMode::COUNT:
       break;
   }
@@ -113,19 +122,34 @@ SceneRenderer::addLitPasses(const RenderView& view, RGTextureHandle output)
 /*
  */
 void
-SceneRenderer::updateViewMode()
+SceneRenderer::updateSettings()
 {
-  const String& text = g_cvarViewMode.get();
-  if (text == m_viewModeText) {
-    return;
+  const String& viewModeText = g_cvarViewMode.get();
+  if (viewModeText != m_viewModeText) {
+    m_viewModeText = viewModeText;
+    const Optional<ViewMode> mode = RenderSettingsUtils::viewModeFromName(viewModeText);
+    if (!mode) {
+      CH_LOG_WARNING(SceneRendererLog, "Unknown view mode '{0}', using Lit.", viewModeText);
+    }
+    m_viewMode = mode.value_or(ViewMode::Lit);
   }
-  m_viewModeText = text;
 
-  const Optional<ViewMode> mode = ViewModeUtils::fromName(text);
-  if (!mode) {
-    CH_LOG_WARNING(SceneRendererLog, "Unknown view mode '{0}', using Lit.", text);
+  const String& renderPathText = g_cvarRenderPath.get();
+  if (renderPathText != m_renderPathText) {
+    m_renderPathText = renderPathText;
+    const Optional<RenderPathType> path =
+        RenderSettingsUtils::renderPathFromName(renderPathText);
+    if (!path) {
+      CH_LOG_WARNING(SceneRendererLog, "Unknown render path '{0}', using Deferred.",
+                     renderPathText);
+    }
+    if (path.value_or(RenderPathType::Deferred) == RenderPathType::Forward) {
+      m_renderPath = m_forwardRenderPath.get();
+    }
+    else {
+      m_renderPath = m_deferredRenderPath.get();
+    }
   }
-  m_viewMode = mode.value_or(ViewMode::Lit);
 }
 
 } // namespace chEngineSDK
