@@ -42,7 +42,6 @@ class Module
     }
 
     if (isDestroyed()) {
-
       CH_EXCEPT(InternalErrorException, "Trying to access a destroyed module.");
     }
 
