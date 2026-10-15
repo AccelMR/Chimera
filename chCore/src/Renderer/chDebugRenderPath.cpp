@@ -83,6 +83,7 @@ toDebugMode(ViewMode mode)
     case ViewMode::Roughness:
     case ViewMode::AmbientOcclusion:
     case ViewMode::Emissive:
+    case ViewMode::ShadowCascades:
     case ViewMode::COUNT:
       break;
   }

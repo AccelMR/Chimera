@@ -62,16 +62,32 @@ class CH_CORE_EXPORT SceneViewBuffers
   };
   static_assert(sizeof(GpuLight) == 64);
 
-  // Must match ShadowData in chShadows.hlsli.
-  struct GpuShadow
+  // Must match ShadowCascadeData in chShadows.hlsli.
+  struct GpuShadowCascade
   {
     Matrix4 viewProjection;
-    uint32 textureIndex;
-    float texelSize;
+    float atlasOffset[2];
     float normalOffset;
-    float fadeDistance;
+    float padding;
   };
-  static_assert(sizeof(GpuShadow) == 80);
+  static_assert(sizeof(GpuShadowCascade) == 80);
+
+  // Must match ShadowData in chShadows.hlsli, which reads the cascades after it on their own.
+  struct GpuShadow
+  {
+    uint32 textureIndex;
+    uint32 cascadeCount;
+    uint32 filterRadius;
+    float fadeStart;
+    float texelSize[2];
+    float atlasScale[2];
+    float splitDepths[4];
+    float blendStarts[4];
+    float fadeEnd;
+    float padding[3];
+    GpuShadowCascade cascades[4];
+  };
+  static_assert(sizeof(GpuShadow) == 400);
 
   Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_viewBuffers;
   Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBuffers;

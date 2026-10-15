@@ -17,7 +17,8 @@ namespace chEngineSDK {
 /**
  * What the scene renderer shows. Lit uses the active render path; the others are views for
  * looking at the scene data. The GBuffer modes (BaseColor to Emissive) show what the
- * deferred path stores, whichever path is active.
+ * deferred path stores, whichever path is active. ShadowCascades is Lit tinted by the
+ * shadow cascade each pixel reads.
  */
 enum class ViewMode : uint32
 {
@@ -33,6 +34,7 @@ enum class ViewMode : uint32
   Roughness,
   AmbientOcclusion,
   Emissive,
+  ShadowCascades,
   COUNT
 };
 
@@ -79,10 +81,32 @@ extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarAmbient;
 // Directional lights with Cast Shadows draw shadows.
 extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarShadows;
 
-// Width and height in texels of the directional shadow map.
+// Width and height in texels of each cascade of the directional shadow map.
 extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarShadowMapSize;
 
 // How far from the camera, in world units, the directional shadow reaches.
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowDistance;
+
+// How many cascades (1 to 4) split the shadow distance.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarShadowCascades;
+
+// 0 splits the cascades in even steps, 1 in steps that grow with the distance.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowSplitLambda;
+
+// Fraction of each cascade that blends into the next one.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowCascadeBlend;
+
+// Fraction of the shadow distance where the shadow fades out.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowFade;
+
+// Texels around each pixel the shadow test blends.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarShadowFilterRadius;
+
+// Texels a receiver moves along its normal before the shadow test.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowNormalOffset;
+
+// Depth bias of the shadow casters, constant and by slope.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowDepthBias;
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowSlopeBias;
 
 } // namespace chEngineSDK

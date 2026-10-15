@@ -47,6 +47,7 @@ float3
 evaluateLights(SurfaceData surface, float3 worldPosition, float3 viewDirection, ViewData view)
 {
   ByteAddressBuffer lights = ResourceDescriptorHeap[view.lightBufferIndex];
+  const float viewDepth = mul(float4(worldPosition, 1.0f), view.view).z;
   float3 result = float3(0.0f, 0.0f, 0.0f);
   for (uint i = 0; i < view.lightCount; ++i) {
     const LightData light = lights.Load<LightData>(i * kLightDataSize);
@@ -68,7 +69,7 @@ evaluateLights(SurfaceData surface, float3 worldPosition, float3 viewDirection, 
     if (attenuation > 0.0f && light.shadowIndex != kNoShadow) {
       attenuation *= evaluateShadow(view.shadowBufferIndex, view.shadowSamplerIndex,
                                     light.shadowIndex, worldPosition, surface.normal,
-                                    view.cameraPosition);
+                                    viewDepth);
     }
 
     if (attenuation > 0.0f) {
@@ -85,4 +86,18 @@ float3
 evaluateAmbient(SurfaceData surface, float ambient, float occlusion)
 {
   return surface.baseColor * (1.0f - surface.metallic) * ambient * occlusion;
+}
+
+// The ShadowCascades view mode: the lit color tinted by the cascade each pixel reads. Some of
+// the tint is added, so it also shows where the scene is dark.
+float3
+applyShadowCascadeTint(float3 color, float3 worldPosition, ViewData view)
+{
+  if (view.debugShadowIndex == kNoShadow) {
+    return color;
+  }
+  const float viewDepth = mul(float4(worldPosition, 1.0f), view.view).z;
+  const float4 tint =
+      getShadowCascadeTint(view.shadowBufferIndex, view.debugShadowIndex, viewDepth);
+  return lerp(color, color * tint.rgb + tint.rgb * 0.05f, tint.a);
 }

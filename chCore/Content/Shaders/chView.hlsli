@@ -16,4 +16,7 @@ struct ViewData
   // Shadow maps of the frame (chShadows.hlsli) and the sampler that compares against them.
   uint shadowBufferIndex;
   uint shadowSamplerIndex;
+  // Shadow whose cascades the ShadowCascades view mode tints, kNoShadow in other modes.
+  uint debugShadowIndex;
+  uint3 padding;
 };

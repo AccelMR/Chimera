@@ -33,6 +33,8 @@ struct ViewData
   float ambient;
   uint32 shadowBufferIndex;
   uint32 shadowSamplerIndex;
+  uint32 debugShadowIndex;
+  uint32 padding[3];
 };
 
 // Must match kNoShadow in chShadows.hlsli.
@@ -148,13 +150,31 @@ SceneViewBuffers::update(const RenderView& view)
          .padding = {0.0f, 0.0f}});
   }
 
+  static_assert(sizeof(GpuShadow::cascades) / sizeof(GpuShadowCascade) ==
+                ShadowView::MAX_CASCADES);
   m_gpuShadows.clear();
   for (const ShadowView& shadow : view.shadows) {
-    m_gpuShadows.push_back({.viewProjection = shadow.viewProjection,
-                            .textureIndex = shadow.textureIndex,
-                            .texelSize = shadow.texelSize,
-                            .normalOffset = shadow.normalOffset,
-                            .fadeDistance = shadow.fadeDistance});
+    // Value initialized: its default constructor is implicit, so unused cascades are zeros.
+    GpuShadow& gpuShadow = m_gpuShadows.emplace_back();
+    gpuShadow.textureIndex = shadow.textureIndex;
+    gpuShadow.cascadeCount = shadow.cascadeCount;
+    gpuShadow.filterRadius = shadow.filterRadius;
+    gpuShadow.fadeStart = shadow.fadeStart;
+    gpuShadow.texelSize[0] = shadow.texelSize.x;
+    gpuShadow.texelSize[1] = shadow.texelSize.y;
+    gpuShadow.atlasScale[0] = shadow.atlasScale.x;
+    gpuShadow.atlasScale[1] = shadow.atlasScale.y;
+    gpuShadow.fadeEnd = shadow.fadeEnd;
+    for (uint32 i = 0; i < shadow.cascadeCount; ++i) {
+      const ShadowCascade& cascade = shadow.cascades[i];
+      gpuShadow.splitDepths[i] = cascade.splitDepth;
+      gpuShadow.blendStarts[i] = cascade.blendStart;
+      GpuShadowCascade& gpuCascade = gpuShadow.cascades[i];
+      gpuCascade.viewProjection = cascade.viewProjection;
+      gpuCascade.atlasOffset[0] = cascade.atlasOffset.x;
+      gpuCascade.atlasOffset[1] = cascade.atlasOffset.y;
+      gpuCascade.normalOffset = cascade.normalOffset;
+    }
   }
 
   const IBuffer& lightBuffer =
@@ -173,7 +193,9 @@ SceneViewBuffers::update(const RenderView& view)
       .lightBufferIndex = lightBuffer.getBindlessIndex(),
       .ambient = g_cvarAmbient.get(),
       .shadowBufferIndex = shadowBuffer.getBindlessIndex(),
-      .shadowSamplerIndex = m_shadowSampler->getBindlessIndex()};
+      .shadowSamplerIndex = m_shadowSampler->getBindlessIndex(),
+      .debugShadowIndex = view.bShowShadowCascades && !view.shadows.empty() ? 0u : kNoShadow,
+      .padding = {0, 0, 0}};
   IBuffer& viewBuffer = *m_viewBuffers[frameIndex];
   viewBuffer.update(&viewData, sizeof(viewData));
   return viewBuffer.getBindlessIndex();

@@ -33,6 +33,95 @@ using namespace chEngineSDK::chUIHelpers;
 
 CH_LOG_DECLARE_STATIC(MainMenuBarUILog, All);
 
+namespace {
+// Settings changed here use the Console source, which wins over the command line and config
+// files, as a choice made in the editor should. Hovering one shows its help.
+void
+editSetting(const ANSICHAR* label,
+            ConsoleVariable<float>& cvar,
+            float speed,
+            float min,
+            float max,
+            const ANSICHAR* format,
+            ImGuiSliderFlags flags = ImGuiSliderFlags_None)
+{
+  float value = cvar.get();
+  if (ImGui::DragFloat(label, &value, speed, min, max, format,
+                       flags | ImGuiSliderFlags_AlwaysClamp)) {
+    cvar.set(value, ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
+}
+
+void
+editSetting(const ANSICHAR* label, ConsoleVariable<int32>& cvar, int32 min, int32 max)
+{
+  int32 value = cvar.get();
+  if (ImGui::SliderInt(label, &value, min, max, "%d", ImGuiSliderFlags_AlwaysClamp)) {
+    cvar.set(value, ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
+}
+
+template<typename T>
+void
+resetSetting(ConsoleVariable<T>& cvar)
+{
+  cvar.set(cvar.getDefault(), ConsoleVariableSource::Console);
+}
+
+void
+renderShadowSettings()
+{
+  bool bShadows = g_cvarShadows.get();
+  if (ImGui::Checkbox("Enabled", &bShadows)) {
+    g_cvarShadows.set(bShadows, ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", g_cvarShadows.getHelp().c_str());
+
+  // The same texels cover the whole distance, so it depends on the scale of the scene.
+  editSetting("Distance", g_cvarShadowDistance, 0.5f, 1.0f, 10000.0f, "%.1f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Cascades", g_cvarShadowCascades, 1, 4);
+  editSetting("Split Lambda", g_cvarShadowSplitLambda, 0.005f, 0.0f, 1.0f, "%.2f");
+  editSetting("Cascade Blend", g_cvarShadowCascadeBlend, 0.005f, 0.0f, 0.5f, "%.2f");
+  editSetting("Fade", g_cvarShadowFade, 0.005f, 0.0f, 1.0f, "%.2f");
+  editSetting("Filter Radius", g_cvarShadowFilterRadius, 0, 3);
+  editSetting("Normal Offset", g_cvarShadowNormalOffset, 0.05f, 0.0f, 10.0f, "%.2f texels");
+  editSetting("Depth Bias", g_cvarShadowDepthBias, 0.05f, 0.0f, 20.0f, "%.2f");
+  editSetting("Slope Bias", g_cvarShadowSlopeBias, 0.05f, 0.0f, 20.0f, "%.2f");
+
+  ImGui::TextUnformatted("Map size per cascade");
+  constexpr int32 kMapSizes[] = {512, 1024, 2048, 4096};
+  constexpr const ANSICHAR* kMapSizeNames[] = {"512", "1024", "2048", "4096"};
+  constexpr SIZE_T kMapSizeCount = sizeof(kMapSizes) / sizeof(kMapSizes[0]);
+  for (SIZE_T i = 0; i < kMapSizeCount; ++i) {
+    if (ImGui::RadioButton(kMapSizeNames[i], g_cvarShadowMapSize.get() == kMapSizes[i])) {
+      g_cvarShadowMapSize.set(kMapSizes[i], ConsoleVariableSource::Console);
+    }
+    ImGui::SetItemTooltip("%s", g_cvarShadowMapSize.getHelp().c_str());
+    if (i + 1 < kMapSizeCount) {
+      ImGui::SameLine();
+    }
+  }
+
+  ImGui::Separator();
+  if (ImGui::MenuItem("Reset to Defaults")) {
+    resetSetting(g_cvarShadows);
+    resetSetting(g_cvarShadowDistance);
+    resetSetting(g_cvarShadowCascades);
+    resetSetting(g_cvarShadowSplitLambda);
+    resetSetting(g_cvarShadowCascadeBlend);
+    resetSetting(g_cvarShadowFade);
+    resetSetting(g_cvarShadowFilterRadius);
+    resetSetting(g_cvarShadowNormalOffset);
+    resetSetting(g_cvarShadowDepthBias);
+    resetSetting(g_cvarShadowSlopeBias);
+    resetSetting(g_cvarShadowMapSize);
+  }
+}
+} // namespace
+
 /*
  */
 void
@@ -73,26 +162,7 @@ MainMenuBarUI::renderMainMenuBar() {
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Shadows")) {
-      bool bShadows = g_cvarShadows.get();
-      if (ImGui::Checkbox("Enabled", &bShadows)) {
-        g_cvarShadows.set(bShadows, ConsoleVariableSource::Console);
-      }
-      // The same texels cover the whole distance, so it depends on the scale of the scene.
-      float distance = g_cvarShadowDistance.get();
-      if (ImGui::DragFloat("Distance", &distance, 0.5f, 1.0f, 10000.0f, "%.1f",
-                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
-        g_cvarShadowDistance.set(distance, ConsoleVariableSource::Console);
-      }
-      constexpr int32 kMapSizes[] = {1024, 2048, 4096, 8192};
-      constexpr const ANSICHAR* kMapSizeNames[] = {"1024", "2048", "4096", "8192"};
-      for (SIZE_T i = 0; i < sizeof(kMapSizes) / sizeof(kMapSizes[0]); ++i) {
-        if (ImGui::RadioButton(kMapSizeNames[i], g_cvarShadowMapSize.get() == kMapSizes[i])) {
-          g_cvarShadowMapSize.set(kMapSizes[i], ConsoleVariableSource::Console);
-        }
-        if (i + 1 < sizeof(kMapSizes) / sizeof(kMapSizes[0])) {
-          ImGui::SameLine();
-        }
-      }
+      renderShadowSettings();
       ImGui::EndMenu();
     }
     ImGui::Separator(); //--------------------------------------------------------------

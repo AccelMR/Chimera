@@ -66,10 +66,12 @@ SceneRenderer::addScenePasses(const Scene& scene,
   const RenderView view{.camera = camera,
                         .items = m_visibleItems,
                         .lights = m_visibleLights,
-                        .clearColor = clearColor};
+                        .clearColor = clearColor,
+                        .bShowShadowCascades = m_viewMode == ViewMode::ShadowCascades};
 
   switch (m_viewMode) {
     case ViewMode::Lit:
+    case ViewMode::ShadowCascades:
       return addLitPasses(scene, view, output);
     case ViewMode::LitWireframe: {
       const RGTextureHandle depth = addLitPasses(scene, view, output);
@@ -116,7 +118,8 @@ SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextur
                            .items = view.items,
                            .lights = view.lights,
                            .shadows = m_shadowRenderer->addPasses(m_graph, scene, view),
-                           .clearColor = view.clearColor};
+                           .clearColor = view.clearColor,
+                           .bShowShadowCascades = view.bShowShadowCascades};
   const RGTextureDesc outputDesc = m_graph.getTextureDesc(output);
   const RGTextureHandle sceneColor = m_graph.createTexture(
       "SceneColor",

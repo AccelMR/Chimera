@@ -25,7 +25,8 @@ constexpr StringView kViewModeNames[] = {"Lit",
                                          "Metallic",
                                          "Roughness",
                                          "AmbientOcclusion",
-                                         "Emissive"};
+                                         "Emissive",
+                                         "ShadowCascades"};
 static_assert(sizeof(kViewModeNames) / sizeof(kViewModeNames[0]) ==
               static_cast<SIZE_T>(ViewMode::COUNT));
 
@@ -50,7 +51,8 @@ ConsoleVariable<String> g_cvarViewMode(
     "Renderer.ViewMode",
     "Lit",
     "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords, "
-    "or a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive.",
+    "a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive, or "
+    "ShadowCascades (Lit tinted by the shadow cascade of each pixel).",
     "ViewMode");
 
 ConsoleVariable<String> g_cvarRenderPath("Renderer.Path",
@@ -73,15 +75,69 @@ ConsoleVariable<bool> g_cvarShadows("Renderer.Shadows",
 ConsoleVariable<int32> g_cvarShadowMapSize(
     "Renderer.ShadowMapSize",
     2048,
-    "Width and height in texels of the directional shadow map.",
+    "Width and height in texels of each cascade of the directional shadow map.",
     "ShadowMapSize");
 
 ConsoleVariable<float> g_cvarShadowDistance(
     "Renderer.ShadowDistance",
-    50.0f,
+    200.0f,
     "How far from the camera, in world units, the directional shadow reaches. A bigger "
     "distance spreads the same texels over more ground.",
     "ShadowDistance");
+
+ConsoleVariable<int32> g_cvarShadowCascades(
+    "Renderer.ShadowCascades",
+    4,
+    "How many maps (1 to 4) split the directional shadow distance, the nearest one the "
+    "sharpest.",
+    "ShadowCascades");
+
+ConsoleVariable<float> g_cvarShadowSplitLambda(
+    "Renderer.ShadowSplitLambda",
+    0.8f,
+    "Where the cascades split, from 0 (even steps) to 1 (steps that grow with the distance, "
+    "more detail near the camera).",
+    "ShadowSplitLambda");
+
+ConsoleVariable<float> g_cvarShadowCascadeBlend(
+    "Renderer.ShadowCascadeBlend",
+    0.15f,
+    "Fraction of each cascade, at its far end, that blends into the next one so the change "
+    "does not show. 0 cuts sharply.",
+    "ShadowCascadeBlend");
+
+ConsoleVariable<float> g_cvarShadowFade(
+    "Renderer.ShadowFade",
+    0.2f,
+    "Fraction of the shadow distance, at its far end, where the shadow fades out.",
+    "ShadowFade");
+
+ConsoleVariable<int32> g_cvarShadowFilterRadius(
+    "Renderer.ShadowFilterRadius",
+    1,
+    "Texels around each pixel the shadow test blends (0 to 3; 1 is a 3x3 filter). Softer "
+    "edges cost more samples.",
+    "ShadowFilterRadius");
+
+ConsoleVariable<float> g_cvarShadowNormalOffset(
+    "Renderer.ShadowNormalOffset",
+    1.5f,
+    "How far, in texels of its cascade, a receiver moves along its normal before the test. "
+    "Too little leaves dark stripes on lit surfaces; too much detaches shadows.",
+    "ShadowNormalOffset");
+
+ConsoleVariable<float> g_cvarShadowDepthBias(
+    "Renderer.ShadowDepthBias",
+    1.0f,
+    "Constant depth bias of the shadow casters, in steps of the depth format.",
+    "ShadowDepthBias");
+
+ConsoleVariable<float> g_cvarShadowSlopeBias(
+    "Renderer.ShadowSlopeBias",
+    2.0f,
+    "Depth bias of the shadow casters that grows with how steeply they face away from the "
+    "light.",
+    "ShadowSlopeBias");
 
 /*
  */

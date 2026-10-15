@@ -697,7 +697,8 @@ TEST_CASE("chCore - Directional shadow projection")
   // Comes down at an angle, from behind the camera and to its left.
   const Vector3 lightDirection = Vector3(1.0f, 0.5f, -1.0f).getNormalized();
   const DirectionalShadowProjection projection =
-      ShadowRenderer::computeDirectionalProjection(camera, lightDirection, kDistance, kMapSize);
+      ShadowRenderer::computeDirectionalProjection(camera, lightDirection, 0.0f, kDistance,
+                                                   kMapSize);
 
   const auto project = [](const Matrix4& viewProjection, const Vector3& point) {
     const Vector4 clip = viewProjection.transformVector4(Vector4(point.x, point.y, point.z, 1.0f));
@@ -747,7 +748,8 @@ TEST_CASE("chCore - Directional shadow projection")
     moved.setPosition(camera.getPosition() + move);
     moved.lookAt(camera.getLookAt() + move);
     const DirectionalShadowProjection movedProjection =
-        ShadowRenderer::computeDirectionalProjection(moved, lightDirection, kDistance, kMapSize);
+        ShadowRenderer::computeDirectionalProjection(moved, lightDirection, 0.0f, kDistance,
+                                                     kMapSize);
     REQUIRE(movedProjection.texelWorldSize == projection.texelWorldSize);
 
     const Vector3 point(3.0f, 1.0f, 0.5f);
@@ -758,6 +760,68 @@ TEST_CASE("chCore - Directional shadow projection")
                                (after.y - before.y) * kMapSize * 0.5f}) {
       REQUIRE(Math::abs(texels - Math::floor(texels + 0.5f)) < 0.01f);
     }
+  }
+
+  SECTION("A cascade covers its own slice of the view with smaller texels")
+  {
+    const DirectionalShadowProjection slice = ShadowRenderer::computeDirectionalProjection(
+        camera, lightDirection, 5.0f, 10.0f, kMapSize);
+    REQUIRE(slice.texelWorldSize < projection.texelWorldSize);
+
+    const Vector3 forward = camera.getForwardVector();
+    const Vector3 right = camera.getRightVector();
+    const Vector3 up = camera.getUpVector();
+    constexpr float kAspect = 720.0f / 1280.0f;
+    for (const float depth : {5.0f, 7.5f, 10.0f}) {
+      for (const float x : {-0.99f, 0.0f, 0.99f}) {
+        for (const float y : {-0.99f, 0.0f, 0.99f}) {
+          const Vector3 point = camera.getPosition() + forward * depth +
+                                right * (x * depth) + up * (y * depth * kAspect);
+          const Vector3 ndc = project(slice.viewProjection, point);
+          REQUIRE(Math::abs(ndc.x) <= 1.0f);
+          REQUIRE(Math::abs(ndc.y) <= 1.0f);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("chCore - Shadow cascade splits")
+{
+  float splits[4];
+
+  SECTION("Lambda 0 gives even steps")
+  {
+    ShadowRenderer::computeCascadeSplits(1.0f, 101.0f, 0.0f, splits);
+    REQUIRE(splits[0] == Approx(26.0f));
+    REQUIRE(splits[1] == Approx(51.0f));
+    REQUIRE(splits[2] == Approx(76.0f));
+    REQUIRE(splits[3] == 101.0f);
+  }
+
+  SECTION("Lambda 1 gives steps in proportion to the distance")
+  {
+    ShadowRenderer::computeCascadeSplits(1.0f, 10000.0f, 1.0f, splits);
+    REQUIRE(splits[0] == Approx(10.0f));
+    REQUIRE(splits[1] == Approx(100.0f));
+    REQUIRE(splits[2] == Approx(1000.0f));
+    REQUIRE(splits[3] == 10000.0f);
+  }
+
+  SECTION("Splits grow and the last one ends at the distance")
+  {
+    ShadowRenderer::computeCascadeSplits(0.1f, 200.0f, 0.8f, splits);
+    REQUIRE(splits[0] > 0.1f);
+    REQUIRE(splits[0] < splits[1]);
+    REQUIRE(splits[1] < splits[2]);
+    REQUIRE(splits[2] < splits[3]);
+    REQUIRE(splits[3] == 200.0f);
+  }
+
+  SECTION("One cascade covers the whole distance")
+  {
+    ShadowRenderer::computeCascadeSplits(0.1f, 200.0f, 0.8f, Span<float>(splits, 1));
+    REQUIRE(splits[0] == 200.0f);
   }
 }
 

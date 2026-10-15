@@ -80,5 +80,6 @@ PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
   color += evaluateAmbient(surface, view.ambient,
                            getOcclusion(material, textureSampler, input.texCoord));
   color += getEmissive(material, textureSampler, input.texCoord);
+  color = applyShadowCascadeTint(color, input.worldPosition, view);
   return float4(color, baseColor.a);
 }
