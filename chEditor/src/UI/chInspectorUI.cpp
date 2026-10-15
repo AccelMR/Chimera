@@ -25,6 +25,7 @@
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
+#include "chStringUtils.h"
 #include "chTextureAsset.h"
 
 #include "chMath.h"
@@ -163,10 +164,12 @@ InspectorUI::renderInspectorUI()
     return;
   }
 
-  ImGui::TextUnformatted(selected->getName().c_str());
   // What an instance holds comes from its prefab and is not saved with the scene, so it is
-  // shown but cannot be edited; only the instance's own transform can.
+  // shown but cannot be edited; only the instance's own name and transform can.
   GameObject* instance = selected->getOutermostPrefabInstance();
+  ImGui::BeginDisabled(instance && instance != selected.get());
+  renderName(*selected);
+  ImGui::EndDisabled();
   if (instance) {
     renderPrefabInstance(*selected, *instance);
   }
@@ -182,6 +185,29 @@ InspectorUI::renderInspectorUI()
   renderLightComponent(*selected);
   ImGui::EndDisabled();
   ImGui::End();
+}
+
+/*
+ * The name changes once the field is left or Enter is pressed, so a rename is one undo step
+ * and the Scene Graph does not change on every key.
+ */
+void
+InspectorUI::renderName(GameObject& gameObject)
+{
+  if (m_nameOwner != &gameObject || !m_bEditingName) {
+    m_nameOwner = &gameObject;
+    StringUtils::copyToBuffer(m_nameBuffer, gameObject.getName());
+  }
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  ImGui::InputText("##Name", m_nameBuffer, sizeof(m_nameBuffer));
+  m_bEditingName = ImGui::IsItemActive();
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    const StringView name = StringUtils::trimView(StringView(m_nameBuffer));
+    if (!name.empty() && name != gameObject.getName()) {
+      EditorScene::recordChange(gameObject, "Rename");
+      gameObject.setName(String(name));
+    }
+  }
 }
 
 /*
@@ -207,8 +233,8 @@ InspectorUI::renderPrefabInstance(GameObject& selected, GameObject& instance)
     ImGui::SameLine();
     if (ImGui::SmallButton("Unpack")) {
       // The content stays; it is saved with the scene from now on.
+      EditorScene::recordChange(instance, "Unpack");
       instance.setPrefab(UUID::null());
-      EditorScene::markDirty();
     }
   }
 }
@@ -240,19 +266,19 @@ InspectorUI::renderTransform(GameObject& gameObject)
                                                            "Z (up)"};
   if (renderAxisRow(ICON_FA_ARROWS_ALT "  Position", positionValues, 0.01f, 0.0f, "%.3f",
                     kPositionTooltips)) {
+    EditorScene::recordChange(gameObject, "Move");
     transform.setLocalPosition(
         Vector3(positionValues[0], positionValues[1], positionValues[2]));
-    EditorScene::markDirty();
   }
 
   static constexpr const ANSICHAR* kRotationTooltips[3] = {
       "Roll (around X)", "Pitch (around Y)", "Yaw (around Z)"};
   if (renderAxisRow(ICON_FA_SYNC_ALT "  Rotation", m_rotationDegrees, 0.5f, 0.0f, "%.1f",
                     kRotationTooltips)) {
+    EditorScene::recordChange(gameObject, "Rotate");
     transform.setLocalRotation(
         Quaternion(Rotator(m_rotationDegrees[1], m_rotationDegrees[2], m_rotationDegrees[0])));
     m_rotationShown = transform.getLocalRotation();
-    EditorScene::markDirty();
   }
 
   const Vector3& scale = transform.getLocalScale();
@@ -260,8 +286,8 @@ InspectorUI::renderTransform(GameObject& gameObject)
   static constexpr const ANSICHAR* kScaleTooltips[3] = {"X", "Y", "Z"};
   if (renderAxisRow(ICON_FA_EXPAND_ARROWS_ALT "  Scale", scaleValues, 0.01f, 1.0f, "%.3f",
                     kScaleTooltips)) {
+    EditorScene::recordChange(gameObject, "Scale");
     transform.setLocalScale(Vector3(scaleValues[0], scaleValues[1], scaleValues[2]));
-    EditorScene::markDirty();
   }
 }
 
@@ -276,8 +302,8 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
 
   bool bVisible = modelComponent.isEnabled();
   if (ImGui::Checkbox("Visible", &bVisible)) {
+    EditorScene::recordChange(*modelComponent.getOwner(), "Edit Visible");
     modelComponent.setEnabled(bVisible);
-    EditorScene::markDirty();
   }
 
   const SPtr<Model>& model = modelComponent.getModel();
@@ -330,44 +356,44 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
 
   bool bEnabled = light->isEnabled();
   if (ImGui::Checkbox("Enabled", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
     light->setEnabled(bEnabled);
-    EditorScene::markDirty();
   }
 
   const LinearColor& color = light->getColor();
   float colorValues[3] = {color.r, color.g, color.b};
   if (ImGui::ColorEdit3("Color", colorValues, ImGuiColorEditFlags_Float)) {
+    EditorScene::recordChange(gameObject, "Edit Color");
     light->setColor(LinearColor(colorValues[0], colorValues[1], colorValues[2], 1.0f));
-    EditorScene::markDirty();
   }
 
   float intensity = light->getIntensity();
   if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 10000.0f)) {
+    EditorScene::recordChange(gameObject, "Edit Intensity");
     light->setIntensity(intensity);
-    EditorScene::markDirty();
   }
 
   if (pointLight) {
     float range = pointLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      EditorScene::recordChange(gameObject, "Edit Range");
       pointLight->setRange(range);
-      EditorScene::markDirty();
     }
   }
 
   if (spotLight) {
     float range = spotLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      EditorScene::recordChange(gameObject, "Edit Range");
       spotLight->setRange(range);
-      EditorScene::markDirty();
     }
     float inner = spotLight->getInnerConeAngle().valueDegree();
     float outer = spotLight->getOuterConeAngle().valueDegree();
     const bool bInnerChanged = ImGui::SliderFloat("Inner Angle", &inner, 0.0f, 89.0f);
     const bool bOuterChanged = ImGui::SliderFloat("Outer Angle", &outer, 0.0f, 89.0f);
     if (bInnerChanged || bOuterChanged) {
+      EditorScene::recordChange(gameObject, "Edit Cone");
       spotLight->setConeAngles(Degree(inner), Degree(outer));
-      EditorScene::markDirty();
     }
   }
 }
@@ -390,8 +416,8 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
                 ImVec2(-FLT_MIN, 0.0f));
   if (ImGui::BeginDragDropTarget()) {
     if (SPtr<MaterialAsset> dropped = AssetDragDrop::acceptMaterial()) {
+      EditorScene::recordChange(*modelComponent.getOwner(), "Set Material");
       modelComponent.setMaterial(slot, dropped);
-      EditorScene::markDirty();
     }
     ImGui::EndDragDropTarget();
   }
@@ -399,8 +425,8 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
     ImGui::TextDisabled("Only on this object");
     ImGui::SameLine();
     if (ImGui::SmallButton("Use model's")) {
+      EditorScene::recordChange(*modelComponent.getOwner(), "Clear Material");
       modelComponent.setMaterial(slot, nullptr);
-      EditorScene::markDirty();
     }
   }
 

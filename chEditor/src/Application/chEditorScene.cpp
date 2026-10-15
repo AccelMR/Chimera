@@ -25,6 +25,7 @@
 #include "chRotator.h"
 #include "chScene.h"
 #include "chSceneAsset.h"
+#include "chSceneHistory.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
 
@@ -68,6 +69,10 @@ struct EditorSceneState
   EditorCamera* camera = nullptr;
   bool bDirty = false;
   uint32 revision = 0;
+  // Of the scene shown; a new scene or prefab mode starts an empty one.
+  SceneHistory history;
+  bool bUndoRequested = false;
+  bool bRedoRequested = false;
 
   // Waits for the unsaved changes question or the Save As name, then runs in applyPending.
   PendingAction action = PendingAction::None;
@@ -159,6 +164,7 @@ setCurrent(EditorSceneState& state, const SPtr<Scene>& scene, const SPtr<SceneAs
   state.asset = asset;
   state.bDirty = false;
   ++state.revision;
+  state.history.clear();
   if (!scene || !SceneManager::instance().setActiveScene(scene)) {
     CH_LOG_ERROR(EditorSceneLog, "Could not make the scene active.");
   }
@@ -176,6 +182,9 @@ void
 releaseCurrent(EditorSceneState& state)
 {
   EditorSelection::setSelectedGameObject(nullptr);
+  state.history.clear();
+  state.bUndoRequested = false;
+  state.bRedoRequested = false;
   if (state.scene) {
     SceneManager::instance().unloadScene(*state.scene);
   }
@@ -197,10 +206,13 @@ saveInto(EditorSceneState& state, const SPtr<SceneAsset>& asset)
     const Camera& camera = state.camera->getCamera();
     asset->setEditorView(camera.getPosition(), camera.getLookAt());
   }
+  // An edit still going on is saved as it is now, so it ends here.
+  state.history.commit(*state.scene);
   if (!AssetManager::instance().saveAsset(asset)) {
     CH_LOG_ERROR(EditorSceneLog, "Failed to save scene {0}.", asset->getName());
     return false;
   }
+  state.history.markSaved();
   setDirty(state, false);
   rememberStartupScene(*asset);
   CH_LOG_INFO(EditorSceneLog, "Saved scene {0}.", asset->getName());
@@ -213,11 +225,13 @@ bool
 savePrefab(EditorSceneState& state)
 {
   PrefabAsset& prefab = *state.prefab;
+  state.history.commit(*state.scene);
   if (!prefab.setContent(*state.prefabRoot) ||
       !AssetManager::instance().saveAsset(state.prefab)) {
     CH_LOG_ERROR(EditorSceneLog, "Failed to save prefab {0}.", prefab.getName());
     return false;
   }
+  state.history.markSaved();
   setDirty(state, false);
   CH_LOG_INFO(EditorSceneLog, "Saved prefab {0}.", prefab.getName());
   return true;
@@ -473,6 +487,36 @@ renderSaveAsPopup(EditorSceneState& state, const Path& folder)
     state.actionAsset.reset();
   }
 }
+
+/*
+ * The scene stays dirty when undo or redo did not land where it was saved.
+ */
+void
+applyHistory(EditorSceneState& state, bool bEditing)
+{
+  Scene& scene = *state.scene;
+  UUID focus = UUID::null();
+  bool bApplied = false;
+  if (state.bUndoRequested) {
+    bApplied = state.history.undo(scene, focus);
+  }
+  else if (state.bRedoRequested) {
+    bApplied = state.history.redo(scene, focus);
+  }
+  state.bUndoRequested = false;
+  state.bRedoRequested = false;
+
+  if (bApplied) {
+    // Null when the step removed the object.
+    EditorSelection::setSelectedGameObject(scene.findGameObject(focus));
+    setDirty(state, !state.history.isAtSavedState());
+  }
+  else if (!bEditing && state.history.isEntryOpen()) {
+    // An edit that changed nothing (a value set back) is dropped and leaves no "*".
+    state.history.commit(scene);
+    setDirty(state, !state.history.isAtSavedState());
+  }
+}
 } // namespace
 
 /*
@@ -556,9 +600,69 @@ EditorScene::getDefaultParent()
 /*
  */
 void
-EditorScene::markDirty()
+EditorScene::recordChange(GameObject& gameObject, StringView action)
 {
-  setDirty(getState(), true);
+  EditorSceneState& state = getState();
+  state.history.recordChange(gameObject, action);
+  setDirty(state, true);
+}
+
+/*
+ */
+void
+EditorScene::recordCreated(GameObject& gameObject, StringView action)
+{
+  EditorSceneState& state = getState();
+  state.history.recordCreated(gameObject, action);
+  setDirty(state, true);
+}
+
+/*
+ */
+bool
+EditorScene::canUndo()
+{
+  return getState().history.canUndo();
+}
+
+/*
+ */
+bool
+EditorScene::canRedo()
+{
+  return getState().history.canRedo();
+}
+
+/*
+ */
+StringView
+EditorScene::getUndoName()
+{
+  return getState().history.getUndoName();
+}
+
+/*
+ */
+StringView
+EditorScene::getRedoName()
+{
+  return getState().history.getRedoName();
+}
+
+/*
+ */
+void
+EditorScene::requestUndo()
+{
+  getState().bUndoRequested = true;
+}
+
+/*
+ */
+void
+EditorScene::requestRedo()
+{
+  getState().bRedoRequested = true;
 }
 
 /*
@@ -680,9 +784,10 @@ EditorScene::createPrefab(GameObject& gameObject, const Path& folder)
     return nullptr;
   }
 
-  // Its content is already what the prefab holds, so nothing has to be read again.
+  // Its content is already what the prefab holds, so nothing has to be read again. Undo only
+  // removes the link; the prefab asset stays.
+  recordChange(gameObject, "Create Prefab");
   gameObject.setPrefab(prefab->getUUID());
-  markDirty();
   getState().onAssetCreated(prefab);
   CH_LOG_INFO(EditorSceneLog, "Made prefab {0}.", name);
   return prefab;
@@ -735,9 +840,12 @@ EditorScene::render(const Path& folder)
 /*
  */
 void
-EditorScene::applyPending()
+EditorScene::applyPending(bool bEditing)
 {
   EditorSceneState& state = getState();
+  if (state.scene) {
+    applyHistory(state, bEditing);
+  }
   if (!state.bActionReady) {
     return;
   }

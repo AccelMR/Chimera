@@ -31,6 +31,9 @@ class InspectorUI
   renderInspectorUI();
 
  private:
+  void
+  renderName(GameObject& gameObject);
+
   /**
    * Says which prefab selected comes from, with buttons to edit or unpack it.
    */
@@ -64,6 +67,11 @@ class InspectorUI
   float m_rotationDegrees[3] = {0.0f, 0.0f, 0.0f};
   // The rotation the angles were last read from or written to.
   Quaternion m_rotationShown = Quaternion::IDENTITY;
+
+  // Read again from the object whenever the field is not being typed in.
+  const GameObject* m_nameOwner = nullptr;
+  ANSICHAR m_nameBuffer[256] = "";
+  bool m_bEditingName = false;
 };
 
 } // namespace chEngineSDK

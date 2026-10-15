@@ -177,7 +177,9 @@ EditorApplication::onRender(ICommandList& commandList,
   if (UIHelpers::bRenderImGui) {
     renderUI();
   }
-  EditorScene::applyPending();
+  // A drag or a text field still going on keeps its changes in one undo step.
+  EditorScene::applyPending(UIHelpers::bRenderImGui &&
+                            (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse()));
   if (EditorScene::shouldQuit()) {
     quit();
   }
@@ -332,6 +334,16 @@ EditorApplication::bindEvents() {
       }
       else if (data.key == chKeyBoard::Key::N) {
         EditorScene::requestNew();
+      }
+      // A text field being typed in has its own undo.
+      else if (!ImGui::GetIO().WantTextInput) {
+        if (data.key == chKeyBoard::Key::Z && !bShift) {
+          EditorScene::requestUndo();
+        }
+        else if (data.key == chKeyBoard::Key::Y ||
+                 (data.key == chKeyBoard::Key::Z && bShift)) {
+          EditorScene::requestRedo();
+        }
       }
 
       if (data.key == chKeyBoard::Key::F5) {

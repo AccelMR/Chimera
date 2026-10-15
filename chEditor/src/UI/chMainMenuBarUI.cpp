@@ -23,6 +23,7 @@
 #include "chPrefabAsset.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
+#include "chStringUtils.h"
 #include "chUIHelpers.h"
 
 #include "imgui.h"
@@ -42,6 +43,7 @@ MainMenuBarUI::renderMainMenuBar() {
   }
 
   renderFileMenu();
+  renderEditMenu();
 
   if (ImGui::BeginMenu("Render")) {
     if (ImGui::BeginMenu("View Mode")) {
@@ -152,6 +154,31 @@ MainMenuBarUI::renderFileMenu()
   if (ImGui::MenuItem("Exit")) {
     // The editor closes once the unsaved changes are saved or discarded.
     CH_PARAMETER_UNUSED(EditorScene::requestQuit());
+  }
+  ImGui::EndMenu();
+}
+
+/*
+ * The labels are only built while the menu is open.
+ */
+void
+MainMenuBarUI::renderEditMenu()
+{
+  if (!ImGui::BeginMenu("Edit")) {
+    return;
+  }
+
+  const String undoLabel = EditorScene::canUndo()
+                               ? StringUtils::format("Undo {0}", EditorScene::getUndoName())
+                               : String("Undo");
+  if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, EditorScene::canUndo())) {
+    EditorScene::requestUndo();
+  }
+  const String redoLabel = EditorScene::canRedo()
+                               ? StringUtils::format("Redo {0}", EditorScene::getRedoName())
+                               : String("Redo");
+  if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, EditorScene::canRedo())) {
+    EditorScene::requestRedo();
   }
   ImGui::EndMenu();
 }

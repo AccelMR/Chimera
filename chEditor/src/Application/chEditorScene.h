@@ -65,10 +65,39 @@ class EditorScene
   getDefaultParent();
 
   /**
-   * Call after every change to the scene's objects or components.
+   * Call before every change to gameObject, its components or its children, also before
+   * destroying it, so it can be undone. action names the change in the Edit menu ("Move").
+   * Changes recorded until the edit ends (applyPending) are undone together.
    */
   static void
-  markDirty();
+  recordChange(GameObject& gameObject, StringView action);
+
+  /**
+   * Call after making gameObject, once its components and children are in place.
+   */
+  static void
+  recordCreated(GameObject& gameObject, StringView action);
+
+  NODISCARD static bool
+  canUndo();
+
+  NODISCARD static bool
+  canRedo();
+
+  NODISCARD static StringView
+  getUndoName();
+
+  NODISCARD static StringView
+  getRedoName();
+
+  /**
+   * Undo and redo run in applyPending and select the object they changed.
+   */
+  static void
+  requestUndo();
+
+  static void
+  requestRedo();
 
   NODISCARD static bool
   isDirty();
@@ -136,10 +165,12 @@ class EditorScene
   render(const Path& folder);
 
   /**
-   * Makes or opens the scene asked for during the frame. Call after the UI is drawn.
+   * Runs the undo or redo and makes or opens the scene asked for during the frame. Call after
+   * the UI is drawn. While bEditing (a drag or a text field still going on) the recorded
+   * changes stay one open edit; otherwise they become one undo step.
    */
   static void
-  applyPending();
+  applyPending(bool bEditing);
 
   /**
    * The callback runs on the main thread with each scene asset Save As makes.

@@ -157,7 +157,7 @@ AssetDragDrop::createPrefabObject(Scene& scene,
 
   const SPtr<GameObject> gameObject = GameObjectSerializer::instantiate(*prefab, scene, parent);
   EditorSelection::setSelectedGameObject(gameObject);
-  EditorScene::markDirty();
+  EditorScene::recordCreated(*gameObject, "Place");
   return gameObject;
 }
 
@@ -185,7 +185,7 @@ AssetDragDrop::createModelObject(Scene& scene,
     ModelExpand::expand(scene, *gameObject, mode);
   }
   EditorSelection::setSelectedGameObject(gameObject);
-  EditorScene::markDirty();
+  EditorScene::recordCreated(*gameObject, "Place");
   return gameObject;
 }
 

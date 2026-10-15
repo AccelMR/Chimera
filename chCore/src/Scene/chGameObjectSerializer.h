@@ -47,6 +47,14 @@ class CH_CORE_EXPORT GameObjectSerializer
   read(DataStream& stream, Scene& scene, GameObject* parent);
 
   /**
+   * Reads one object written by write() into target (which must be in a scene), replacing its
+   * name, transform, prefab link, components and children; target keeps its UUID and place.
+   * The children get their saved UUIDs. False for broken data.
+   */
+  NODISCARD static bool
+  readInto(DataStream& stream, GameObject& target);
+
+  /**
    * Makes an instance of prefab under parent: an object named after the prefab, linked to it,
    * with the prefab's content.
    */
@@ -76,12 +84,26 @@ class CH_CORE_EXPORT GameObjectSerializer
 
  private:
   struct ReadContext;
+  struct ObjectHeader;
 
   NODISCARD static bool
   readList(ReadContext& context, GameObject* parent, uint32 count, uint32 depth);
 
   NODISCARD static bool
   readObject(ReadContext& context, GameObject* parent, uint32 depth);
+
+  NODISCARD static bool
+  readObjectHeader(ReadContext& context, ObjectHeader& outHeader);
+
+  /**
+   * Gives gameObject the transform and prefab link of header, then reads its components and
+   * children from the stream (or its prefab's content).
+   */
+  NODISCARD static bool
+  fillObject(ReadContext& context,
+             GameObject& gameObject,
+             const ObjectHeader& header,
+             uint32 depth);
 
   NODISCARD static bool
   readComponent(ReadContext& context, GameObject& gameObject);

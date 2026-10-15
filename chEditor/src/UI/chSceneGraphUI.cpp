@@ -58,7 +58,7 @@ createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
   const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
   gameObject->addComponent<LightComponentType>();
   EditorSelection::setSelectedGameObject(gameObject);
-  EditorScene::markDirty();
+  EditorScene::recordCreated(*gameObject, "Create");
 }
 
 /*
@@ -124,9 +124,9 @@ SceneGraphUI::applyPendingChanges(Scene& scene)
     addPendingObject(scene);
   }
   if (m_pendingExpand) {
+    EditorScene::recordChange(*m_pendingExpand, "Expand");
     if (ModelExpand::expand(scene, *m_pendingExpand, m_pendingExpandMode)) {
       m_openOnNextDraw = m_pendingExpand.get();
-      EditorScene::markDirty();
     }
     m_pendingExpand.reset();
   }
@@ -140,8 +140,8 @@ SceneGraphUI::applyPendingChanges(Scene& scene)
     if (isInSubtree(selected.get(), *m_pendingDelete)) {
       EditorSelection::setSelectedGameObject(nullptr);
     }
+    EditorScene::recordChange(*m_pendingDelete, "Delete");
     scene.destroyGameObject(*m_pendingDelete);
-    EditorScene::markDirty();
     m_pendingDelete.reset();
   }
 }
@@ -225,8 +225,8 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
                                       bool bPrefabRoot)
 {
   if (ImGui::MenuItem("Create Child", nullptr, false, !bLocked)) {
-    scene.createGameObject("GameObject", gameObject.get());
-    EditorScene::markDirty();
+    EditorScene::recordCreated(*scene.createGameObject("GameObject", gameObject.get()),
+                               "Create");
   }
   if (!bLocked) {
     renderCreateLightItems(scene, gameObject.get());
@@ -257,8 +257,8 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
     }
     if (ImGui::MenuItem("Unpack Prefab", nullptr, false, !bInsideInstance)) {
       // The content stays; it is saved with the scene from now on.
+      EditorScene::recordChange(*gameObject, "Unpack");
       gameObject->setPrefab(UUID::null());
-      EditorScene::markDirty();
     }
   }
 
@@ -278,8 +278,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
                                          ImGuiPopupFlags_NoOpenOverItems)) {
     GameObject* parent = EditorScene::getDefaultParent();
     if (ImGui::MenuItem("Create Empty")) {
-      scene.createGameObject("GameObject", parent);
-      EditorScene::markDirty();
+      EditorScene::recordCreated(*scene.createGameObject("GameObject", parent), "Create");
     }
     renderCreateLightItems(scene, parent);
     ImGui::EndPopup();

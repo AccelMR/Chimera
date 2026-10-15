@@ -170,6 +170,13 @@ struct GameObjectSerializer::ReadContext
   bool bNewUuids;
 };
 
+struct GameObjectSerializer::ObjectHeader
+{
+  GameObjectFileData data;
+  UUID prefab;
+  String name;
+};
+
 /*
  */
 void
@@ -211,6 +218,39 @@ GameObjectSerializer::read(DataStream& stream, Scene& scene, GameObject* parent)
   ReadContext context{
       .stream = stream, .scene = scene, .version = version, .bNewUuids = false};
   return readList(context, parent, count, 0);
+}
+
+/*
+ */
+bool
+GameObjectSerializer::readInto(DataStream& stream, GameObject& target)
+{
+  CH_ASSERT(target.getScene() && "The target must be in a scene.");
+  Scene& scene = *target.getScene();
+  uint32 version = 0;
+  uint32 count = 0;
+  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
+      version > SERIALIZATION_VERSION ||
+      stream.read(&count, sizeof(count)) != sizeof(count) || count != 1) {
+    return false;
+  }
+  ReadContext context{
+      .stream = stream, .scene = scene, .version = version, .bNewUuids = false};
+  ObjectHeader header;
+  if (!readObjectHeader(context, header)) {
+    return false;
+  }
+
+  // From the back, so nothing is shifted while removing.
+  while (!target.m_components.empty()) {
+    target.removeComponent(*target.m_components.back());
+  }
+  while (!target.m_children.empty()) {
+    scene.destroyGameObject(*target.m_children.back());
+  }
+  target.setName(header.name);
+  target.m_prefab = UUID::null();
+  return fillObject(context, target, header, 0);
 }
 
 /*
@@ -281,54 +321,75 @@ GameObjectSerializer::readList(ReadContext& context,
 bool
 GameObjectSerializer::readObject(ReadContext& context, GameObject* parent, uint32 depth)
 {
-  DataStream& stream = context.stream;
-  GameObjectFileData data;
-  UUID prefabId = UUID::null();
-  String name;
-  if (stream.read(&data, sizeof(data)) != sizeof(data) ||
-      (context.version >= kFirstPrefabVersion &&
-       stream.read(&prefabId, sizeof(prefabId)) != sizeof(prefabId)) ||
-      !AssetFile::readString(stream, name, kMaxNameLength) ||
-      data.componentCount > kMaxComponents) {
-    return false;
-  }
-  // An instance stores nothing below it.
-  if (!prefabId.isNull() && (data.componentCount != 0 || data.childCount != 0)) {
+  ObjectHeader header;
+  if (!readObjectHeader(context, header)) {
     return false;
   }
 
-  const SPtr<GameObject> gameObject = context.scene.createGameObject(name, parent);
+  const SPtr<GameObject> gameObject = context.scene.createGameObject(header.name, parent);
   if (!context.bNewUuids) {
     // The saved UUID, so whatever points at the object by its id finds it again.
-    gameObject->m_uuid = data.uuid;
+    gameObject->m_uuid = header.data.uuid;
   }
-  Transform& transform = gameObject->getTransform();
+  return fillObject(context, *gameObject, header, depth);
+}
+
+/*
+ */
+bool
+GameObjectSerializer::readObjectHeader(ReadContext& context, ObjectHeader& outHeader)
+{
+  DataStream& stream = context.stream;
+  outHeader.prefab = UUID::null();
+  if (stream.read(&outHeader.data, sizeof(outHeader.data)) != sizeof(outHeader.data) ||
+      (context.version >= kFirstPrefabVersion &&
+       stream.read(&outHeader.prefab, sizeof(outHeader.prefab)) !=
+           sizeof(outHeader.prefab)) ||
+      !AssetFile::readString(stream, outHeader.name, kMaxNameLength) ||
+      outHeader.data.componentCount > kMaxComponents) {
+    return false;
+  }
+  // An instance stores nothing below it.
+  return outHeader.prefab.isNull() ||
+         (outHeader.data.componentCount == 0 && outHeader.data.childCount == 0);
+}
+
+/*
+ */
+bool
+GameObjectSerializer::fillObject(ReadContext& context,
+                                 GameObject& gameObject,
+                                 const ObjectHeader& header,
+                                 uint32 depth)
+{
+  const GameObjectFileData& data = header.data;
+  Transform& transform = gameObject.getTransform();
   transform.setLocalPosition(Vector3(data.position[0], data.position[1], data.position[2]));
   transform.setLocalRotation(
       Quaternion(data.rotation[0], data.rotation[1], data.rotation[2], data.rotation[3]));
   transform.setLocalScale(Vector3(data.scale[0], data.scale[1], data.scale[2]));
 
-  if (!prefabId.isNull()) {
+  if (!header.prefab.isNull()) {
     // Kept even when the prefab is missing, so saving again keeps the link.
-    gameObject->m_prefab = prefabId;
-    const SPtr<PrefabAsset> prefab = findPrefab(prefabId);
+    gameObject.m_prefab = header.prefab;
+    const SPtr<PrefabAsset> prefab = findPrefab(header.prefab);
     if (!prefab) {
-      CH_LOG_WARNING(SceneManagerLog, "{0} lost its prefab {1}.", name, prefabId);
+      CH_LOG_WARNING(SceneManagerLog, "{0} lost its prefab {1}.", header.name, header.prefab);
     }
-    else if (!readPrefabInto(*prefab, *gameObject, depth + 1)) {
+    else if (!readPrefabInto(*prefab, gameObject, depth + 1)) {
       // A broken prefab leaves its instances empty instead of failing the whole file.
-      CH_LOG_WARNING(SceneManagerLog, "{0} could not read its prefab {1}.", name,
+      CH_LOG_WARNING(SceneManagerLog, "{0} could not read its prefab {1}.", header.name,
                      prefab->getName());
     }
     return true;
   }
 
   for (uint32 i = 0; i < data.componentCount; ++i) {
-    if (!readComponent(context, *gameObject)) {
+    if (!readComponent(context, gameObject)) {
       return false;
     }
   }
-  return readList(context, gameObject.get(), data.childCount, depth + 1);
+  return readList(context, &gameObject, data.childCount, depth + 1);
 }
 
 /*

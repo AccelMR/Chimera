@@ -41,6 +41,7 @@
 #include "chRenderSettings.h"
 #include "chRotator.h"
 #include "chScene.h"
+#include "chSceneHistory.h"
 #include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
@@ -1721,6 +1722,167 @@ TEST_CASE("chCore - Prefabs")
     REQUIRE(GameObjectSerializer::read(stream, loaded, nullptr));
     REQUIRE(loaded.getRootGameObjects()[0]->getChildren().size() == 1);
     REQUIRE(loaded.getRootGameObjects()[0]->getComponent<PointLightComponent>() != nullptr);
+  }
+}
+
+TEST_CASE("chCore - Scene history")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> a = scene.createGameObject("A");
+  a->addComponent<PointLightComponent>().setRange(10.0f);
+  const SPtr<GameObject> c = scene.createGameObject("C", a.get());
+  const SPtr<GameObject> b = scene.createGameObject("B");
+  b->addComponent<DirectionalLightComponent>();
+  const SPtr<GameObject> d = scene.createGameObject("D");
+  const chEngineSDK::UUID bId = b->getUUID();
+  const chEngineSDK::UUID cId = c->getUUID();
+  REQUIRE(scene.getLightCount() == 2);
+
+  SceneHistory history;
+  chEngineSDK::UUID focus = chEngineSDK::UUID::null();
+  REQUIRE_FALSE(history.canUndo());
+  REQUIRE_FALSE(history.undo(scene, focus));
+
+  SECTION("A drag is one step, undone in place")
+  {
+    history.recordChange(*a, "Move");
+    a->getTransform().setLocalPosition(Vector3(1.0f, 0.0f, 0.0f));
+    history.recordChange(*a, "Move");
+    a->getTransform().setLocalPosition(Vector3(2.0f, 0.0f, 0.0f));
+    REQUIRE(history.isEntryOpen());
+    REQUIRE(history.getUndoName() == "Move A");
+    history.commit(scene);
+    REQUIRE(history.getEntryCount() == 1);
+
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(focus == a->getUUID());
+    // The same object, so whatever holds it keeps a live one.
+    REQUIRE(scene.getRootGameObjects()[0] == a);
+    REQUIRE(a->getTransform().getLocalPosition() == Vector3::ZERO);
+    REQUIRE(a->getComponent<PointLightComponent>()->getRange() == 10.0f);
+    REQUIRE(a->getChildren().size() == 1);
+    REQUIRE(a->getChildren()[0]->getUUID() == cId);
+    REQUIRE(scene.getLightCount() == 2);
+    REQUIRE(history.canRedo());
+    REQUIRE(history.getRedoName() == "Move A");
+
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(a->getTransform().getLocalPosition() == Vector3(2.0f, 0.0f, 0.0f));
+    REQUIRE_FALSE(history.canRedo());
+  }
+
+  SECTION("A deleted object comes back with its UUID at its place")
+  {
+    history.recordChange(*b, "Delete");
+    scene.destroyGameObject(*b);
+    history.commit(scene);
+    REQUIRE(scene.getRootGameObjects().size() == 2);
+    REQUIRE(scene.getLightCount() == 1);
+
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(focus == bId);
+    REQUIRE(scene.getRootGameObjects().size() == 3);
+    REQUIRE(scene.getRootGameObjects()[1]->getUUID() == bId);
+    REQUIRE(scene.getRootGameObjects()[2] == d);
+    REQUIRE(scene.getRootGameObjects()[1]->getComponent<DirectionalLightComponent>());
+    REQUIRE(scene.getLightCount() == 2);
+    REQUIRE(scene.findGameObject(bId) == scene.getRootGameObjects()[1]);
+
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(scene.findGameObject(bId) == nullptr);
+    REQUIRE(scene.getLightCount() == 1);
+  }
+
+  SECTION("A created object goes away and comes back")
+  {
+    const SPtr<GameObject> e = scene.createGameObject("E", a.get());
+    e->addComponent<SpotLightComponent>();
+    history.recordCreated(*e, "Create");
+    // Recorded already through its creation, so this adds nothing.
+    history.recordChange(*e, "Move");
+    e->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 5.0f));
+    history.commit(scene);
+    const chEngineSDK::UUID eId = e->getUUID();
+
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(a->getChildren().size() == 1);
+    REQUIRE(scene.findGameObject(eId) == nullptr);
+    REQUIRE(scene.getLightCount() == 2);
+
+    REQUIRE(history.redo(scene, focus));
+    const SPtr<GameObject> again = scene.findGameObject(eId);
+    REQUIRE(again != nullptr);
+    REQUIRE(again->getParent() == a.get());
+    REQUIRE(again->getTransform().getLocalPosition() == Vector3(0.0f, 0.0f, 5.0f));
+    REQUIRE(again->getComponent<SpotLightComponent>());
+    REQUIRE(scene.getLightCount() == 3);
+  }
+
+  SECTION("A parent recorded after its child undoes both")
+  {
+    history.recordChange(*c, "Rename");
+    c->setName("Renamed");
+    history.recordChange(*a, "Delete Child");
+    scene.destroyGameObject(*c);
+    history.commit(scene);
+    REQUIRE(a->getChildren().empty());
+
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(focus == cId);
+    REQUIRE(a->getChildren().size() == 1);
+    REQUIRE(a->getChildren()[0]->getUUID() == cId);
+    REQUIRE(a->getChildren()[0]->getName() == "C");
+
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(a->getChildren().empty());
+  }
+
+  SECTION("Nothing changed, nothing to undo")
+  {
+    history.recordChange(*d, "Move");
+    history.commit(scene);
+    REQUIRE(history.getEntryCount() == 0);
+    REQUIRE_FALSE(history.canUndo());
+  }
+
+  SECTION("Saved state")
+  {
+    REQUIRE(history.isAtSavedState());
+    history.recordChange(*d, "Rename");
+    d->setName("D2");
+    REQUIRE_FALSE(history.isAtSavedState());
+    history.commit(scene);
+    history.markSaved();
+    REQUIRE(history.isAtSavedState());
+
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(d->getName() == "D");
+    REQUIRE_FALSE(history.isAtSavedState());
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(history.isAtSavedState());
+
+    // A new step after an undo makes the saved state unreachable.
+    REQUIRE(history.undo(scene, focus));
+    history.recordChange(*d, "Rename");
+    d->setName("D3");
+    history.commit(scene);
+    REQUIRE_FALSE(history.canRedo());
+    REQUIRE_FALSE(history.isAtSavedState());
+  }
+
+  SECTION("The oldest steps are dropped past the limit")
+  {
+    SceneHistory shortHistory(2);
+    for (uint32 i = 1; i <= 3; ++i) {
+      shortHistory.recordChange(*d, "Move");
+      d->getTransform().setLocalPosition(Vector3(static_cast<float>(i), 0.0f, 0.0f));
+      shortHistory.commit(scene);
+    }
+    REQUIRE(shortHistory.getEntryCount() == 2);
+    REQUIRE(shortHistory.undo(scene, focus));
+    REQUIRE(shortHistory.undo(scene, focus));
+    REQUIRE_FALSE(shortHistory.undo(scene, focus));
+    REQUIRE(d->getTransform().getLocalPosition() == Vector3(1.0f, 0.0f, 0.0f));
   }
 }
 

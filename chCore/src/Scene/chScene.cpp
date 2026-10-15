@@ -11,6 +11,7 @@
 
 #include "chAlgorithm.h"
 #include "chFrustum.h"
+#include "chMath.h"
 #include "chMesh.h"
 #include "chRay.h"
 #include "chRayCast.h"
@@ -23,6 +24,22 @@ NODISCARD FORCEINLINE Vector3
 toVector3(const Vector4& vector)
 {
   return Vector3(vector.x, vector.y, vector.z);
+}
+
+/*
+ */
+SPtr<GameObject>
+findInList(const Vector<SPtr<GameObject>>& gameObjects, const UUID& id)
+{
+  for (const SPtr<GameObject>& gameObject : gameObjects) {
+    if (gameObject->getUUID() == id) {
+      return gameObject;
+    }
+    if (SPtr<GameObject> found = findInList(gameObject->getChildren(), id)) {
+      return found;
+    }
+  }
+  return nullptr;
 }
 } // namespace
 
@@ -77,6 +94,46 @@ Scene::destroyGameObject(GameObject& gameObject)
   Algorithm::removeFirstIf(siblings, [&gameObject](const SPtr<GameObject>& sibling) {
     return sibling.get() == &gameObject;
   });
+}
+
+/*
+ */
+SPtr<GameObject>
+Scene::findGameObject(const UUID& id) const
+{
+  return findInList(m_rootGameObjects, id);
+}
+
+/*
+ */
+uint32
+Scene::getSiblingIndex(const GameObject& gameObject) const
+{
+  const Vector<SPtr<GameObject>>& siblings =
+      gameObject.m_parent ? gameObject.m_parent->m_children : m_rootGameObjects;
+  for (SIZE_T i = 0; i < siblings.size(); ++i) {
+    if (siblings[i].get() == &gameObject) {
+      return static_cast<uint32>(i);
+    }
+  }
+  return 0;
+}
+
+/*
+ */
+void
+Scene::setSiblingIndex(GameObject& gameObject, uint32 index)
+{
+  Vector<SPtr<GameObject>>& siblings =
+      gameObject.m_parent ? gameObject.m_parent->m_children : m_rootGameObjects;
+  const SIZE_T current = getSiblingIndex(gameObject);
+  const SIZE_T target = Math::min(static_cast<SIZE_T>(index), siblings.size() - 1);
+  if (current == target) {
+    return;
+  }
+  SPtr<GameObject> moved = std::move(siblings[current]);
+  siblings.erase(siblings.begin() + current);
+  siblings.insert(siblings.begin() + target, std::move(moved));
 }
 
 /*

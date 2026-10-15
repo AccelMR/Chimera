@@ -540,10 +540,13 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
   Quaternion rotation;
   Vector3 position;
   if (local.decompose(scale, rotation, position)) {
+    const StringView action = m_operation == Operation::Rotate  ? "Rotate"
+                              : m_operation == Operation::Scale ? "Scale"
+                                                                : "Move";
+    EditorScene::recordChange(*selected, action);
     transform.setLocalPosition(position);
     transform.setLocalRotation(rotation);
     transform.setLocalScale(scale);
-    EditorScene::markDirty();
   }
 }
 
