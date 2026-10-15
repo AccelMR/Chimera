@@ -13,9 +13,9 @@
 #include "chIBuffer.h"
 #include "chIGraphicsAPI.h"
 #include "chIRenderPath.h"
+#include "chISampler.h"
 #include "chLightItem.h"
 #include "chMath.h"
-#include "chMatrix4.h"
 #include "chRenderSettings.h"
 
 namespace chEngineSDK {
@@ -31,19 +31,56 @@ struct ViewData
   uint32 lightCount;
   uint32 lightBufferIndex;
   float ambient;
-  float padding[2];
+  uint32 shadowBufferIndex;
+  uint32 shadowSamplerIndex;
 };
+
+// Must match kNoShadow in chShadows.hlsli.
+constexpr uint32 kNoShadow = 0xFFFFFFFF;
 
 // Enough for a small scene, so most frames never make the light buffers again.
 constexpr uint32 kInitialLightCapacity = 16;
+constexpr uint32 kInitialShadowCapacity = 4;
 
 NODISCARD SPtr<IBuffer>
-createLightBuffer(uint32 capacity, SIZE_T lightSize)
+createStorageBuffer(uint32 capacity, SIZE_T elementSize)
 {
   return IGraphicsAPI::instance().createBuffer(
-      {.size = static_cast<uint32>(capacity * lightSize),
+      {.size = static_cast<uint32>(capacity * elementSize),
        .usage = BufferUsage::StorageBuffer,
        .memoryUsage = MemoryUsage::CpuToGpu});
+}
+
+// Makes the buffer of this frame slot again, bigger, when the frame has more elements.
+template<typename Element, SIZE_T Slots>
+IBuffer&
+writeStorageBuffer(Array<SPtr<IBuffer>, Slots>& buffers,
+                   Array<uint32, Slots>& capacities,
+                   uint32 frameIndex,
+                   const Vector<Element>& elements)
+{
+  const uint32 count = static_cast<uint32>(elements.size());
+  uint32& capacity = capacities[frameIndex];
+  if (count > capacity) {
+    capacity = Math::max(count, capacity * 2);
+    buffers[frameIndex] = createStorageBuffer(capacity, sizeof(Element));
+  }
+  IBuffer& buffer = *buffers[frameIndex];
+  if (count > 0) {
+    buffer.update(elements.data(), elements.size() * sizeof(Element));
+  }
+  return buffer;
+}
+
+NODISCARD uint32
+findShadowIndex(Span<const ShadowView> shadows, const LightItem* light)
+{
+  for (SIZE_T i = 0; i < shadows.size(); ++i) {
+    if (shadows[i].light == light) {
+      return static_cast<uint32>(i);
+    }
+  }
+  return kNoShadow;
 }
 } // namespace
 
@@ -58,10 +95,25 @@ SceneViewBuffers::SceneViewBuffers()
                                            .memoryUsage = MemoryUsage::CpuToGpu});
   }
   for (uint32 i = 0; i < GraphicsLimits::MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_lightBuffers[i] = createLightBuffer(kInitialLightCapacity, sizeof(GpuLight));
+    m_lightBuffers[i] = createStorageBuffer(kInitialLightCapacity, sizeof(GpuLight));
     m_lightBufferCapacities[i] = kInitialLightCapacity;
+    m_shadowBuffers[i] = createStorageBuffer(kInitialShadowCapacity, sizeof(GpuShadow));
+    m_shadowBufferCapacities[i] = kInitialShadowCapacity;
   }
   m_gpuLights.reserve(kInitialLightCapacity);
+  m_gpuShadows.reserve(kInitialShadowCapacity);
+
+  // Lit where the receiver is not farther than the stored depth; linear filtering blends
+  // the four nearest results, which softens the edge.
+  m_shadowSampler = graphicsAPI.createSampler({.magFilter = SamplerFilter::Linear,
+                                               .minFilter = SamplerFilter::Linear,
+                                               .mipmapMode = SamplerMipmapMode::Nearest,
+                                               .addressModeU = SamplerAddressMode::ClampToEdge,
+                                               .addressModeV = SamplerAddressMode::ClampToEdge,
+                                               .addressModeW = SamplerAddressMode::ClampToEdge,
+                                               .compareEnable = true,
+                                               .compareOp = CompareOp::LessOrEqual,
+                                               .maxLod = 0.0f});
 }
 
 /*
@@ -74,7 +126,6 @@ uint32
 SceneViewBuffers::update(const RenderView& view)
 {
   const uint32 frameIndex = IGraphicsAPI::instance().getFrameIndex();
-  const uint32 lightCount = static_cast<uint32>(view.lights.size());
 
   m_gpuLights.clear();
   for (const LightItem* light : view.lights) {
@@ -93,18 +144,23 @@ SceneViewBuffers::update(const RenderView& view)
          .color = {light->color.r, light->color.g, light->color.b},
          .spotScale = spotScale,
          .spotOffset = spotOffset,
-         .padding = {0.0f, 0.0f, 0.0f}});
+         .shadowIndex = findShadowIndex(view.shadows, light),
+         .padding = {0.0f, 0.0f}});
   }
 
-  uint32& capacity = m_lightBufferCapacities[frameIndex];
-  if (lightCount > capacity) {
-    capacity = Math::max(lightCount, capacity * 2);
-    m_lightBuffers[frameIndex] = createLightBuffer(capacity, sizeof(GpuLight));
+  m_gpuShadows.clear();
+  for (const ShadowView& shadow : view.shadows) {
+    m_gpuShadows.push_back({.viewProjection = shadow.viewProjection,
+                            .textureIndex = shadow.textureIndex,
+                            .texelSize = shadow.texelSize,
+                            .normalOffset = shadow.normalOffset,
+                            .fadeDistance = shadow.fadeDistance});
   }
-  IBuffer& lightBuffer = *m_lightBuffers[frameIndex];
-  if (lightCount > 0) {
-    lightBuffer.update(m_gpuLights.data(), m_gpuLights.size() * sizeof(GpuLight));
-  }
+
+  const IBuffer& lightBuffer =
+      writeStorageBuffer(m_lightBuffers, m_lightBufferCapacities, frameIndex, m_gpuLights);
+  const IBuffer& shadowBuffer =
+      writeStorageBuffer(m_shadowBuffers, m_shadowBufferCapacities, frameIndex, m_gpuShadows);
 
   const Camera& camera = view.camera;
   const Vector3& cameraPosition = camera.getPosition();
@@ -113,10 +169,11 @@ SceneViewBuffers::update(const RenderView& view)
       .projection = camera.getProjectionMatrix(),
       .inverseViewProjection = camera.getViewProjectionMatrix().getInverse(),
       .cameraPosition = {cameraPosition.x, cameraPosition.y, cameraPosition.z},
-      .lightCount = lightCount,
+      .lightCount = static_cast<uint32>(m_gpuLights.size()),
       .lightBufferIndex = lightBuffer.getBindlessIndex(),
       .ambient = g_cvarAmbient.get(),
-      .padding = {0.0f, 0.0f}};
+      .shadowBufferIndex = shadowBuffer.getBindlessIndex(),
+      .shadowSamplerIndex = m_shadowSampler->getBindlessIndex()};
   IBuffer& viewBuffer = *m_viewBuffers[frameIndex];
   viewBuffer.update(&viewData, sizeof(viewData));
   return viewBuffer.getBindlessIndex();

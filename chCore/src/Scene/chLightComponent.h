@@ -45,11 +45,21 @@ class CH_CORE_EXPORT LightComponent : public Component
   NODISCARD FORCEINLINE float
   getIntensity() const noexcept { return m_intensity; }
 
+  /**
+   * Only directional lights draw shadows so far; the flag is kept for the others.
+   */
+  void
+  setCastShadows(bool bCastShadows);
+
+  NODISCARD FORCEINLINE bool
+  getCastShadows() const noexcept { return m_bCastShadows; }
+
   NODISCARD FORCEINLINE LightType
   getLightType() const noexcept { return m_type; }
 
   /**
-   * Writes color and intensity; the types with more values write them after.
+   * Writes color, intensity and the shadow flag; the types with more values write them
+   * after.
    */
   void
   serialize(DataStream& stream) const override;
@@ -57,10 +67,10 @@ class CH_CORE_EXPORT LightComponent : public Component
   NODISCARD bool
   deserialize(DataStream& stream) override;
 
-  static constexpr uint32 SERIALIZATION_VERSION = 1;
+  static constexpr uint32 SERIALIZATION_VERSION = 2;
 
  protected:
-  LightComponent(LightType type, float intensity);
+  LightComponent(LightType type, float intensity, bool bCastShadows);
 
   void
   onRegister() override;
@@ -88,6 +98,7 @@ class CH_CORE_EXPORT LightComponent : public Component
   LinearColor m_color{1.0f, 1.0f, 1.0f, 1.0f};
   float m_intensity;
   uint32 m_lightId = 0;
+  bool m_bCastShadows;
 };
 
 /**

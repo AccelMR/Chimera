@@ -198,6 +198,10 @@ TEST_CASE("chUtilities - PlatformMath") {
   REQUIRE(Math::invSqrt(25.0f) == Approx(0.2f));
   REQUIRE(Math::pow(5.0f, 2.0f) == Approx(25.0f));
   REQUIRE(Math::pow(3.0f, 3.0f) == Approx(27.0f));
+  REQUIRE(Math::floor(2.7f) == 2.0f);
+  REQUIRE(Math::floor(-2.2f) == -3.0f);
+  REQUIRE(Math::ceil(2.2f) == 3.0f);
+  REQUIRE(Math::ceil(-2.7f) == -2.0f);
   REQUIRE(Math::abs(-3.0f) == Approx(3.0f));
 
   REQUIRE(Math::lerp(56.0f, 76.0f, 4.0f) == Approx(136.0f));

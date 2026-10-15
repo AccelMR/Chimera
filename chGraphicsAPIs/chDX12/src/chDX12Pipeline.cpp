@@ -156,7 +156,7 @@ DX12Pipeline::DX12Pipeline(ID3D12Device* device,
                            const GraphicsPipelineDesc& desc)
   : m_topology(toTopology(desc.topology))
 {
-  CH_ASSERT(desc.vertexShader && desc.fragmentShader);
+  CH_ASSERT(desc.vertexShader);
   CH_ASSERT(desc.colorAttachmentCount <= GraphicsLimits::MAX_COLOR_ATTACHMENTS);
 
   const VertexLayout& vertexLayout = desc.vertexLayout;
@@ -183,7 +183,10 @@ DX12Pipeline::DX12Pipeline(ID3D12Device* device,
   D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDesc{};
   pipelineDesc.pRootSignature = rootSignature;
   pipelineDesc.VS = static_cast<const DX12Shader&>(*desc.vertexShader).getBytecode();
-  pipelineDesc.PS = static_cast<const DX12Shader&>(*desc.fragmentShader).getBytecode();
+  // Depth only passes have no pixel shader.
+  if (desc.fragmentShader) {
+    pipelineDesc.PS = static_cast<const DX12Shader&>(*desc.fragmentShader).getBytecode();
+  }
 
   // Each attachment has its own blend state, as the description lists them; the unused
   // ones keep the defaults, so every entry holds valid values.
@@ -217,7 +220,7 @@ DX12Pipeline::DX12Pipeline(ID3D12Device* device,
       .DepthBias = static_cast<INT>(desc.raster.depthBiasConstant),
       .DepthBiasClamp = 0.0f,
       .SlopeScaledDepthBias = desc.raster.depthBiasSlope,
-      .DepthClipEnable = TRUE,
+      .DepthClipEnable = desc.raster.depthClampEnable ? FALSE : TRUE,
       .MultisampleEnable = desc.samples != SampleCount::Count1,
       .AntialiasedLineEnable = FALSE,
       .ForcedSampleCount = 0,

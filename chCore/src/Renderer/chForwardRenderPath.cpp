@@ -73,12 +73,14 @@ ForwardRenderPath::addPasses(RenderGraph& graph,
   updatePipeline(outputDesc.format);
   const uint32 viewIndex = m_viewBuffers.update(view);
 
-  graph.addPass("Forward")
-      .writeColor(output, LoadOp::Clear, view.clearColor)
-      .writeDepth(depth)
-      .setExecute([this, items = view.items, viewIndex](RenderPassContext& context) {
-        recordDraws(context, items, viewIndex);
-      });
+  RenderPassBuilder pass = graph.addPass("Forward");
+  pass.writeColor(output, LoadOp::Clear, view.clearColor).writeDepth(depth);
+  for (const ShadowView& shadow : view.shadows) {
+    pass.read(shadow.texture);
+  }
+  pass.setExecute([this, items = view.items, viewIndex](RenderPassContext& context) {
+    recordDraws(context, items, viewIndex);
+  });
   return depth;
 }
 

@@ -76,4 +76,13 @@ extern CH_CORE_EXPORT ConsoleVariable<String> g_cvarRenderPath;
 // Light that reaches every surface from all sides until image based lighting exists.
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarAmbient;
 
+// Directional lights with Cast Shadows draw shadows.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarShadows;
+
+// Width and height in texels of the directional shadow map.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarShadowMapSize;
+
+// How far from the camera, in world units, the directional shadow reaches.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarShadowDistance;
+
 } // namespace chEngineSDK

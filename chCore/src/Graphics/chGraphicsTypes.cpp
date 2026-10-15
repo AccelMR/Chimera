@@ -38,6 +38,7 @@ GraphicsPipelineDesc::getHash() const
   hash = HashUtils::combine(hash, raster.polygonMode);
   hash = HashUtils::combine(hash, raster.depthBiasConstant);
   hash = HashUtils::combine(hash, raster.depthBiasSlope);
+  hash = HashUtils::combine(hash, raster.depthClampEnable);
   hash = HashUtils::combine(hash, depth.testEnable);
   hash = HashUtils::combine(hash, depth.writeEnable);
   hash = HashUtils::combine(hash, depth.compareOp);

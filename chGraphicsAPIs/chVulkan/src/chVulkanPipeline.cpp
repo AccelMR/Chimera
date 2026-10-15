@@ -128,12 +128,11 @@ VulkanPipeline::VulkanPipeline(VkDevice device,
                                VkPipelineLayout layout,
                                const GraphicsPipelineDesc& desc)
 {
-  CH_ASSERT(desc.vertexShader && desc.fragmentShader);
+  CH_ASSERT(desc.vertexShader);
   CH_ASSERT(desc.colorAttachmentCount <= GraphicsLimits::MAX_COLOR_ATTACHMENTS);
 
   const auto* vertexShader = static_cast<const VulkanShader*>(desc.vertexShader.get());
-  const auto* fragmentShader = static_cast<const VulkanShader*>(desc.fragmentShader.get());
-  const Array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
+  Array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
       VkPipelineShaderStageCreateInfo{.sType =
                                           VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                       .pNext = nullptr,
@@ -141,15 +140,19 @@ VulkanPipeline::VulkanPipeline(VkDevice device,
                                       .stage = VK_SHADER_STAGE_VERTEX_BIT,
                                       .module = vertexShader->getHandle(),
                                       .pName = vertexShader->getEntryPoint().c_str(),
-                                      .pSpecializationInfo = nullptr},
-      VkPipelineShaderStageCreateInfo{.sType =
-                                          VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                      .pNext = nullptr,
-                                      .flags = 0,
-                                      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                                      .module = fragmentShader->getHandle(),
-                                      .pName = fragmentShader->getEntryPoint().c_str(),
                                       .pSpecializationInfo = nullptr}};
+  uint32 stageCount = 1;
+  // Depth only passes have no fragment shader.
+  if (desc.fragmentShader) {
+    const auto* fragmentShader = static_cast<const VulkanShader*>(desc.fragmentShader.get());
+    shaderStages[stageCount++] = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                  .pNext = nullptr,
+                                  .flags = 0,
+                                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                                  .module = fragmentShader->getHandle(),
+                                  .pName = fragmentShader->getEntryPoint().c_str(),
+                                  .pSpecializationInfo = nullptr};
+  }
 
   // HLSL inputs get their locations in declaration order, so attribute i is location i.
   const VertexLayout& vertexLayout = desc.vertexLayout;
@@ -205,7 +208,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device,
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .depthClampEnable = VK_FALSE,
+      .depthClampEnable = desc.raster.depthClampEnable ? VK_TRUE : VK_FALSE,
       .rasterizerDiscardEnable = VK_FALSE,
       .polygonMode = desc.raster.polygonMode == PolygonMode::Line ? VK_POLYGON_MODE_LINE
                                                                   : VK_POLYGON_MODE_FILL,
@@ -296,7 +299,7 @@ VulkanPipeline::VulkanPipeline(VkDevice device,
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &renderingInfo,
       .flags = 0,
-      .stageCount = static_cast<uint32>(shaderStages.size()),
+      .stageCount = stageCount,
       .pStages = shaderStages.data(),
       .pVertexInputState = &vertexInput,
       .pInputAssemblyState = &inputAssembly,

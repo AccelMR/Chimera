@@ -13,5 +13,7 @@ struct ViewData
   uint lightCount;
   uint lightBufferIndex;
   float ambient;
-  float2 padding;
+  // Shadow maps of the frame (chShadows.hlsli) and the sampler that compares against them.
+  uint shadowBufferIndex;
+  uint shadowSamplerIndex;
 };

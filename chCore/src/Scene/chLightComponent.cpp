@@ -41,9 +41,10 @@ static_assert(sizeof(SpotLightFileData) == 12, "SpotLightFileData must have no p
 
 /*
  */
-LightComponent::LightComponent(LightType type, float intensity)
+LightComponent::LightComponent(LightType type, float intensity, bool bCastShadows)
   : m_type(type),
-    m_intensity(intensity)
+    m_intensity(intensity),
+    m_bCastShadows(bCastShadows)
 {}
 
 /*
@@ -67,13 +68,24 @@ LightComponent::setIntensity(float intensity)
 /*
  */
 void
+LightComponent::setCastShadows(bool bCastShadows)
+{
+  m_bCastShadows = bCastShadows;
+  updateLightItem();
+}
+
+/*
+ */
+void
 LightComponent::serialize(DataStream& stream) const
 {
   const uint32 version = SERIALIZATION_VERSION;
   const LightFileData data{.color = {m_color.r, m_color.g, m_color.b},
                            .intensity = m_intensity};
+  const uint8 castShadows = m_bCastShadows ? 1 : 0;
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
+  stream.write(&castShadows, sizeof(castShadows));
 }
 
 /*
@@ -86,6 +98,14 @@ LightComponent::deserialize(DataStream& stream)
   if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
       version > SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data)) {
     return false;
+  }
+  // Version 1 had no shadow flag, so those lights keep the default of their type.
+  if (version >= 2) {
+    uint8 castShadows = 0;
+    if (stream.read(&castShadows, sizeof(castShadows)) != sizeof(castShadows)) {
+      return false;
+    }
+    setCastShadows(castShadows != 0);
   }
   setColor(LinearColor(data.color[0], data.color[1], data.color[2], 1.0f));
   setIntensity(data.intensity);
@@ -146,19 +166,20 @@ LightComponent::updateLightItem()
   item.direction = direction;
   item.color = LinearColor(m_color.r * m_intensity, m_color.g * m_intensity,
                            m_color.b * m_intensity, 1.0f);
+  item.bCastShadows = m_bCastShadows;
   writeTypeValues(item);
 }
 
 /*
  */
 DirectionalLightComponent::DirectionalLightComponent()
-  : LightComponent(LightType::Directional, 3.0f)
+  : LightComponent(LightType::Directional, 3.0f, true)
 {}
 
 /*
  */
 PointLightComponent::PointLightComponent()
-  : LightComponent(LightType::Point, 10.0f)
+  : LightComponent(LightType::Point, 10.0f, false)
 {}
 
 /*
@@ -204,7 +225,7 @@ PointLightComponent::writeTypeValues(LightItem& item) const
 /*
  */
 SpotLightComponent::SpotLightComponent()
-  : LightComponent(LightType::Spot, 10.0f)
+  : LightComponent(LightType::Spot, 10.0f, false)
 {}
 
 /*

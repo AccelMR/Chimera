@@ -70,6 +70,8 @@ visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
 {
   // PolygonMode::Line (wireframe view modes).
   visit(chain.core.features.fillModeNonSolid, "fillModeNonSolid");
+  // RasterState::depthClampEnable (shadow maps keep casters behind their near plane).
+  visit(chain.core.features.depthClamp, "depthClamp");
   visit(chain.vulkan13.dynamicRendering, "dynamicRendering");
   visit(chain.vulkan13.synchronization2, "synchronization2");
   // DXC turns discard into a demote to helper invocation.

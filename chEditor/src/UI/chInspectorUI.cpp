@@ -384,6 +384,16 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     light->setIntensity(intensity);
   }
 
+  bool bCastShadows = light->getCastShadows();
+  if (ImGui::Checkbox("Cast Shadows", &bCastShadows)) {
+    EditorScene::recordChange(gameObject, "Edit Cast Shadows");
+    light->setCastShadows(bCastShadows);
+  }
+  if (light->getLightType() != LightType::Directional) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("(directional lights only, for now)");
+  }
+
   if (pointLight) {
     float range = pointLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {

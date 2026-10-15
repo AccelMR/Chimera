@@ -72,6 +72,29 @@ MainMenuBarUI::renderMainMenuBar() {
       }
       ImGui::EndMenu();
     }
+    if (ImGui::BeginMenu("Shadows")) {
+      bool bShadows = g_cvarShadows.get();
+      if (ImGui::Checkbox("Enabled", &bShadows)) {
+        g_cvarShadows.set(bShadows, ConsoleVariableSource::Console);
+      }
+      // The same texels cover the whole distance, so it depends on the scale of the scene.
+      float distance = g_cvarShadowDistance.get();
+      if (ImGui::DragFloat("Distance", &distance, 0.5f, 1.0f, 10000.0f, "%.1f",
+                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
+        g_cvarShadowDistance.set(distance, ConsoleVariableSource::Console);
+      }
+      constexpr int32 kMapSizes[] = {1024, 2048, 4096, 8192};
+      constexpr const ANSICHAR* kMapSizeNames[] = {"1024", "2048", "4096", "8192"};
+      for (SIZE_T i = 0; i < sizeof(kMapSizes) / sizeof(kMapSizes[0]); ++i) {
+        if (ImGui::RadioButton(kMapSizeNames[i], g_cvarShadowMapSize.get() == kMapSizes[i])) {
+          g_cvarShadowMapSize.set(kMapSizes[i], ConsoleVariableSource::Console);
+        }
+        if (i + 1 < sizeof(kMapSizes) / sizeof(kMapSizes[0])) {
+          ImGui::SameLine();
+        }
+      }
+      ImGui::EndMenu();
+    }
     ImGui::Separator(); //--------------------------------------------------------------
 
     // The scene renderer reads the color every frame.

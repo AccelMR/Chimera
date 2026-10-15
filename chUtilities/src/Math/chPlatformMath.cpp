@@ -41,6 +41,22 @@ PlatformMath::pow(float value, float exponent) noexcept
 /*
  */
 float
+PlatformMath::floor(float value) noexcept
+{
+  return std::floor(value);
+}
+
+/*
+ */
+float
+PlatformMath::ceil(float value) noexcept
+{
+  return std::ceil(value);
+}
+
+/*
+ */
+float
 PlatformMath::fmod(float value, float divisor) noexcept
 {
   return std::fmod(value, divisor);

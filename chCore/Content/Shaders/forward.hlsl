@@ -76,8 +76,7 @@ PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
                               isFrontFace);
 
   const float3 viewDirection = normalize(view.cameraPosition - input.worldPosition);
-  float3 color = evaluateLights(surface, input.worldPosition, viewDirection,
-                                view.lightBufferIndex, view.lightCount);
+  float3 color = evaluateLights(surface, input.worldPosition, viewDirection, view);
   color += evaluateAmbient(surface, view.ambient,
                            getOcclusion(material, textureSampler, input.texCoord));
   color += getEmissive(material, textureSampler, input.texCoord);

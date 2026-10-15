@@ -384,6 +384,9 @@ struct RasterState {
   PolygonMode polygonMode = PolygonMode::Fill;
   float depthBiasConstant = 0.0f;
   float depthBiasSlope = 0.0f;
+  // Depth outside 0..1 is clamped instead of clipped, so shadow casters between the light
+  // and the near plane still write depth.
+  bool depthClampEnable = false;
 };
 
 struct DepthState {

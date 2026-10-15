@@ -157,24 +157,27 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
       addGBufferPass(graph, view, viewIndex, outputDesc.width, outputDesc.height);
   updateFullscreenPipeline(m_lighting, outputDesc.format);
 
-  graph.addPass("DeferredLighting")
-      .read(gbuffer.baseColor)
+  RenderPassBuilder pass = graph.addPass("DeferredLighting");
+  pass.read(gbuffer.baseColor)
       .read(gbuffer.normal)
       .read(gbuffer.surface)
       .read(gbuffer.emissive)
       .read(gbuffer.depth)
-      .writeColor(output, LoadOp::Clear, view.clearColor)
-      .setExecute([this, gbuffer, viewIndex](RenderPassContext& context) {
-        const LightingPushConstants pushConstants{
-            .gbuffer = getGBufferTextures(context, gbuffer),
-            .viewIndex = viewIndex,
-            .inverseSize = {1.0f / static_cast<float>(context.getWidth()),
-                            1.0f / static_cast<float>(context.getHeight())}};
-        ICommandList& commandList = context.getCommandList();
-        commandList.bindPipeline(*m_lighting.pipeline);
-        commandList.pushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.draw(3);
-      });
+      .writeColor(output, LoadOp::Clear, view.clearColor);
+  for (const ShadowView& shadow : view.shadows) {
+    pass.read(shadow.texture);
+  }
+  pass.setExecute([this, gbuffer, viewIndex](RenderPassContext& context) {
+    const LightingPushConstants pushConstants{
+        .gbuffer = getGBufferTextures(context, gbuffer),
+        .viewIndex = viewIndex,
+        .inverseSize = {1.0f / static_cast<float>(context.getWidth()),
+                        1.0f / static_cast<float>(context.getHeight())}};
+    ICommandList& commandList = context.getCommandList();
+    commandList.bindPipeline(*m_lighting.pipeline);
+    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.draw(3);
+  });
   return gbuffer.depth;
 }
 

@@ -15,6 +15,7 @@
 #include "chForwardRenderPath.h"
 #include "chLogger.h"
 #include "chScene.h"
+#include "chShadowRenderer.h"
 #include "chTonemapPass.h"
 
 namespace chEngineSDK {
@@ -33,6 +34,7 @@ SceneRenderer::SceneRenderer()
     m_deferredRenderPath(new DeferredRenderPath()),
     m_renderPath(m_deferredRenderPath.get()),
     m_debugRenderPath(new DebugRenderPath()),
+    m_shadowRenderer(new ShadowRenderer()),
     m_tonemapPass(new TonemapPass())
 {}
 
@@ -68,9 +70,9 @@ SceneRenderer::addScenePasses(const Scene& scene,
 
   switch (m_viewMode) {
     case ViewMode::Lit:
-      return addLitPasses(view, output);
+      return addLitPasses(scene, view, output);
     case ViewMode::LitWireframe: {
-      const RGTextureHandle depth = addLitPasses(view, output);
+      const RGTextureHandle depth = addLitPasses(scene, view, output);
       if (depth.isValid()) {
         m_debugRenderPath->addWireframeOverlay(m_graph, view, output, depth);
       }
@@ -108,13 +110,18 @@ SceneRenderer::execute(ICommandList& commandList)
 /*
  */
 RGTextureHandle
-SceneRenderer::addLitPasses(const RenderView& view, RGTextureHandle output)
+SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output)
 {
+  const RenderView litView{.camera = view.camera,
+                           .items = view.items,
+                           .lights = view.lights,
+                           .shadows = m_shadowRenderer->addPasses(m_graph, scene, view),
+                           .clearColor = view.clearColor};
   const RGTextureDesc outputDesc = m_graph.getTextureDesc(output);
   const RGTextureHandle sceneColor = m_graph.createTexture(
       "SceneColor",
       {.format = kSceneColorFormat, .width = outputDesc.width, .height = outputDesc.height});
-  const RGTextureHandle depth = m_renderPath->addPasses(m_graph, view, sceneColor);
+  const RGTextureHandle depth = m_renderPath->addPasses(m_graph, litView, sceneColor);
   m_tonemapPass->addPass(m_graph, sceneColor, output);
   return depth;
 }

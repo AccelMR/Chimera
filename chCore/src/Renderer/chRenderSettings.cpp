@@ -65,6 +65,24 @@ ConsoleVariable<float> g_cvarAmbient(
     "Light that reaches every surface from all sides, scaled by the material occlusion.",
     "Ambient");
 
+ConsoleVariable<bool> g_cvarShadows("Renderer.Shadows",
+                                    true,
+                                    "Directional lights with Cast Shadows draw shadows.",
+                                    "Shadows");
+
+ConsoleVariable<int32> g_cvarShadowMapSize(
+    "Renderer.ShadowMapSize",
+    2048,
+    "Width and height in texels of the directional shadow map.",
+    "ShadowMapSize");
+
+ConsoleVariable<float> g_cvarShadowDistance(
+    "Renderer.ShadowDistance",
+    50.0f,
+    "How far from the camera, in world units, the directional shadow reaches. A bigger "
+    "distance spreads the same texels over more ground.",
+    "ShadowDistance");
+
 /*
  */
 StringView

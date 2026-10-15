@@ -3,6 +3,8 @@
 #pragma once
 
 #include "chBRDF.hlsli"
+#include "chView.hlsli"
+#include "chShadows.hlsli"
 
 // Must match LightType in chLightItem.h.
 static const uint kLightDirectional = 0;
@@ -22,7 +24,9 @@ struct LightData
   // The spot falloff is saturate(cos * spotScale + spotOffset), from the cone cosines.
   float spotScale;
   float spotOffset;
-  float3 padding;
+  // Index into the shadow buffer of the view, kNoShadow without a shadow map.
+  uint shadowIndex;
+  float2 padding;
 };
 
 static const uint kLightDataSize = 64;
@@ -38,17 +42,13 @@ getDistanceAttenuation(float distanceSquared, float range)
   return window * window / max(distanceSquared, 1e-4f);
 }
 
-// Light sent towards the eye by every light of the buffer.
+// Light sent towards the eye by every light of the view.
 float3
-evaluateLights(SurfaceData surface,
-               float3 worldPosition,
-               float3 viewDirection,
-               uint lightBufferIndex,
-               uint lightCount)
+evaluateLights(SurfaceData surface, float3 worldPosition, float3 viewDirection, ViewData view)
 {
-  ByteAddressBuffer lights = ResourceDescriptorHeap[lightBufferIndex];
+  ByteAddressBuffer lights = ResourceDescriptorHeap[view.lightBufferIndex];
   float3 result = float3(0.0f, 0.0f, 0.0f);
-  for (uint i = 0; i < lightCount; ++i) {
+  for (uint i = 0; i < view.lightCount; ++i) {
     const LightData light = lights.Load<LightData>(i * kLightDataSize);
 
     float3 lightDirection = -light.direction;
@@ -63,6 +63,12 @@ evaluateLights(SurfaceData surface,
         const float cone = saturate(cosine * light.spotScale + light.spotOffset);
         attenuation *= cone * cone;
       }
+    }
+
+    if (attenuation > 0.0f && light.shadowIndex != kNoShadow) {
+      attenuation *= evaluateShadow(view.shadowBufferIndex, view.shadowSamplerIndex,
+                                    light.shadowIndex, worldPosition, surface.normal,
+                                    view.cameraPosition);
     }
 
     if (attenuation > 0.0f) {

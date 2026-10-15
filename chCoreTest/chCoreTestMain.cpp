@@ -42,6 +42,7 @@
 #include "chRotator.h"
 #include "chScene.h"
 #include "chSceneHistory.h"
+#include "chShadowRenderer.h"
 #include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
@@ -537,12 +538,15 @@ TEST_CASE("chCore - Scene lights")
   REQUIRE(visible[0]->color.r == 2.0f);
   REQUIRE(visible[0]->color.g == 1.0f);
   REQUIRE(visible[0]->color.b == 0.5f);
+  // Only directional lights cast shadows by default.
+  REQUIRE(visible[0]->bCastShadows);
 
   const SPtr<GameObject> lamp = scene.createGameObject("Lamp");
   PointLightComponent& lampLight = lamp->addComponent<PointLightComponent>();
   lampLight.setRange(5.0f);
   scene.updateTransforms();
   REQUIRE(scene.getLightCount() == 2);
+  REQUIRE_FALSE(lampLight.getCastShadows());
 
   SECTION("Point lights are culled by their range")
   {
@@ -684,6 +688,78 @@ hasBarrier(Span<const RGBarrier> barriers,
 }
 
 } // namespace
+
+TEST_CASE("chCore - Directional shadow projection")
+{
+  Camera camera = createTestCamera();
+  constexpr uint32 kMapSize = 1024;
+  constexpr float kDistance = 20.0f;
+  // Comes down at an angle, from behind the camera and to its left.
+  const Vector3 lightDirection = Vector3(1.0f, 0.5f, -1.0f).getNormalized();
+  const DirectionalShadowProjection projection =
+      ShadowRenderer::computeDirectionalProjection(camera, lightDirection, kDistance, kMapSize);
+
+  const auto project = [](const Matrix4& viewProjection, const Vector3& point) {
+    const Vector4 clip = viewProjection.transformVector4(Vector4(point.x, point.y, point.z, 1.0f));
+    return Vector3(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+  };
+
+  SECTION("The covered part of the view is inside the map")
+  {
+    // A horizontal field of view of 90 degrees reaches as far sideways as forward.
+    const Vector3 forward = camera.getForwardVector();
+    const Vector3 right = camera.getRightVector();
+    const Vector3 up = camera.getUpVector();
+    constexpr float kAspect = 720.0f / 1280.0f;
+    for (const float depth : {0.1f, 10.0f, kDistance}) {
+      for (const float x : {-0.99f, 0.0f, 0.99f}) {
+        for (const float y : {-0.99f, 0.0f, 0.99f}) {
+          const Vector3 point = camera.getPosition() + forward * depth +
+                                right * (x * depth) + up * (y * depth * kAspect);
+          const Vector3 ndc = project(projection.viewProjection, point);
+          REQUIRE(Math::abs(ndc.x) <= 1.0f);
+          REQUIRE(Math::abs(ndc.y) <= 1.0f);
+          REQUIRE(ndc.z >= 0.0f);
+          REQUIRE(ndc.z <= 1.0f);
+        }
+      }
+    }
+  }
+
+  SECTION("Casters toward the light are kept, casters beside the map are not")
+  {
+    const Vector3 viewCenter = camera.getPosition() + camera.getForwardVector() * 10.0f;
+    const Vector3 towardLight = viewCenter - lightDirection * 1000.0f;
+    REQUIRE(ShapeOverlap::frustumPoint(projection.casterFrustum, towardLight));
+    // In front of the near plane: the depth clamp draws it at 0.
+    REQUIRE(project(projection.viewProjection, towardLight).z < 0.0f);
+
+    const Vector3 side = lightDirection.cross(Vector3::UP).getNormalized();
+    REQUIRE_FALSE(ShapeOverlap::frustumPoint(projection.casterFrustum, viewCenter + side * 1000.0f));
+    REQUIRE_FALSE(
+        ShapeOverlap::frustumPoint(projection.casterFrustum, viewCenter + lightDirection * 1000.0f));
+  }
+
+  SECTION("The map moves in whole texels")
+  {
+    const Vector3 move(0.013f, 0.0271f, -0.0057f);
+    Camera moved = camera;
+    moved.setPosition(camera.getPosition() + move);
+    moved.lookAt(camera.getLookAt() + move);
+    const DirectionalShadowProjection movedProjection =
+        ShadowRenderer::computeDirectionalProjection(moved, lightDirection, kDistance, kMapSize);
+    REQUIRE(movedProjection.texelWorldSize == projection.texelWorldSize);
+
+    const Vector3 point(3.0f, 1.0f, 0.5f);
+    const Vector3 before = project(projection.viewProjection, point);
+    const Vector3 after = project(movedProjection.viewProjection, point);
+    // NDC spans two units over the map.
+    for (const float texels : {(after.x - before.x) * kMapSize * 0.5f,
+                               (after.y - before.y) * kMapSize * 0.5f}) {
+      REQUIRE(Math::abs(texels - Math::floor(texels + 0.5f)) < 0.01f);
+    }
+  }
+}
 
 TEST_CASE("chCore - RenderGraph")
 {
@@ -1526,7 +1602,9 @@ TEST_CASE("chCore - GameObject serializer")
   lampLight.setRange(25.0f);
   lampLight.setEnabled(false);
   const SPtr<GameObject> spot = source.createGameObject("Spot", parent.get());
-  spot->addComponent<SpotLightComponent>().setConeAngles(Degree(10.0f), Degree(20.0f));
+  SpotLightComponent& spotLight = spot->addComponent<SpotLightComponent>();
+  spotLight.setConeAngles(Degree(10.0f), Degree(20.0f));
+  spotLight.setCastShadows(true);
   source.createGameObject("Empty", spot.get());
   // A second user of the same model, which must be referenced once.
   source.createGameObject("Copy")->addComponent<ModelComponent>(modelAsset);
@@ -1558,6 +1636,7 @@ TEST_CASE("chCore - GameObject serializer")
   REQUIRE(loadedSun->isRegistered());
   REQUIRE(loadedSun->getColor().g == 0.5f);
   REQUIRE(loadedSun->getIntensity() == 4.0f);
+  REQUIRE(loadedSun->getCastShadows());
 
   const GameObject& loadedParent = *roots[1];
   REQUIRE(loadedParent.getUUID() == parent->getUUID());
@@ -1592,6 +1671,7 @@ TEST_CASE("chCore - GameObject serializer")
   REQUIRE(loadedSpotLight != nullptr);
   REQUIRE(loadedSpotLight->getInnerConeAngle().valueDegree() == Approx(10.0f));
   REQUIRE(loadedSpotLight->getOuterConeAngle().valueDegree() == Approx(20.0f));
+  REQUIRE(loadedSpotLight->getCastShadows());
   REQUIRE(loadedSpot.getChildren().size() == 1);
   REQUIRE(loadedSpot.getChildren()[0]->getName() == "Empty");
   REQUIRE(loadedSpot.getChildren()[0]->getComponents().empty());
