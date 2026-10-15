@@ -356,14 +356,14 @@ EditorApplication::bindEvents() {
 
   m_onKeyUpEvent = eventDispatcher.OnKeyUp.connect([](const KeyBoardData& keyData) {
     switch (keyData.key) {
-    case chKeyBoard::Key::F10: {
-      CH_LOG_DEBUG(EditorApp, "F10 pressed, toggling ImGui rendering.");
+    case chKeyBoard::Key::F11: {
       UIHelpers::bRenderImGui = !UIHelpers::bRenderImGui;
       if (UIHelpers::bRenderImGui) {
-        CH_LOG_DEBUG(EditorApp, "ImGui rendering enabled.");
-      }
-      else {
-        CH_LOG_DEBUG(EditorApp, "ImGui rendering disabled.");
+        // ImGui got no events while hidden, so keys and buttons released meanwhile would
+        // still count as held.
+        ImGuiIO& io = ImGui::GetIO();
+        io.ClearInputKeys();
+        io.ClearInputMouse();
       }
     } break;
 

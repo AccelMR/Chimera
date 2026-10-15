@@ -115,6 +115,10 @@ UIHelpers::bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler) {
       return false;
     }
 
+    // Without new frames ImGui never drains its input queue, so it would keep growing.
+    if (!bRenderImGui) {
+      return false;
+    }
     return ImGui_ImplSDL3_ProcessEvent(event);
 #else
     CH_PARAMETER_UNUSED(platformEvent);

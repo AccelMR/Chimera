@@ -46,7 +46,7 @@ class UIHelpers {
 
   // Variable to control the visibility of the ImGui demo window
   static bool bShowDemoWindow;
-  // Variable to control if ImGui should render
+  // False hides the whole editor UI (F11), leaving only the scene.
   static bool bRenderImGui;
   static LinearColor rendererColor; // Renderer color for the editor
 }; // class UIHelpers
