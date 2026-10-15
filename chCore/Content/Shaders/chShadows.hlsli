@@ -1,7 +1,9 @@
 // How much of a light reaches a point past what stands between them, read from the shadow
 // maps the ShadowRenderer draws. They come in a raw buffer read by bindless index, one
 // ShadowData after another, each followed by its cascades. A directional map is an atlas
-// with one tile per cascade; each pixel reads the cascade its view depth falls in.
+// with one tile per cascade; each pixel reads the cascade its view depth falls in. A spot
+// map is one tile of the spot atlas, seen through a perspective projection, with one
+// cascade that covers every depth.
 #pragma once
 
 // Must match kNoShadow in chSceneViewBuffers.cpp.
@@ -24,7 +26,11 @@ struct ShadowData
   float4 blendStarts;
   // View depth where the shadow is gone.
   float fadeEnd;
-  float3 padding;
+  // 1 for spot maps, whose normal offset grows with the distance to the light.
+  uint perspective;
+  // How much of the whole shadow has faded; spot shadows fade with their light's distance.
+  float lightFade;
+  float padding;
 };
 
 // Must match GpuShadowCascade in chSceneViewBuffers.h. The matrix is kept as its rows, so it
@@ -37,7 +43,8 @@ struct ShadowCascadeData
   float4 viewProjectionRow3;
   // Top left corner of the cascade's tile in the atlas.
   float2 atlasOffset;
-  // Moves the receiver along its normal, so a surface does not shadow itself.
+  // Moves the receiver along its normal, so a surface does not shadow itself; per unit of
+  // distance from the light in a perspective map.
   float normalOffset;
   float padding;
 };
@@ -79,11 +86,24 @@ sampleShadowCascade(ShadowData shadow,
       shadowIndex * kShadowDataSize + kShadowCascadesOffset +
       cascadeIndex * kShadowCascadeDataSize);
 
-  const float3 position = worldPosition + normal * cascade.normalOffset;
-  // Row vector times the matrix, as mul(float4(position, 1), viewProjection).
-  const float4 clip = position.x * cascade.viewProjectionRow0 +
-                      position.y * cascade.viewProjectionRow1 +
-                      position.z * cascade.viewProjectionRow2 + cascade.viewProjectionRow3;
+  // Row vector times the matrix, as mul(float4(position, 1), viewProjection). The normal
+  // offset is linear, so it is added in clip space; a perspective w is the distance in
+  // front of the light, which is what one texel grows with.
+  const float4 receiverClip = worldPosition.x * cascade.viewProjectionRow0 +
+                              worldPosition.y * cascade.viewProjectionRow1 +
+                              worldPosition.z * cascade.viewProjectionRow2 +
+                              cascade.viewProjectionRow3;
+  float normalOffset = cascade.normalOffset;
+  if (shadow.perspective != 0) {
+    normalOffset *= receiverClip.w;
+  }
+  const float4 clip = receiverClip + normalOffset * (normal.x * cascade.viewProjectionRow0 +
+                                                     normal.y * cascade.viewProjectionRow1 +
+                                                     normal.z * cascade.viewProjectionRow2);
+  // Behind a spot light: it does not light the point, so it cannot shadow it either.
+  if (clip.w <= 0.0f) {
+    return 1.0f;
+  }
   const float3 ndc = clip.xyz / clip.w;
   const float2 tileCoord = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f);
   if (any(tileCoord < 0.0f) || any(tileCoord > 1.0f) || ndc.z > 1.0f) {
@@ -138,8 +158,11 @@ evaluateShadow(uint shadowBufferIndex,
     lit = lerp(lit, next, blend);
   }
 
-  const float fade = saturate((viewDepth - shadow.fadeStart) /
-                              max(shadow.fadeEnd - shadow.fadeStart, 1e-4f));
+  float fade = shadow.lightFade;
+  if (shadow.perspective == 0) {
+    fade = saturate((viewDepth - shadow.fadeStart) /
+                    max(shadow.fadeEnd - shadow.fadeStart, 1e-4f));
+  }
   return lerp(lit, 1.0f, fade);
 }
 

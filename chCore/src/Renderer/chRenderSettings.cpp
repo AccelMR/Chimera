@@ -26,7 +26,8 @@ constexpr StringView kViewModeNames[] = {"Lit",
                                          "Roughness",
                                          "AmbientOcclusion",
                                          "Emissive",
-                                         "ShadowCascades"};
+                                         "ShadowCascades",
+                                         "ShadowMaps"};
 static_assert(sizeof(kViewModeNames) / sizeof(kViewModeNames[0]) ==
               static_cast<SIZE_T>(ViewMode::COUNT));
 
@@ -52,7 +53,8 @@ ConsoleVariable<String> g_cvarViewMode(
     "Lit",
     "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords, "
     "a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive, or "
-    "ShadowCascades (Lit tinted by the shadow cascade of each pixel).",
+    "ShadowCascades (Lit tinted by the shadow cascade of each pixel) or ShadowMaps (the shadow "
+    "atlases of the frame).",
     "ViewMode");
 
 ConsoleVariable<String> g_cvarRenderPath("Renderer.Path",
@@ -69,7 +71,7 @@ ConsoleVariable<float> g_cvarAmbient(
 
 ConsoleVariable<bool> g_cvarShadows("Renderer.Shadows",
                                     true,
-                                    "Directional lights with Cast Shadows draw shadows.",
+                                    "Lights with Cast Shadows draw shadows.",
                                     "Shadows");
 
 ConsoleVariable<int32> g_cvarShadowMapSize(
@@ -138,6 +140,67 @@ ConsoleVariable<float> g_cvarShadowSlopeBias(
     "Depth bias of the shadow casters that grows with how steeply they face away from the "
     "light.",
     "ShadowSlopeBias");
+
+ConsoleVariable<int32> g_cvarSpotShadowMaxLights(
+    "Renderer.SpotShadowMaxLights",
+    8,
+    "How many spot lights with Cast Shadows (0 to 16) draw shadows in one frame. When more "
+    "are in view, the ones that cover the most of the screen (range over distance to the "
+    "camera) win.",
+    "SpotShadowMaxLights");
+
+ConsoleVariable<int32> g_cvarSpotShadowMapSize(
+    "Renderer.SpotShadowMapSize",
+    1024,
+    "Width and height in texels of the shadow map of each spot light.",
+    "SpotShadowMapSize");
+
+ConsoleVariable<float> g_cvarSpotShadowDistance(
+    "Renderer.SpotShadowDistance",
+    100.0f,
+    "How far from the camera, in world units, the range of a spot light may start and still "
+    "draw its shadow.",
+    "SpotShadowDistance");
+
+ConsoleVariable<float> g_cvarSpotShadowFade(
+    "Renderer.SpotShadowFade",
+    0.2f,
+    "Fraction of the spot shadow distance, at its far end, where the shadow of a spot light "
+    "fades out.",
+    "SpotShadowFade");
+
+ConsoleVariable<float> g_cvarSpotShadowNearPlane(
+    "Renderer.SpotShadowNearPlane",
+    0.1f,
+    "Distance in world units from a spot light to the near plane of its shadow map. Casters "
+    "closer than it still cast; a bigger value gives more depth precision.",
+    "SpotShadowNearPlane");
+
+ConsoleVariable<int32> g_cvarSpotShadowFilterRadius(
+    "Renderer.SpotShadowFilterRadius",
+    1,
+    "Texels around each pixel the spot shadow test blends (0 to 3; 1 is a 3x3 filter).",
+    "SpotShadowFilterRadius");
+
+ConsoleVariable<float> g_cvarSpotShadowNormalOffset(
+    "Renderer.SpotShadowNormalOffset",
+    1.5f,
+    "How far, in texels of the spot shadow map at the distance of the receiver, a receiver "
+    "moves along its normal before the test.",
+    "SpotShadowNormalOffset");
+
+ConsoleVariable<float> g_cvarSpotShadowDepthBias(
+    "Renderer.SpotShadowDepthBias",
+    1.0f,
+    "Constant depth bias of the spot shadow casters, in steps of the depth format.",
+    "SpotShadowDepthBias");
+
+ConsoleVariable<float> g_cvarSpotShadowSlopeBias(
+    "Renderer.SpotShadowSlopeBias",
+    2.0f,
+    "Depth bias of the spot shadow casters that grows with how steeply they face away from "
+    "the light.",
+    "SpotShadowSlopeBias");
 
 /*
  */

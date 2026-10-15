@@ -84,7 +84,10 @@ class CH_CORE_EXPORT SceneViewBuffers
     float splitDepths[4];
     float blendStarts[4];
     float fadeEnd;
-    float padding[3];
+    // 1 for spot maps, whose normal offset grows with the distance to the light.
+    uint32 perspective;
+    float lightFade;
+    float padding;
     GpuShadowCascade cascades[4];
   };
   static_assert(sizeof(GpuShadow) == 400);

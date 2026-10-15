@@ -84,6 +84,7 @@ toDebugMode(ViewMode mode)
     case ViewMode::AmbientOcclusion:
     case ViewMode::Emissive:
     case ViewMode::ShadowCascades:
+    case ViewMode::ShadowMaps:
     case ViewMode::COUNT:
       break;
   }

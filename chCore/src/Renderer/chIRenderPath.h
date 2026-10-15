@@ -31,13 +31,16 @@ struct ShadowCascade
   float splitDepth = 0.0f;
   // View depth where it starts to blend into the next cascade.
   float blendStart = 0.0f;
-  // How far receivers move along their normal before the test, in world units.
+  // How far receivers move along their normal before the test, in world units; per unit of
+  // distance from the light in a perspective map.
   float normalOffset = 0.0f;
 };
 
 /**
  * A shadow map the ShadowRenderer drew this frame for one light. Lit paths read its texture
- * in their lighting pass; SceneViewBuffers sends the rest to the shaders.
+ * in their lighting pass; SceneViewBuffers sends the rest to the shaders. A directional
+ * light has one cascade per tile of its atlas; a spot light has one cascade, its tile of
+ * the spot atlas, seen through a perspective projection.
  */
 struct ShadowView
 {
@@ -57,6 +60,11 @@ struct ShadowView
   // View depths where the shadow starts to fade and where it is gone.
   float fadeStart = 0.0f;
   float fadeEnd = 0.0f;
+  // How much of the whole shadow has faded, from 0 (all of it shows) to 1 (none). Spot
+  // shadows fade as their light gets far from the camera.
+  float lightFade = 0.0f;
+  // Spot shadows: the normal offset grows with the distance to the light.
+  bool bPerspective = false;
 };
 
 /**

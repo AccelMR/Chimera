@@ -84,6 +84,18 @@ findShadowIndex(Span<const ShadowView> shadows, const LightItem* light)
   }
   return kNoShadow;
 }
+
+// The directional shadow, the only one with cascades to tint.
+NODISCARD uint32
+findCascadedShadowIndex(Span<const ShadowView> shadows)
+{
+  for (SIZE_T i = 0; i < shadows.size(); ++i) {
+    if (!shadows[i].bPerspective) {
+      return static_cast<uint32>(i);
+    }
+  }
+  return kNoShadow;
+}
 } // namespace
 
 /*
@@ -165,6 +177,8 @@ SceneViewBuffers::update(const RenderView& view)
     gpuShadow.atlasScale[0] = shadow.atlasScale.x;
     gpuShadow.atlasScale[1] = shadow.atlasScale.y;
     gpuShadow.fadeEnd = shadow.fadeEnd;
+    gpuShadow.perspective = shadow.bPerspective ? 1 : 0;
+    gpuShadow.lightFade = shadow.lightFade;
     for (uint32 i = 0; i < shadow.cascadeCount; ++i) {
       const ShadowCascade& cascade = shadow.cascades[i];
       gpuShadow.splitDepths[i] = cascade.splitDepth;
@@ -194,7 +208,8 @@ SceneViewBuffers::update(const RenderView& view)
       .ambient = g_cvarAmbient.get(),
       .shadowBufferIndex = shadowBuffer.getBindlessIndex(),
       .shadowSamplerIndex = m_shadowSampler->getBindlessIndex(),
-      .debugShadowIndex = view.bShowShadowCascades && !view.shadows.empty() ? 0u : kNoShadow,
+      .debugShadowIndex =
+          view.bShowShadowCascades ? findCascadedShadowIndex(view.shadows) : kNoShadow,
       .padding = {0, 0, 0}};
   IBuffer& viewBuffer = *m_viewBuffers[frameIndex];
   viewBuffer.update(&viewData, sizeof(viewData));

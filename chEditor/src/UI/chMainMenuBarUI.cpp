@@ -71,6 +71,27 @@ resetSetting(ConsoleVariable<T>& cvar)
 }
 
 void
+renderMapSizeChoice(const ANSICHAR* label, ConsoleVariable<int32>& cvar)
+{
+  ImGui::TextUnformatted(label);
+  constexpr int32 kMapSizes[] = {512, 1024, 2048, 4096};
+  constexpr const ANSICHAR* kMapSizeNames[] = {"512", "1024", "2048", "4096"};
+  constexpr SIZE_T kMapSizeCount = sizeof(kMapSizes) / sizeof(kMapSizes[0]);
+  // Both choices use the same button labels.
+  ImGui::PushID(label);
+  for (SIZE_T i = 0; i < kMapSizeCount; ++i) {
+    if (ImGui::RadioButton(kMapSizeNames[i], cvar.get() == kMapSizes[i])) {
+      cvar.set(kMapSizes[i], ConsoleVariableSource::Console);
+    }
+    ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
+    if (i + 1 < kMapSizeCount) {
+      ImGui::SameLine();
+    }
+  }
+  ImGui::PopID();
+}
+
+void
 renderShadowSettings()
 {
   bool bShadows = g_cvarShadows.get();
@@ -79,6 +100,7 @@ renderShadowSettings()
   }
   ImGui::SetItemTooltip("%s", g_cvarShadows.getHelp().c_str());
 
+  ImGui::SeparatorText("Directional Light");
   // The same texels cover the whole distance, so it depends on the scale of the scene.
   editSetting("Distance", g_cvarShadowDistance, 0.5f, 1.0f, 10000.0f, "%.1f",
               ImGuiSliderFlags_Logarithmic);
@@ -91,22 +113,33 @@ renderShadowSettings()
   editSetting("Depth Bias", g_cvarShadowDepthBias, 0.05f, 0.0f, 20.0f, "%.2f");
   editSetting("Slope Bias", g_cvarShadowSlopeBias, 0.05f, 0.0f, 20.0f, "%.2f");
 
-  ImGui::TextUnformatted("Map size per cascade");
-  constexpr int32 kMapSizes[] = {512, 1024, 2048, 4096};
-  constexpr const ANSICHAR* kMapSizeNames[] = {"512", "1024", "2048", "4096"};
-  constexpr SIZE_T kMapSizeCount = sizeof(kMapSizes) / sizeof(kMapSizes[0]);
-  for (SIZE_T i = 0; i < kMapSizeCount; ++i) {
-    if (ImGui::RadioButton(kMapSizeNames[i], g_cvarShadowMapSize.get() == kMapSizes[i])) {
-      g_cvarShadowMapSize.set(kMapSizes[i], ConsoleVariableSource::Console);
-    }
-    ImGui::SetItemTooltip("%s", g_cvarShadowMapSize.getHelp().c_str());
-    if (i + 1 < kMapSizeCount) {
-      ImGui::SameLine();
-    }
-  }
+  renderMapSizeChoice("Map size per cascade", g_cvarShadowMapSize);
+
+  ImGui::SeparatorText("Spot Lights");
+  editSetting("Max Lights", g_cvarSpotShadowMaxLights, 0, 16);
+  editSetting("Spot Distance", g_cvarSpotShadowDistance, 0.5f, 1.0f, 10000.0f, "%.1f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Spot Fade", g_cvarSpotShadowFade, 0.005f, 0.0f, 1.0f, "%.2f");
+  editSetting("Near Plane", g_cvarSpotShadowNearPlane, 0.005f, 0.001f, 10.0f, "%.3f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Spot Filter Radius", g_cvarSpotShadowFilterRadius, 0, 3);
+  editSetting("Spot Normal Offset", g_cvarSpotShadowNormalOffset, 0.05f, 0.0f, 10.0f,
+              "%.2f texels");
+  editSetting("Spot Depth Bias", g_cvarSpotShadowDepthBias, 0.05f, 0.0f, 20.0f, "%.2f");
+  editSetting("Spot Slope Bias", g_cvarSpotShadowSlopeBias, 0.05f, 0.0f, 20.0f, "%.2f");
+  renderMapSizeChoice("Map size per spot light", g_cvarSpotShadowMapSize);
 
   ImGui::Separator();
   if (ImGui::MenuItem("Reset to Defaults")) {
+    resetSetting(g_cvarSpotShadowMaxLights);
+    resetSetting(g_cvarSpotShadowDistance);
+    resetSetting(g_cvarSpotShadowFade);
+    resetSetting(g_cvarSpotShadowNearPlane);
+    resetSetting(g_cvarSpotShadowFilterRadius);
+    resetSetting(g_cvarSpotShadowNormalOffset);
+    resetSetting(g_cvarSpotShadowDepthBias);
+    resetSetting(g_cvarSpotShadowSlopeBias);
+    resetSetting(g_cvarSpotShadowMapSize);
     resetSetting(g_cvarShadows);
     resetSetting(g_cvarShadowDistance);
     resetSetting(g_cvarShadowCascades);

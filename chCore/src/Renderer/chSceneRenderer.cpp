@@ -93,6 +93,11 @@ SceneRenderer::addScenePasses(const Scene& scene,
     case ViewMode::AmbientOcclusion:
     case ViewMode::Emissive:
       return m_deferredRenderPath->addGBufferViewPasses(m_graph, view, output, m_viewMode);
+    case ViewMode::ShadowMaps:
+      // The views are only needed by lit paths; the debug pass reads the atlases.
+      static_cast<void>(m_shadowRenderer->addPasses(m_graph, scene, view));
+      m_shadowRenderer->addDebugPass(m_graph, output);
+      return {};
     case ViewMode::COUNT:
       break;
   }

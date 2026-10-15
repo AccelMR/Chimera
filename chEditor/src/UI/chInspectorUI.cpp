@@ -389,9 +389,9 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     EditorScene::recordChange(gameObject, "Edit Cast Shadows");
     light->setCastShadows(bCastShadows);
   }
-  if (light->getLightType() != LightType::Directional) {
+  if (light->getLightType() == LightType::Point) {
     ImGui::SameLine();
-    ImGui::TextDisabled("(directional lights only, for now)");
+    ImGui::TextDisabled("(not drawn for point lights yet)");
   }
 
   if (pointLight) {

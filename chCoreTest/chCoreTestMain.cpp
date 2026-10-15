@@ -825,6 +825,120 @@ TEST_CASE("chCore - Shadow cascade splits")
   }
 }
 
+TEST_CASE("chCore - Spot shadow projection")
+{
+  constexpr uint32 kMapSize = 1024;
+  const Degree halfAngle(30.0f);
+  LightItem light;
+  light.type = LightType::Spot;
+  light.position = Vector3(0.0f, 0.0f, 2.0f);
+  light.direction = Vector3::FORWARD;
+  light.range = 10.0f;
+  light.outerConeCos = Math::cos(Radian(halfAngle));
+  const SpotShadowProjection projection =
+      ShadowRenderer::computeSpotProjection(light, 0.1f, kMapSize);
+
+  const auto project = [&projection](const Vector3& point) {
+    const Vector4 clip =
+        projection.viewProjection.transformVector4(Vector4(point.x, point.y, point.z, 1.0f));
+    return Vector3(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+  };
+
+  SECTION("The axis is the center of the map, the range its far plane")
+  {
+    const Vector3 middle = project(light.position + light.direction * 5.0f);
+    REQUIRE(middle.x == Approx(0.0f).margin(1e-5f));
+    REQUIRE(middle.y == Approx(0.0f).margin(1e-5f));
+    REQUIRE(middle.z > 0.0f);
+    REQUIRE(middle.z < 1.0f);
+    REQUIRE(project(light.position + light.direction * 9.9f).z < 1.0f);
+    REQUIRE(project(light.position + light.direction * 10.5f).z > 1.0f);
+  }
+
+  SECTION("The cone fits the map")
+  {
+    for (const float degrees : {29.0f, 31.0f}) {
+      const float side = 5.0f * Math::tan(Radian(Degree(degrees)));
+      const Vector3 right = project(light.position + Vector3(5.0f, side, 0.0f));
+      const Vector3 up = project(light.position + Vector3(5.0f, 0.0f, side));
+      if (degrees < 30.0f) {
+        REQUIRE(Math::abs(right.x) < 1.0f);
+        REQUIRE(Math::abs(up.y) < 1.0f);
+      }
+      else {
+        REQUIRE(Math::abs(right.x) > 1.0f);
+        REQUIRE(Math::abs(up.y) > 1.0f);
+      }
+    }
+    REQUIRE(projection.texelWorldSizePerDistance ==
+            Approx(2.0f * Math::tan(Radian(halfAngle)) / kMapSize));
+  }
+
+  SECTION("Casters between the light and the near plane are kept, those behind it are not")
+  {
+    REQUIRE(ShapeOverlap::frustumPoint(projection.casterFrustum,
+                                       light.position + light.direction * 0.05f));
+    REQUIRE_FALSE(ShapeOverlap::frustumPoint(projection.casterFrustum,
+                                             light.position - light.direction));
+  }
+
+  SECTION("The near plane stays under half the range")
+  {
+    const SpotShadowProjection farNear =
+        ShadowRenderer::computeSpotProjection(light, 20.0f, kMapSize);
+    REQUIRE(farNear.nearPlane == 5.0f);
+    REQUIRE(projection.nearPlane == 0.1f);
+  }
+}
+
+TEST_CASE("chCore - Spot shadow selection")
+{
+  // Every light stands on the X axis, the camera at the origin.
+  const auto makeLight = [](LightType type, float x, float range, bool bCast) {
+    LightItem light;
+    light.type = type;
+    light.position = Vector3(x, 0.0f, 0.0f);
+    light.range = range;
+    light.bCastShadows = bCast;
+    return light;
+  };
+  const LightItem nearSmall = makeLight(LightType::Spot, 10.0f, 2.0f, true);
+  const LightItem farBig = makeLight(LightType::Spot, 40.0f, 20.0f, true);
+  const LightItem around = makeLight(LightType::Spot, 1.0f, 5.0f, true);
+  const LightItem tooFar = makeLight(LightType::Spot, 500.0f, 10.0f, true);
+  const LightItem noShadow = makeLight(LightType::Spot, 2.0f, 5.0f, false);
+  const LightItem point = makeLight(LightType::Point, 2.0f, 5.0f, true);
+  const LightItem* lights[] = {&nearSmall, &farBig, &around, &tooFar, &noShadow, &point};
+
+  Vector<SpotShadowCandidate> candidates;
+  ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 8, 100.0f, candidates);
+
+  SECTION("Only spot lights with shadows inside the distance, the biggest on screen first")
+  {
+    REQUIRE(candidates.size() == 3);
+    REQUIRE(candidates[0].light == &around);
+    REQUIRE(candidates[0].rangeDistance == 0.0f);
+    REQUIRE(candidates[1].light == &farBig);
+    REQUIRE(candidates[1].rangeDistance == Approx(20.0f));
+    REQUIRE(candidates[2].light == &nearSmall);
+    REQUIRE(candidates[2].rangeDistance == Approx(8.0f));
+  }
+
+  SECTION("At most maxCount are kept")
+  {
+    ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 2, 100.0f, candidates);
+    REQUIRE(candidates.size() == 2);
+    REQUIRE(candidates[1].light == &farBig);
+  }
+
+  SECTION("The distance counts from the camera to the edge of the range")
+  {
+    ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 8, 15.0f, candidates);
+    REQUIRE(candidates.size() == 2);
+    REQUIRE(candidates[1].light == &nearSmall);
+  }
+}
+
 TEST_CASE("chCore - RenderGraph")
 {
   const FakeTexture backBuffer(Format::B8G8R8A8_UNORM, 64, 32);

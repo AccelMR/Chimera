@@ -46,7 +46,7 @@ class CH_CORE_EXPORT LightComponent : public Component
   getIntensity() const noexcept { return m_intensity; }
 
   /**
-   * Only directional lights draw shadows so far; the flag is kept for the others.
+   * Directional and spot lights draw shadows; point lights keep the flag for later.
    */
   void
   setCastShadows(bool bCastShadows);
