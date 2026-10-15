@@ -13,6 +13,7 @@
 #include "chAssetManager.h"
 #include "chEditorCamera.h"
 #include "chEditorScene.h"
+#include "chEditorTheme.h"
 #include "chConsoleVariable.h"
 #include "chEventDispatcherManager.h"
 #include "chDynamicLibManager.h"
@@ -406,8 +407,8 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display)
           .toString();
   ImGui::GetIO().IniFilename = iniFilePath.c_str();
 
-  UIHelpers::initStyle();
-  UIHelpers::initFontConfig();
+  UIHelpers::initConfigFlags();
+  EditorTheme::initialize();
 
 #if USING(CH_DISPLAY_SDL3)
   // The windows ImGui opens need the same window flags the graphics API asked for, and the

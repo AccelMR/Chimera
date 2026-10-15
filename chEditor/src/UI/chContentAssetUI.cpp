@@ -57,6 +57,17 @@ using namespace ContentAssetUIVars;
 
 namespace {
 
+// Tiles take the frame colors of the theme, so they stand out from the panel in any theme.
+void
+pushTileColors()
+{
+  ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+}
+
 NODISCARD ImVec4
 getAssetStateColor(AssetState state) noexcept
 {
@@ -480,9 +491,7 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
   const AssetIcon assetIcon = UIHelpers::getIconFromAssetType(asset);
   const ImVec2 buttonSize(gridSize, gridSize);
 
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+  pushTileColors();
 
   const uint64 thumbnail = assetIcon.type == AssetType::Texture ? getThumbnail(asset) : 0;
 
@@ -523,8 +532,10 @@ ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset)
                        (gridSize - ImGui::CalcTextSize(displayName).x) * 0.5f);
 
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
 
   ImGui::Button(displayName);
 
@@ -851,9 +862,6 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset)
   // Styled to look close to the plain name it replaces.
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
   ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 0.8f));
-  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
-  ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 0.4f, 0.4f, 0.9f));
 
   ImGui::SetNextItemWidth(inputWidth);
 
@@ -882,7 +890,6 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset)
     cancelInlineRename();
   }
 
-  ImGui::PopStyleColor(3);
   ImGui::PopStyleVar(2);
 
   return true;
@@ -1089,9 +1096,7 @@ ContentAssetUI::renderGridFolderItem(uint32 folderIndex, int32 column)
   ImGui::PushID(static_cast<int32>(folderIndex));
   ImGui::BeginGroup();
 
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+  pushTileColors();
   ImGui::Button("##folder", ImVec2(gridSize, gridSize));
   ImGui::PopStyleColor(3);
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {

@@ -15,6 +15,7 @@
 
 #include "chAssetManager.h"
 #include "chEditorScene.h"
+#include "chEditorTheme.h"
 #include "chEnginePaths.h"
 #include "chImportDialog.h"
 #include "chLinearColor.h"
@@ -204,15 +205,13 @@ MainMenuBarUI::renderMainMenuBar() {
     ImGui::ColorEdit4("Renderer Color", UIHelpers::rendererColor.toFloatPtr(),
                       ImGuiColorEditFlags_NoInputs);
 
-    ImGui::Separator(); //--------------------------------------------------------------
-    if (ImGui::SliderFloat("Font Size", &UIHelpers::baseFontSize, 1.0f, 5.0f, "%.1f",
-                           ImGuiSliderFlags_AlwaysClamp)) {
-      ImGui::GetStyle().FontScaleMain = UIHelpers::baseFontSize;
-    }
-    ImGui::Separator(); //--------------------------------------------------------------
+    ImGui::EndMenu();
+  }
 
+  if (ImGui::BeginMenu("View")) {
+    EditorTheme::renderSettings();
+    ImGui::Separator(); //--------------------------------------------------------------
     ImGui::MenuItem("Show ImGui Demo Window", nullptr, &UIHelpers::bShowDemoWindow);
-
     ImGui::EndMenu();
   }
 

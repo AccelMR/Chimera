@@ -33,10 +33,7 @@ class UIHelpers {
   getIconFromAssetType(const SPtr<IAsset>& asset);
 
   static void
-  initStyle();
-
-  static void
-  initFontConfig();
+  initConfigFlags();
 
   NODISCARD static HEvent
   bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler);
@@ -51,7 +48,6 @@ class UIHelpers {
   static bool bShowDemoWindow;
   // Variable to control if ImGui should render
   static bool bRenderImGui;
-  static float baseFontSize; // Default font size for ImGui
   static LinearColor rendererColor; // Renderer color for the editor
 }; // class UIHelpers
 
