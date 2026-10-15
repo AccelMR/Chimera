@@ -31,11 +31,13 @@
 #include "chOrientedBox.h"
 #include "chPath.h"
 #include "chPlane.h"
+#include "chProfiler.h"
 #include "chQuaternion.h"
 #include "chRandom.h"
 #include "chRay.h"
 #include "chRayCast.h"
 #include "chRotator.h"
+#include "chSTDThreading.h"
 #include "chShapeOverlap.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
@@ -2683,3 +2685,73 @@ TEST_CASE("chUtilities - LinearAllocator")
     REQUIRE(destroyed.size() == 2);
   }
 }
+
+#if USING(CH_PROFILER)
+TEST_CASE("chUtilities - Profiler")
+{
+  IConsoleVariable* updateInterval = ConsoleVariables::find("Profiler.UpdateInterval");
+  REQUIRE(updateInterval != nullptr);
+  // Every frame publishes, so each frame can be checked alone.
+  REQUIRE(updateInterval->setFromString("0", ConsoleVariableSource::Console));
+
+  SECTION("Disabled scopes measure nothing")
+  {
+    Profiler::setEnabled(false);
+    Profiler::beginFrame();
+    REQUIRE(Profiler::beginScope("Ignored") == Profiler::INVALID_SCOPE);
+    Profiler::endFrame();
+  }
+
+  SECTION("Nested scopes add up by name under their parent")
+  {
+    Profiler::setEnabled(true);
+    Profiler::beginFrame();
+    {
+      CH_PROFILE_SCOPE("Update");
+      for (int32 i = 0; i < 3; ++i) {
+        CH_PROFILE_SCOPE("Step");
+      }
+    }
+    {
+      CH_PROFILE_SCOPE("Render");
+      CH_PROFILE_SCOPE("Step");
+    }
+    Profiler::endFrame();
+
+    const Span<const ProfilerScopeStats> scopes = Profiler::getScopeStats();
+    REQUIRE(scopes.size() == 5);
+    REQUIRE(scopes[0].name == "Frame");
+    REQUIRE(scopes[0].depth == 0);
+    REQUIRE(scopes[1].name == "Update");
+    REQUIRE(scopes[1].depth == 1);
+    REQUIRE(scopes[2].name == "Step");
+    REQUIRE(scopes[2].depth == 2);
+    REQUIRE(scopes[2].callsPerFrame == 3.0f);
+    REQUIRE(scopes[3].name == "Render");
+    REQUIRE(scopes[3].depth == 1);
+    REQUIRE(scopes[4].name == "Step");
+    REQUIRE(scopes[4].callsPerFrame == 1.0f);
+    REQUIRE(scopes[0].milliseconds >= scopes[1].milliseconds);
+    REQUIRE(Profiler::getAverageFrameMilliseconds() == scopes[0].milliseconds);
+
+    const uint32 newest =
+        (Profiler::getFrameHistoryOffset() + Profiler::FRAME_HISTORY_SIZE - 1) %
+        Profiler::FRAME_HISTORY_SIZE;
+    REQUIRE(Profiler::getFrameHistory()[newest] >= 0.0f);
+  }
+
+  SECTION("Other threads are not measured")
+  {
+    Profiler::setEnabled(true);
+    Profiler::beginFrame();
+    uint32 workerScope = 0;
+    Thread worker([&workerScope]() { workerScope = Profiler::beginScope("Worker"); });
+    worker.join();
+    REQUIRE(workerScope == Profiler::INVALID_SCOPE);
+    Profiler::endFrame();
+  }
+
+  Profiler::setEnabled(false);
+  REQUIRE(updateInterval->setFromString("0.5", ConsoleVariableSource::Console));
+}
+#endif // USING(CH_PROFILER)

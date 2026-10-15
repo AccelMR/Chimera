@@ -11,6 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 #include "chGraphicsTypes.h"
+#include "chICommandList.h"
 #include "chLinearAllocator.h"
 #include "chLinearColor.h"
 
@@ -63,6 +64,15 @@ struct RGBarrier
   RGTextureHandle texture;
   ResourceState before = ResourceState::Undefined;
   ResourceState after = ResourceState::Undefined;
+};
+
+/**
+ * What one pass recorded the last time the graph ran, its barriers included.
+ */
+struct RenderPassStats
+{
+  StringView name;
+  CommandListStats commands;
 };
 
 /**
@@ -194,6 +204,16 @@ class CH_CORE_EXPORT RenderGraph
    */
   void
   execute(ICommandList& commandList, TransientTexturePool& pool);
+
+  /**
+   * What each pass of the last execute() recorded, in the order they ran. Kept until the
+   * next execute(), so reset() does not clear it.
+   */
+  NODISCARD FORCEINLINE Span<const RenderPassStats>
+  getExecutedPassStats() const
+  {
+    return m_executedPassStats;
+  }
 
   /**
    * A copy, because creating a texture can move the ones already created.
@@ -388,6 +408,7 @@ class CH_CORE_EXPORT RenderGraph
   Vector<const ITexture*> m_resolvedTextures;
   Vector<const ITextureView*> m_resolvedViews;
   Vector<TextureBarrier> m_textureBarriers;
+  Vector<RenderPassStats> m_executedPassStats;
 };
 
 /**

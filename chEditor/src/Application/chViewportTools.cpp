@@ -19,6 +19,7 @@
 #include "chMath.h"
 #include "chMatrix4.h"
 #include "chModelComponent.h"
+#include "chProfilerUI.h"
 #include "chQuaternion.h"
 #include "chRay.h"
 #include "chScene.h"
@@ -288,6 +289,19 @@ ViewportTools::renderToolbar()
   ImGui::TextDisabled("|");
   ImGui::SameLine();
   renderCameraSettings();
+
+  ImGui::SameLine();
+  const bool bStats = ProfilerUI::isOverlayVisible();
+  if (bStats) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+  }
+  if (ImGui::Button("Stats")) {
+    ProfilerUI::setOverlayVisible(!bStats);
+  }
+  if (bStats) {
+    ImGui::PopStyleColor();
+  }
+  ImGui::SetItemTooltip("Frame time, draws and triangles in the corner of the viewport");
   ImGui::End();
 }
 

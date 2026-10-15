@@ -11,6 +11,7 @@
 
 #include "chICommandList.h"
 #include "chITexture.h"
+#include "chProfiler.h"
 #include "chTransientTexturePool.h"
 
 namespace chEngineSDK {
@@ -227,10 +228,16 @@ RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
     }
   }
 
+  m_executedPassStats.clear();
   for (uint32 compiledIndex = 0; compiledIndex < m_compiledPasses.size(); ++compiledIndex) {
+    const Pass& pass = m_passes[m_compiledPasses[compiledIndex].pass];
+#if USING(CH_PROFILER)
+    const ProfileScope profileScope(pass.name);
+    const CommandListStats statsBefore = commandList.getStats();
+#endif // USING(CH_PROFILER)
+
     submitBarriers(commandList, pool, getCompiledPassBarriers(compiledIndex));
 
-    const Pass& pass = m_passes[m_compiledPasses[compiledIndex].pass];
     RenderingDesc renderingDesc{};
     bool isRendering = false;
     for (uint32 i = 0; i < pass.accessCount; ++i) {
@@ -274,6 +281,11 @@ RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
     if (isRendering) {
       commandList.endRendering();
     }
+
+#if USING(CH_PROFILER)
+    m_executedPassStats.push_back(
+        {.name = pass.name, .commands = commandList.getStats() - statsBefore});
+#endif // USING(CH_PROFILER)
   }
 
   submitBarriers(commandList, pool, getFinalBarriers());

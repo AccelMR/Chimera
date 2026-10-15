@@ -21,6 +21,7 @@
 #include "chGraphicsTypes.h"
 #include "chLogger.h"
 #include "chMath.h"
+#include "chProfiler.h"
 #include "chStringUtils.h"
 
 // Include graphics API
@@ -76,27 +77,33 @@ WindowedApplication::run() {
   auto& eventDispatcher = EventDispatcherManager::instance();
 
   while (m_running) {
+    Profiler::beginFrame();
+
     // Calculate delta time
     auto currentTime = high_resolution_clock::now();
     auto deltaTime = duration_cast<duration<double>>(currentTime - previousTime).count();
     previousTime = currentTime;
 
-    m_eventhandler->update();
-    eventDispatcher.dispatchEvents(m_eventhandler);
+    {
+      CH_PROFILE_SCOPE("Events");
+      m_eventhandler->update();
+      eventDispatcher.dispatchEvents(m_eventhandler);
+    }
     if (!m_running) {
       break;
     }
 
-    // Update the accumulator
-    accumulator += deltaTime;
-    while (accumulator >= fixedTimeStamp) {
-      // Update the application logic
-      update(static_cast<float>(fixedTimeStamp));
-      accumulator -= fixedTimeStamp;
+    {
+      CH_PROFILE_SCOPE("Update");
+      accumulator += deltaTime;
+      while (accumulator >= fixedTimeStamp) {
+        update(static_cast<float>(fixedTimeStamp));
+        accumulator -= fixedTimeStamp;
+      }
     }
 
-    // Render the application
     render(static_cast<float>(deltaTime));
+    Profiler::endFrame();
   }
 }
 
@@ -295,9 +302,19 @@ WindowedApplication::render(const float deltaTime)
   IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
   ISwapChain& swapChain = *m_swapChain;
 
-  ICommandList& commandList = graphicsAPI.beginFrame();
+  CH_PROFILE_SCOPE("Render");
+  ICommandList* commandList = nullptr;
+  {
+    // Waits until the GPU is done with the last frame that used this slot.
+    CH_PROFILE_SCOPE("WaitForGPU");
+    commandList = &graphicsAPI.beginFrame();
+  }
 
-  const SwapChainStatus acquireStatus = swapChain.acquireNextImage();
+  SwapChainStatus acquireStatus = SwapChainStatus::Failed;
+  {
+    CH_PROFILE_SCOPE("AcquireImage");
+    acquireStatus = swapChain.acquireNextImage();
+  }
   if (acquireStatus == SwapChainStatus::OutOfDate ||
       acquireStatus == SwapChainStatus::Failed) {
     graphicsAPI.endFrame();
@@ -307,12 +324,21 @@ WindowedApplication::render(const float deltaTime)
     return;
   }
 
-  onRender(commandList, swapChain, deltaTime);
+  {
+    CH_PROFILE_SCOPE("OnRender");
+    onRender(*commandList, swapChain, deltaTime);
+  }
 
-  graphicsAPI.endFrame();
-  const SwapChainStatus presentStatus = swapChain.present();
-
-  onPostPresent();
+  SwapChainStatus presentStatus = SwapChainStatus::Failed;
+  {
+    CH_PROFILE_SCOPE("Submit");
+    graphicsAPI.endFrame();
+  }
+  {
+    CH_PROFILE_SCOPE("Present");
+    presentStatus = swapChain.present();
+    onPostPresent();
+  }
 
   // A suboptimal image is still drawn and presented, so the swap chain is only recreated
   // after the frame is done.

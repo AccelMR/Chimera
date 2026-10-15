@@ -31,6 +31,8 @@
 #include "chPrefabAsset.h"
 #include "chPath.h"
 #include "chPlane.h"
+#include "chProfiler.h"
+#include "chProfilerUI.h"
 #include "chQuaternion.h"
 #include "chRayCast.h"
 #include "chRotator.h"
@@ -176,6 +178,7 @@ EditorApplication::onRender(ICommandList& commandList,
   }
 
   if (UIHelpers::bRenderImGui) {
+    CH_PROFILE_SCOPE("BuildUI");
     renderUI();
   }
   // A drag or a text field still going on keeps its changes in one undo step.
@@ -200,7 +203,10 @@ EditorApplication::onRender(ICommandList& commandList,
   }
 
   // After the UI, which may have moved or added objects.
-  scene.updateTransforms();
+  {
+    CH_PROFILE_SCOPE("UpdateTransforms");
+    scene.updateTransforms();
+  }
 
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
@@ -222,6 +228,7 @@ EditorApplication::onRender(ICommandList& commandList,
   m_sceneRenderer->execute(commandList);
 
   if (UIHelpers::bRenderImGui) {
+    CH_PROFILE_SCOPE("FloatingWindows");
     m_imguiRenderer->renderFloatingWindows(commandList);
   }
 }
@@ -443,6 +450,8 @@ EditorApplication::renderUI()
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   m_viewportTools->render(*EditorScene::getScene());
+  // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
+  ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
   renderViewportDropTarget();

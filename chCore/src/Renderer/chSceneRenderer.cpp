@@ -14,6 +14,7 @@
 #include "chDeferredRenderPath.h"
 #include "chForwardRenderPath.h"
 #include "chLogger.h"
+#include "chProfiler.h"
 #include "chScene.h"
 #include "chShadowRenderer.h"
 #include "chTonemapPass.h"
@@ -60,9 +61,13 @@ SceneRenderer::addScenePasses(const Scene& scene,
                               RGTextureHandle output,
                               const LinearColor& clearColor)
 {
+  CH_PROFILE_SCOPE("AddScenePasses");
   const Frustum& frustum = camera.getFrustum();
-  scene.gatherRenderItems(frustum, m_visibleItems);
-  scene.gatherLights(frustum, m_visibleLights);
+  {
+    CH_PROFILE_SCOPE("Gather");
+    scene.gatherRenderItems(frustum, m_visibleItems);
+    scene.gatherLights(frustum, m_visibleLights);
+  }
   const RenderView view{.camera = camera,
                         .items = m_visibleItems,
                         .lights = m_visibleLights,
@@ -109,8 +114,19 @@ SceneRenderer::addScenePasses(const Scene& scene,
 void
 SceneRenderer::execute(ICommandList& commandList)
 {
-  m_graph.compile();
+  {
+    CH_PROFILE_SCOPE("CompileGraph");
+    m_graph.compile();
+  }
+
+  CH_PROFILE_SCOPE("ExecuteGraph");
+#if USING(CH_PROFILER)
+  const CommandListStats statsBefore = commandList.getStats();
   m_graph.execute(commandList, m_texturePool);
+  m_frameCommandStats = commandList.getStats() - statsBefore;
+#else
+  m_graph.execute(commandList, m_texturePool);
+#endif // USING(CH_PROFILER)
   m_texturePool.nextFrame();
 }
 

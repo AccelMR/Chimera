@@ -136,6 +136,7 @@ VulkanCommandList::begin()
                                            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                                            .pInheritanceInfo = nullptr};
   VK_CHECK(vkBeginCommandBuffer(m_commandBuffer, &beginInfo));
+  m_stats = {};
 
   // Every pipeline uses the same layout, so the heap stays bound for the whole buffer.
   vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
@@ -158,6 +159,7 @@ void
 VulkanCommandList::beginRendering(const RenderingDesc& desc)
 {
   CH_ASSERT(desc.colorAttachmentCount <= GraphicsLimits::MAX_COLOR_ATTACHMENTS);
+  m_stats.recordRendering();
 
   Array<VkRenderingAttachmentInfo, GraphicsLimits::MAX_COLOR_ATTACHMENTS> colorInfos{};
   for (uint32 i = 0; i < desc.colorAttachmentCount; ++i) {
@@ -221,6 +223,7 @@ VulkanCommandList::endRendering()
 void
 VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
 {
+  m_stats.recordBarriers(textureBarriers.size());
   Array<VkImageMemoryBarrier2, kMaxBarriersPerCall> imageBarriers{};
   uint32 count = 0;
 
@@ -285,6 +288,7 @@ VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
 void
 VulkanCommandList::bindPipeline(const IPipeline& pipeline)
 {
+  m_stats.recordPipelineBind();
   vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     static_cast<const VulkanPipeline&>(pipeline).getHandle());
 }
@@ -327,6 +331,7 @@ VulkanCommandList::draw(uint32 vertexCount,
                           uint32 firstVertex,
                           uint32 firstInstance)
 {
+  m_stats.recordDraw(vertexCount, instanceCount);
   vkCmdDraw(m_commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
@@ -339,6 +344,7 @@ VulkanCommandList::drawIndexed(uint32 indexCount,
                                  int32 vertexOffset,
                                  uint32 firstInstance)
 {
+  m_stats.recordDraw(indexCount, instanceCount);
   vkCmdDrawIndexed(m_commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset,
                    firstInstance);
 }

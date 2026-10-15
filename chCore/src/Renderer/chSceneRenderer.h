@@ -24,6 +24,18 @@ class ShadowRenderer;
 class TonemapPass;
 
 /**
+ * What one frame of a SceneRenderer drew, for the profiler.
+ */
+struct RenderFrameStats
+{
+  Span<const RenderPassStats> passes;
+  // Every pass plus the barriers at the end of the frame.
+  CommandListStats commands;
+  uint32 visibleItems = 0;
+  uint32 visibleLights = 0;
+};
+
+/**
  * Exists so an application only says where the frame goes and what it draws on top: it
  * owns the frame's render graph, the textures the graph makes, and the render path that
  * draws a scene. Lit view modes draw the shadow maps first, then the scene into an HDR
@@ -78,6 +90,18 @@ class CH_CORE_EXPORT SceneRenderer
   void
   execute(ICommandList& commandList);
 
+  /**
+   * What the last frame drew. Kept until the next execute().
+   */
+  NODISCARD RenderFrameStats
+  getLastFrameStats() const
+  {
+    return {.passes = m_graph.getExecutedPassStats(),
+            .commands = m_frameCommandStats,
+            .visibleItems = static_cast<uint32>(m_visibleItems.size()),
+            .visibleLights = static_cast<uint32>(m_visibleLights.size())};
+  }
+
  private:
   /**
    * The shadow maps, the active render path into an HDR scene color, then the tonemap into
@@ -108,6 +132,7 @@ class CH_CORE_EXPORT SceneRenderer
   // Kept between frames, so gathering the visible items and lights does not allocate.
   Vector<const RenderItem*> m_visibleItems;
   Vector<const LightItem*> m_visibleLights;
+  CommandListStats m_frameCommandStats;
 };
 
 } // namespace chEngineSDK

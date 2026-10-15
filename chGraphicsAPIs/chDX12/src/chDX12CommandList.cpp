@@ -116,6 +116,7 @@ DX12CommandList::begin(ID3D12CommandAllocator* allocator)
   m_commandList->SetGraphicsRootSignature(m_rootSignature);
   m_pipeline = nullptr;
   m_boundVertexBuffers = 0;
+  m_stats = {};
 }
 
 /*
@@ -132,6 +133,7 @@ void
 DX12CommandList::beginRendering(const RenderingDesc& desc)
 {
   CH_ASSERT(desc.colorAttachmentCount <= GraphicsLimits::MAX_COLOR_ATTACHMENTS);
+  m_stats.recordRendering();
 
   Array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, GraphicsLimits::MAX_COLOR_ATTACHMENTS>
       colorDescs{};
@@ -186,6 +188,7 @@ DX12CommandList::endRendering()
 void
 DX12CommandList::barrier(Span<const TextureBarrier> textureBarriers)
 {
+  m_stats.recordBarriers(textureBarriers.size());
   Array<D3D12_TEXTURE_BARRIER, kMaxBarriersPerCall> barriers{};
   uint32 count = 0;
 
@@ -245,6 +248,7 @@ DX12CommandList::bindPipeline(const IPipeline& pipeline)
   m_commandList->SetPipelineState(dx12Pipeline.getHandle());
   m_commandList->IASetPrimitiveTopology(dx12Pipeline.getTopology());
   m_pipeline = &dx12Pipeline;
+  m_stats.recordPipelineBind();
 
   for (uint32 binding = 0; binding < MAX_VERTEX_BINDINGS; ++binding) {
     D3D12_VERTEX_BUFFER_VIEW& view = m_vertexBuffers[binding];
@@ -302,6 +306,7 @@ DX12CommandList::draw(uint32 vertexCount,
                       uint32 firstVertex,
                       uint32 firstInstance)
 {
+  m_stats.recordDraw(vertexCount, instanceCount);
   m_commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
@@ -314,6 +319,7 @@ DX12CommandList::drawIndexed(uint32 indexCount,
                              int32 vertexOffset,
                              uint32 firstInstance)
 {
+  m_stats.recordDraw(indexCount, instanceCount);
   m_commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, vertexOffset,
                                       firstInstance);
 }

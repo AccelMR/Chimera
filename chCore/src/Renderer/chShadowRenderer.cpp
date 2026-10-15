@@ -23,6 +23,7 @@
 #include "chMath.h"
 #include "chMatrixHelpers.h"
 #include "chMesh.h"
+#include "chProfiler.h"
 #include "chRenderItem.h"
 #include "chRenderSettings.h"
 #include "chScene.h"
@@ -197,6 +198,7 @@ ShadowRenderer::~ShadowRenderer() = default;
 Span<const ShadowView>
 ShadowRenderer::addPasses(RenderGraph& graph, const Scene& scene, const RenderView& view)
 {
+  CH_PROFILE_SCOPE("ShadowSetup");
   m_shadowViews.clear();
   m_directionalAtlas.handle = {};
   m_spotAtlas.handle = {};

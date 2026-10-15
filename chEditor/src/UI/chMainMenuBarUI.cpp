@@ -22,6 +22,7 @@
 #include "chLogger.h"
 #include "chModelAsset.h"
 #include "chPrefabAsset.h"
+#include "chProfilerUI.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
 #include "chStringUtils.h"
@@ -234,6 +235,12 @@ MainMenuBarUI::renderMainMenuBar() {
   if (ImGui::BeginMenu("View")) {
     EditorTheme::renderSettings();
     ImGui::Separator(); //--------------------------------------------------------------
+    if (ImGui::MenuItem("Profiler", nullptr, ProfilerUI::isWindowVisible())) {
+      ProfilerUI::setWindowVisible(!ProfilerUI::isWindowVisible());
+    }
+    if (ImGui::MenuItem("Stats Overlay", nullptr, ProfilerUI::isOverlayVisible())) {
+      ProfilerUI::setOverlayVisible(!ProfilerUI::isOverlayVisible());
+    }
     ImGui::MenuItem("Show ImGui Demo Window", nullptr, &UIHelpers::bShowDemoWindow);
     ImGui::EndMenu();
   }

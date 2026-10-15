@@ -31,3 +31,10 @@
 #include "chForwardDecUtil.h"
 
 #include "chException.h"
+
+// Off in shipping game builds, so profile scopes and render stats compile to nothing.
+#ifdef CH_PROFILER_ENABLED
+# define CH_PROFILER IN_USE
+#else
+# define CH_PROFILER NOT_IN_USE
+#endif
