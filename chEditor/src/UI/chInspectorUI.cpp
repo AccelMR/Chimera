@@ -260,16 +260,27 @@ InspectorUI::renderTransform(GameObject& gameObject)
     m_rotationDegrees[2] = rotator.yaw.valueDegree();
   }
 
+  // Every instance is placed where it is dropped, so the prefab keeps no position; its
+  // rotation and scale are what new instances start with.
+  const bool bPrefabRoot = &gameObject == EditorScene::getPrefabRoot().get();
+  if (bPrefabRoot) {
+    ImGui::TextWrapped("Prefab root: position is locked, each instance goes where it is "
+                       "dropped. Rotation and scale are what new instances start with; "
+                       "placed instances keep their own.");
+  }
+
   const Vector3& position = transform.getLocalPosition();
   float positionValues[3] = {position.x, position.y, position.z};
   static constexpr const ANSICHAR* kPositionTooltips[3] = {"X (forward)", "Y (right)",
                                                            "Z (up)"};
+  ImGui::BeginDisabled(bPrefabRoot);
   if (renderAxisRow(ICON_FA_ARROWS_ALT "  Position", positionValues, 0.01f, 0.0f, "%.3f",
                     kPositionTooltips)) {
     EditorScene::recordChange(gameObject, "Move");
     transform.setLocalPosition(
         Vector3(positionValues[0], positionValues[1], positionValues[2]));
   }
+  ImGui::EndDisabled();
 
   static constexpr const ANSICHAR* kRotationTooltips[3] = {
       "Roll (around X)", "Pitch (around Y)", "Yaw (around Z)"};

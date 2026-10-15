@@ -260,7 +260,7 @@ GameObjectSerializer::instantiate(const PrefabAsset& prefab, Scene& scene, GameO
 {
   const SPtr<GameObject> gameObject = scene.createGameObject(prefab.getName(), parent);
   gameObject->m_prefab = prefab.getUUID();
-  if (!readPrefabInto(prefab, *gameObject, 0)) {
+  if (!readPrefabInto(prefab, *gameObject, 0, true)) {
     CH_LOG_WARNING(SceneManagerLog, "Could not read the content of prefab {0}.",
                    prefab.getName());
   }
@@ -272,7 +272,7 @@ GameObjectSerializer::instantiate(const PrefabAsset& prefab, Scene& scene, GameO
 bool
 GameObjectSerializer::readPrefabContent(const PrefabAsset& prefab, GameObject& target)
 {
-  return readPrefabInto(prefab, target, 0);
+  return readPrefabInto(prefab, target, 0, true);
 }
 
 /*
@@ -376,7 +376,7 @@ GameObjectSerializer::fillObject(ReadContext& context,
     if (!prefab) {
       CH_LOG_WARNING(SceneManagerLog, "{0} lost its prefab {1}.", header.name, header.prefab);
     }
-    else if (!readPrefabInto(*prefab, gameObject, depth + 1)) {
+    else if (!readPrefabInto(*prefab, gameObject, depth + 1, false)) {
       // A broken prefab leaves its instances empty instead of failing the whole file.
       CH_LOG_WARNING(SceneManagerLog, "{0} could not read its prefab {1}.", header.name,
                      prefab->getName());
@@ -433,12 +433,14 @@ GameObjectSerializer::readComponent(ReadContext& context, GameObject& gameObject
 
 /*
  * The content is one object written by write(); its components and children go to target,
- * its UUID, name and transform are left out.
+ * its UUID, name and position are left out. Its rotation and scale only start a new
+ * instance: an instance read from a scene keeps the ones the scene saved.
  */
 bool
 GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
                                      GameObject& target,
-                                     uint32 depth)
+                                     uint32 depth,
+                                     bool bApplyRootTransform)
 {
   CH_ASSERT(target.getScene() && "The target must be in a scene.");
   if (depth > kMaxDepth) {
@@ -470,10 +472,17 @@ GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
     return false;
   }
 
+  if (bApplyRootTransform) {
+    Transform& transform = target.getTransform();
+    transform.setLocalRotation(
+        Quaternion(data.rotation[0], data.rotation[1], data.rotation[2], data.rotation[3]));
+    transform.setLocalScale(Vector3(data.scale[0], data.scale[1], data.scale[2]));
+  }
+
   // A prefab whose root is an instance of another takes that one's content.
   if (!nestedPrefab.isNull()) {
     const SPtr<PrefabAsset> nested = findPrefab(nestedPrefab);
-    return nested ? readPrefabInto(*nested, target, depth + 1) : true;
+    return nested ? readPrefabInto(*nested, target, depth + 1, false) : true;
   }
 
   ReadContext context{.stream = stream,

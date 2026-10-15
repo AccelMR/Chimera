@@ -1637,6 +1637,8 @@ TEST_CASE("chCore - Prefabs")
   Scene source("Source", chEngineSDK::UUID::createRandom());
   const SPtr<GameObject> post = source.createGameObject("Lamp Post");
   post->getTransform().setLocalPosition(Vector3(50.0f, 0.0f, 0.0f));
+  post->getTransform().setLocalScale(Vector3(5.0f, 5.0f, 5.0f));
+  post->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
   post->addComponent<PointLightComponent>().setRange(12.0f);
   const SPtr<GameObject> bulb = source.createGameObject("Bulb", post.get());
   bulb->getTransform().setLocalPosition(Vector3(0.0f, 0.0f, 3.0f));
@@ -1653,6 +1655,10 @@ TEST_CASE("chCore - Prefabs")
   REQUIRE(first->getOutermostPrefabInstance() == first.get());
   // An instance stands where it is placed, not where the prefab's root was.
   REQUIRE(first->getTransform().getLocalPosition() == Vector3::ZERO);
+  // It starts with the rotation and scale of the prefab's root.
+  REQUIRE(first->getTransform().getLocalScale() == Vector3(5.0f, 5.0f, 5.0f));
+  REQUIRE(first->getTransform().getLocalRotation() ==
+          post->getTransform().getLocalRotation());
   const PointLightComponent* firstLight = first->getComponent<PointLightComponent>();
   REQUIRE(firstLight != nullptr);
   REQUIRE(firstLight->getRange() == 12.0f);
@@ -1694,6 +1700,8 @@ TEST_CASE("chCore - Prefabs")
   {
     const SPtr<GameObject> editable = scene.createGameObject("Editable");
     REQUIRE(GameObjectSerializer::readPrefabContent(prefab, *editable));
+    REQUIRE(editable->getTransform().getLocalScale() == Vector3(5.0f, 5.0f, 5.0f));
+    REQUIRE(editable->getTransform().getLocalPosition() == Vector3::ZERO);
     REQUIRE(editable->getPrefab().isNull());
     REQUIRE(editable->getOutermostPrefabInstance() == nullptr);
     REQUIRE(editable->getComponent<PointLightComponent>() != nullptr);

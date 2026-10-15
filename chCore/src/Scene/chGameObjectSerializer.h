@@ -56,15 +56,16 @@ class CH_CORE_EXPORT GameObjectSerializer
 
   /**
    * Makes an instance of prefab under parent: an object named after the prefab, linked to it,
-   * with the prefab's content.
+   * with the prefab's content and the rotation and scale of the prefab's root. Its position
+   * stays at zero; the caller places it.
    */
   static SPtr<GameObject>
   instantiate(const PrefabAsset& prefab, Scene& scene, GameObject* parent);
 
   /**
    * Gives target (which must be in a scene) the components and children of the prefab's
-   * root, with new UUIDs, and leaves its name, transform and link as they are. False when
-   * the content cannot be read.
+   * root, with new UUIDs, and the root's rotation and scale; its name, position and link stay
+   * as they are. False when the content cannot be read.
    */
   NODISCARD static bool
   readPrefabContent(const PrefabAsset& prefab, GameObject& target);
@@ -109,7 +110,10 @@ class CH_CORE_EXPORT GameObjectSerializer
   readComponent(ReadContext& context, GameObject& gameObject);
 
   NODISCARD static bool
-  readPrefabInto(const PrefabAsset& prefab, GameObject& target, uint32 depth);
+  readPrefabInto(const PrefabAsset& prefab,
+                 GameObject& target,
+                 uint32 depth,
+                 bool bApplyRootTransform);
 };
 
 } // namespace chEngineSDK

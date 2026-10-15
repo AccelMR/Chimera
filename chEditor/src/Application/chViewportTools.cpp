@@ -500,6 +500,11 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
   if (instance && instance != selected) {
     return;
   }
+  // The prefab keeps no position for its root, only the rotation and scale new instances
+  // start with.
+  if (m_operation == Operation::Translate && selected == EditorScene::getPrefabRoot().get()) {
+    return;
+  }
 
   Transform& transform = selected->getTransform();
   Matrix4 world = transform.getWorldMatrix();
