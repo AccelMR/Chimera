@@ -69,7 +69,7 @@ SceneManager::loadScene(WeakPtr<SceneAsset> asset){
     return WeakPtr<Scene>{};
   }
 
-  SPtr<Scene> scene = sceneAsset->getScene().lock();
+  const SPtr<Scene>& scene = sceneAsset->getScene();
   if (!scene) {
     CH_LOG_ERROR(SceneManagerLog,
                   "Scene asset with UUID {0} does not contain a valid scene.",
@@ -83,6 +83,17 @@ SceneManager::loadScene(WeakPtr<SceneAsset> asset){
                sceneAsset->getUUID().toString());
 
   return scene;
+}
+
+/*
+ */
+void
+SceneManager::unloadScene(const Scene& scene)
+{
+  if (m_activeScene.lock().get() == &scene) {
+    m_activeScene.reset();
+  }
+  m_loadedScenes.erase(scene.getUUID());
 }
 
 /*

@@ -33,11 +33,23 @@ ConsoleVariable<float> g_cvarCameraSprintMultiplier(
     3.0f,
     "How many times faster the viewport camera flies while Shift is held.",
     "SprintMultiplier");
+ConsoleVariable<float> g_cvarCameraFieldOfView(
+    "Editor.CameraFieldOfView",
+    90.0f,
+    "Horizontal field of view of the viewport camera, in degrees.",
+    "FieldOfView");
+ConsoleVariable<float> g_cvarCameraNearPlane("Editor.CameraNearPlane",
+                                             0.1f,
+                                             "Near clip plane of the viewport camera.",
+                                             "NearPlane");
+ConsoleVariable<float> g_cvarCameraFarPlane("Editor.CameraFarPlane",
+                                            10000.0f,
+                                            "Far clip plane of the viewport camera.",
+                                            "FarPlane");
 
 constexpr Vector3 kStartPosition(-5.0f, 0.0f, 0.0f);
-constexpr float kNearPlane = 0.1f;
-constexpr float kFarPlane = 10000.0f;
-constexpr float kFieldOfViewDegrees = 45.0f;
+// Keeps the look at point from collapsing onto the camera while turning.
+constexpr float kMinLookAtDistance = 0.1f;
 // Each wheel step while flying multiplies or divides the speed by this.
 constexpr float kWheelSpeedStep = 1.2f;
 // Outside a flight a wheel step moves this fraction of a second of flight.
@@ -64,8 +76,11 @@ EditorCamera::EditorCamera(float viewportWidth, float viewportHeight)
  : m_camera(kStartPosition, Vector3::ZERO, viewportWidth, viewportHeight)
 {
   m_camera.setProjectionType(CameraProjectionType::Perspective);
-  m_camera.setFieldOfView(Radian(Degree(kFieldOfViewDegrees)));
-  m_camera.setClipPlanes(kNearPlane, kFarPlane);
+  // A config file may hold values out of range: the camera gets them clamped, and the
+  // variables keep what the file says until the user edits them.
+  applyProjection(g_cvarCameraFieldOfView.get(),
+                  g_cvarCameraNearPlane.get(),
+                  g_cvarCameraFarPlane.get());
 }
 
 /*
@@ -156,7 +171,7 @@ EditorCamera::look(float yawDegrees, float pitchDegrees)
   // panning still work around it afterwards.
   const Vector3& position = m_camera.getPosition();
   const Vector3 toLookAt = m_camera.getLookAt() - position;
-  const float distance = Math::max(toLookAt.magnitude(), kNearPlane);
+  const float distance = Math::max(toLookAt.magnitude(), kMinLookAtDistance);
   const Vector3 forward = toLookAt * (1.0f / distance);
 
   const float yaw = Math::atan2(forward.y, forward.x).valueDegree() + yawDegrees;
@@ -288,12 +303,85 @@ EditorCamera::setSprintMultiplier(float multiplier)
 
 /*
  */
+float
+EditorCamera::getFieldOfView() const
+{
+  return m_camera.getFieldOfView().valueDegree();
+}
+
+/*
+ */
+void
+EditorCamera::setFieldOfView(float degrees)
+{
+  applyProjection(degrees, getNearPlane(), getFarPlane());
+  g_cvarCameraFieldOfView.set(getFieldOfView(), ConsoleVariableSource::Console);
+}
+
+/*
+ */
+float
+EditorCamera::getNearPlane() const
+{
+  return m_camera.getNearClipPlane();
+}
+
+/*
+ */
+float
+EditorCamera::getFarPlane() const
+{
+  return m_camera.getFarClipPlane();
+}
+
+/*
+ */
+void
+EditorCamera::setClipPlanes(float nearPlane, float farPlane)
+{
+  applyProjection(getFieldOfView(), nearPlane, farPlane);
+  g_cvarCameraNearPlane.set(getNearPlane(), ConsoleVariableSource::Console);
+  g_cvarCameraFarPlane.set(getFarPlane(), ConsoleVariableSource::Console);
+}
+
+/*
+ */
+void
+EditorCamera::applyProjection(float fieldOfViewDegrees, float nearPlane, float farPlane)
+{
+  const float fieldOfView =
+      Math::clamp(fieldOfViewDegrees, MIN_FIELD_OF_VIEW, MAX_FIELD_OF_VIEW);
+  const float nearClip =
+      Math::clamp(nearPlane, MIN_NEAR_PLANE, MAX_FAR_PLANE / MIN_FAR_TO_NEAR_RATIO);
+  const float farClip = Math::clamp(farPlane, nearClip * MIN_FAR_TO_NEAR_RATIO, MAX_FAR_PLANE);
+  m_camera.setFieldOfView(Radian(Degree(fieldOfView)));
+  m_camera.setClipPlanes(nearClip, farClip);
+}
+
+/*
+ */
+void
+EditorCamera::resetSettings()
+{
+  setMoveSpeed(g_cvarCameraSpeed.getDefault());
+  setLookSensitivity(g_cvarCameraLookSensitivity.getDefault());
+  setSprintMultiplier(g_cvarCameraSprintMultiplier.getDefault());
+  setFieldOfView(g_cvarCameraFieldOfView.getDefault());
+  setClipPlanes(g_cvarCameraNearPlane.getDefault(), g_cvarCameraFarPlane.getDefault());
+  saveSettings();
+}
+
+/*
+ */
 void
 EditorCamera::saveSettings() const
 {
   saveSetting("CameraSpeed", getMoveSpeed());
   saveSetting("CameraLookSensitivity", getLookSensitivity());
   saveSetting("CameraSprintMultiplier", getSprintMultiplier());
+  saveSetting("CameraFieldOfView", getFieldOfView());
+  saveSetting("CameraNearPlane", getNearPlane());
+  saveSetting("CameraFarPlane", getFarPlane());
 }
 
 } // namespace chEngineSDK

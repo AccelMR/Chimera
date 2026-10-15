@@ -14,6 +14,7 @@
 namespace chEngineSDK {
 class MaterialAsset;
 class ModelAsset;
+class PrefabAsset;
 class TextureAsset;
 
 /**
@@ -51,11 +52,24 @@ class AssetDragDrop
   acceptMaterial();
 
   /**
+   * Same as acceptModel, for prefabs.
+   */
+  NODISCARD static SPtr<PrefabAsset>
+  acceptPrefab();
+
+  /**
    * Adds a GameObject with the model under parent (a root object when null) and selects it.
    * The model is split as its import settings say, unless Alt is held.
    */
   static SPtr<GameObject>
-  createModelObject(Scene& scene, const ModelAsset& modelAsset, GameObject* parent);
+  createModelObject(Scene& scene, const SPtr<ModelAsset>& modelAsset, GameObject* parent);
+
+  /**
+   * Adds an instance of the prefab under parent (a root object when null) and selects it.
+   * Refused, with null, when it would put a prefab inside itself.
+   */
+  static SPtr<GameObject>
+  createPrefabObject(Scene& scene, const SPtr<PrefabAsset>& prefab, GameObject* parent);
 };
 
 } // namespace chEngineSDK

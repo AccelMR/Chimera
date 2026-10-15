@@ -1923,6 +1923,33 @@ TEST_CASE("chUtilities - MemoryDataStream") {
     REQUIRE(stream.isAtEnd());
   }
 
+  SECTION("a stream made without a size grows") {
+    MemoryDataStream stream;
+    REQUIRE(stream.size() == 0);
+    uint32 values[300];
+    for (uint32 i = 0; i < 300; ++i) {
+      values[i] = i * 3;
+    }
+    for (const uint32 value : values) {
+      REQUIRE(stream.write(&value, sizeof(value)) == sizeof(value));
+    }
+    REQUIRE(stream.size() == sizeof(values));
+
+    // Writing over the start does not change the size.
+    const uint32 first = 77;
+    stream.seek(0);
+    stream.write(&first, sizeof(first));
+    REQUIRE(stream.size() == sizeof(values));
+    REQUIRE(stream.tell() == sizeof(first));
+
+    stream.seek(0);
+    uint32 readBack[300] = {};
+    REQUIRE(stream.read(readBack, sizeof(readBack)) == sizeof(readBack));
+    REQUIRE(readBack[0] == 77);
+    REQUIRE(readBack[299] == 299 * 3);
+    REQUIRE(stream.read(readBack, 1) == 0);
+  }
+
   SECTION("copies keep their data") {
     auto source = chMakeShared<MemoryDataStream>(3);
     const uint8 bytes[3] = {7, 8, 9};

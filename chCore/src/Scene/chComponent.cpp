@@ -24,6 +24,31 @@ Component::update(float deltaTime)
 /*
  */
 void
+Component::serialize(DataStream& stream) const
+{
+  CH_PARAMETER_UNUSED(stream);
+}
+
+/*
+ */
+bool
+Component::deserialize(DataStream& stream)
+{
+  CH_PARAMETER_UNUSED(stream);
+  return true;
+}
+
+/*
+ */
+void
+Component::collectReferences(Vector<UUID>& outReferences) const
+{
+  CH_PARAMETER_UNUSED(outReferences);
+}
+
+/*
+ */
+void
 Component::setEnabled(bool enabled)
 {
   if (m_enabled == enabled) {

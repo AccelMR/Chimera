@@ -64,6 +64,25 @@ class CH_CORE_EXPORT Scene : public Object
   getRootGameObjects() const { return m_rootGameObjects; }
 
   /**
+   * Walks the whole hierarchy: meant for rare lookups (undo), not for every frame. Null when
+   * no object has the id.
+   */
+  NODISCARD SPtr<GameObject>
+  findGameObject(const UUID& id) const;
+
+  /**
+   * Place of the object among its parent's children, or among the root objects.
+   */
+  NODISCARD uint32
+  getSiblingIndex(const GameObject& gameObject) const;
+
+  /**
+   * Moves the object to index among its siblings; past the end puts it last.
+   */
+  void
+  setSiblingIndex(GameObject& gameObject, uint32 index);
+
+  /**
    * Updates the components of every object.
    */
   void

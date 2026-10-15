@@ -14,12 +14,16 @@
 #endif // USING(CH_CODECS)
 
 #include "chAssetManager.h"
+#include "chEditorScene.h"
 #include "chEnginePaths.h"
 #include "chImportDialog.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
+#include "chPrefabAsset.h"
 #include "chRenderSettings.h"
+#include "chSceneAsset.h"
+#include "chStringUtils.h"
 #include "chUIHelpers.h"
 
 #include "imgui.h"
@@ -37,6 +41,9 @@ MainMenuBarUI::renderMainMenuBar() {
   if (!ImGui::BeginMainMenuBar()) {
     return;
   }
+
+  renderFileMenu();
+  renderEditMenu();
 
   if (ImGui::BeginMenu("Render")) {
     if (ImGui::BeginMenu("View Mode")) {
@@ -87,7 +94,93 @@ MainMenuBarUI::renderMainMenuBar() {
     renderImportMenu();
     ImGui::EndMenu();
   }
+
+  // Prefab mode looks like a scene, so the bar says what is being edited.
+  if (const SPtr<PrefabAsset>& prefab = EditorScene::getPrefab()) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.45f, 0.7f, 1.0f, 1.0f), "Editing prefab %s",
+                       prefab->getName());
+    if (ImGui::SmallButton("Back to Scene")) {
+      EditorScene::requestBackToScene();
+    }
+  }
   ImGui::EndMainMenuBar();
+}
+
+/*
+ */
+void
+MainMenuBarUI::renderFileMenu()
+{
+  if (!ImGui::BeginMenu("File")) {
+    return;
+  }
+
+  if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+    EditorScene::requestNew();
+  }
+  if (ImGui::BeginMenu("Open Scene")) {
+    // Listed only while the menu is open, so the walk over every asset is rare.
+    const SPtr<SceneAsset>& current = EditorScene::getAsset();
+    bool bAny = false;
+    for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
+      if (!asset->isTypeOf<SceneAsset>()) {
+        continue;
+      }
+      bAny = true;
+      ImGui::PushID(asset.get());
+      if (ImGui::MenuItem(asset->getName(), asset->getAssetPath(), asset == current)) {
+        EditorScene::requestOpen(std::static_pointer_cast<SceneAsset>(asset));
+      }
+      ImGui::PopID();
+    }
+    if (!bAny) {
+      ImGui::TextDisabled("No scenes saved yet");
+    }
+    ImGui::EndMenu();
+  }
+  ImGui::Separator();
+  const bool bEditingPrefab = EditorScene::getPrefab() != nullptr;
+  if (ImGui::MenuItem(bEditingPrefab ? "Save Prefab" : "Save Scene", "Ctrl+S")) {
+    EditorScene::requestSave();
+  }
+  if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, !bEditingPrefab)) {
+    EditorScene::requestSaveAs();
+  }
+  if (bEditingPrefab && ImGui::MenuItem("Back to Scene")) {
+    EditorScene::requestBackToScene();
+  }
+  ImGui::Separator();
+  if (ImGui::MenuItem("Exit")) {
+    // The editor closes once the unsaved changes are saved or discarded.
+    CH_PARAMETER_UNUSED(EditorScene::requestQuit());
+  }
+  ImGui::EndMenu();
+}
+
+/*
+ * The labels are only built while the menu is open.
+ */
+void
+MainMenuBarUI::renderEditMenu()
+{
+  if (!ImGui::BeginMenu("Edit")) {
+    return;
+  }
+
+  const String undoLabel = EditorScene::canUndo()
+                               ? StringUtils::format("Undo {0}", EditorScene::getUndoName())
+                               : String("Undo");
+  if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, EditorScene::canUndo())) {
+    EditorScene::requestUndo();
+  }
+  const String redoLabel = EditorScene::canRedo()
+                               ? StringUtils::format("Redo {0}", EditorScene::getRedoName())
+                               : String("Redo");
+  if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, EditorScene::canRedo())) {
+    EditorScene::requestRedo();
+  }
+  ImGui::EndMenu();
 }
 
 /*

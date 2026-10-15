@@ -14,6 +14,7 @@
 #include "chAssetFile.h"
 #include "chAssetManager.h"
 
+#include "chConfigFile.h"
 #include "chEnginePaths.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
@@ -81,7 +82,10 @@ IAsset::save() {
   stream->close();
 
 #if USING(CH_EDITOR)
-  if (!AssetMeta::save(fullFilePath, m_editorData)) {
+  ConfigFile metaFile;
+  AssetMeta::write(m_editorData, EnginePaths::getProjectDirectory(), metaFile);
+  writeEditorValues(metaFile);
+  if (!metaFile.save(AssetMeta::getPath(fullFilePath))) {
     CH_LOG(AssetSystem, Warning, "Failed to write the .meta file of asset {0}",
            m_metadata.name);
   }

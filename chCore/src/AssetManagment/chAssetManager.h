@@ -86,49 +86,13 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
     return true;
   }
 
-  /*
-   * Load a scene by its name.
-   * !important: This loads a scene that is already registered as an asset. There's no way to load a scene directly from a file path.
-   * and that's intentional.
-   * @param name Name of the scene to load.
-   * @return Weak pointer to the loaded scene, or nullptr if loading failed.
+  /**
+   * The scene asset whose file is "<path>.chAss" for a virtual path such as
+   * /Game/Maps/Main, or the first one with that name for a text without '/'. Null when
+   * there is none. Walks every asset.
    */
-  WeakPtr<SceneAsset>
-  loadSceneByName(const String& name);
-
-  WeakPtr<SceneAsset>
-  getSceneByName(const String& name) const{
-    for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (StringUtils::equals(asset->getName(), name)) {
-        return asset->as<SceneAsset>();
-      }
-    }
-    return WeakPtr<SceneAsset>();
-  }
-
-  WeakPtr<SceneAsset>
-  getSceneByUUID(const UUID& uuid) const{
-    auto it = m_sceneAssets.find(uuid);
-    if (it != m_sceneAssets.end()) {
-      return it->second->as<SceneAsset>();
-    }
-    return WeakPtr<SceneAsset>();
-  }
-
-  /*
-   * Check if a scene with the given name exists.
-   * @param name Name of the scene to check.
-   * @return True if the scene exists, false otherwise.
-   */
-  FORCEINLINE bool
-  doesSceneExist(const String& name) const{
-    for (const auto& [uuid, asset] : m_sceneAssets) {
-      if (StringUtils::equals(asset->getName(), name)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  NODISCARD SPtr<SceneAsset>
+  findScene(StringView pathOrName) const;
 
 #if USING(CH_EDITOR)
   bool
@@ -189,13 +153,9 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   SPtr<IAsset>
   lazyLoadAssetFile(const Path& file);
 
-  void
-  cacheSceneAssets();
-
  private:
   Map<UUID, SPtr<IAsset>> m_assets; ///< Map of all assets by UUID, both loaded and unloaded
   Map<UUID, SPtr<IAsset>> m_loadedAssets; ///< Map of currently loaded assets by UUID
-  Map<UUID, SPtr<IAsset>> m_sceneAssets; ///< Map of scene assets by UUID
 
   Event<bool(const SPtr<IAsset>&)> m_onAssetLoaded; ///< Event triggered when an asset is loaded
   Event<bool(const SPtr<IAsset>&)> m_onAssetUnloaded; ///< Event triggered

@@ -100,14 +100,47 @@ class EditorCamera
   setSprintMultiplier(float multiplier);
 
   /**
-   * Writes the speed, sensitivity and sprint to /Saved/Config/Editor.ini, so the next
-   * session starts with them.
+   * Horizontal, in degrees.
+   */
+  NODISCARD float
+  getFieldOfView() const;
+
+  void
+  setFieldOfView(float degrees);
+
+  NODISCARD float
+  getNearPlane() const;
+
+  NODISCARD float
+  getFarPlane() const;
+
+  /**
+   * Keeps the near plane above zero and the far plane beyond it.
+   */
+  void
+  setClipPlanes(float nearPlane, float farPlane);
+
+  /**
+   * Puts every camera setting back to its default and saves them.
+   */
+  void
+  resetSettings();
+
+  /**
+   * Writes the camera settings to /Saved/Config/Editor.ini, so the next session starts
+   * with them.
    */
   void
   saveSettings() const;
 
   static constexpr float MIN_MOVE_SPEED = 0.05f;
   static constexpr float MAX_MOVE_SPEED = 2000.0f;
+  static constexpr float MIN_FIELD_OF_VIEW = 5.0f;
+  static constexpr float MAX_FIELD_OF_VIEW = 170.0f;
+  static constexpr float MIN_NEAR_PLANE = 0.001f;
+  static constexpr float MAX_FAR_PLANE = 1000000.0f;
+  // The far plane is at least this many times the near one.
+  static constexpr float MIN_FAR_TO_NEAR_RATIO = 2.0f;
 
  private:
   void
@@ -115,6 +148,9 @@ class EditorCamera
 
   void
   fly(float deltaTime);
+
+  void
+  applyProjection(float fieldOfViewDegrees, float nearPlane, float farPlane);
 
   Camera m_camera;
   bool m_bFocused = false;

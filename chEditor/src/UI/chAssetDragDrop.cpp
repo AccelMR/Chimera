@@ -13,6 +13,7 @@
 #include <type_traits>
 
 #include "chAssetManager.h"
+#include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLogger.h"
@@ -20,6 +21,8 @@
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
+#include "chGameObjectSerializer.h"
+#include "chPrefabAsset.h"
 #include "chScene.h"
 #include "chTextureAsset.h"
 
@@ -37,6 +40,7 @@ static_assert(std::is_trivially_copyable_v<UUID>);
 constexpr const ANSICHAR* kModelPayload = "CH_MODEL";
 constexpr const ANSICHAR* kTexturePayload = "CH_TEXTURE";
 constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
+constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
 
 /*
  * Null for asset types that cannot be dropped anywhere.
@@ -52,6 +56,9 @@ getPayloadName(const IAsset& asset)
   }
   if (asset.isTypeOf<MaterialAsset>()) {
     return kMaterialPayload;
+  }
+  if (asset.isTypeOf<PrefabAsset>()) {
+    return kPrefabPayload;
   }
   return nullptr;
 }
@@ -128,26 +135,57 @@ AssetDragDrop::acceptMaterial()
 
 /*
  */
-SPtr<GameObject>
-AssetDragDrop::createModelObject(Scene& scene, const ModelAsset& modelAsset,
-                                 GameObject* parent)
+SPtr<PrefabAsset>
+AssetDragDrop::acceptPrefab()
 {
-  if (!modelAsset.getModel()) {
-    CH_LOG_ERROR(AssetDragDropLog, "Model asset '{0}' has no model.", modelAsset.getName());
+  return acceptAsset<PrefabAsset>(kPrefabPayload);
+}
+
+/*
+ */
+SPtr<GameObject>
+AssetDragDrop::createPrefabObject(Scene& scene,
+                                  const SPtr<PrefabAsset>& prefab,
+                                  GameObject* parent)
+{
+  // In prefab mode the edited prefab would end up inside itself.
+  const SPtr<PrefabAsset>& edited = EditorScene::getPrefab();
+  if (!prefab || (edited && prefab->dependsOn(edited->getUUID()))) {
+    CH_LOG_WARNING(AssetDragDropLog, "A prefab cannot be placed inside itself.");
     return nullptr;
   }
 
-  SPtr<GameObject> gameObject = scene.createGameObject(modelAsset.getName(), parent);
-  gameObject->addComponent<ModelComponent>(modelAsset.getModel());
+  const SPtr<GameObject> gameObject = GameObjectSerializer::instantiate(*prefab, scene, parent);
+  EditorSelection::setSelectedGameObject(gameObject);
+  EditorScene::recordCreated(*gameObject, "Place");
+  return gameObject;
+}
+
+/*
+ */
+SPtr<GameObject>
+AssetDragDrop::createModelObject(Scene& scene,
+                                 const SPtr<ModelAsset>& modelAsset,
+                                 GameObject* parent)
+{
+  if (!modelAsset || !modelAsset->getModel()) {
+    CH_LOG_ERROR(AssetDragDropLog, "Model asset '{0}' has no model.",
+                 modelAsset ? modelAsset->getName() : "null");
+    return nullptr;
+  }
+
+  SPtr<GameObject> gameObject = scene.createGameObject(modelAsset->getName(), parent);
+  gameObject->addComponent<ModelComponent>(modelAsset);
 
   // Alt places the whole model, whatever its import asked for; it can still be split later.
   const ModelExpandMode mode = ImGui::GetIO().KeyAlt
                                    ? ModelExpandMode::Single
-                                   : modelAsset.getEditorData().importSettings.expandMode;
+                                   : modelAsset->getEditorData().importSettings.expandMode;
   if (mode != ModelExpandMode::Single) {
     ModelExpand::expand(scene, *gameObject, mode);
   }
   EditorSelection::setSelectedGameObject(gameObject);
+  EditorScene::recordCreated(*gameObject, "Place");
   return gameObject;
 }
 

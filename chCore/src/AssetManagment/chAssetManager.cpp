@@ -15,6 +15,7 @@
 #include <chrono>
 
 #include "chAssetFile.h"
+#include "chConfigFile.h"
 #include "chTypeTraits.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
@@ -22,7 +23,7 @@
 #include "chPath.h"
 
 // Base asset types
-#include "chGameObjectAsset.h"
+#include "chPrefabAsset.h"
 #include "chMaterialAsset.h"
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
@@ -47,7 +48,8 @@ AssetManager::initialize() {
   m_assetRegister->registerAssetCreator<ModelAsset>();
   m_assetRegister->registerAssetCreator<TextureAsset>();
   m_assetRegister->registerAssetCreator<MaterialAsset>();
-  m_assetRegister->registerAssetCreator<GameObjectAsset>();
+  m_assetRegister->registerAssetCreator<PrefabAsset>();
+  m_assetRegister->registerAssetCreator<SceneAsset>();
 }
 
 /*
@@ -215,32 +217,28 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
     m_assets[asset->getUUID()] = asset;
     CH_LOG_DEBUG(AssetSystem, "Lazy loaded asset: {0}", asset->getUUID().toString());
   });
-
-  cacheSceneAssets();
 }
 
 /*
-*/
-WeakPtr<SceneAsset>
-AssetManager::loadSceneByName(const String& name) {
-  for (const auto& [uuid, asset] : m_sceneAssets) {
-    if (StringUtils::equals(asset->getName(), name)) {
-      if (!syncLoadAsset(asset)) {
-        CH_LOG_ERROR(AssetSystem, "Failed to load scene asset: {0}", name);
-        return WeakPtr<SceneAsset>();
-      }
+ */
+SPtr<SceneAsset>
+AssetManager::findScene(StringView pathOrName) const
+{
+  const SIZE_T nameStart = pathOrName.rfind('/');
+  const bool bHasFolder = nameStart != StringView::npos;
+  const StringView name = bHasFolder ? pathOrName.substr(nameStart + 1) : pathOrName;
+  const StringView folder = bHasFolder ? pathOrName.substr(0, nameStart) : StringView();
 
-      SPtr<SceneAsset> sceneAsset = asset->as<SceneAsset>();
-      if (!sceneAsset) {
-        CH_LOG_ERROR(AssetSystem, "Asset {0} is not a SceneAsset", name);
-        return WeakPtr<SceneAsset>();
-      }
-      return sceneAsset;
+  for (const auto& [uuid, asset] : m_assets) {
+    if (asset->getAssetTypeId() != AssetTypeTraits<SceneAsset>::getTypeId() ||
+        StringView(asset->getName()) != name) {
+      continue;
+    }
+    if (!bHasFolder || StringView(asset->getAssetPath()) == folder) {
+      return std::static_pointer_cast<SceneAsset>(asset);
     }
   }
-
-  CH_LOG_ERROR(AssetSystem, "Scene asset with name {0} not found", name);
-  return WeakPtr<SceneAsset>();
+  return nullptr;
 }
 
 
@@ -370,7 +368,12 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
   SPtr<IAsset> asset = creator(metadata);
 
 #if USING(CH_EDITOR)
-  if (!AssetMeta::load(file, asset->m_editorData) && info.formatVersion == 1) {
+  ConfigFile metaFile;
+  if (metaFile.load(AssetMeta::getPath(file))) {
+    AssetMeta::read(metaFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
+    asset->readEditorValues(metaFile);
+  }
+  else if (info.formatVersion == 1) {
     // Files of format version 1 kept this data inside; it moves to the .meta file, and the
     // asset file itself loses it the next time it is saved.
     AssetEditorData& editorData = asset->m_editorData;
@@ -396,21 +399,4 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
   return asset;
 }
 
-/*
-*/
-void
-AssetManager::cacheSceneAssets() {
-  m_sceneAssets.clear();
-
-  for (const auto& [uuid, asset] : m_assets) {
-    if (asset->getAssetTypeId() == AssetTypeTraits<SceneAsset>::getTypeId()) {
-      m_sceneAssets[uuid] = asset;
-      CH_LOG_DEBUG(AssetSystem, "Cached scene asset: {0}", asset->getName());
-    }
-  }
-
-#if USING(CH_DEBUG_MODE)
-  CH_LOG_DEBUG(AssetSystem, "Total scene assets cached: {0}", m_sceneAssets.size());
-#endif
-}
 } // namespace chEngineSDK

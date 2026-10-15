@@ -28,17 +28,17 @@ namespace chEngineSDK {
 namespace {
 
 Matrix4
-buildPerspective(const Radian& halfFOV, float width, float height, float near,
-                 float far) noexcept
+buildPerspective(const Radian& halfFOV, float width, float height, float nearPlane,
+                 float farPlane) noexcept
 {
   const float xScale = 1.0f / Math::tan(halfFOV);
   const float yScale = xScale * width / height;
-  const float depthScale = far / (far - near);
+  const float depthScale = farPlane / (farPlane - nearPlane);
 
   return Matrix4(xScale, 0.0f, 0.0f, 0.0f,
                  0.0f, yScale, 0.0f, 0.0f,
                  0.0f, 0.0f, depthScale, 1.0f,
-                 0.0f, 0.0f, -near * depthScale, 0.0f);
+                 0.0f, 0.0f, -nearPlane * depthScale, 0.0f);
 }
 
 Matrix4
@@ -362,8 +362,8 @@ ScaleRotationTranslationMatrix::ScaleRotationTranslationMatrix(const Vector3& sc
 /*
  */
 PerspectiveMatrix::PerspectiveMatrix(const Radian& halfFOV, float width, float height,
-                                     float near, float far) noexcept
- : Matrix4(buildPerspective(halfFOV, width, height, near, far))
+                                     float nearPlane, float farPlane) noexcept
+ : Matrix4(buildPerspective(halfFOV, width, height, nearPlane, farPlane))
 {}
 
 /*

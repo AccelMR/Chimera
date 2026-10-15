@@ -36,8 +36,11 @@ class ContentAssetUI
   void
   refreshAssets();
 
-  void
-  saveUnsavedAssets();
+  /**
+   * The folder the browser shows, where new assets go.
+   */
+  NODISCARD const Path&
+  getCurrentFolderPath() const;
 
  private:
   void
@@ -169,8 +172,11 @@ class ContentAssetUI
   void
   createFolder();
 
-  NODISCARD const Path&
-  getCurrentFolderPath() const;
+  /**
+   * Opens what can be opened (scenes, and prefabs in prefab mode); does nothing for the rest.
+   */
+  void
+  openAsset(const SPtr<IAsset>& asset);
 
   /**
    * Empty while searching, because a search lists the assets of every subfolder.
@@ -216,7 +222,6 @@ class ContentAssetUI
   // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
   UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;
 
-  Vector<WeakPtr<IAsset>> m_unsavedAssets;
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;
@@ -233,5 +238,6 @@ class ContentAssetUI
   ANSICHAR searchBuffer[256] = "";
 
   HEvent m_onAssetImported;
+  HEvent m_onSceneCreated;
 };
 } // namespace chEngineSDK

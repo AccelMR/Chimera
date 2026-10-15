@@ -23,7 +23,6 @@ class MainMenuBarUI;
 class OutputLogUI;
 class SceneGraphUI;
 class InspectorUI;
-class GameObjectAssetUI;
 class ImGuiRenderer;
 class EditorCamera;
 class ViewportTools;
@@ -58,6 +57,9 @@ class EditorApplication : public WindowedApplication
   virtual void
   onPostPresent() override;
 
+  NODISCARD virtual bool
+  onCloseRequested() override;
+
  private:
   void
   initializeEditorComponents();
@@ -77,8 +79,17 @@ class EditorApplication : public WindowedApplication
   void
   onCameraFlightChanged(bool bFlying);
 
+  /**
+   * Moves a just dropped object under the mouse, on the ground when it can.
+   */
   void
-  addModelAtMouse(const ModelAsset& modelAsset);
+  placeAtMouse(const SPtr<GameObject>& gameObject);
+
+  /**
+   * Shows the scene name, and whether it has unsaved changes, after the window title.
+   */
+  void
+  updateWindowTitle();
 
   void
   loadCodecs();
@@ -90,7 +101,9 @@ class EditorApplication : public WindowedApplication
   uint32 m_viewportHeight = 0;
   UniquePtr<EditorCamera> m_editorCamera;
   UniquePtr<ViewportTools> m_viewportTools;
-  SPtr<Scene> m_activeScene;
+  // The title the window was made with, before the scene name.
+  String m_windowTitle;
+  uint32 m_titleRevision = ~0u;
 
   UniquePtr<ImGuiRenderer> m_imguiRenderer;
 
@@ -99,7 +112,6 @@ class EditorApplication : public WindowedApplication
   UniquePtr<OutputLogUI> m_outputLogUI; ///< Output log UI instance
   UniquePtr<SceneGraphUI> m_sceneGraphUI; ///< Scene graph UI instance
   UniquePtr<InspectorUI> m_inspectorUI; ///< Inspector UI instance
-  UniquePtr<GameObjectAssetUI> m_gameObjectAssetUI; ///< GameObject Asset UI instance
 
   HEvent m_updateInjection; ///< Event for updating ImGui with SDL events
 

@@ -11,6 +11,7 @@
 #include "chInspectorUI.h"
 
 #include "chAssetDragDrop.h"
+#include "chEditorScene.h"
 #include "chAssetManager.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
@@ -21,11 +22,17 @@
 #include "chMaterialAsset.h"
 #include "chModel.h"
 #include "chModelComponent.h"
+#include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
+#include "chStringUtils.h"
 #include "chTextureAsset.h"
 
+#include "chMath.h"
+
 #include "imgui.h"
+
+#include "../../Content/Fonts/IconsFontAwsome5.h"
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_STATIC(InspectorLog, All);
@@ -85,6 +92,63 @@ saveMaterial(const SPtr<MaterialAsset>& materialAsset)
     CH_LOG_ERROR(InspectorLog, "Failed to save material {0}", materialAsset->getName());
   }
 }
+
+// The colors most editors and the gizmo give each axis: X red, Y green, Z blue.
+constexpr ImVec4 kAxisColors[3] = {ImVec4(0.75f, 0.18f, 0.18f, 1.0f),
+                                   ImVec4(0.25f, 0.60f, 0.18f, 1.0f),
+                                   ImVec4(0.18f, 0.38f, 0.82f, 1.0f)};
+constexpr ImVec4 kAxisHoverColors[3] = {ImVec4(0.90f, 0.30f, 0.30f, 1.0f),
+                                        ImVec4(0.38f, 0.75f, 0.30f, 1.0f),
+                                        ImVec4(0.30f, 0.50f, 0.95f, 1.0f)};
+constexpr const ANSICHAR* kAxisLabels[3] = {"X", "Y", "Z"};
+constexpr const ANSICHAR* kAxisFieldIds[3] = {"##X", "##Y", "##Z"};
+
+/*
+ * One row with the label, then a colored axis button and a drag field per component.
+ * Clicking an axis button puts that component back to resetValue. True when a value
+ * changed.
+ */
+bool
+renderAxisRow(const ANSICHAR* label,
+              float (&values)[3],
+              float speed,
+              float resetValue,
+              const ANSICHAR* format,
+              const ANSICHAR* const (&tooltips)[3])
+{
+  ImGui::PushID(label);
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted(label);
+  ImGui::SameLine(ImGui::GetFontSize() * 6.5f);
+
+  const float buttonSize = ImGui::GetFrameHeight();
+  const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+  const float fieldWidth = Math::max(
+      (ImGui::GetContentRegionAvail().x - 3.0f * buttonSize - 2.0f * spacing) / 3.0f, 1.0f);
+
+  bool bChanged = false;
+  for (uint32 axis = 0; axis < 3; ++axis) {
+    if (axis > 0) {
+      ImGui::SameLine(0.0f, spacing);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, kAxisColors[axis]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAxisHoverColors[axis]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAxisColors[axis]);
+    if (ImGui::Button(kAxisLabels[axis], ImVec2(buttonSize, buttonSize))) {
+      values[axis] = resetValue;
+      bChanged = true;
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::SetItemTooltip("%s, click to reset", tooltips[axis]);
+
+    // The field touches its button, so both read as one control.
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::SetNextItemWidth(fieldWidth);
+    bChanged |= ImGui::DragFloat(kAxisFieldIds[axis], &values[axis], speed, 0.0f, 0.0f, format);
+  }
+  ImGui::PopID();
+  return bChanged;
+}
 } // namespace
 
 /*
@@ -100,15 +164,79 @@ InspectorUI::renderInspectorUI()
     return;
   }
 
-  ImGui::TextUnformatted(selected->getName().c_str());
+  // What an instance holds comes from its prefab and is not saved with the scene, so it is
+  // shown but cannot be edited; only the instance's own name and transform can.
+  GameObject* instance = selected->getOutermostPrefabInstance();
+  ImGui::BeginDisabled(instance && instance != selected.get());
+  renderName(*selected);
+  ImGui::EndDisabled();
+  if (instance) {
+    renderPrefabInstance(*selected, *instance);
+  }
   ImGui::Separator();
+  ImGui::BeginDisabled(instance && instance != selected.get());
   renderTransform(*selected);
+  ImGui::EndDisabled();
 
+  ImGui::BeginDisabled(instance != nullptr);
   if (ModelComponent* modelComponent = selected->getComponent<ModelComponent>()) {
     renderModelComponent(*modelComponent);
   }
   renderLightComponent(*selected);
+  ImGui::EndDisabled();
   ImGui::End();
+}
+
+/*
+ * The name changes once the field is left or Enter is pressed, so a rename is one undo step
+ * and the Scene Graph does not change on every key.
+ */
+void
+InspectorUI::renderName(GameObject& gameObject)
+{
+  if (m_nameOwner != &gameObject || !m_bEditingName) {
+    m_nameOwner = &gameObject;
+    StringUtils::copyToBuffer(m_nameBuffer, gameObject.getName());
+  }
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  ImGui::InputText("##Name", m_nameBuffer, sizeof(m_nameBuffer));
+  m_bEditingName = ImGui::IsItemActive();
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    const StringView name = StringUtils::trimView(StringView(m_nameBuffer));
+    if (!name.empty() && name != gameObject.getName()) {
+      EditorScene::recordChange(gameObject, "Rename");
+      gameObject.setName(String(name));
+    }
+  }
+}
+
+/*
+ */
+void
+InspectorUI::renderPrefabInstance(GameObject& selected, GameObject& instance)
+{
+  const SPtr<IAsset> asset = AssetManager::instance().getAsset(instance.getPrefab());
+  const SPtr<PrefabAsset> prefab = asset ? asset->as<PrefabAsset>() : nullptr;
+  const ANSICHAR* prefabName = prefab ? prefab->getName() : "(missing)";
+  if (&selected == &instance) {
+    ImGui::TextDisabled(ICON_FA_CUBES "  Instance of %s", prefabName);
+  }
+  else {
+    ImGui::TextDisabled(ICON_FA_CUBES "  Part of %s, an instance of %s",
+                        instance.getName().c_str(), prefabName);
+  }
+
+  if (prefab && ImGui::SmallButton("Edit Prefab")) {
+    EditorScene::requestEditPrefab(prefab);
+  }
+  if (&selected == &instance) {
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Unpack")) {
+      // The content stays; it is saved with the scene from now on.
+      EditorScene::recordChange(instance, "Unpack");
+      instance.setPrefab(UUID::null());
+    }
+  }
 }
 
 /*
@@ -116,7 +244,8 @@ InspectorUI::renderInspectorUI()
 void
 InspectorUI::renderTransform(GameObject& gameObject)
 {
-  if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_FA_VECTOR_SQUARE "  Transform###Transform",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -126,28 +255,49 @@ InspectorUI::renderTransform(GameObject& gameObject)
     m_rotationOwner = &gameObject;
     m_rotationShown = transform.getLocalRotation();
     const Rotator rotator = transform.getLocalRotation().toRotator();
-    m_rotationDegrees[0] = rotator.pitch.valueDegree();
-    m_rotationDegrees[1] = rotator.yaw.valueDegree();
-    m_rotationDegrees[2] = rotator.roll.valueDegree();
+    m_rotationDegrees[0] = rotator.roll.valueDegree();
+    m_rotationDegrees[1] = rotator.pitch.valueDegree();
+    m_rotationDegrees[2] = rotator.yaw.valueDegree();
+  }
+
+  // Every instance is placed where it is dropped, so the prefab keeps no position; its
+  // rotation and scale are what new instances start with.
+  const bool bPrefabRoot = &gameObject == EditorScene::getPrefabRoot().get();
+  if (bPrefabRoot) {
+    ImGui::TextWrapped("Prefab root: position is locked, each instance goes where it is "
+                       "dropped. Rotation and scale are what new instances start with; "
+                       "placed instances keep their own.");
   }
 
   const Vector3& position = transform.getLocalPosition();
   float positionValues[3] = {position.x, position.y, position.z};
-  if (ImGui::DragFloat3("Position", positionValues, 0.01f)) {
+  static constexpr const ANSICHAR* kPositionTooltips[3] = {"X (forward)", "Y (right)",
+                                                           "Z (up)"};
+  ImGui::BeginDisabled(bPrefabRoot);
+  if (renderAxisRow(ICON_FA_ARROWS_ALT "  Position", positionValues, 0.01f, 0.0f, "%.3f",
+                    kPositionTooltips)) {
+    EditorScene::recordChange(gameObject, "Move");
     transform.setLocalPosition(
         Vector3(positionValues[0], positionValues[1], positionValues[2]));
   }
+  ImGui::EndDisabled();
 
-  // Pitch, yaw, roll, in the order Rotator takes them.
-  if (ImGui::DragFloat3("Rotation", m_rotationDegrees, 0.5f)) {
+  static constexpr const ANSICHAR* kRotationTooltips[3] = {
+      "Roll (around X)", "Pitch (around Y)", "Yaw (around Z)"};
+  if (renderAxisRow(ICON_FA_SYNC_ALT "  Rotation", m_rotationDegrees, 0.5f, 0.0f, "%.1f",
+                    kRotationTooltips)) {
+    EditorScene::recordChange(gameObject, "Rotate");
     transform.setLocalRotation(
-        Quaternion(Rotator(m_rotationDegrees[0], m_rotationDegrees[1], m_rotationDegrees[2])));
+        Quaternion(Rotator(m_rotationDegrees[1], m_rotationDegrees[2], m_rotationDegrees[0])));
     m_rotationShown = transform.getLocalRotation();
   }
 
   const Vector3& scale = transform.getLocalScale();
   float scaleValues[3] = {scale.x, scale.y, scale.z};
-  if (ImGui::DragFloat3("Scale", scaleValues, 0.01f)) {
+  static constexpr const ANSICHAR* kScaleTooltips[3] = {"X", "Y", "Z"};
+  if (renderAxisRow(ICON_FA_EXPAND_ARROWS_ALT "  Scale", scaleValues, 0.01f, 1.0f, "%.3f",
+                    kScaleTooltips)) {
+    EditorScene::recordChange(gameObject, "Scale");
     transform.setLocalScale(Vector3(scaleValues[0], scaleValues[1], scaleValues[2]));
   }
 }
@@ -163,6 +313,7 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
 
   bool bVisible = modelComponent.isEnabled();
   if (ImGui::Checkbox("Visible", &bVisible)) {
+    EditorScene::recordChange(*modelComponent.getOwner(), "Edit Visible");
     modelComponent.setEnabled(bVisible);
   }
 
@@ -216,23 +367,27 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
 
   bool bEnabled = light->isEnabled();
   if (ImGui::Checkbox("Enabled", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
     light->setEnabled(bEnabled);
   }
 
   const LinearColor& color = light->getColor();
   float colorValues[3] = {color.r, color.g, color.b};
   if (ImGui::ColorEdit3("Color", colorValues, ImGuiColorEditFlags_Float)) {
+    EditorScene::recordChange(gameObject, "Edit Color");
     light->setColor(LinearColor(colorValues[0], colorValues[1], colorValues[2], 1.0f));
   }
 
   float intensity = light->getIntensity();
   if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 10000.0f)) {
+    EditorScene::recordChange(gameObject, "Edit Intensity");
     light->setIntensity(intensity);
   }
 
   if (pointLight) {
     float range = pointLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      EditorScene::recordChange(gameObject, "Edit Range");
       pointLight->setRange(range);
     }
   }
@@ -240,6 +395,7 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
   if (spotLight) {
     float range = spotLight->getRange();
     if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      EditorScene::recordChange(gameObject, "Edit Range");
       spotLight->setRange(range);
     }
     float inner = spotLight->getInnerConeAngle().valueDegree();
@@ -247,6 +403,7 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     const bool bInnerChanged = ImGui::SliderFloat("Inner Angle", &inner, 0.0f, 89.0f);
     const bool bOuterChanged = ImGui::SliderFloat("Outer Angle", &outer, 0.0f, 89.0f);
     if (bInnerChanged || bOuterChanged) {
+      EditorScene::recordChange(gameObject, "Edit Cone");
       spotLight->setConeAngles(Degree(inner), Degree(outer));
     }
   }
@@ -270,6 +427,7 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
                 ImVec2(-FLT_MIN, 0.0f));
   if (ImGui::BeginDragDropTarget()) {
     if (SPtr<MaterialAsset> dropped = AssetDragDrop::acceptMaterial()) {
+      EditorScene::recordChange(*modelComponent.getOwner(), "Set Material");
       modelComponent.setMaterial(slot, dropped);
     }
     ImGui::EndDragDropTarget();
@@ -278,6 +436,7 @@ InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
     ImGui::TextDisabled("Only on this object");
     ImGui::SameLine();
     if (ImGui::SmallButton("Use model's")) {
+      EditorScene::recordChange(*modelComponent.getOwner(), "Clear Material");
       modelComponent.setMaterial(slot, nullptr);
     }
   }

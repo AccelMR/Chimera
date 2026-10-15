@@ -37,6 +37,27 @@ class CH_CORE_EXPORT Component
   update(float deltaTime);
 
   /**
+   * Writes what is needed to make the component again, starting with a version of its own,
+   * so a type can change its data and still read older files. The enabled flag is written
+   * by whoever saves the GameObject.
+   */
+  virtual void
+  serialize(DataStream& stream) const;
+
+  /**
+   * Reads what serialize wrote. It runs before the component is attached, so it registers
+   * once, with the values read. False when the data cannot be read.
+   */
+  NODISCARD virtual bool
+  deserialize(DataStream& stream);
+
+  /**
+   * Adds the UUIDs of the assets it uses, so whatever saves it loads them first.
+   */
+  virtual void
+  collectReferences(Vector<UUID>& outReferences) const;
+
+  /**
    * A disabled component is unregistered: it stays on its GameObject but leaves the scene.
    */
   void

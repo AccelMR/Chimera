@@ -32,6 +32,15 @@ class InspectorUI
 
  private:
   void
+  renderName(GameObject& gameObject);
+
+  /**
+   * Says which prefab selected comes from, with buttons to edit or unpack it.
+   */
+  void
+  renderPrefabInstance(GameObject& selected, GameObject& instance);
+
+  void
   renderTransform(GameObject& gameObject);
 
   void
@@ -54,9 +63,15 @@ class InspectorUI
   // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).
   // So the angles are kept while the same object stays selected.
   const GameObject* m_rotationOwner = nullptr;
+  // Roll, pitch, yaw: the turns around X, Y and Z, so they share the axis colors.
   float m_rotationDegrees[3] = {0.0f, 0.0f, 0.0f};
   // The rotation the angles were last read from or written to.
   Quaternion m_rotationShown = Quaternion::IDENTITY;
+
+  // Read again from the object whenever the field is not being typed in.
+  const GameObject* m_nameOwner = nullptr;
+  ANSICHAR m_nameBuffer[256] = "";
+  bool m_bEditingName = false;
 };
 
 } // namespace chEngineSDK

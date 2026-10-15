@@ -23,5 +23,10 @@ class MainMenuBarUI {
   void
   renderImportMenu();
  private:
+  void
+  renderFileMenu();
+
+  void
+  renderEditMenu();
 };
 }  // namespace chEngineSDK

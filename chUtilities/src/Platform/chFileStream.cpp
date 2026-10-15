@@ -48,6 +48,9 @@ constexpr uint8 kUTF16BEMark[] = {0xFE, 0xFF};
 constexpr uint8 kUTF32LEMark[] = {0xFF, 0xFE, 0x00, 0x00};
 constexpr uint8 kUTF32BEMark[] = {0x00, 0x00, 0xFE, 0xFF};
 
+// First allocation of a growing memory stream.
+constexpr SIZE_T kMinGrowCapacity = 256;
+
 template<SIZE_T N>
 NODISCARD bool
 startsWith(const uint8* bytes, SIZE_T count, const uint8 (&mark)[N]) noexcept
@@ -114,6 +117,17 @@ unitsFromBytes(const String& bytes, bool bigEndian)
 }
 
 } // namespace
+
+/*
+*/
+MemoryDataStream::MemoryDataStream()
+  : DataStream(ACCESS_MODE::kREAD | ACCESS_MODE::kWRITE),
+    m_data(nullptr),
+    m_currPos(nullptr),
+    m_end(nullptr),
+    m_freeOnClose(true),
+    m_bGrowable(true)
+{}
 
 /*
 */
@@ -187,6 +201,10 @@ MemoryDataStream::write(const void* buf, SIZE_T size)
     return 0;
   }
 
+  if (m_bGrowable) {
+    return writeGrowing(buf, size);
+  }
+
   const SIZE_T count = Math::min(size, static_cast<SIZE_T>(m_end - m_currPos));
   if (0 == count) {
     return 0;
@@ -195,6 +213,36 @@ MemoryDataStream::write(const void* buf, SIZE_T size)
   memcpy(m_currPos, buf, count);
   m_currPos += count;
   return count;
+}
+
+/*
+*/
+SIZE_T
+MemoryDataStream::writeGrowing(const void* buf, SIZE_T size)
+{
+  const SIZE_T position = static_cast<SIZE_T>(m_currPos - m_data);
+  const SIZE_T needed = position + size;
+  if (needed > m_capacity) {
+    // Doubling keeps the number of copies small for data written in many small pieces.
+    const SIZE_T capacity = Math::max(needed, Math::max(m_capacity * 2, kMinGrowCapacity));
+    uint8* data = static_cast<uint8*>(realloc(m_data, capacity));
+    if (!data) {
+      return 0;
+    }
+    const SIZE_T written = static_cast<SIZE_T>(m_end - m_data);
+    m_data = data;
+    m_currPos = m_data + position;
+    m_end = m_data + written;
+    m_capacity = capacity;
+  }
+
+  memcpy(m_currPos, buf, size);
+  m_currPos += size;
+  if (m_currPos > m_end) {
+    m_end = m_currPos;
+    m_size = static_cast<SIZE_T>(m_end - m_data);
+  }
+  return size;
 }
 
 /*
@@ -238,6 +286,7 @@ MemoryDataStream::close()
       free(m_data);
     }
     m_data = m_currPos = m_end = nullptr;
+    m_capacity = 0;
   }
 }
 

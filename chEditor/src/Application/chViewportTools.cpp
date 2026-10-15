@@ -12,6 +12,7 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chEditorCamera.h"
+#include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLightItem.h"
@@ -335,6 +336,41 @@ ViewportTools::renderCameraSettings()
     bSave |= ImGui::IsItemDeactivatedAfterEdit();
 
     ImGui::Separator();
+    float fieldOfView = m_editorCamera.getFieldOfView();
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderFloat("Field of View", &fieldOfView, EditorCamera::MIN_FIELD_OF_VIEW,
+                           EditorCamera::MAX_FIELD_OF_VIEW, "%.0f deg")) {
+      m_editorCamera.setFieldOfView(fieldOfView);
+    }
+    ImGui::SetItemTooltip("Horizontal field of view");
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+    // Logarithmic, because the planes go from millimeters to kilometers. Each range stops
+    // at the other plane, so the far plane always stays beyond the near one.
+    float nearPlane = m_editorCamera.getNearPlane();
+    float farPlane = m_editorCamera.getFarPlane();
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::DragFloat("Near Plane", &nearPlane, 0.001f, EditorCamera::MIN_NEAR_PLANE,
+                         farPlane / EditorCamera::MIN_FAR_TO_NEAR_RATIO, "%.3f",
+                         ImGuiSliderFlags_Logarithmic)) {
+      m_editorCamera.setClipPlanes(nearPlane, farPlane);
+    }
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::DragFloat("Far Plane", &farPlane, 1.0f,
+                         nearPlane * EditorCamera::MIN_FAR_TO_NEAR_RATIO,
+                         EditorCamera::MAX_FAR_PLANE, "%.1f", ImGuiSliderFlags_Logarithmic)) {
+      m_editorCamera.setClipPlanes(nearPlane, farPlane);
+    }
+    ImGui::SetItemTooltip("Far planes much farther than the near one lose depth precision");
+    bSave |= ImGui::IsItemDeactivatedAfterEdit();
+
+    if (ImGui::Button("Reset to Defaults")) {
+      m_editorCamera.resetSettings();
+    }
+
+    ImGui::Separator();
     ImGui::TextDisabled("Hold the right mouse button to fly:");
     ImGui::TextDisabled("WASD move, E up, Q down, Shift faster,");
     ImGui::TextDisabled("mouse wheel changes the speed.");
@@ -459,6 +495,16 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
   if (!selected || selected->getScene() != &scene) {
     return;
   }
+  // Below an instance the transforms come from the prefab.
+  const GameObject* instance = selected->getOutermostPrefabInstance();
+  if (instance && instance != selected) {
+    return;
+  }
+  // The prefab keeps no position for its root, only the rotation and scale new instances
+  // start with.
+  if (m_operation == Operation::Translate && selected == EditorScene::getPrefabRoot().get()) {
+    return;
+  }
 
   Transform& transform = selected->getTransform();
   Matrix4 world = transform.getWorldMatrix();
@@ -499,6 +545,10 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
   Quaternion rotation;
   Vector3 position;
   if (local.decompose(scale, rotation, position)) {
+    const StringView action = m_operation == Operation::Rotate  ? "Rotate"
+                              : m_operation == Operation::Scale ? "Scale"
+                                                                : "Move";
+    EditorScene::recordChange(*selected, action);
     transform.setLocalPosition(position);
     transform.setLocalRotation(rotation);
     transform.setLocalScale(scale);
@@ -622,6 +672,12 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
     SceneRayHit hit;
     if (scene.raycast(camera.screenToWorldRay(screenPoint), hit)) {
       picked = hit.gameObject;
+    }
+  }
+  // The parts of an instance cannot be edited one by one, so a click picks the instance.
+  if (picked) {
+    if (GameObject* instance = picked->getOutermostPrefabInstance()) {
+      picked = instance;
     }
   }
 

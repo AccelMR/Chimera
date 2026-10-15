@@ -27,20 +27,8 @@ class EditorSelection {
     m_selectedGameObject = std::move(gameObject);
   }
 
-  static SPtr<GameObject>
-  getGameObjectAssetPreview() {
-    return m_gameObjectAssetPreview;
-  }
-
-  static void
-  setGameObjectAssetPreview(SPtr<GameObject> gameObject) {
-    m_gameObjectAssetPreview = std::move(gameObject);
-  }
-
  private:
   static SPtr<GameObject> m_selectedGameObject;
-
-  static SPtr<GameObject> m_gameObjectAssetPreview;
 };
 
 } // namespace chEngineSDK

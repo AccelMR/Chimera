@@ -84,6 +84,21 @@ class Algorithm
     return removed;
   }
 
+  /**
+   * Erases every element matches returns true for.
+   *
+   * @return How many elements were erased.
+   */
+  template<typename Container, typename Predicate>
+  static FORCEINLINE SIZE_T
+  removeAllIf(Container& container, Predicate matches)
+  {
+    const auto newEnd = std::remove_if(container.begin(), container.end(), matches);
+    const SIZE_T removed = static_cast<SIZE_T>(container.end() - newEnd);
+    container.erase(newEnd, container.end());
+    return removed;
+  }
+
   template<typename Container>
   static FORCEINLINE void
   sort(Container& container)

@@ -48,6 +48,17 @@ class CH_CORE_EXPORT LightComponent : public Component
   NODISCARD FORCEINLINE LightType
   getLightType() const noexcept { return m_type; }
 
+  /**
+   * Writes color and intensity; the types with more values write them after.
+   */
+  void
+  serialize(DataStream& stream) const override;
+
+  NODISCARD bool
+  deserialize(DataStream& stream) override;
+
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
+
  protected:
   LightComponent(LightType type, float intensity);
 
@@ -102,6 +113,12 @@ class CH_CORE_EXPORT PointLightComponent : public LightComponent
   NODISCARD FORCEINLINE float
   getRange() const noexcept { return m_range; }
 
+  void
+  serialize(DataStream& stream) const override;
+
+  NODISCARD bool
+  deserialize(DataStream& stream) override;
+
  protected:
   void
   writeTypeValues(LightItem& item) const override;
@@ -137,6 +154,12 @@ class CH_CORE_EXPORT SpotLightComponent : public LightComponent
 
   NODISCARD FORCEINLINE const Degree&
   getOuterConeAngle() const noexcept { return m_outerConeAngle; }
+
+  void
+  serialize(DataStream& stream) const override;
+
+  NODISCARD bool
+  deserialize(DataStream& stream) override;
 
  protected:
   void
