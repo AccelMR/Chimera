@@ -72,22 +72,22 @@ resetSetting(ConsoleVariable<T>& cvar)
 }
 
 void
-renderMapSizeChoice(const ANSICHAR* label, ConsoleVariable<int32>& cvar)
+renderMapSizeChoice(const ANSICHAR* label, ConsoleVariable<int32>& cvar, int32 maxSize = 4096)
 {
   ImGui::TextUnformatted(label);
   constexpr int32 kMapSizes[] = {512, 1024, 2048, 4096};
   constexpr const ANSICHAR* kMapSizeNames[] = {"512", "1024", "2048", "4096"};
   constexpr SIZE_T kMapSizeCount = sizeof(kMapSizes) / sizeof(kMapSizes[0]);
-  // Both choices use the same button labels.
+  // Every choice uses the same button labels.
   ImGui::PushID(label);
-  for (SIZE_T i = 0; i < kMapSizeCount; ++i) {
+  for (SIZE_T i = 0; i < kMapSizeCount && kMapSizes[i] <= maxSize; ++i) {
+    if (i > 0) {
+      ImGui::SameLine();
+    }
     if (ImGui::RadioButton(kMapSizeNames[i], cvar.get() == kMapSizes[i])) {
       cvar.set(kMapSizes[i], ConsoleVariableSource::Console);
     }
     ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
-    if (i + 1 < kMapSizeCount) {
-      ImGui::SameLine();
-    }
   }
   ImGui::PopID();
 }
@@ -130,6 +130,20 @@ renderShadowSettings()
   editSetting("Spot Slope Bias", g_cvarSpotShadowSlopeBias, 0.05f, 0.0f, 20.0f, "%.2f");
   renderMapSizeChoice("Map size per spot light", g_cvarSpotShadowMapSize);
 
+  ImGui::SeparatorText("Point Lights");
+  editSetting("Max Point Lights", g_cvarPointShadowMaxLights, 0, 8);
+  editSetting("Point Distance", g_cvarPointShadowDistance, 0.5f, 1.0f, 10000.0f, "%.1f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Point Fade", g_cvarPointShadowFade, 0.005f, 0.0f, 1.0f, "%.2f");
+  editSetting("Point Near Plane", g_cvarPointShadowNearPlane, 0.005f, 0.001f, 10.0f, "%.3f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Point Filter Radius", g_cvarPointShadowFilterRadius, 0, 3);
+  editSetting("Point Normal Offset", g_cvarPointShadowNormalOffset, 0.05f, 0.0f, 10.0f,
+              "%.2f texels");
+  editSetting("Point Depth Bias", g_cvarPointShadowDepthBias, 0.05f, 0.0f, 20.0f, "%.2f");
+  editSetting("Point Slope Bias", g_cvarPointShadowSlopeBias, 0.05f, 0.0f, 20.0f, "%.2f");
+  renderMapSizeChoice("Map size per cube face", g_cvarPointShadowMapSize, 2048);
+
   ImGui::Separator();
   if (ImGui::MenuItem("Reset to Defaults")) {
     resetSetting(g_cvarSpotShadowMaxLights);
@@ -141,6 +155,15 @@ renderShadowSettings()
     resetSetting(g_cvarSpotShadowDepthBias);
     resetSetting(g_cvarSpotShadowSlopeBias);
     resetSetting(g_cvarSpotShadowMapSize);
+    resetSetting(g_cvarPointShadowMaxLights);
+    resetSetting(g_cvarPointShadowDistance);
+    resetSetting(g_cvarPointShadowFade);
+    resetSetting(g_cvarPointShadowNearPlane);
+    resetSetting(g_cvarPointShadowFilterRadius);
+    resetSetting(g_cvarPointShadowNormalOffset);
+    resetSetting(g_cvarPointShadowDepthBias);
+    resetSetting(g_cvarPointShadowSlopeBias);
+    resetSetting(g_cvarPointShadowMapSize);
     resetSetting(g_cvarShadows);
     resetSetting(g_cvarShadowDistance);
     resetSetting(g_cvarShadowCascades);

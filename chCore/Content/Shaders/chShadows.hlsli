@@ -3,11 +3,17 @@
 // ShadowData after another, each followed by its cascades. A directional map is an atlas
 // with one tile per cascade; each pixel reads the cascade its view depth falls in. A spot
 // map is one tile of the spot atlas, seen through a perspective projection, with one
-// cascade that covers every depth.
+// cascade that covers every depth. A point map is one cube of a cube map array, read in the
+// direction from the light; it has no cascades.
 #pragma once
 
 // Must match kNoShadow in chSceneViewBuffers.cpp.
 static const uint kNoShadow = 0xFFFFFFFF;
+
+// Must match ShadowMapType in chIRenderPath.h.
+static const uint kShadowMapCascaded = 0;
+static const uint kShadowMapSpot = 1;
+static const uint kShadowMapPoint = 2;
 
 // Must match GpuShadow in chSceneViewBuffers.h, up to its cascades.
 struct ShadowData
@@ -18,7 +24,8 @@ struct ShadowData
   uint filterRadius;
   // View depth where the shadow starts to fade.
   float fadeStart;
-  // Size of one texel and of one tile in texture coordinates of the atlas.
+  // Size of one texel and of one tile in texture coordinates of the atlas. For a point map,
+  // texelSize.x is one texel of a face per unit of distance from the light.
   float2 texelSize;
   float2 atlasScale;
   // View depth where each cascade ends, and where it starts to blend into the next one.
@@ -26,11 +33,22 @@ struct ShadowData
   float4 blendStarts;
   // View depth where the shadow is gone.
   float fadeEnd;
-  // 1 for spot maps, whose normal offset grows with the distance to the light.
-  uint perspective;
-  // How much of the whole shadow has faded; spot shadows fade with their light's distance.
+  // kShadowMapCascaded, kShadowMapSpot or kShadowMapPoint.
+  uint type;
+  // How much of the whole shadow has faded; spot and point shadows fade with their light's
+  // distance.
   float lightFade;
-  float padding;
+  float padding0;
+  // Point maps: where the light is and the cube of the array.
+  float3 lightPosition;
+  uint cubeIndex;
+  // Point maps: a face stores cubeDepthScale + cubeDepthOffset / d for a point at distance d
+  // along its axis.
+  float cubeDepthScale;
+  float cubeDepthOffset;
+  // Point maps: how far the receiver moves along its normal, per unit of distance.
+  float cubeNormalOffset;
+  float padding1;
 };
 
 // Must match GpuShadowCascade in chSceneViewBuffers.h. The matrix is kept as its rows, so it
@@ -49,8 +67,8 @@ struct ShadowCascadeData
   float padding;
 };
 
-static const uint kShadowDataSize = 400;
-static const uint kShadowCascadesOffset = 80;
+static const uint kShadowDataSize = 432;
+static const uint kShadowCascadesOffset = 112;
 static const uint kShadowCascadeDataSize = 80;
 
 // Which cascade a view depth reads (cascadeCount past the last one) and how far it has
@@ -94,7 +112,7 @@ sampleShadowCascade(ShadowData shadow,
                               worldPosition.z * cascade.viewProjectionRow2 +
                               cascade.viewProjectionRow3;
   float normalOffset = cascade.normalOffset;
-  if (shadow.perspective != 0) {
+  if (shadow.type == kShadowMapSpot) {
     normalOffset *= receiverClip.w;
   }
   const float4 clip = receiverClip + normalOffset * (normal.x * cascade.viewProjectionRow0 +
@@ -131,6 +149,59 @@ sampleShadowCascade(ShadowData shadow,
   return lit / (width * width);
 }
 
+// 1 where the light arrives in a point map, 0 where something blocks it. The face is the
+// one the direction from the light points at most, and the stored depth follows the
+// distance along that face's axis.
+float
+samplePointShadow(ShadowData shadow,
+                  SamplerComparisonState shadowSampler,
+                  float3 worldPosition,
+                  float3 normal)
+{
+  float3 toReceiver = worldPosition - shadow.lightPosition;
+  float3 axisDistances = abs(toReceiver);
+  float faceDistance = max(axisDistances.x, max(axisDistances.y, axisDistances.z));
+  // One texel of a face grows with the distance, so the offset does too.
+  toReceiver += normal * (shadow.cubeNormalOffset * faceDistance);
+  axisDistances = abs(toReceiver);
+  faceDistance = max(axisDistances.x, max(axisDistances.y, axisDistances.z));
+  if (faceDistance <= 1e-5f) {
+    return 1.0f;
+  }
+  const float depth = shadow.cubeDepthScale + shadow.cubeDepthOffset / faceDistance;
+  // Past the light's range: it does not light the point, so it cannot shadow it either.
+  if (depth > 1.0f) {
+    return 1.0f;
+  }
+
+  // The filter moves across the face, along its two other axes.
+  float3 axisU = float3(0.0f, 1.0f, 0.0f);
+  float3 axisV = float3(0.0f, 0.0f, 1.0f);
+  if (axisDistances.y >= axisDistances.x && axisDistances.y >= axisDistances.z) {
+    axisU = float3(1.0f, 0.0f, 0.0f);
+  }
+  else if (axisDistances.z >= axisDistances.x) {
+    axisU = float3(1.0f, 0.0f, 0.0f);
+    axisV = float3(0.0f, 1.0f, 0.0f);
+  }
+  const float step = shadow.texelSize.x * faceDistance;
+
+  TextureCubeArray<float> shadowMap = ResourceDescriptorHeap[shadow.textureIndex];
+  // Casters in front of the near plane were clamped to depth 0.
+  const float compareDepth = saturate(depth);
+  const float cube = (float)shadow.cubeIndex;
+  const int radius = (int)shadow.filterRadius;
+  float lit = 0.0f;
+  for (int y = -radius; y <= radius; ++y) {
+    for (int x = -radius; x <= radius; ++x) {
+      const float3 tap = toReceiver + (axisU * (float)x + axisV * (float)y) * step;
+      lit += shadowMap.SampleCmpLevelZero(shadowSampler, float4(tap, cube), compareDepth);
+    }
+  }
+  const float width = (float)(radius * 2 + 1);
+  return lit / (width * width);
+}
+
 // 1 where the light arrives, 0 where something blocks it, in between at the edges.
 float
 evaluateShadow(uint shadowBufferIndex,
@@ -142,6 +213,12 @@ evaluateShadow(uint shadowBufferIndex,
 {
   ByteAddressBuffer shadows = ResourceDescriptorHeap[shadowBufferIndex];
   const ShadowData shadow = shadows.Load<ShadowData>(shadowIndex * kShadowDataSize);
+
+  if (shadow.type == kShadowMapPoint) {
+    SamplerComparisonState pointSampler = SamplerDescriptorHeap[samplerIndex];
+    return lerp(samplePointShadow(shadow, pointSampler, worldPosition, normal), 1.0f,
+                shadow.lightFade);
+  }
 
   float blend;
   const uint cascadeIndex = selectShadowCascade(shadow, viewDepth, blend);
@@ -159,7 +236,7 @@ evaluateShadow(uint shadowBufferIndex,
   }
 
   float fade = shadow.lightFade;
-  if (shadow.perspective == 0) {
+  if (shadow.type == kShadowMapCascaded) {
     fade = saturate((viewDepth - shadow.fadeStart) /
                     max(shadow.fadeEnd - shadow.fadeStart, 1e-4f));
   }

@@ -90,7 +90,7 @@ NODISCARD uint32
 findCascadedShadowIndex(Span<const ShadowView> shadows)
 {
   for (SIZE_T i = 0; i < shadows.size(); ++i) {
-    if (!shadows[i].bPerspective) {
+    if (shadows[i].type == ShadowMapType::Cascaded) {
       return static_cast<uint32>(i);
     }
   }
@@ -177,8 +177,15 @@ SceneViewBuffers::update(const RenderView& view)
     gpuShadow.atlasScale[0] = shadow.atlasScale.x;
     gpuShadow.atlasScale[1] = shadow.atlasScale.y;
     gpuShadow.fadeEnd = shadow.fadeEnd;
-    gpuShadow.perspective = shadow.bPerspective ? 1 : 0;
+    gpuShadow.type = static_cast<uint32>(shadow.type);
     gpuShadow.lightFade = shadow.lightFade;
+    gpuShadow.cubeIndex = shadow.cubeIndex;
+    gpuShadow.lightPosition[0] = shadow.light->position.x;
+    gpuShadow.lightPosition[1] = shadow.light->position.y;
+    gpuShadow.lightPosition[2] = shadow.light->position.z;
+    gpuShadow.cubeDepthScale = shadow.cubeDepthScale;
+    gpuShadow.cubeDepthOffset = shadow.cubeDepthOffset;
+    gpuShadow.cubeNormalOffset = shadow.cubeNormalOffset;
     for (uint32 i = 0; i < shadow.cascadeCount; ++i) {
       const ShadowCascade& cascade = shadow.cascades[i];
       gpuShadow.splitDepths[i] = cascade.splitDepth;

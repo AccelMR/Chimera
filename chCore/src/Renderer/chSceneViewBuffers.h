@@ -84,13 +84,22 @@ class CH_CORE_EXPORT SceneViewBuffers
     float splitDepths[4];
     float blendStarts[4];
     float fadeEnd;
-    // 1 for spot maps, whose normal offset grows with the distance to the light.
-    uint32 perspective;
+    // ShadowMapType.
+    uint32 type;
     float lightFade;
-    float padding;
+    float padding0;
+    // Point maps: where the light is, the cube of the array, how the depth of a face follows
+    // the distance along its axis, and the normal offset per unit of distance. The position
+    // starts on 16 bytes, where a raw load may expect a float3.
+    float lightPosition[3];
+    uint32 cubeIndex;
+    float cubeDepthScale;
+    float cubeDepthOffset;
+    float cubeNormalOffset;
+    float padding1;
     GpuShadowCascade cascades[4];
   };
-  static_assert(sizeof(GpuShadow) == 400);
+  static_assert(sizeof(GpuShadow) == 432);
 
   Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_viewBuffers;
   Array<SPtr<IBuffer>, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_lightBuffers;

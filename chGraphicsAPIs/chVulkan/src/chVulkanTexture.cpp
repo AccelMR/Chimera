@@ -58,7 +58,9 @@ VulkanTexture::VulkanTexture(VkDevice device,
   const VkImageCreateInfo imageInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = nullptr,
-      .flags = 0,
+      .flags = createInfo.type == TextureType::TextureCube
+                   ? static_cast<VkImageCreateFlags>(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT)
+                   : 0u,
       .imageType = chTextureTypeToVkImageType(createInfo.type),
       .format = chFormatToVkFormat(createInfo.format),
       .extent = {.width = createInfo.width,

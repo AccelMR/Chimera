@@ -389,10 +389,6 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
     EditorScene::recordChange(gameObject, "Edit Cast Shadows");
     light->setCastShadows(bCastShadows);
   }
-  if (light->getLightType() == LightType::Point) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("(not drawn for point lights yet)");
-  }
 
   if (pointLight) {
     float range = pointLight->getRange();

@@ -37,15 +37,30 @@ struct ShadowCascade
 };
 
 /**
+ * How a shadow map is laid out. The values are sent to the shaders (chShadows.hlsli).
+ */
+enum class ShadowMapType : uint32
+{
+  // Tiles of an atlas, one per cascade, picked by view depth.
+  Cascaded = 0,
+  // One tile of an atlas, seen through a perspective projection.
+  Spot = 1,
+  // Six faces of a cube map array, picked by the direction from the light.
+  Point = 2
+};
+
+/**
  * A shadow map the ShadowRenderer drew this frame for one light. Lit paths read its texture
  * in their lighting pass; SceneViewBuffers sends the rest to the shaders. A directional
  * light has one cascade per tile of its atlas; a spot light has one cascade, its tile of
- * the spot atlas, seen through a perspective projection.
+ * the spot atlas, seen through a perspective projection; a point light has no cascade, only
+ * its cube in the point cube array.
  */
 struct ShadowView
 {
   static constexpr uint32 MAX_CASCADES = 4;
 
+  ShadowMapType type = ShadowMapType::Cascaded;
   const LightItem* light = nullptr;
   RGTextureHandle texture;
   uint32 textureIndex = 0;
@@ -53,18 +68,25 @@ struct ShadowView
   Array<ShadowCascade, MAX_CASCADES> cascades;
   // Size of one tile in texture coordinates of the atlas.
   Vector2 atlasScale;
-  // Size of one texel in texture coordinates of the atlas.
+  // Size of one texel in texture coordinates of the atlas; for a point map, x is the size
+  // of one texel of a face per unit of distance from the light.
   Vector2 texelSize;
   // Texels around each pixel the test blends.
   uint32 filterRadius = 0;
   // View depths where the shadow starts to fade and where it is gone.
   float fadeStart = 0.0f;
   float fadeEnd = 0.0f;
-  // How much of the whole shadow has faded, from 0 (all of it shows) to 1 (none). Spot
-  // shadows fade as their light gets far from the camera.
+  // How much of the whole shadow has faded, from 0 (all of it shows) to 1 (none). Spot and
+  // point shadows fade as their light gets far from the camera.
   float lightFade = 0.0f;
-  // Spot shadows: the normal offset grows with the distance to the light.
-  bool bPerspective = false;
+  // Point maps: which cube of the array, and the depth a face stores for a point at
+  // distance d along its axis, depthScale + depthOffset / d.
+  uint32 cubeIndex = 0;
+  float cubeDepthScale = 0.0f;
+  float cubeDepthOffset = 0.0f;
+  // Point maps: how far receivers move along their normal, per unit of distance from the
+  // light.
+  float cubeNormalOffset = 0.0f;
 };
 
 /**

@@ -28,6 +28,10 @@ DX12TextureView::DX12TextureView(const DX12Texture& texture,
                               texture.getMipLevels() - m_baseMipLevel);
   m_arrayLayerCount = Math::min(createInfo.arrayLayerCount,
                                 texture.getArrayLayers() - m_baseArrayLayer);
+  m_bArrayResource = texture.getArrayLayers() > 1;
+  if (m_viewType == TextureViewType::View1D || m_viewType == TextureViewType::View2D) {
+    m_arrayLayerCount = 1;
+  }
 
   const TextureUsageFlags usage = texture.getUsage();
   if (usage.isSet(TextureUsage::ColorAttachment)) {
@@ -83,7 +87,7 @@ DX12TextureView::createRenderTarget(ID3D12Resource* resource)
 {
   D3D12_RENDER_TARGET_VIEW_DESC desc{};
   desc.Format = chFormatToDxgiFormat(m_format);
-  if (m_viewType == TextureViewType::View2DArray) {
+  if (m_bArrayResource) {
     desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
     desc.Texture2DArray = {.MipSlice = m_baseMipLevel,
                            .FirstArraySlice = m_baseArrayLayer,
@@ -110,7 +114,7 @@ DX12TextureView::createDepthTarget(ID3D12Resource* resource)
   D3D12_DEPTH_STENCIL_VIEW_DESC desc{};
   desc.Format = chFormatToDxgiFormat(m_format);
   desc.Flags = D3D12_DSV_FLAG_NONE;
-  if (m_viewType == TextureViewType::View2DArray) {
+  if (m_bArrayResource) {
     desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
     desc.Texture2DArray = {.MipSlice = m_baseMipLevel,
                            .FirstArraySlice = m_baseArrayLayer,
@@ -152,6 +156,16 @@ DX12TextureView::createShaderResource(ID3D12Resource* resource)
                            .ArraySize = m_arrayLayerCount,
                            .ResourceMinLODClamp = 0.0f};
     break;
+  case TextureViewType::View2D:
+    if (!m_bArrayResource) {
+      desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+      desc.Texture2D = {.MostDetailedMip = m_baseMipLevel,
+                        .MipLevels = m_mipLevelCount,
+                        .PlaneSlice = 0,
+                        .ResourceMinLODClamp = 0.0f};
+      break;
+    }
+    CH_FALLTHROUGH;
   case TextureViewType::View2DArray:
     desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
     desc.Texture2DArray = {.MostDetailedMip = m_baseMipLevel,
@@ -181,13 +195,8 @@ DX12TextureView::createShaderResource(ID3D12Resource* resource)
                              .NumCubes = m_arrayLayerCount / 6,
                              .ResourceMinLODClamp = 0.0f};
     break;
-  case TextureViewType::View2D:
   default:
-    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    desc.Texture2D = {.MostDetailedMip = m_baseMipLevel,
-                      .MipLevels = m_mipLevelCount,
-                      .PlaneSlice = 0,
-                      .ResourceMinLODClamp = 0.0f};
+    CH_ASSERT(false && "Unknown texture view type");
     break;
   }
 

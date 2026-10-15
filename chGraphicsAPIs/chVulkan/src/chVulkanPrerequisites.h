@@ -53,11 +53,12 @@ chTextureTypeToVkImageType(TextureType type) {
   switch (type) {
     case TextureType::Texture1D:
       return VK_IMAGE_TYPE_1D;
+    // A cube is a 2D image whose layers are its faces.
     case TextureType::Texture2D:
+    case TextureType::TextureCube:
       return VK_IMAGE_TYPE_2D;
     case TextureType::Texture3D:
       return VK_IMAGE_TYPE_3D;
-    case TextureType::TextureCube:
     default:
       CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan image type: {0}", static_cast<uint32>(type)));
   }
@@ -131,6 +132,12 @@ vkTextureViewTypeToChTextureViewType(VkImageViewType viewType) {
       return TextureViewType::View3D;
     case VK_IMAGE_VIEW_TYPE_CUBE:
       return TextureViewType::ViewCube;
+    case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
+      return TextureViewType::View1DArray;
+    case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
+      return TextureViewType::View2DArray;
+    case VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
+      return TextureViewType::ViewCubeArray;
     default:
       CH_EXCEPT(VulkanErrorException, StringUtils::format("Unsupported Vulkan image view type: {0}", viewType));
   }
@@ -147,6 +154,12 @@ chTextureViewTypeToVkTextureViewType(TextureViewType viewType) {
       return VK_IMAGE_VIEW_TYPE_3D;
     case TextureViewType::ViewCube:
       return VK_IMAGE_VIEW_TYPE_CUBE;
+    case TextureViewType::View1DArray:
+      return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    case TextureViewType::View2DArray:
+      return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    case TextureViewType::ViewCubeArray:
+      return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
     default:
       CH_EXCEPT(VulkanErrorException,
                 StringUtils::format("Unsupported Vulkan image view type: {0}",

@@ -95,6 +95,9 @@ class DX12TextureView : public ITextureView
   uint32 m_mipLevelCount = 1;
   uint32 m_baseArrayLayer = 0;
   uint32 m_arrayLayerCount = 1;
+  // Descriptors of a resource with several layers must name the layers they use, even when
+  // the view is a single 2D layer.
+  bool m_bArrayResource = false;
   uint32 m_renderTargetIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
   uint32 m_depthTargetIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
   uint32 m_bindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;

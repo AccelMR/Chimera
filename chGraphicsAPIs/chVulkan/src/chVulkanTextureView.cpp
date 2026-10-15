@@ -64,14 +64,16 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
   }
 
   viewInfo.subresourceRange.baseMipLevel = createInfo.baseMipLevel;
-  viewInfo.subresourceRange.levelCount = createInfo.mipLevelCount == ~0u ?
-                                          vulkanTexture->getMipLevels() :
-                                          createInfo.mipLevelCount;
+  viewInfo.subresourceRange.levelCount =
+      createInfo.mipLevelCount == ~0u
+          ? vulkanTexture->getMipLevels() - createInfo.baseMipLevel
+          : createInfo.mipLevelCount;
 
   viewInfo.subresourceRange.baseArrayLayer = createInfo.baseArrayLayer;
-  viewInfo.subresourceRange.layerCount = createInfo.arrayLayerCount == ~0u ?
-                                          vulkanTexture->getArrayLayers() :
-                                          createInfo.arrayLayerCount;
+  viewInfo.subresourceRange.layerCount =
+      createInfo.arrayLayerCount == ~0u
+          ? vulkanTexture->getArrayLayers() - createInfo.baseArrayLayer
+          : createInfo.arrayLayerCount;
 
   VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_imageView));
 

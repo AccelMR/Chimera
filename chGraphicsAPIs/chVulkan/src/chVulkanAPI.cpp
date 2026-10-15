@@ -72,6 +72,8 @@ visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
   visit(chain.core.features.fillModeNonSolid, "fillModeNonSolid");
   // RasterState::depthClampEnable (shadow maps keep casters behind their near plane).
   visit(chain.core.features.depthClamp, "depthClamp");
+  // TextureCubeArray views (point light shadow maps).
+  visit(chain.core.features.imageCubeArray, "imageCubeArray");
   visit(chain.vulkan13.dynamicRendering, "dynamicRendering");
   visit(chain.vulkan13.synchronization2, "synchronization2");
   // DXC turns discard into a demote to helper invocation.

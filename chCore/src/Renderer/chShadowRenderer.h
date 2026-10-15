@@ -12,6 +12,7 @@
 
 #include "chFrustum.h"
 #include "chIRenderPath.h"
+#include "chLightItem.h"
 #include "chMaterial.h"
 #include "chMaterialPipelines.h"
 #include "chPipelineCache.h"
@@ -51,9 +52,31 @@ struct SpotShadowProjection
 };
 
 /**
- * A spot light that may draw a shadow this frame, with what decides whether it does.
+ * Where the six faces of a point light's cube shadow map look from: 90 degree perspective
+ * projections along +X, -X, +Y, -Y, +Z, -Z, each turned so its image lands where cube map
+ * sampling reads that face.
  */
-struct SpotShadowCandidate
+struct PointShadowProjection
+{
+  static constexpr uint32 FACE_COUNT = 6;
+
+  // World to each face: xy in NDC, z the depth 0..1.
+  Array<Matrix4, FACE_COUNT> faceViewProjections;
+  // Each face's volume with its near plane moved back to the light.
+  Array<Frustum, FACE_COUNT> faceCasterFrustums;
+  // The depth a face stores for a point at distance d along its axis is
+  // depthScale + depthOffset / d.
+  float depthScale;
+  float depthOffset;
+  // The near plane used, after it was kept under half the range.
+  float nearPlane;
+};
+
+/**
+ * A spot or point light that may draw a shadow this frame, with what decides whether it
+ * does.
+ */
+struct LocalShadowCandidate
 {
   const LightItem* light = nullptr;
   // Range over the distance from the camera to the light: about how much of the screen the
@@ -69,12 +92,13 @@ struct SpotShadowCandidate
  * which SceneViewBuffers sends to the lighting shaders. The first directional light that
  * casts shadows gets a map split into Renderer.ShadowCascades cascades along the camera
  * view up to Renderer.ShadowDistance; up to Renderer.SpotShadowMaxLights spot lights get
- * one map each.
+ * one map each, and up to Renderer.PointShadowMaxLights point lights one cube map each.
  *
- * Each kind of light draws into its own atlas texture, one tile per map, so one pass draws
- * all of its maps, each tile with its own viewport. An atlas is a texture it keeps and
- * imports into each frame's graph, so its bindless index is known while the graph is
- * built, when the shadow data is written.
+ * Directional and spot lights draw into an atlas texture each, one tile per map, so one
+ * pass draws all of its maps, each tile with its own viewport. Point lights draw into a
+ * cube map array, one rendering per face. These are textures it keeps and imports into
+ * each frame's graph, so their bindless indexes are known while the graph is built, when
+ * the shadow data is written.
  *
  * Needs a started IGraphicsAPI and must be destroyed before it shuts down.
  */
@@ -98,8 +122,9 @@ class CH_CORE_EXPORT ShadowRenderer
   addPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
 
   /**
-   * Adds a pass that shows the atlases the last addPasses drew over all of output: the
-   * directional one on the left, the spot one on the right, nearer depths brighter.
+   * Adds a pass that shows the maps the last addPasses drew over all of output: the
+   * directional atlas on the left, the spot atlas on the right and, when there are point
+   * shadows, the faces of each cube in a row below, nearer depths brighter.
    */
   void
   addDebugPass(RenderGraph& graph, RGTextureHandle output);
@@ -133,17 +158,27 @@ class CH_CORE_EXPORT ShadowRenderer
   computeSpotProjection(const LightItem& light, float nearPlane, uint32 mapSize);
 
   /**
-   * Picks the spot lights with Cast Shadows whose range starts closer to the camera than
-   * maxDistance, at most maxCount of them, the ones with the best score first.
+   * The six faces of a point light's cube map, from nearPlane around it to its range (the
+   * near plane is kept under half the range).
+   */
+  NODISCARD static PointShadowProjection
+  computePointProjection(const LightItem& light, float nearPlane);
+
+  /**
+   * Picks the lights of one type (spot or point) with Cast Shadows whose range starts
+   * closer to the camera than maxDistance, at most maxCount of them, the ones with the best
+   * score first.
    */
   static void
-  selectSpotShadows(const Vector3& cameraPosition,
-                    Span<const LightItem* const> lights,
-                    uint32 maxCount,
-                    float maxDistance,
-                    Vector<SpotShadowCandidate>& outCandidates);
+  selectLocalShadows(const Vector3& cameraPosition,
+                     Span<const LightItem* const> lights,
+                     LightType type,
+                     uint32 maxCount,
+                     float maxDistance,
+                     Vector<LocalShadowCandidate>& outCandidates);
 
   static constexpr uint32 MAX_SPOT_SHADOWS = 16;
+  static constexpr uint32 MAX_POINT_SHADOWS = 8;
 
  private:
   /**
@@ -167,6 +202,32 @@ class CH_CORE_EXPORT ShadowRenderer
     uint32 tileSize = 0;
     uint32 columns = 1;
     // Imported into this frame's graph; invalid when no map of this kind is drawn.
+    RGTextureHandle handle;
+  };
+
+  /**
+   * A depth cube map array with one cube per point light, made again when its size or cube
+   * count changes. Shaders read it through a cube array view; each face is drawn through a
+   * view of its own layer.
+   */
+  struct ShadowCubeArray
+  {
+    void
+    update(uint32 newFaceSize, uint32 newCubeCount);
+
+    NODISCARD RGTextureHandle
+    import(RenderGraph& graph, const ANSICHAR* name);
+
+    SPtr<ITexture> texture;
+    // Every cube, as shaders sample them.
+    SPtr<ITextureView> cubeView;
+    // Every face as a layer of a 2D array, for the debug view.
+    SPtr<ITextureView> layerView;
+    // One per face, cube after cube, as depth targets.
+    Vector<SPtr<ITextureView>> faceViews;
+    uint32 faceSize = 0;
+    uint32 cubeCount = 0;
+    ResourceState state = ResourceState::Undefined;
     RGTextureHandle handle;
   };
 
@@ -196,6 +257,9 @@ class CH_CORE_EXPORT ShadowRenderer
   void
   addSpotPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
 
+  void
+  addPointPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
+
   /**
    * Draws the casters into one tile of the atlas being rendered.
    */
@@ -208,7 +272,16 @@ class CH_CORE_EXPORT ShadowRenderer
              const Vector<const RenderItem*>& casters);
 
   /**
-   * Builds the debug view pipeline again when the output format changes.
+   * Draws the casters with a pipeline set, through one light view projection.
+   */
+  void
+  recordCasters(ICommandList& commandList,
+                const MaterialPipelines& pipelines,
+                const Matrix4& lightViewProjection,
+                const Vector<const RenderItem*>& casters);
+
+  /**
+   * Builds the debug view pipelines again when the output format changes.
    */
   void
   updateDebugPipeline(Format outputFormat);
@@ -217,27 +290,42 @@ class CH_CORE_EXPORT ShadowRenderer
   SPtr<IShader> m_maskedFragmentShader;
   CasterPipelines m_directionalPipelines;
   CasterPipelines m_spotPipelines;
+  CasterPipelines m_pointPipelines;
 
   ShadowAtlas m_directionalAtlas;
   ShadowAtlas m_spotAtlas;
+  ShadowCubeArray m_pointCubes;
 
-  // One list per cascade and per spot light, kept between frames, so gathering does not
-  // allocate.
+  // One list per cascade, per spot light and per point light face, kept between frames, so
+  // gathering does not allocate.
   Array<Vector<const RenderItem*>, ShadowView::MAX_CASCADES> m_cascadeCasters;
   Array<Vector<const RenderItem*>, MAX_SPOT_SHADOWS> m_spotCasters;
-  Vector<SpotShadowCandidate> m_spotCandidates;
+  Array<Vector<const RenderItem*>, MAX_POINT_SHADOWS * PointShadowProjection::FACE_COUNT>
+      m_pointFaceCasters;
+  // Every item inside the range of the point light being gathered, split into its faces.
+  Vector<const RenderItem*> m_pointRangeCasters;
+  Vector<LocalShadowCandidate> m_spotCandidates;
+  Vector<LocalShadowCandidate> m_pointCandidates;
+  // The face view projections of each point light this frame.
+  Array<Array<Matrix4, PointShadowProjection::FACE_COUNT>, MAX_POINT_SHADOWS>
+      m_pointFaceViewProjections;
   Vector<ShadowView> m_shadowViews;
   // Where the views of this frame are in m_shadowViews.
   uint32 m_directionalViewIndex = 0;
   uint32 m_firstSpotViewIndex = 0;
   uint32 m_spotViewCount = 0;
-  // Near plane over range of each spot map, which the debug view needs to show depth.
+  uint32 m_pointViewCount = 0;
+  // Near plane over range of each spot and point map, which the debug view needs to show
+  // depth.
   Array<float, MAX_SPOT_SHADOWS> m_spotNearRatios{};
+  Array<float, MAX_POINT_SHADOWS> m_pointNearRatios{};
 
   SPtr<IShader> m_debugVertexShader;
   SPtr<IShader> m_debugFragmentShader;
+  SPtr<IShader> m_pointDebugFragmentShader;
   PipelineCache m_debugPipelineCache;
   const IPipeline* m_debugPipeline = nullptr;
+  const IPipeline* m_pointDebugPipeline = nullptr;
   Format m_debugPipelineFormat = Format::Unknown;
 
   // For items without a material.

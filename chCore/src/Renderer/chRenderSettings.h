@@ -136,4 +136,30 @@ extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSpotShadowNormalOffset;
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSpotShadowDepthBias;
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSpotShadowSlopeBias;
 
+// How many point lights (0 to 8) draw shadows in one frame; the ones that cover the most of
+// the screen win.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarPointShadowMaxLights;
+
+// Width and height in texels of each face of the cube shadow map of a point light.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarPointShadowMapSize;
+
+// How far from the camera, in world units, a point light still draws its shadow.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowDistance;
+
+// Fraction of the point shadow distance where the shadows fade out.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowFade;
+
+// Distance from a point light to the near plane of its cube faces.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowNearPlane;
+
+// Texels around each pixel the point shadow test blends.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarPointShadowFilterRadius;
+
+// Texels a receiver moves along its normal before the point shadow test.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowNormalOffset;
+
+// Depth bias of the point shadow casters, constant and by slope.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowDepthBias;
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowSlopeBias;
+
 } // namespace chEngineSDK

@@ -76,6 +76,20 @@ RenderPassBuilder::writeDepth(RGTextureHandle texture, LoadOp loadOp, float clea
 /*
  */
 RenderPassBuilder&
+RenderPassBuilder::writeDepthLayers(RGTextureHandle texture, LoadOp loadOp)
+{
+  CH_ASSERT(FormatUtils::isDepth(m_graph.getTextureDesc(texture).format));
+  m_graph.addAccess(m_passIndex,
+                    {.texture = texture.index,
+                     .type = RenderGraph::AccessType::DepthLayers,
+                     .state = ResourceState::DepthWrite,
+                     .loadOp = loadOp});
+  return *this;
+}
+
+/*
+ */
+RenderPassBuilder&
 RenderPassBuilder::setSideEffect()
 {
   m_graph.m_passes[m_passIndex].sideEffect = true;
@@ -159,7 +173,7 @@ RenderGraph::addAccess(uint32 passIndex, const Access& access)
     // One texture in two states inside one pass cannot be expressed with barriers.
     CH_ASSERT(other.texture != access.texture);
     // Every attachment of one rendering has the same size.
-    CH_ASSERT(access.type == AccessType::Read || other.type == AccessType::Read ||
+    CH_ASSERT(!isAttachment(access.type) || !isAttachment(other.type) ||
               (m_textures[other.texture].desc.width == desc.width &&
                m_textures[other.texture].desc.height == desc.height));
   }
@@ -221,7 +235,7 @@ RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
     bool isRendering = false;
     for (uint32 i = 0; i < pass.accessCount; ++i) {
       const Access& access = m_accesses[pass.firstAccess + i];
-      if (access.type == AccessType::Read) {
+      if (!isAttachment(access.type)) {
         continue;
       }
 
@@ -380,7 +394,7 @@ RenderGraph::getAttachmentStoreOp(uint32 compiledIndex, RGTextureHandle texture)
   const Pass& pass = m_passes[m_compiledPasses[compiledIndex].pass];
   for (uint32 i = 0; i < pass.accessCount; ++i) {
     const Access& access = m_accesses[pass.firstAccess + i];
-    if (access.texture == texture.index && access.type != AccessType::Read) {
+    if (access.texture == texture.index && isAttachment(access.type)) {
       return access.storeOp;
     }
   }
@@ -470,6 +484,7 @@ RenderGraph::computeLifetimes()
           texture.usage |= TextureUsage::ColorAttachment;
           break;
         case AccessType::Depth:
+        case AccessType::DepthLayers:
           texture.usage |= TextureUsage::DepthStencil;
           break;
       }

@@ -101,6 +101,15 @@ class CH_CORE_EXPORT RenderPassBuilder
   writeDepth(RGTextureHandle texture, LoadOp loadOp = LoadOp::Clear, float clearDepth = 1.0f);
 
   /**
+   * Writes a depth texture with several layers (a cube map) that the pass renders one layer
+   * at a time through views of its own, beginning and ending each rendering itself. The
+   * graph only puts the texture in DepthWrite. Clear means the pass writes every layer, so
+   * the earlier contents are not needed.
+   */
+  RenderPassBuilder&
+  writeDepthLayers(RGTextureHandle texture, LoadOp loadOp = LoadOp::Clear);
+
+  /**
    * Keeps the pass even when nothing reads what it writes (readbacks, captures).
    */
   RenderPassBuilder&
@@ -241,8 +250,16 @@ class CH_CORE_EXPORT RenderGraph
   {
     Read,
     Color,
-    Depth
+    Depth,
+    // Depth written by renderings the pass begins itself.
+    DepthLayers
   };
+
+  NODISCARD static constexpr bool
+  isAttachment(AccessType type) noexcept
+  {
+    return type == AccessType::Color || type == AccessType::Depth;
+  }
 
   struct Access
   {

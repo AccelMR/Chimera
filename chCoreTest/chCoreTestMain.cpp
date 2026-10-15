@@ -891,7 +891,76 @@ TEST_CASE("chCore - Spot shadow projection")
   }
 }
 
-TEST_CASE("chCore - Spot shadow selection")
+TEST_CASE("chCore - Point shadow projection")
+{
+  LightItem light;
+  light.type = LightType::Point;
+  light.position = Vector3(3.0f, -2.0f, 1.0f);
+  light.range = 10.0f;
+  const PointShadowProjection projection = ShadowRenderer::computePointProjection(light, 0.1f);
+
+  const auto project = [&projection](uint32 face, const Vector3& point) {
+    const Vector4 clip = projection.faceViewProjections[face].transformVector4(
+        Vector4(point.x, point.y, point.z, 1.0f));
+    return Vector3(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+  };
+
+  SECTION("Each face's image lands where cube map sampling reads it")
+  {
+    // Cube map face selection as Direct3D and Vulkan define it: for the major axis ma of
+    // the direction, s = (sc / |ma| + 1) / 2 and t = (tc / |ma| + 1) / 2, with t going down
+    // the image. A face's NDC x is then sc / |ma| and its NDC y is -tc / |ma|.
+    const auto cubeCoords = [](uint32 face, const Vector3& direction, float& sc, float& tc) {
+      switch (face) {
+        case 0: sc = -direction.z; tc = -direction.y; return direction.x;
+        case 1: sc = direction.z; tc = -direction.y; return -direction.x;
+        case 2: sc = direction.x; tc = direction.z; return direction.y;
+        case 3: sc = direction.x; tc = -direction.z; return -direction.y;
+        case 4: sc = direction.x; tc = -direction.y; return direction.z;
+        default: sc = -direction.x; tc = -direction.y; return -direction.z;
+      }
+    };
+    const Vector3 directions[] = {Vector3(4.0f, 1.0f, -2.0f), Vector3(-5.0f, 2.0f, 1.0f),
+                                  Vector3(1.0f, 3.0f, 2.0f),  Vector3(-2.0f, -4.0f, 1.0f),
+                                  Vector3(1.0f, -2.0f, 6.0f), Vector3(2.0f, 1.0f, -3.0f)};
+    for (uint32 face = 0; face < PointShadowProjection::FACE_COUNT; ++face) {
+      const Vector3& direction = directions[face];
+      float sc = 0.0f;
+      float tc = 0.0f;
+      const float major = cubeCoords(face, direction, sc, tc);
+      REQUIRE(major > 0.0f);
+      const Vector3 ndc = project(face, light.position + direction);
+      REQUIRE(ndc.x == Approx(sc / major).margin(1e-4f));
+      REQUIRE(ndc.y == Approx(-tc / major).margin(1e-4f));
+    }
+  }
+
+  SECTION("The stored depth follows the distance along the face's axis")
+  {
+    for (const float distance : {0.5f, 3.0f, 9.0f}) {
+      const Vector3 ndc = project(2, light.position + Vector3(0.5f, distance, -0.3f));
+      REQUIRE(ndc.z ==
+              Approx(projection.depthScale + projection.depthOffset / distance).margin(1e-5f));
+    }
+    REQUIRE(project(0, light.position + Vector3(9.9f, 0.0f, 0.0f)).z < 1.0f);
+    REQUIRE(project(0, light.position + Vector3(10.5f, 0.0f, 0.0f)).z > 1.0f);
+  }
+
+  SECTION("Casters between the light and the near plane are kept, those behind it are not")
+  {
+    REQUIRE(ShapeOverlap::frustumPoint(projection.faceCasterFrustums[4],
+                                       light.position + Vector3(0.0f, 0.0f, 0.05f)));
+    REQUIRE_FALSE(ShapeOverlap::frustumPoint(projection.faceCasterFrustums[4],
+                                             light.position - Vector3(0.0f, 0.0f, 1.0f)));
+  }
+
+  SECTION("The near plane stays under half the range")
+  {
+    REQUIRE(ShadowRenderer::computePointProjection(light, 20.0f).nearPlane == 5.0f);
+  }
+}
+
+TEST_CASE("chCore - Spot and point shadow selection")
 {
   // Every light stands on the X axis, the camera at the origin.
   const auto makeLight = [](LightType type, float x, float range, bool bCast) {
@@ -910,8 +979,9 @@ TEST_CASE("chCore - Spot shadow selection")
   const LightItem point = makeLight(LightType::Point, 2.0f, 5.0f, true);
   const LightItem* lights[] = {&nearSmall, &farBig, &around, &tooFar, &noShadow, &point};
 
-  Vector<SpotShadowCandidate> candidates;
-  ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 8, 100.0f, candidates);
+  Vector<LocalShadowCandidate> candidates;
+  ShadowRenderer::selectLocalShadows(Vector3::ZERO, lights, LightType::Spot, 8, 100.0f,
+                                     candidates);
 
   SECTION("Only spot lights with shadows inside the distance, the biggest on screen first")
   {
@@ -926,16 +996,26 @@ TEST_CASE("chCore - Spot shadow selection")
 
   SECTION("At most maxCount are kept")
   {
-    ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 2, 100.0f, candidates);
+    ShadowRenderer::selectLocalShadows(Vector3::ZERO, lights, LightType::Spot, 2, 100.0f,
+                                       candidates);
     REQUIRE(candidates.size() == 2);
     REQUIRE(candidates[1].light == &farBig);
   }
 
   SECTION("The distance counts from the camera to the edge of the range")
   {
-    ShadowRenderer::selectSpotShadows(Vector3::ZERO, lights, 8, 15.0f, candidates);
+    ShadowRenderer::selectLocalShadows(Vector3::ZERO, lights, LightType::Spot, 8, 15.0f,
+                                       candidates);
     REQUIRE(candidates.size() == 2);
     REQUIRE(candidates[1].light == &nearSmall);
+  }
+
+  SECTION("Point lights are picked on their own")
+  {
+    ShadowRenderer::selectLocalShadows(Vector3::ZERO, lights, LightType::Point, 8, 100.0f,
+                                       candidates);
+    REQUIRE(candidates.size() == 1);
+    REQUIRE(candidates[0].light == &point);
   }
 }
 
@@ -1053,6 +1133,23 @@ TEST_CASE("chCore - RenderGraph")
     REQUIRE(hasBarrier(resolve, depth, ResourceState::DepthWrite, ResourceState::DepthRead));
     REQUIRE(graph.getTextureUsage(color) ==
             (TextureUsageFlags(TextureUsage::ColorAttachment) | TextureUsage::Sampled));
+  }
+
+  SECTION("Depth layers written by the pass itself")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle cubes = graph.createTexture("Cubes", depthDesc);
+    graph.addPass("CubeFaces").writeDepthLayers(cubes);
+    graph.addPass("Lighting").read(cubes).writeColor(output);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 2);
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(0), cubes, ResourceState::Undefined,
+                       ResourceState::DepthWrite));
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(1), cubes, ResourceState::DepthWrite,
+                       ResourceState::DepthRead));
+    REQUIRE(graph.getTextureUsage(cubes) ==
+            (TextureUsageFlags(TextureUsage::DepthStencil) | TextureUsage::Sampled));
   }
 
   SECTION("Dead textures give their slot to new ones")

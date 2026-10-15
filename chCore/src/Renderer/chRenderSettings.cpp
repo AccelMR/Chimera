@@ -202,6 +202,68 @@ ConsoleVariable<float> g_cvarSpotShadowSlopeBias(
     "the light.",
     "SpotShadowSlopeBias");
 
+ConsoleVariable<int32> g_cvarPointShadowMaxLights(
+    "Renderer.PointShadowMaxLights",
+    4,
+    "How many point lights with Cast Shadows (0 to 8) draw shadows in one frame. Each one "
+    "draws its casters six times, once per cube face. When more are in view, the ones that "
+    "cover the most of the screen (range over distance to the camera) win.",
+    "PointShadowMaxLights");
+
+ConsoleVariable<int32> g_cvarPointShadowMapSize(
+    "Renderer.PointShadowMapSize",
+    512,
+    "Width and height in texels of each of the six faces of the cube shadow map of a point "
+    "light (256 to 2048).",
+    "PointShadowMapSize");
+
+ConsoleVariable<float> g_cvarPointShadowDistance(
+    "Renderer.PointShadowDistance",
+    100.0f,
+    "How far from the camera, in world units, the range of a point light may start and still "
+    "draw its shadow.",
+    "PointShadowDistance");
+
+ConsoleVariable<float> g_cvarPointShadowFade(
+    "Renderer.PointShadowFade",
+    0.2f,
+    "Fraction of the point shadow distance, at its far end, where the shadow of a point "
+    "light fades out.",
+    "PointShadowFade");
+
+ConsoleVariable<float> g_cvarPointShadowNearPlane(
+    "Renderer.PointShadowNearPlane",
+    0.1f,
+    "Distance in world units from a point light to the near plane of its cube faces. "
+    "Casters closer than it still cast; a bigger value gives more depth precision.",
+    "PointShadowNearPlane");
+
+ConsoleVariable<int32> g_cvarPointShadowFilterRadius(
+    "Renderer.PointShadowFilterRadius",
+    1,
+    "Texels around each pixel the point shadow test blends (0 to 3; 1 is a 3x3 filter).",
+    "PointShadowFilterRadius");
+
+ConsoleVariable<float> g_cvarPointShadowNormalOffset(
+    "Renderer.PointShadowNormalOffset",
+    1.5f,
+    "How far, in texels of the cube face at the distance of the receiver, a receiver moves "
+    "along its normal before the test.",
+    "PointShadowNormalOffset");
+
+ConsoleVariable<float> g_cvarPointShadowDepthBias(
+    "Renderer.PointShadowDepthBias",
+    1.0f,
+    "Constant depth bias of the point shadow casters, in steps of the depth format.",
+    "PointShadowDepthBias");
+
+ConsoleVariable<float> g_cvarPointShadowSlopeBias(
+    "Renderer.PointShadowSlopeBias",
+    2.0f,
+    "Depth bias of the point shadow casters that grows with how steeply they face away from "
+    "the light.",
+    "PointShadowSlopeBias");
+
 /*
  */
 StringView
