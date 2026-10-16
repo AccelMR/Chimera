@@ -510,7 +510,7 @@ EditorTheme::applyPending()
 void
 EditorTheme::renderSettings()
 {
-  if (ImGui::BeginMenu("Theme")) {
+  if (ImGui::BeginMenu(ICON_FA_PALETTE "  Theme")) {
     for (SIZE_T i = 0; i < static_cast<SIZE_T>(EditorThemeType::COUNT); ++i) {
       const EditorThemeType theme = static_cast<EditorThemeType>(i);
       if (ImGui::MenuItem(kThemeNames[i].data(), nullptr, g_state.theme == theme) &&
@@ -523,7 +523,7 @@ EditorTheme::renderSettings()
     }
     ImGui::EndMenu();
   }
-  if (ImGui::BeginMenu("Font")) {
+  if (ImGui::BeginMenu(ICON_FA_FONT "  Font")) {
     for (SIZE_T i = 0; i < static_cast<SIZE_T>(EditorFontType::COUNT); ++i) {
       // A font whose file was missing cannot be picked.
       ImGui::BeginDisabled(g_state.fonts[i] == nullptr);
@@ -547,7 +547,7 @@ EditorTheme::renderSettings()
   editSetting("Opacity", g_cvarUIOpacity, "UIOpacity", 0.005f, kMinUIOpacity, 1.0f,
               "%.2f");
 
-  if (ImGui::MenuItem("Reset to Defaults")) {
+  if (ImGui::MenuItem(ICON_FA_UNDO_ALT "  Reset to Defaults")) {
     g_cvarFontSize.set(g_cvarFontSize.getDefault(), ConsoleVariableSource::Console);
     g_cvarUIScale.set(g_cvarUIScale.getDefault(), ConsoleVariableSource::Console);
     g_cvarUIOpacity.set(g_cvarUIOpacity.getDefault(), ConsoleVariableSource::Console);

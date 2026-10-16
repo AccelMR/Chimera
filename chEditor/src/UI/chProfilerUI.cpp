@@ -20,6 +20,8 @@
 
 #include "imgui.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 namespace chEngineSDK {
 namespace {
 ConsoleVariable<bool> g_cvarShowProfiler("Editor.ShowProfiler",
@@ -337,7 +339,7 @@ renderWindow(const RenderFrameStats& stats)
                           ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
   ImGui::SetNextWindowSize(ImVec2(kWindowWidth, kWindowHeight), ImGuiCond_FirstUseEver);
   bool bVisible = true;
-  if (!ImGui::Begin("Profiler", &bVisible)) {
+  if (!ImGui::Begin(ICON_FA_CHART_LINE "  Profiler###Profiler", &bVisible)) {
     ImGui::End();
     if (!bVisible) {
       ProfilerUI::setWindowVisible(false);

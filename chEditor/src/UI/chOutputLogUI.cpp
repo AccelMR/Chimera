@@ -14,6 +14,8 @@
 
 #include "imgui.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 namespace chEngineSDK {
 
 CH_LOG_DECLARE_STATIC(OutputLogUILog, All);
@@ -91,7 +93,7 @@ OutputLogUI::renderOutputLogUI()
     return;
   }
 
-  if (!ImGui::Begin("Output Log", &m_isVisible)) {
+  if (!ImGui::Begin(ICON_FA_TERMINAL "  Output Log###OutputLog", &m_isVisible)) {
     ImGui::End();
     return;
   }

@@ -30,6 +30,8 @@
 
 #include "imgui.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 namespace chEngineSDK {
 
 namespace {
@@ -63,23 +65,55 @@ createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
 }
 
 /*
+ * A light or sky light wins over a model on the same object, since lighting is what such an
+ * object is for. Each component is compared once, so a big tree stays cheap to draw.
+ */
+const ANSICHAR*
+getObjectIcon(const GameObject& gameObject)
+{
+  if (!gameObject.getPrefab().isNull()) {
+    return ICON_FA_CUBES;
+  }
+  const ANSICHAR* icon = ICON_FA_DOT_CIRCLE;
+  for (const UniquePtr<Component>& component : gameObject.getComponents()) {
+    const UUID& typeId = component->getTypeId();
+    if (typeId == TypeTraits<DirectionalLightComponent>::getTypeId()) {
+      return ICON_FA_SUN;
+    }
+    if (typeId == TypeTraits<PointLightComponent>::getTypeId()) {
+      return ICON_FA_LIGHTBULB;
+    }
+    if (typeId == TypeTraits<SpotLightComponent>::getTypeId()) {
+      return ICON_FA_BULLSEYE;
+    }
+    if (typeId == TypeTraits<SkyLightComponent>::getTypeId()) {
+      return ICON_FA_CLOUD_SUN;
+    }
+    if (typeId == TypeTraits<ModelComponent>::getTypeId()) {
+      icon = ICON_FA_CUBE;
+    }
+  }
+  return icon;
+}
+
+/*
  */
 void
 renderCreateLightItems(Scene& scene, GameObject* parent)
 {
-  if (!ImGui::BeginMenu("Create Light")) {
+  if (!ImGui::BeginMenu(ICON_FA_LIGHTBULB "  Create Light")) {
     return;
   }
-  if (ImGui::MenuItem("Directional Light")) {
+  if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
     createLight<DirectionalLightComponent>(scene, "Directional Light", parent);
   }
-  if (ImGui::MenuItem("Point Light")) {
+  if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
     createLight<PointLightComponent>(scene, "Point Light", parent);
   }
-  if (ImGui::MenuItem("Spot Light")) {
+  if (ImGui::MenuItem(ICON_FA_BULLSEYE "  Spot Light")) {
     createLight<SpotLightComponent>(scene, "Spot Light", parent);
   }
-  if (ImGui::MenuItem("Sky Light")) {
+  if (ImGui::MenuItem(ICON_FA_CLOUD_SUN "  Sky Light")) {
     createLight<SkyLightComponent>(scene, "Sky Light", parent);
   }
   ImGui::EndMenu();
@@ -97,7 +131,8 @@ SceneGraphUI::renderSceneGraphUI()
     m_titleSceneName = sceneName;
     // "###" keeps the window ID fixed, so ImGui keeps its position and docking when the
     // scene changes.
-    m_windowTitle = StringUtils::format("Scene Graph - {0}###SceneGraph", m_titleSceneName);
+    m_windowTitle = StringUtils::format(ICON_FA_SITEMAP "  Scene Graph - {0}###SceneGraph",
+                                        m_titleSceneName);
   }
 
   ImGui::Begin(m_windowTitle.c_str(), &m_isVisible);
@@ -184,7 +219,8 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
     ImGui::PushStyleColor(ImGuiCol_Text, bInstanceRoot ? ImVec4(0.45f, 0.7f, 1.0f, 1.0f)
                                                        : ImVec4(0.55f, 0.55f, 0.6f, 1.0f));
   }
-  const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s", gameObject->getName().c_str());
+  const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s  %s", getObjectIcon(*gameObject),
+                                       gameObject->getName().c_str());
   if (bLocked) {
     ImGui::PopStyleColor();
   }
@@ -228,7 +264,7 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
                                       bool bInsideInstance,
                                       bool bPrefabRoot)
 {
-  if (ImGui::MenuItem("Create Child", nullptr, false, !bLocked)) {
+  if (ImGui::MenuItem(ICON_FA_PLUS "  Create Child", nullptr, false, !bLocked)) {
     EditorScene::recordCreated(*scene.createGameObject("GameObject", gameObject.get()),
                                "Create");
   }
@@ -237,12 +273,12 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   }
   const ModelComponent* model = gameObject->getComponent<ModelComponent>();
   if (!bLocked && model && model->isWholeModel() && model->getModel() &&
-      ImGui::BeginMenu("Expand Model")) {
-    if (ImGui::MenuItem("By Node")) {
+      ImGui::BeginMenu(ICON_FA_OBJECT_UNGROUP "  Expand Model")) {
+    if (ImGui::MenuItem(ICON_FA_SITEMAP "  By Node")) {
       m_pendingExpand = gameObject;
       m_pendingExpandMode = ModelExpandMode::PerNode;
     }
-    if (ImGui::MenuItem("By Mesh")) {
+    if (ImGui::MenuItem(ICON_FA_TH_LARGE "  By Mesh")) {
       m_pendingExpand = gameObject;
       m_pendingExpandMode = ModelExpandMode::PerMesh;
     }
@@ -250,16 +286,16 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   }
 
   ImGui::Separator();
-  if (ImGui::MenuItem("Create Prefab", nullptr, false, !bInsideInstance)) {
+  if (ImGui::MenuItem(ICON_FA_CUBES "  Create Prefab", nullptr, false, !bInsideInstance)) {
     m_pendingCreatePrefab = gameObject;
   }
   if (!gameObject->getPrefab().isNull()) {
     const SPtr<IAsset> asset = AssetManager::instance().getAsset(gameObject->getPrefab());
     const SPtr<PrefabAsset> prefab = asset ? asset->as<PrefabAsset>() : nullptr;
-    if (ImGui::MenuItem("Edit Prefab", nullptr, false, prefab != nullptr)) {
+    if (ImGui::MenuItem(ICON_FA_EDIT "  Edit Prefab", nullptr, false, prefab != nullptr)) {
       EditorScene::requestEditPrefab(prefab);
     }
-    if (ImGui::MenuItem("Unpack Prefab", nullptr, false, !bInsideInstance)) {
+    if (ImGui::MenuItem(ICON_FA_UNLINK "  Unpack Prefab", nullptr, false, !bInsideInstance)) {
       // The content stays; it is saved with the scene from now on.
       EditorScene::recordChange(*gameObject, "Unpack");
       gameObject->setPrefab(UUID::null());
@@ -267,7 +303,8 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   }
 
   ImGui::Separator();
-  if (ImGui::MenuItem("Delete", nullptr, false, !bInsideInstance && !bPrefabRoot)) {
+  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", nullptr, false,
+                      !bInsideInstance && !bPrefabRoot)) {
     m_pendingDelete = gameObject;
   }
 }
@@ -281,7 +318,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
                                      ImGuiPopupFlags_MouseButtonRight |
                                          ImGuiPopupFlags_NoOpenOverItems)) {
     GameObject* parent = EditorScene::getDefaultParent();
-    if (ImGui::MenuItem("Create Empty")) {
+    if (ImGui::MenuItem(ICON_FA_PLUS "  Create Empty")) {
       EditorScene::recordCreated(*scene.createGameObject("GameObject", parent), "Create");
     }
     renderCreateLightItems(scene, parent);

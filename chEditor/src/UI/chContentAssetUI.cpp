@@ -37,6 +37,8 @@
 
 #include "imgui.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 #if USING(CH_DISPLAY_SDL3)
 
 #include "imgui_impl_sdl3.h"
@@ -150,7 +152,8 @@ ContentAssetUI::renderContentAssetUI()
 {
   renderDeleteConfirmationPopup();
 
-  if (!ImGui::Begin("Content Browser", &bShowContentWindow)) {
+  if (!ImGui::Begin(ICON_FA_FOLDER_OPEN "  Content Browser###ContentBrowser",
+                    &bShowContentWindow)) {
     ImGui::End();
     return;
   }
@@ -196,14 +199,14 @@ ContentAssetUI::renderSearchBar()
 void
 ContentAssetUI::renderAssetTypeFilters()
 {
-  if (ImGui::Button("All")) {
+  if (ImGui::Button(ICON_FA_TH_LARGE "  All")) {
     showAllTypes = true;
     showModels = showTextures = showMaterials = showOther = true;
     m_needsFilterUpdate = true;
   }
   ImGui::SameLine();
 
-  if (ImGui::Button("Models")) {
+  if (ImGui::Button(ICON_FA_CUBE "  Models")) {
     showAllTypes = false;
     showModels = true;
     showTextures = showMaterials = showOther = false;
@@ -211,7 +214,7 @@ ContentAssetUI::renderAssetTypeFilters()
   }
   ImGui::SameLine();
 
-  if (ImGui::Button("Textures")) {
+  if (ImGui::Button(ICON_FA_IMAGE "  Textures")) {
     showAllTypes = false;
     showTextures = true;
     showModels = showMaterials = showOther = false;
@@ -219,7 +222,7 @@ ContentAssetUI::renderAssetTypeFilters()
   }
   ImGui::SameLine();
 
-  if (ImGui::Button("Materials")) {
+  if (ImGui::Button(ICON_FA_PALETTE "  Materials")) {
     showAllTypes = false;
     showMaterials = true;
     showModels = showTextures = showOther = false;
@@ -227,7 +230,7 @@ ContentAssetUI::renderAssetTypeFilters()
   }
   ImGui::SameLine();
 
-  if (ImGui::Button("Other")) {
+  if (ImGui::Button(ICON_FA_FILE "  Other")) {
     showAllTypes = false;
     showOther = true;
     showModels = showTextures = showMaterials = false;
@@ -757,38 +760,38 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
   }
 
   if (asset->isTypeOf<SceneAsset>()) {
-    if (ImGui::MenuItem("Open")) {
+    if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) {
       openAsset(asset);
     }
     ImGui::Separator();
   }
 
   if (asset->isTypeOf<PrefabAsset>()) {
-    if (ImGui::MenuItem("Edit Prefab")) {
+    if (ImGui::MenuItem(ICON_FA_EDIT "  Edit Prefab")) {
       openAsset(asset);
     }
     ImGui::Separator();
   }
 
-  if (ImGui::MenuItem("Load")) {
+  if (ImGui::MenuItem(ICON_FA_DOWNLOAD "  Load")) {
     loadAsset(asset);
   }
 
-  if (ImGui::MenuItem("Unload", nullptr, false, asset->isLoaded())) {
+  if (ImGui::MenuItem(ICON_FA_EJECT "  Unload", nullptr, false, asset->isLoaded())) {
     CH_LOG_DEBUG(ContentAssetUILog, "Unloading asset: {0}", asset->getName());
     AssetManager::instance().unloadAsset(asset->getUUID());
   }
 
   ImGui::Separator();
 
-  if (ImGui::MenuItem("Rename")) {
+  if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename")) {
     startInlineRename(asset);
     ImGui::CloseCurrentPopup();
   }
 
   ImGui::Separator();
 
-  if (ImGui::MenuItem("Delete", nullptr, false, asset->isUnloaded())) {
+  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", nullptr, false, asset->isUnloaded())) {
     m_assetToDelete = asset;
     m_showDeleteConfirmation = true;
 
@@ -1195,14 +1198,14 @@ ContentAssetUI::renderEmptyAreaContextMenu()
     return;
   }
 
-  if (ImGui::MenuItem("Refresh")) {
+  if (ImGui::MenuItem(ICON_FA_SYNC_ALT "  Refresh")) {
     refreshAssets();
     CH_LOG_INFO(ContentAssetUILog, "Refreshed asset list.");
   }
 
   ImGui::Separator();
 
-  if (ImGui::BeginMenu("Import Asset")) {
+  if (ImGui::BeginMenu(ICON_FA_FILE_IMPORT "  Import Asset")) {
     ImGui::Separator();
 #if USING(CH_CODECS)
     AssetCodecManager& codecManager = AssetCodecManager::instance();
@@ -1224,12 +1227,12 @@ ContentAssetUI::renderEmptyAreaContextMenu()
 
   ImGui::Separator();
 
-  if (ImGui::BeginMenu("Create")) {
-    if (ImGui::MenuItem("Folder")) {
+  if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
+    if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  Folder")) {
       createFolder();
     }
     ImGui::Separator();
-    if (ImGui::MenuItem("Material")) {
+    if (ImGui::MenuItem(ICON_FA_PALETTE "  Material")) {
       // Saved at once, so a model or object can reference it before "Save All".
       AssetManager& assetManager = AssetManager::instance();
       const Path& folder = getCurrentFolderPath();

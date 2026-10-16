@@ -157,7 +157,7 @@ renderAxisRow(const ANSICHAR* label,
 void
 InspectorUI::renderInspectorUI()
 {
-  ImGui::Begin("Inspector", nullptr);
+  ImGui::Begin(ICON_FA_INFO_CIRCLE "  Inspector###Inspector", nullptr);
   const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
   if (!selected) {
     m_rotationOwner = nullptr;
@@ -311,7 +311,8 @@ InspectorUI::renderTransform(GameObject& gameObject)
 void
 InspectorUI::renderModelComponent(ModelComponent& modelComponent)
 {
-  if (!ImGui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_FA_CUBE "  Model###Model",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -337,7 +338,9 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
   }
 
   const Vector<uint32>& usedSlots = modelComponent.getUsedMaterialSlots();
-  if (usedSlots.empty() || !ImGui::TreeNodeEx("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (usedSlots.empty() ||
+      !ImGui::TreeNodeEx(ICON_FA_PALETTE "  Materials###Materials",
+                         ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
   for (const uint32 slot : usedSlots) {
@@ -356,14 +359,14 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
   PointLightComponent* pointLight = gameObject.getComponent<PointLightComponent>();
   SpotLightComponent* spotLight = gameObject.getComponent<SpotLightComponent>();
   LightComponent* light = gameObject.getComponent<DirectionalLightComponent>();
-  const ANSICHAR* title = "Directional Light";
+  const ANSICHAR* title = ICON_FA_SUN "  Directional Light###DirectionalLight";
   if (pointLight) {
     light = pointLight;
-    title = "Point Light";
+    title = ICON_FA_LIGHTBULB "  Point Light###PointLight";
   }
   else if (spotLight) {
     light = spotLight;
-    title = "Spot Light";
+    title = ICON_FA_BULLSEYE "  Spot Light###SpotLight";
   }
   if (!light || !ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
@@ -425,7 +428,8 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
 void
 InspectorUI::renderSkyLightComponent(SkyLightComponent& skyLight)
 {
-  if (!ImGui::CollapsingHeader("Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_FA_CLOUD_SUN "  Sky Light###SkyLight",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
   GameObject& gameObject = *skyLight.getOwner();

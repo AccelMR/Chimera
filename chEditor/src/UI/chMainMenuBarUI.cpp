@@ -30,6 +30,8 @@
 
 #include "imgui.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 namespace chEngineSDK {
 using namespace chEngineSDK::chUIHelpers;
 
@@ -146,7 +148,7 @@ renderShadowSettings()
   renderMapSizeChoice("Map size per cube face", g_cvarPointShadowMapSize, 2048);
 
   ImGui::Separator();
-  if (ImGui::MenuItem("Reset to Defaults")) {
+  if (ImGui::MenuItem(ICON_FA_UNDO_ALT "  Reset to Defaults")) {
     resetSetting(g_cvarSpotShadowMaxLights);
     resetSetting(g_cvarSpotShadowDistance);
     resetSetting(g_cvarSpotShadowFade);
@@ -235,7 +237,7 @@ renderImageBasedLightingSettings()
   editSetting("Table Samples", g_cvarIBLBrdfLutSamples, 16, 8192);
 
   ImGui::Separator();
-  if (ImGui::MenuItem("Reset to Defaults##IBL")) {
+  if (ImGui::MenuItem(ICON_FA_UNDO_ALT "  Reset to Defaults##IBL")) {
     resetSetting(g_cvarImageBasedLighting);
     resetSetting(g_cvarAmbient);
     resetSetting(g_cvarIBLCubeSize);
@@ -281,7 +283,7 @@ renderAmbientOcclusionSettings()
   editSetting("Multi Bounce", g_cvarAOMultiBounce);
 
   ImGui::Separator();
-  if (ImGui::MenuItem("Reset to Defaults##AO")) {
+  if (ImGui::MenuItem(ICON_FA_UNDO_ALT "  Reset to Defaults##AO")) {
     resetSetting(g_cvarSSAO);
     resetSetting(g_cvarSSAOHalfResolution);
     resetSetting(g_cvarSSAORadius);
@@ -310,7 +312,7 @@ MainMenuBarUI::renderMainMenuBar() {
   renderEditMenu();
 
   if (ImGui::BeginMenu("Render")) {
-    if (ImGui::BeginMenu("View Mode")) {
+    if (ImGui::BeginMenu(ICON_FA_EYE "  View Mode")) {
       const Optional<ViewMode> current =
           RenderSettingsUtils::viewModeFromName(g_cvarViewMode.get());
       for (uint32 i = 0; i < static_cast<uint32>(ViewMode::COUNT); ++i) {
@@ -324,7 +326,7 @@ MainMenuBarUI::renderMainMenuBar() {
       }
       ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Render Path")) {
+    if (ImGui::BeginMenu(ICON_FA_ROUTE "  Render Path")) {
       const Optional<RenderPathType> current =
           RenderSettingsUtils::renderPathFromName(g_cvarRenderPath.get());
       for (uint32 i = 0; i < static_cast<uint32>(RenderPathType::COUNT); ++i) {
@@ -336,23 +338,23 @@ MainMenuBarUI::renderMainMenuBar() {
       }
       ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Shadows")) {
+    if (ImGui::BeginMenu(ICON_FA_MOON "  Shadows")) {
       renderShadowSettings();
       ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Image Based Lighting")) {
+    if (ImGui::BeginMenu(ICON_FA_GLOBE_AMERICAS "  Image Based Lighting")) {
       renderImageBasedLightingSettings();
       ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Ambient Occlusion")) {
+    if (ImGui::BeginMenu(ICON_FA_ADJUST "  Ambient Occlusion")) {
       renderAmbientOcclusionSettings();
       ImGui::EndMenu();
     }
     ImGui::Separator(); //--------------------------------------------------------------
 
     // The scene renderer reads the color every frame.
-    ImGui::ColorEdit4("Renderer Color", UIHelpers::rendererColor.toFloatPtr(),
-                      ImGuiColorEditFlags_NoInputs);
+    ImGui::ColorEdit4(ICON_FA_FILL_DRIP "  Renderer Color",
+                      UIHelpers::rendererColor.toFloatPtr(), ImGuiColorEditFlags_NoInputs);
 
     ImGui::EndMenu();
   }
@@ -360,13 +362,16 @@ MainMenuBarUI::renderMainMenuBar() {
   if (ImGui::BeginMenu("View")) {
     EditorTheme::renderSettings();
     ImGui::Separator(); //--------------------------------------------------------------
-    if (ImGui::MenuItem("Profiler", nullptr, ProfilerUI::isWindowVisible())) {
+    if (ImGui::MenuItem(ICON_FA_CHART_LINE "  Profiler", nullptr,
+                        ProfilerUI::isWindowVisible())) {
       ProfilerUI::setWindowVisible(!ProfilerUI::isWindowVisible());
     }
-    if (ImGui::MenuItem("Stats Overlay", nullptr, ProfilerUI::isOverlayVisible())) {
+    if (ImGui::MenuItem(ICON_FA_TACHOMETER_ALT "  Stats Overlay", nullptr,
+                        ProfilerUI::isOverlayVisible())) {
       ProfilerUI::setOverlayVisible(!ProfilerUI::isOverlayVisible());
     }
-    ImGui::MenuItem("Show ImGui Demo Window", nullptr, &UIHelpers::bShowDemoWindow);
+    ImGui::MenuItem(ICON_FA_QUESTION_CIRCLE "  Show ImGui Demo Window", nullptr,
+                    &UIHelpers::bShowDemoWindow);
     ImGui::EndMenu();
   }
 
@@ -380,7 +385,7 @@ MainMenuBarUI::renderMainMenuBar() {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.45f, 0.7f, 1.0f, 1.0f), "Editing prefab %s",
                        prefab->getName());
-    if (ImGui::SmallButton("Back to Scene")) {
+    if (ImGui::SmallButton(ICON_FA_ARROW_LEFT "  Back to Scene")) {
       EditorScene::requestBackToScene();
     }
   }
@@ -396,10 +401,10 @@ MainMenuBarUI::renderFileMenu()
     return;
   }
 
-  if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+  if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
     EditorScene::requestNew();
   }
-  if (ImGui::BeginMenu("Open Scene")) {
+  if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN "  Open Scene")) {
     // Listed only while the menu is open, so the walk over every asset is rare.
     const SPtr<SceneAsset>& current = EditorScene::getAsset();
     bool bAny = false;
@@ -421,17 +426,20 @@ MainMenuBarUI::renderFileMenu()
   }
   ImGui::Separator();
   const bool bEditingPrefab = EditorScene::getPrefab() != nullptr;
-  if (ImGui::MenuItem(bEditingPrefab ? "Save Prefab" : "Save Scene", "Ctrl+S")) {
+  const ANSICHAR* saveLabel =
+      bEditingPrefab ? ICON_FA_SAVE "  Save Prefab" : ICON_FA_SAVE "  Save Scene";
+  if (ImGui::MenuItem(saveLabel, "Ctrl+S")) {
     EditorScene::requestSave();
   }
-  if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, !bEditingPrefab)) {
+  if (ImGui::MenuItem(ICON_FA_SAVE "  Save Scene As...", "Ctrl+Shift+S", false,
+                      !bEditingPrefab)) {
     EditorScene::requestSaveAs();
   }
-  if (bEditingPrefab && ImGui::MenuItem("Back to Scene")) {
+  if (bEditingPrefab && ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Back to Scene")) {
     EditorScene::requestBackToScene();
   }
   ImGui::Separator();
-  if (ImGui::MenuItem("Exit")) {
+  if (ImGui::MenuItem(ICON_FA_SIGN_OUT_ALT "  Exit")) {
     // The editor closes once the unsaved changes are saved or discarded.
     CH_PARAMETER_UNUSED(EditorScene::requestQuit());
   }
@@ -448,15 +456,17 @@ MainMenuBarUI::renderEditMenu()
     return;
   }
 
-  const String undoLabel = EditorScene::canUndo()
-                               ? StringUtils::format("Undo {0}", EditorScene::getUndoName())
-                               : String("Undo");
+  const String undoLabel =
+      EditorScene::canUndo()
+          ? StringUtils::format(ICON_FA_UNDO "  Undo {0}", EditorScene::getUndoName())
+          : String(ICON_FA_UNDO "  Undo");
   if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, EditorScene::canUndo())) {
     EditorScene::requestUndo();
   }
-  const String redoLabel = EditorScene::canRedo()
-                               ? StringUtils::format("Redo {0}", EditorScene::getRedoName())
-                               : String("Redo");
+  const String redoLabel =
+      EditorScene::canRedo()
+          ? StringUtils::format(ICON_FA_REDO "  Redo {0}", EditorScene::getRedoName())
+          : String(ICON_FA_REDO "  Redo");
   if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, EditorScene::canRedo())) {
     EditorScene::requestRedo();
   }
@@ -469,7 +479,7 @@ void
 MainMenuBarUI::renderImportMenu()
 {
 #if USING(CH_CODECS)
-  if (!ImGui::BeginMenu("Import")) {
+  if (!ImGui::BeginMenu(ICON_FA_FILE_IMPORT "  Import")) {
     return;
   }
 
