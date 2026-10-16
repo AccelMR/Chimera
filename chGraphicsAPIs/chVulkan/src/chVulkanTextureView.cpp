@@ -92,6 +92,14 @@ VulkanTextureView::VulkanTextureView(VkDevice device,
     m_bindlessIndex = bindlessHeap.allocateResourceIndex();
     bindlessHeap.writeSampledImage(m_bindlessIndex, m_imageView, layout);
   }
+
+  // A shader writes one mip of a storage image at a time.
+  if (vulkanTexture->getUsage().isSet(TextureUsage::Storage) && m_mipLevelCount == 1) {
+    CH_ASSERT(!FormatUtils::getInfo(format).isSrgb && "sRGB formats cannot be written");
+    VulkanBindlessHeap& bindlessHeap = g_vulkanAPI().getBindlessHeap();
+    m_storageBindlessIndex = bindlessHeap.allocateResourceIndex();
+    bindlessHeap.writeStorageImage(m_storageBindlessIndex, m_imageView);
+  }
 }
 
 /*
@@ -101,6 +109,7 @@ VulkanTextureView::~VulkanTextureView()
   if (m_ownsTextureView) {
     VulkanDeletionQueue& deletionQueue = g_vulkanAPI().getDeletionQueue();
     deletionQueue.enqueueBindlessIndex(m_bindlessIndex, false);
+    deletionQueue.enqueueBindlessIndex(m_storageBindlessIndex, false);
     deletionQueue.enqueue(VK_OBJECT_TYPE_IMAGE_VIEW, m_imageView);
   }
 }

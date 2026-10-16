@@ -147,7 +147,9 @@ DX12CommandList::begin(ID3D12CommandAllocator* allocator)
   m_commandList->SetDescriptorHeaps(static_cast<UINT>(m_descriptorHeaps.size()),
                                     m_descriptorHeaps.data());
   m_commandList->SetGraphicsRootSignature(m_rootSignature);
+  m_commandList->SetComputeRootSignature(m_rootSignature);
   m_pipeline = nullptr;
+  m_bComputeBound = false;
   m_boundVertexBuffers = 0;
   m_stats = {};
   m_timestampCount = 0;
@@ -284,9 +286,14 @@ DX12CommandList::bindPipeline(const IPipeline& pipeline)
 {
   const auto& dx12Pipeline = static_cast<const DX12Pipeline&>(pipeline);
   m_commandList->SetPipelineState(dx12Pipeline.getHandle());
+  m_stats.recordPipelineBind();
+  m_bComputeBound = dx12Pipeline.isCompute();
+  if (m_bComputeBound) {
+    return;
+  }
+
   m_commandList->IASetPrimitiveTopology(dx12Pipeline.getTopology());
   m_pipeline = &dx12Pipeline;
-  m_stats.recordPipelineBind();
 
   for (uint32 binding = 0; binding < MAX_VERTEX_BINDINGS; ++binding) {
     D3D12_VERTEX_BUFFER_VIEW& view = m_vertexBuffers[binding];
@@ -305,7 +312,23 @@ DX12CommandList::pushConstants(const void* data, uint32 size, uint32 offset)
 {
   CH_ASSERT(offset + size <= GraphicsLimits::PUSH_CONSTANTS_SIZE);
   CH_ASSERT(size % 4 == 0 && offset % 4 == 0);
-  m_commandList->SetGraphicsRoot32BitConstants(0, size / 4, data, offset / 4);
+  // Graphics and compute keep separate root arguments.
+  if (m_bComputeBound) {
+    m_commandList->SetComputeRoot32BitConstants(0, size / 4, data, offset / 4);
+  }
+  else {
+    m_commandList->SetGraphicsRoot32BitConstants(0, size / 4, data, offset / 4);
+  }
+}
+
+/*
+ */
+void
+DX12CommandList::dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
+{
+  CH_ASSERT(m_bComputeBound);
+  m_stats.recordDispatch();
+  m_commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 /*

@@ -19,7 +19,8 @@ class DX12Texture;
 /**
  * Part of a texture as the GPU sees it. Direct3D 12 has no view objects, so it holds the
  * descriptors its texture usage needs: a render target or depth target descriptor in the
- * CPU heaps of the API, and a shader resource descriptor in the bindless heap.
+ * CPU heaps of the API, and shader resource and unordered access descriptors in the
+ * bindless heap.
  */
 class DX12TextureView : public ITextureView
 {
@@ -73,6 +74,12 @@ class DX12TextureView : public ITextureView
     return m_bindlessIndex;
   }
 
+  NODISCARD uint32
+  getStorageBindlessIndex() const override
+  {
+    return m_storageBindlessIndex;
+  }
+
   NODISCARD D3D12_CPU_DESCRIPTOR_HANDLE
   getRenderTargetHandle() const;
 
@@ -89,6 +96,9 @@ class DX12TextureView : public ITextureView
   void
   createShaderResource(ID3D12Resource* resource);
 
+  void
+  createUnorderedAccess(ID3D12Resource* resource);
+
   Format m_format = Format::Unknown;
   TextureViewType m_viewType = TextureViewType::View2D;
   uint32 m_baseMipLevel = 0;
@@ -101,6 +111,7 @@ class DX12TextureView : public ITextureView
   uint32 m_renderTargetIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
   uint32 m_depthTargetIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
   uint32 m_bindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+  uint32 m_storageBindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
 };
 
 } // namespace chEngineSDK

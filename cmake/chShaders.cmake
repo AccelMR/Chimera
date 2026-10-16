@@ -66,7 +66,9 @@ function(ch_add_shaders TARGET_NAME SOURCE_DIR)
         foreach(FORMAT ${FORMATS})
           if(FORMAT STREQUAL "SPIRV")
             set(EXTENSION spv)
-            set(FORMAT_FLAGS -spirv -fspv-target-env=vulkan1.3)
+            # Storage images get no format from their HLSL type, so one RWTexture type can
+            # write any format (needs the WithoutFormat device features).
+            set(FORMAT_FLAGS -spirv -fspv-target-env=vulkan1.3 -fspv-use-unknown-image-format)
           else()
             set(EXTENSION dxil)
             # DXIL has no use for the [[vk::...]] attributes, so their warnings are noise.

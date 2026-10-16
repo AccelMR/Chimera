@@ -74,6 +74,9 @@ struct RenderPassStats
 {
   StringView name;
   CommandListStats commands;
+  bool bOptional = false;
+  // False for an optional pass that was turned off and only cleared its outputs.
+  bool bRan = true;
 };
 
 /**
@@ -121,10 +124,29 @@ class CH_CORE_EXPORT RenderPassBuilder
   writeDepthLayers(RGTextureHandle texture, LoadOp loadOp = LoadOp::Clear);
 
   /**
+   * Written by shaders (compute) through storage views, in the UnorderedAccess state; not
+   * an attachment, so it begins no rendering. Load means the pass also reads, or keeps part
+   * of, the earlier contents; DontCare means it writes all of them. Between dispatches that
+   * read what earlier ones wrote, the pass puts its own UnorderedAccess barriers.
+   */
+  RenderPassBuilder&
+  writeStorage(RGTextureHandle texture, LoadOp loadOp = LoadOp::DontCare);
+
+  /**
    * Keeps the pass even when nothing reads what it writes (readbacks, captures).
    */
   RenderPassBuilder&
   setSideEffect();
+
+  /**
+   * Lets the pass be turned off by name (RenderGraph::setDisabledPasses) to see what it
+   * adds or costs. A turned off pass does not run its code, but still begins and ends its
+   * rendering, so its Clear attachments are cleared, its Load ones keep their contents and
+   * its DontCare ones are cleared too: the passes after it read defined data. Only for
+   * passes whose outputs make sense that way; not for writeDepthLayers or writeStorage.
+   */
+  RenderPassBuilder&
+  setOptional();
 
   /**
    * function is called as function(RenderPassContext&) when the graph runs the pass. It is
@@ -210,6 +232,16 @@ class CH_CORE_EXPORT RenderGraph
           GpuProfiler* gpuProfiler = nullptr);
 
   /**
+   * Optional passes with these names do not run. Kept across reset(); the graph keeps a
+   * view of names, so they must stay alive and unchanged until the next call.
+   */
+  void
+  setDisabledPasses(Span<const String> names)
+  {
+    m_disabledPasses = names;
+  }
+
+  /**
    * What each pass of the last execute() recorded, in the order they ran. Kept until the
    * next execute(), so reset() does not clear it.
    */
@@ -276,7 +308,8 @@ class CH_CORE_EXPORT RenderGraph
     Color,
     Depth,
     // Depth written by renderings the pass begins itself.
-    DepthLayers
+    DepthLayers,
+    Storage
   };
 
   NODISCARD static constexpr bool
@@ -305,6 +338,7 @@ class CH_CORE_EXPORT RenderGraph
     uint32 colorCount = 0;
     RenderPassExecutor* executor = nullptr;
     bool sideEffect = false;
+    bool optional = false;
   };
 
   struct TextureNode
@@ -349,6 +383,18 @@ class CH_CORE_EXPORT RenderGraph
   isImported(const TextureNode& texture) const
   {
     return texture.importedTexture != nullptr;
+  }
+
+  NODISCARD bool
+  isDisabled(StringView passName) const;
+
+  /**
+   * A turned off pass clears what it would otherwise leave undefined.
+   */
+  NODISCARD static LoadOp
+  getLoadOp(const Access& access, bool bSkipped) noexcept
+  {
+    return bSkipped && access.loadOp == LoadOp::DontCare ? LoadOp::Clear : access.loadOp;
   }
 
   void
@@ -413,6 +459,7 @@ class CH_CORE_EXPORT RenderGraph
   Vector<const ITextureView*> m_resolvedViews;
   Vector<TextureBarrier> m_textureBarriers;
   Vector<RenderPassStats> m_executedPassStats;
+  Span<const String> m_disabledPasses;
 };
 
 /**

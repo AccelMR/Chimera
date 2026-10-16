@@ -65,6 +65,7 @@ VSMain(VSInput input)
 PSOutput
 PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace)
 {
+  const ViewData view = loadConstants<ViewData>(g_push.viewIndex);
   const MaterialData material = loadConstants<MaterialData>(g_push.materialIndex);
   SamplerState textureSampler = SamplerDescriptorHeap[g_push.samplerIndex];
 
@@ -75,16 +76,24 @@ PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace)
 
   const float2 metallicRoughness =
       getMetallicRoughness(material, textureSampler, input.texCoord);
+  const float3 vertexNormal = normalize(input.normal);
   const float3 normal =
-      faceNormal(getSurfaceNormal(material, textureSampler, input.texCoord,
-                                  normalize(input.normal), input.tangent),
+      faceNormal(isFeatureOn(view, kFeatureNormalMaps)
+                     ? getSurfaceNormal(material, textureSampler, input.texCoord,
+                                        vertexNormal, input.tangent)
+                     : vertexNormal,
                  isFrontFace);
+  const float occlusion = isFeatureOn(view, kFeatureOcclusionMaps)
+                              ? getOcclusion(material, textureSampler, input.texCoord)
+                              : 1.0f;
+  const float3 emissive = isFeatureOn(view, kFeatureEmissive)
+                              ? getEmissive(material, textureSampler, input.texCoord)
+                              : float3(0.0f, 0.0f, 0.0f);
 
   PSOutput output;
   output.baseColor = float4(baseColor.rgb, 1.0f);
   output.normal = float4(normal * 0.5f + 0.5f, 1.0f);
-  output.surface = float4(metallicRoughness,
-                          getOcclusion(material, textureSampler, input.texCoord), 1.0f);
-  output.emissive = float4(getEmissive(material, textureSampler, input.texCoord), 1.0f);
+  output.surface = float4(metallicRoughness, occlusion, 1.0f);
+  output.emissive = float4(emissive, 1.0f);
   return output;
 }

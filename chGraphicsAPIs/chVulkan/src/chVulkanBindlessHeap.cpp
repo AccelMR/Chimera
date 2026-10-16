@@ -208,6 +208,25 @@ VulkanBindlessHeap::allocate(IndexPool& pool, const ANSICHAR* poolName)
 void
 VulkanBindlessHeap::writeSampledImage(uint32 index, VkImageView view, VkImageLayout layout) const
 {
+  writeImage(index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, view, layout);
+}
+
+/*
+ */
+void
+VulkanBindlessHeap::writeStorageImage(uint32 index, VkImageView view) const
+{
+  writeImage(index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, view, VK_IMAGE_LAYOUT_GENERAL);
+}
+
+/*
+ */
+void
+VulkanBindlessHeap::writeImage(uint32 index,
+                               VkDescriptorType type,
+                               VkImageView view,
+                               VkImageLayout layout) const
+{
   const VkDescriptorImageInfo imageInfo{.sampler = VK_NULL_HANDLE,
                                         .imageView = view,
                                         .imageLayout = layout};
@@ -217,7 +236,7 @@ VulkanBindlessHeap::writeSampledImage(uint32 index, VkImageView view, VkImageLay
                                    .dstBinding = kResourceBinding,
                                    .dstArrayElement = index,
                                    .descriptorCount = 1,
-                                   .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                                   .descriptorType = type,
                                    .pImageInfo = &imageInfo,
                                    .pBufferInfo = nullptr,
                                    .pTexelBufferView = nullptr};

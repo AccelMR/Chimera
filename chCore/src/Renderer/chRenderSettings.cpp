@@ -74,6 +74,42 @@ ConsoleVariable<bool> g_cvarShadows("Renderer.Shadows",
                                     "Lights with Cast Shadows draw shadows.",
                                     "Shadows");
 
+ConsoleVariable<bool> g_cvarNormalMaps("Renderer.NormalMaps",
+                                       true,
+                                       "Materials bend their normals with their normal maps.");
+
+ConsoleVariable<bool> g_cvarOcclusionMaps(
+    "Renderer.OcclusionMaps",
+    true,
+    "Materials darken the ambient light with their occlusion maps.");
+
+ConsoleVariable<bool> g_cvarEmissive("Renderer.Emissive",
+                                     true,
+                                     "Materials add their emissive color.");
+
+ConsoleVariable<bool> g_cvarDirectionalLights("Renderer.DirectionalLights",
+                                              true,
+                                              "Directional lights light the scene.");
+
+ConsoleVariable<bool> g_cvarPointLights("Renderer.PointLights",
+                                        true,
+                                        "Point lights light the scene.");
+
+ConsoleVariable<bool> g_cvarSpotLights("Renderer.SpotLights",
+                                       true,
+                                       "Spot lights light the scene.");
+
+ConsoleVariable<bool> g_cvarTonemap(
+    "Renderer.Tonemap",
+    true,
+    "Applies the ACES curve after the exposure; off, the color is only clamped.");
+
+ConsoleVariable<String> g_cvarDisabledPasses(
+    "Renderer.DisabledPasses",
+    "",
+    "Comma separated names of optional render passes that do not run.",
+    "DisabledPasses");
+
 ConsoleVariable<int32> g_cvarShadowMapSize(
     "Renderer.ShadowMapSize",
     2048,

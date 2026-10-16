@@ -47,5 +47,14 @@ class ITextureView {
    */
   NODISCARD virtual uint32
   getBindlessIndex() const = 0;
+
+  /**
+   * Index of this view in the bindless heap for writing it in shaders (RWTexture*) when its
+   * texture has Storage usage and the view holds one mip; GraphicsLimits::
+   * INVALID_BINDLESS_INDEX otherwise. Shaders write it in the UnorderedAccess state. A cube
+   * is written as a 2D array of six layers, so its storage view must be View2DArray.
+   */
+  NODISCARD virtual uint32
+  getStorageBindlessIndex() const = 0;
 };
 } // namespace chEngineSDK

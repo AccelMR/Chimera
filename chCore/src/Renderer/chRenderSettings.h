@@ -82,6 +82,21 @@ extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarAmbient;
 // Lights with Cast Shadows draw shadows.
 extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarShadows;
 
+// Parts of the lighting that can be turned off to see what each one adds or costs.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarNormalMaps;
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarOcclusionMaps;
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarEmissive;
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarDirectionalLights;
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarPointLights;
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarSpotLights;
+
+// The ACES curve of the tonemap; off, the exposed color is only clamped.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarTonemap;
+
+// Comma separated names of optional render passes that do not run
+// (-Renderer.DisabledPasses=ShadowDepth,GBuffer).
+extern CH_CORE_EXPORT ConsoleVariable<String> g_cvarDisabledPasses;
+
 // Width and height in texels of each cascade of the directional shadow map.
 extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarShadowMapSize;
 

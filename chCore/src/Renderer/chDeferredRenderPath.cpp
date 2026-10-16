@@ -158,6 +158,7 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
   updateFullscreenPipeline(m_lighting, outputDesc.format);
 
   RenderPassBuilder pass = graph.addPass("DeferredLighting");
+  pass.setOptional();
   pass.read(gbuffer.baseColor)
       .read(gbuffer.normal)
       .read(gbuffer.surface)
@@ -241,6 +242,7 @@ DeferredRenderPath::addGBufferPass(RenderGraph& graph,
   // The color targets are not cleared: the passes that read them skip the pixels where the
   // depth is still clear, the only ones nothing wrote.
   graph.addPass("GBuffer")
+      .setOptional()
       .writeColor(gbuffer.baseColor, LoadOp::DontCare)
       .writeColor(gbuffer.normal, LoadOp::DontCare)
       .writeColor(gbuffer.surface, LoadOp::DontCare)

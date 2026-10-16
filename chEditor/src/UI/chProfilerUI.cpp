@@ -14,7 +14,9 @@
 #include "chEngineConfig.h"
 #include "chMath.h"
 #include "chProfiler.h"
+#include "chRenderSettings.h"
 #include "chSceneRenderer.h"
+#include "chStringUtils.h"
 
 #include "imgui.h"
 
@@ -46,6 +48,84 @@ void
 saveVisibility(StringView key, bool bVisible)
 {
   EngineConfig::setUserValue("Editor", "Editor", key, bVisible ? "true" : "false");
+}
+
+/**
+ * Adds or removes a pass in Renderer.DisabledPasses. Only runs on a click, so building the
+ * new text is fine.
+ */
+void
+setPassDisabled(StringView passName, bool bDisabled)
+{
+  String text;
+  for (const String& name : StringUtils::splitString(g_cvarDisabledPasses.get(), ',')) {
+    const StringView trimmed = StringUtils::trimView(name);
+    if (trimmed.empty() || trimmed == passName) {
+      continue;
+    }
+    if (!text.empty()) {
+      text += ',';
+    }
+    text += trimmed;
+  }
+  if (bDisabled) {
+    if (!text.empty()) {
+      text += ',';
+    }
+    text += passName;
+  }
+  g_cvarDisabledPasses.set(std::move(text), ConsoleVariableSource::Console);
+}
+
+void
+featureCheckbox(const ANSICHAR* label, ConsoleVariable<bool>& variable)
+{
+  bool bOn = variable.get();
+  if (ImGui::Checkbox(label, &bOn)) {
+    variable.set(bOn, ConsoleVariableSource::Console);
+  }
+  const StringView help = variable.getHelp();
+  const StringView name = variable.getName();
+  ImGui::SetItemTooltip("%.*s (%.*s)", static_cast<int32>(help.size()), help.data(),
+                        static_cast<int32>(name.size()), name.data());
+}
+
+/**
+ * Switches for parts of the frame, to see what each one adds or costs. They are not saved.
+ */
+void
+renderFeatures()
+{
+  if (ImGui::BeginTable("##Features", 2)) {
+    ImGui::TableNextColumn();
+    featureCheckbox("Shadows", g_cvarShadows);
+    featureCheckbox("Normal Maps", g_cvarNormalMaps);
+    featureCheckbox("Occlusion Maps", g_cvarOcclusionMaps);
+    featureCheckbox("Emissive", g_cvarEmissive);
+    ImGui::TableNextColumn();
+    featureCheckbox("Directional Lights", g_cvarDirectionalLights);
+    featureCheckbox("Point Lights", g_cvarPointLights);
+    featureCheckbox("Spot Lights", g_cvarSpotLights);
+    featureCheckbox("Tonemap Curve", g_cvarTonemap);
+    ImGui::EndTable();
+  }
+
+  float ambient = g_cvarAmbient.get();
+  ImGui::SetNextItemWidth(160.0f);
+  if (ImGui::SliderFloat("Ambient", &ambient, 0.0f, 1.0f, "%.3f")) {
+    g_cvarAmbient.set(ambient, ConsoleVariableSource::Console);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Reset All")) {
+    for (ConsoleVariable<bool>* variable :
+         {&g_cvarShadows, &g_cvarNormalMaps, &g_cvarOcclusionMaps, &g_cvarEmissive,
+          &g_cvarDirectionalLights, &g_cvarPointLights, &g_cvarSpotLights, &g_cvarTonemap}) {
+      variable->set(variable->getDefault(), ConsoleVariableSource::Console);
+    }
+    g_cvarAmbient.set(g_cvarAmbient.getDefault(), ConsoleVariableSource::Console);
+    g_cvarDisabledPasses.set(String(), ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("Turns every feature and pass back on");
 }
 
 /**
@@ -169,12 +249,33 @@ findGpuMilliseconds(StringView name, uint32 depth)
   return -1.0f;
 }
 
+/**
+ * pass is null for the total row. Optional passes get a checkbox that turns them on or off.
+ */
 void
-renderPassRow(StringView name, float gpuMilliseconds, const CommandListStats& commands)
+renderPassRow(StringView name,
+              const RenderPassStats* pass,
+              float gpuMilliseconds,
+              const CommandListStats& commands)
 {
   ImGui::TableNextRow();
   ImGui::TableNextColumn();
-  ImGui::Text("%.*s", static_cast<int32>(name.size()), name.data());
+  if (pass != nullptr && pass->bOptional) {
+    ImGui::PushID(static_cast<const void*>(name.data()));
+    bool bRun = pass->bRan;
+    if (ImGui::Checkbox("##Run", &bRun)) {
+      setPassDisabled(name, !bRun);
+    }
+    ImGui::SetItemTooltip("Runs the pass; off, it only clears its outputs");
+    ImGui::PopID();
+    ImGui::SameLine();
+  }
+  if (pass != nullptr && !pass->bRan) {
+    ImGui::TextDisabled("%.*s", static_cast<int32>(name.size()), name.data());
+  }
+  else {
+    ImGui::Text("%.*s", static_cast<int32>(name.size()), name.data());
+  }
   ImGui::TableNextColumn();
   if (gpuMilliseconds >= 0.0f) {
     textMilliseconds(gpuMilliseconds);
@@ -184,6 +285,8 @@ renderPassRow(StringView name, float gpuMilliseconds, const CommandListStats& co
   }
   ImGui::TableNextColumn();
   textCount(commands.drawCalls);
+  ImGui::TableNextColumn();
+  textCount(commands.dispatches);
   ImGui::TableNextColumn();
   textCount(commands.triangles);
   ImGui::TableNextColumn();
@@ -200,12 +303,13 @@ renderPassTable(const RenderFrameStats& stats)
   constexpr ImGuiTableFlags kTableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV |
                                           ImGuiTableFlags_Resizable |
                                           ImGuiTableFlags_SizingStretchProp;
-  if (!ImGui::BeginTable("##Passes", 6, kTableFlags)) {
+  if (!ImGui::BeginTable("##Passes", 7, kTableFlags)) {
     return;
   }
   ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthStretch, 2.0f);
   ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_WidthStretch, 1.2f);
   ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+  ImGui::TableSetupColumn("Dispatches", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Triangles", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Pipelines", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Barriers", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -213,10 +317,10 @@ renderPassTable(const RenderFrameStats& stats)
 
   // The GPU times of the passes are nested under the whole graph's.
   for (const RenderPassStats& pass : stats.passes) {
-    renderPassRow(pass.name, findGpuMilliseconds(pass.name, 1), pass.commands);
+    renderPassRow(pass.name, &pass, findGpuMilliseconds(pass.name, 1), pass.commands);
   }
   // Also counts the barriers that end the frame, which belong to no pass.
-  renderPassRow("Total", findGpuMilliseconds("RenderGraph", 0), stats.commands);
+  renderPassRow("Total", nullptr, findGpuMilliseconds("RenderGraph", 0), stats.commands);
   ImGui::EndTable();
 }
 
@@ -249,6 +353,9 @@ renderWindow(const RenderFrameStats& stats)
   }
   if (ImGui::CollapsingHeader("Render Passes", ImGuiTreeNodeFlags_DefaultOpen)) {
     renderPassTable(stats);
+  }
+  if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen)) {
+    renderFeatures();
   }
   ImGui::End();
 

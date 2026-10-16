@@ -9,14 +9,18 @@
 
 #include "chSceneRenderer.h"
 
+#include "chAlgorithm.h"
 #include "chCamera.h"
 #include "chDebugRenderPath.h"
 #include "chDeferredRenderPath.h"
 #include "chForwardRenderPath.h"
+#include "chImageBasedLighting.h"
+#include "chLightItem.h"
 #include "chLogger.h"
 #include "chProfiler.h"
 #include "chScene.h"
 #include "chShadowRenderer.h"
+#include "chStringUtils.h"
 #include "chTonemapPass.h"
 
 namespace chEngineSDK {
@@ -36,6 +40,7 @@ SceneRenderer::SceneRenderer()
     m_renderPath(m_deferredRenderPath.get()),
     m_debugRenderPath(new DebugRenderPath()),
     m_shadowRenderer(new ShadowRenderer()),
+    m_imageBasedLighting(new ImageBasedLighting()),
     m_tonemapPass(new TonemapPass())
 {}
 
@@ -68,6 +73,7 @@ SceneRenderer::addScenePasses(const Scene& scene,
     CH_PROFILE_SCOPE("Gather");
     scene.gatherRenderItems(frustum, m_visibleItems);
     scene.gatherLights(frustum, m_visibleLights);
+    filterLightTypes();
   }
   const RenderView view{.camera = camera,
                         .items = m_visibleItems,
@@ -138,6 +144,7 @@ SceneRenderer::execute(ICommandList& commandList)
 RGTextureHandle
 SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output)
 {
+  static_cast<void>(m_imageBasedLighting->addPasses(m_graph));
   const RenderView litView{.camera = view.camera,
                            .items = view.items,
                            .lights = view.lights,
@@ -156,8 +163,47 @@ SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextur
 /*
  */
 void
+SceneRenderer::filterLightTypes()
+{
+  const bool bDirectional = g_cvarDirectionalLights.get();
+  const bool bPoint = g_cvarPointLights.get();
+  const bool bSpot = g_cvarSpotLights.get();
+  if (bDirectional && bPoint && bSpot) {
+    return;
+  }
+
+  const auto isOff = [bDirectional, bPoint, bSpot](const LightItem* light) {
+    switch (light->type) {
+      case LightType::Directional:
+        return !bDirectional;
+      case LightType::Point:
+        return !bPoint;
+      case LightType::Spot:
+        return !bSpot;
+    }
+    return false;
+  };
+  Algorithm::removeAllIf(m_visibleLights, isOff);
+}
+
+/*
+ */
+void
 SceneRenderer::updateSettings()
 {
+  const String& disabledPassesText = g_cvarDisabledPasses.get();
+  if (disabledPassesText != m_disabledPassesText) {
+    m_disabledPassesText = disabledPassesText;
+    m_disabledPasses.clear();
+    for (const String& name : StringUtils::splitString(disabledPassesText, ',')) {
+      const StringView trimmed = StringUtils::trimView(name);
+      if (!trimmed.empty()) {
+        m_disabledPasses.emplace_back(trimmed);
+      }
+    }
+    m_graph.setDisabledPasses(m_disabledPasses);
+  }
+
   const String& viewModeText = g_cvarViewMode.get();
   if (viewModeText != m_viewModeText) {
     m_viewModeText = viewModeText;

@@ -19,6 +19,7 @@
 #include "chGraphicsTypes.h"
 #include "chIShader.h"
 #include "chITexture.h"
+#include "chICommandList.h"
 #include "chITextureView.h"
 #include "chLightComponent.h"
 #include "chFileStream.h"
@@ -47,6 +48,7 @@
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
 #include "chTextureMips.h"
+#include "chTransientTexturePool.h"
 #include "chUUID.h"
 #include "chVector2.h"
 #include "chVector3.h"
@@ -671,6 +673,9 @@ class FakeTextureView : public ITextureView
 
   NODISCARD uint32
   getBindlessIndex() const override { return GraphicsLimits::INVALID_BINDLESS_INDEX; }
+
+  NODISCARD uint32
+  getStorageBindlessIndex() const override { return GraphicsLimits::INVALID_BINDLESS_INDEX; }
 };
 
 bool
@@ -1019,6 +1024,120 @@ TEST_CASE("chCore - Spot and point shadow selection")
   }
 }
 
+/**
+ * Records what the render graph asks for, so execute() can be checked without a GPU.
+ */
+class FakeCommandList : public ICommandList
+{
+ public:
+  void
+  beginRendering(const RenderingDesc& desc) override
+  {
+    m_stats.recordRendering();
+    renderings.push_back(desc);
+  }
+
+  void
+  endRendering() override
+  {}
+
+  void
+  barrier(Span<const TextureBarrier> textureBarriers) override
+  {
+    m_stats.recordBarriers(textureBarriers.size());
+  }
+
+  void
+  bindPipeline(const IPipeline& pipeline) override
+  {
+    CH_PARAMETER_UNUSED(pipeline);
+  }
+
+  void
+  pushConstants(const void* data, uint32 size, uint32 offset) override
+  {
+    CH_PARAMETER_UNUSED(data);
+    CH_PARAMETER_UNUSED(size);
+    CH_PARAMETER_UNUSED(offset);
+  }
+
+  void
+  bindVertexBuffer(const IBuffer& buffer, uint32 binding, uint64 offset) override
+  {
+    CH_PARAMETER_UNUSED(buffer);
+    CH_PARAMETER_UNUSED(binding);
+    CH_PARAMETER_UNUSED(offset);
+  }
+
+  void
+  bindIndexBuffer(const IBuffer& buffer, IndexType indexType, uint64 offset) override
+  {
+    CH_PARAMETER_UNUSED(buffer);
+    CH_PARAMETER_UNUSED(indexType);
+    CH_PARAMETER_UNUSED(offset);
+  }
+
+  void
+  draw(uint32 vertexCount, uint32 instanceCount, uint32 firstVertex, uint32 firstInstance)
+      override
+  {
+    CH_PARAMETER_UNUSED(firstVertex);
+    CH_PARAMETER_UNUSED(firstInstance);
+    m_stats.recordDraw(vertexCount, instanceCount);
+  }
+
+  void
+  drawIndexed(uint32 indexCount,
+              uint32 instanceCount,
+              uint32 firstIndex,
+              int32 vertexOffset,
+              uint32 firstInstance) override
+  {
+    CH_PARAMETER_UNUSED(firstIndex);
+    CH_PARAMETER_UNUSED(vertexOffset);
+    CH_PARAMETER_UNUSED(firstInstance);
+    m_stats.recordDraw(indexCount, instanceCount);
+  }
+
+  void
+  dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ) override
+  {
+    CH_PARAMETER_UNUSED(groupCountX);
+    CH_PARAMETER_UNUSED(groupCountY);
+    CH_PARAMETER_UNUSED(groupCountZ);
+    m_stats.recordDispatch();
+  }
+
+  void
+  setViewport(float x, float y, float width, float height, float minDepth, float maxDepth)
+      override
+  {
+    CH_PARAMETER_UNUSED(x);
+    CH_PARAMETER_UNUSED(y);
+    CH_PARAMETER_UNUSED(width);
+    CH_PARAMETER_UNUSED(height);
+    CH_PARAMETER_UNUSED(minDepth);
+    CH_PARAMETER_UNUSED(maxDepth);
+  }
+
+  void
+  setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override
+  {
+    CH_PARAMETER_UNUSED(x);
+    CH_PARAMETER_UNUSED(y);
+    CH_PARAMETER_UNUSED(width);
+    CH_PARAMETER_UNUSED(height);
+  }
+
+  void
+  writeTimestamp(uint32 index) override
+  {
+    CH_PARAMETER_UNUSED(index);
+  }
+
+  Vector<RenderingDesc> renderings;
+};
+
 TEST_CASE("chCore - RenderGraph")
 {
   const FakeTexture backBuffer(Format::B8G8R8A8_UNORM, 64, 32);
@@ -1152,6 +1271,39 @@ TEST_CASE("chCore - RenderGraph")
             (TextureUsageFlags(TextureUsage::DepthStencil) | TextureUsage::Sampled));
   }
 
+  SECTION("Storage written by a compute pass")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle lookup = graph.createTexture("Lookup", colorDesc);
+    graph.addPass("Generate").writeStorage(lookup);
+    graph.addPass("Refine").writeStorage(lookup, LoadOp::Load);
+    graph.addPass("Lighting").read(lookup).writeColor(output);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 3);
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(0), lookup, ResourceState::Undefined,
+                       ResourceState::UnorderedAccess));
+    // The second writer waits for the first.
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(1), lookup,
+                       ResourceState::UnorderedAccess, ResourceState::UnorderedAccess));
+    REQUIRE(hasBarrier(graph.getCompiledPassBarriers(2), lookup,
+                       ResourceState::UnorderedAccess, ResourceState::ShaderRead));
+    REQUIRE(graph.getTextureUsage(lookup) ==
+            (TextureUsageFlags(TextureUsage::Storage) | TextureUsage::Sampled));
+  }
+
+  SECTION("A storage write that nobody reads is dropped")
+  {
+    const RGTextureHandle output = importBackBuffer();
+    const RGTextureHandle unused = graph.createTexture("Unused", colorDesc);
+    graph.addPass("Generate").writeStorage(unused);
+    graph.addPass("Lighting").writeColor(output);
+    graph.compile();
+
+    REQUIRE(graph.getCompiledPassCount() == 1);
+    REQUIRE(graph.getCompiledPassName(0) == "Lighting");
+  }
+
   SECTION("Dead textures give their slot to new ones")
   {
     const RGTextureHandle output = importBackBuffer();
@@ -1217,6 +1369,65 @@ TEST_CASE("chCore - RenderGraph")
       REQUIRE(graph.getCompiledPassBarriers(0).size() == 1);
       REQUIRE(graph.getFinalBarriers().size() == 1);
     }
+  }
+
+  SECTION("A turned off optional pass skips its code but still clears its outputs")
+  {
+    const FakeTexture depthTexture(Format::D32_SFLOAT, 64, 32);
+    const FakeTextureView depthView;
+    int32 runs = 0;
+    const auto addPasses = [&]() {
+      graph.reset();
+      const RGTextureHandle output = importBackBuffer();
+      const RGTextureHandle depth =
+          graph.importTexture("Depth", depthTexture, depthView, ResourceState::Undefined,
+                              ResourceState::Undefined);
+      graph.addPass("GBuffer")
+          .setOptional()
+          .writeColor(output, LoadOp::DontCare)
+          .writeDepth(depth)
+          .setExecute([&runs](RenderPassContext& context) {
+            CH_PARAMETER_UNUSED(context);
+            ++runs;
+          });
+      graph.addPass("UI").writeColor(output, LoadOp::Load).setExecute(
+          [&runs](RenderPassContext& context) {
+            CH_PARAMETER_UNUSED(context);
+            runs += 10;
+          });
+      graph.compile();
+    };
+
+    TransientTexturePool pool;
+    FakeCommandList commandList;
+    addPasses();
+    graph.execute(commandList, pool);
+    REQUIRE(runs == 11);
+    REQUIRE(commandList.renderings[0].colorAttachments[0].loadOp == LoadOp::DontCare);
+
+    // Not optional passes ignore the list.
+    const Vector<String> disabled{"Other", "GBuffer", "UI"};
+    graph.setDisabledPasses(disabled);
+    commandList.renderings.clear();
+    runs = 0;
+    addPasses();
+    graph.execute(commandList, pool);
+    REQUIRE(runs == 10);
+    REQUIRE(commandList.renderings.size() == 2);
+    REQUIRE(commandList.renderings[0].colorAttachments[0].loadOp == LoadOp::Clear);
+    REQUIRE(commandList.renderings[0].depthAttachment.loadOp == LoadOp::Clear);
+    REQUIRE(commandList.renderings[1].colorAttachments[0].loadOp == LoadOp::Load);
+
+#if USING(CH_PROFILER)
+    const Span<const RenderPassStats> stats = graph.getExecutedPassStats();
+    REQUIRE(stats.size() == 2);
+    REQUIRE(stats[0].bOptional);
+    REQUIRE_FALSE(stats[0].bRan);
+    REQUIRE(stats[0].commands.renderings == 1);
+    REQUIRE_FALSE(stats[1].bOptional);
+    REQUIRE(stats[1].bRan);
+#endif // USING(CH_PROFILER)
+    graph.setDisabledPasses({});
   }
 
   SECTION("Reset frees the pass code and the graph builds again")

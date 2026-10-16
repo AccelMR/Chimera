@@ -59,6 +59,12 @@ class VulkanBindlessHeap
   void
   writeSampledImage(uint32 index, VkImageView view, VkImageLayout layout) const;
 
+  /**
+   * Shaders write it in the general layout (ResourceState::UnorderedAccess).
+   */
+  void
+  writeStorageImage(uint32 index, VkImageView view) const;
+
   void
   writeUniformBuffer(uint32 index, VkBuffer buffer, VkDeviceSize size) const;
 
@@ -93,6 +99,9 @@ class VulkanBindlessHeap
 
   NODISCARD uint32
   allocate(IndexPool& pool, const ANSICHAR* poolName);
+
+  void
+  writeImage(uint32 index, VkDescriptorType type, VkImageView view, VkImageLayout layout) const;
 
   void
   writeBuffer(uint32 index, VkDescriptorType type, VkBuffer buffer, VkDeviceSize size) const;

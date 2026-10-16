@@ -81,6 +81,9 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual SPtr<IPipeline>
   createGraphicsPipeline(const GraphicsPipelineDesc& desc) = 0;
 
+  NODISCARD virtual SPtr<IPipeline>
+  createComputePipeline(const ComputePipelineDesc& desc) = 0;
+
   NODISCARD virtual SPtr<ISampler>
   createSampler(const SamplerCreateInfo& createInfo) = 0;
 

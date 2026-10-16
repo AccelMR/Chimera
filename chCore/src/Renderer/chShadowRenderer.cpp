@@ -294,6 +294,7 @@ ShadowRenderer::addDirectionalPasses(RenderGraph& graph,
   }
 
   graph.addPass("ShadowDepth")
+      .setOptional()
       .writeDepth(texture)
       .setExecute([this](RenderPassContext& context) {
         ICommandList& commandList = context.getCommandList();
@@ -380,6 +381,7 @@ ShadowRenderer::addSpotPasses(RenderGraph& graph, const Scene& scene, const Rend
   }
 
   graph.addPass("SpotShadowDepth")
+      .setOptional()
       .writeDepth(texture)
       .setExecute([this](RenderPassContext& context) {
         ICommandList& commandList = context.getCommandList();

@@ -74,6 +74,7 @@ ForwardRenderPath::addPasses(RenderGraph& graph,
   const uint32 viewIndex = m_viewBuffers.update(view);
 
   RenderPassBuilder pass = graph.addPass("Forward");
+  pass.setOptional();
   pass.writeColor(output, LoadOp::Clear, view.clearColor).writeDepth(depth);
   for (const ShadowView& shadow : view.shadows) {
     pass.read(shadow.texture);

@@ -68,6 +68,9 @@ class VulkanTextureView : public ITextureView {
   NODISCARD FORCEINLINE uint32
   getBindlessIndex() const override { return m_bindlessIndex; }
 
+  NODISCARD FORCEINLINE uint32
+  getStorageBindlessIndex() const override { return m_storageBindlessIndex; }
+
  private:
   VkDevice m_device = VK_NULL_HANDLE;
   VkImageView m_imageView = VK_NULL_HANDLE;
@@ -79,6 +82,7 @@ class VulkanTextureView : public ITextureView {
   VkFormat m_format = VK_FORMAT_UNDEFINED;
   bool m_ownsTextureView = true;
   uint32 m_bindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
+  uint32 m_storageBindlessIndex = GraphicsLimits::INVALID_BINDLESS_INDEX;
 
   // TODO: this should be a weak pointer
   ITexture* m_texture;

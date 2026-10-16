@@ -92,9 +92,45 @@ RenderPassBuilder::writeDepthLayers(RGTextureHandle texture, LoadOp loadOp)
 /*
  */
 RenderPassBuilder&
+RenderPassBuilder::writeStorage(RGTextureHandle texture, LoadOp loadOp)
+{
+  CH_ASSERT(loadOp != LoadOp::Clear && "Storage writes cannot be cleared by the graph");
+  m_graph.addAccess(m_passIndex,
+                    {.texture = texture.index,
+                     .type = RenderGraph::AccessType::Storage,
+                     .state = ResourceState::UnorderedAccess,
+                     .loadOp = loadOp});
+  return *this;
+}
+
+/*
+ */
+RenderPassBuilder&
 RenderPassBuilder::setSideEffect()
 {
   m_graph.m_passes[m_passIndex].sideEffect = true;
+  return *this;
+}
+
+/*
+ */
+bool
+RenderGraph::isDisabled(StringView passName) const
+{
+  for (const String& name : m_disabledPasses) {
+    if (name == passName) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ */
+RenderPassBuilder&
+RenderPassBuilder::setOptional()
+{
+  m_graph.m_passes[m_passIndex].optional = true;
   return *this;
 }
 
@@ -246,6 +282,7 @@ RenderGraph::execute(ICommandList& commandList,
 
     submitBarriers(commandList, pool, getCompiledPassBarriers(compiledIndex));
 
+    const bool bSkipped = pass.optional && isDisabled(pass.name);
     RenderingDesc renderingDesc{};
     bool isRendering = false;
     for (uint32 i = 0; i < pass.accessCount; ++i) {
@@ -261,13 +298,13 @@ RenderGraph::execute(ICommandList& commandList,
       if (access.type == AccessType::Color) {
         renderingDesc.colorAttachments[renderingDesc.colorAttachmentCount++] = {
             .view = m_resolvedViews[access.texture],
-            .loadOp = access.loadOp,
+            .loadOp = getLoadOp(access, bSkipped),
             .storeOp = access.storeOp,
             .clearColor = access.clearColor};
       }
       else {
         renderingDesc.depthAttachment = {.view = m_resolvedViews[access.texture],
-                                         .loadOp = access.loadOp,
+                                         .loadOp = getLoadOp(access, bSkipped),
                                          .storeOp = access.storeOp,
                                          .clearDepth = access.clearDepth};
       }
@@ -280,7 +317,7 @@ RenderGraph::execute(ICommandList& commandList,
       commandList.setScissor(0, 0, renderingDesc.width, renderingDesc.height);
     }
 
-    if (pass.executor) {
+    if (pass.executor && !bSkipped) {
       RenderPassContext context(*this, commandList, renderingDesc.width,
                                 renderingDesc.height);
       pass.executor->execute(context);
@@ -294,8 +331,10 @@ RenderGraph::execute(ICommandList& commandList,
     if (gpuProfiler) {
       gpuProfiler->endScope(commandList, gpuScope);
     }
-    m_executedPassStats.push_back(
-        {.name = pass.name, .commands = commandList.getStats() - statsBefore});
+    m_executedPassStats.push_back({.name = pass.name,
+                                   .commands = commandList.getStats() - statsBefore,
+                                   .bOptional = pass.optional,
+                                   .bRan = !bSkipped});
 #endif // USING(CH_PROFILER)
   }
 
@@ -509,6 +548,9 @@ RenderGraph::computeLifetimes()
         case AccessType::Depth:
         case AccessType::DepthLayers:
           texture.usage |= TextureUsage::DepthStencil;
+          break;
+        case AccessType::Storage:
+          texture.usage |= TextureUsage::Storage;
           break;
       }
     }

@@ -199,6 +199,14 @@ DX12API::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
 
 /*
  */
+SPtr<IPipeline>
+DX12API::createComputePipeline(const ComputePipelineDesc& desc)
+{
+  return chMakeShared<DX12Pipeline>(m_device.Get(), m_rootSignature.Get(), desc);
+}
+
+/*
+ */
 SPtr<ISampler>
 DX12API::createSampler(const SamplerCreateInfo& createInfo)
 {

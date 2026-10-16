@@ -255,6 +255,24 @@ DX12Pipeline::DX12Pipeline(ID3D12Device* device,
 
 /*
  */
+DX12Pipeline::DX12Pipeline(ID3D12Device* device,
+                           ID3D12RootSignature* rootSignature,
+                           const ComputePipelineDesc& desc)
+  : m_bCompute(true)
+{
+  CH_ASSERT(desc.computeShader);
+  const D3D12_COMPUTE_PIPELINE_STATE_DESC pipelineDesc{
+      .pRootSignature = rootSignature,
+      .CS = static_cast<const DX12Shader&>(*desc.computeShader).getBytecode(),
+      .NodeMask = 0,
+      .CachedPSO = {.pCachedBlob = nullptr, .CachedBlobSizeInBytes = 0},
+      .Flags = D3D12_PIPELINE_STATE_FLAG_NONE};
+  DX12_CHECK(device->CreateComputePipelineState(&pipelineDesc, IID_ID3D12PipelineState,
+                                                outPtr(m_pipelineState)));
+}
+
+/*
+ */
 DX12Pipeline::~DX12Pipeline()
 {
   g_dx12API().getDeletionQueue().enqueue(m_pipelineState);

@@ -424,6 +424,14 @@ struct CH_CORE_EXPORT GraphicsPipelineDesc {
   getHash() const;
 };
 
+/**
+ * A compute pipeline only needs its shader; it shares the layout of the graphics ones.
+ */
+struct ComputePipelineDesc
+{
+  SPtr<IShader> computeShader{};
+};
+
 struct ColorAttachment {
   const ITextureView* view = nullptr;
   LoadOp loadOp = LoadOp::Clear;

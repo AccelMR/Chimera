@@ -315,8 +315,18 @@ void
 VulkanCommandList::bindPipeline(const IPipeline& pipeline)
 {
   m_stats.recordPipelineBind();
-  vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    static_cast<const VulkanPipeline&>(pipeline).getHandle());
+  const auto& vulkanPipeline = static_cast<const VulkanPipeline&>(pipeline);
+  vkCmdBindPipeline(m_commandBuffer, vulkanPipeline.getBindPoint(),
+                    vulkanPipeline.getHandle());
+}
+
+/*
+ */
+void
+VulkanCommandList::dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
+{
+  m_stats.recordDispatch();
+  vkCmdDispatch(m_commandBuffer, groupCountX, groupCountY, groupCountZ);
 }
 
 /*

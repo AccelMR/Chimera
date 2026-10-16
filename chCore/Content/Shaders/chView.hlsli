@@ -18,5 +18,18 @@ struct ViewData
   uint shadowSamplerIndex;
   // Shadow whose cascades the ShadowCascades view mode tints, kNoShadow in other modes.
   uint debugShadowIndex;
-  uint3 padding;
+  // kFeature bits of the parts of the lighting that are on.
+  uint featureFlags;
+  uint2 padding;
 };
+
+// Must match the flags in chSceneViewBuffers.cpp.
+static const uint kFeatureNormalMaps = 1u << 0;
+static const uint kFeatureOcclusionMaps = 1u << 1;
+static const uint kFeatureEmissive = 1u << 2;
+
+bool
+isFeatureOn(ViewData view, uint feature)
+{
+  return (view.featureFlags & feature) != 0;
+}

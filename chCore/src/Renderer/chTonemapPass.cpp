@@ -15,6 +15,7 @@
 #include "chIPipeline.h"
 #include "chIShader.h"
 #include "chITextureView.h"
+#include "chRenderSettings.h"
 
 namespace chEngineSDK {
 
@@ -29,6 +30,7 @@ struct TonemapPushConstants
 {
   uint32 sceneColorIndex;
   float exposure;
+  uint32 applyCurve;
 };
 } // namespace
 
@@ -59,7 +61,8 @@ TonemapPass::addPass(RenderGraph& graph, RGTextureHandle sceneColor, RGTextureHa
         ICommandList& commandList = context.getCommandList();
         const TonemapPushConstants pushConstants{
             .sceneColorIndex = context.getView(sceneColor).getBindlessIndex(),
-            .exposure = g_cvarExposure.get()};
+            .exposure = g_cvarExposure.get(),
+            .applyCurve = g_cvarTonemap.get() ? 1u : 0u};
         commandList.bindPipeline(*m_pipeline);
         commandList.pushConstants(&pushConstants, sizeof(pushConstants));
         commandList.draw(3);

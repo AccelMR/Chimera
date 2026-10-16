@@ -43,6 +43,10 @@ DX12TextureView::DX12TextureView(const DX12Texture& texture,
   if (usage.isSet(TextureUsage::Sampled)) {
     createShaderResource(texture.getHandle());
   }
+  // A shader writes one mip of a storage texture at a time.
+  if (usage.isSet(TextureUsage::Storage) && m_mipLevelCount == 1) {
+    createUnorderedAccess(texture.getHandle());
+  }
 }
 
 /*
@@ -51,6 +55,8 @@ DX12TextureView::~DX12TextureView()
 {
   DX12API& dx12API = g_dx12API();
   dx12API.getDeletionQueue().enqueueDescriptor(dx12API.getResourceHeap(), m_bindlessIndex);
+  dx12API.getDeletionQueue().enqueueDescriptor(dx12API.getResourceHeap(),
+                                               m_storageBindlessIndex);
 
   // Render and depth target descriptors are copied into the command list when it records
   // them, so they can be reused at once.
@@ -205,6 +211,58 @@ DX12TextureView::createShaderResource(ID3D12Resource* resource)
   m_bindlessIndex = heap.allocate();
   dx12API.getDevice()->CreateShaderResourceView(resource, &desc,
                                                 heap.getCpuHandle(m_bindlessIndex));
+}
+
+/*
+ */
+void
+DX12TextureView::createUnorderedAccess(ID3D12Resource* resource)
+{
+  CH_ASSERT(!FormatUtils::getInfo(m_format).isSrgb && "sRGB formats cannot be written");
+  D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+  desc.Format = chFormatToDxgiFormat(m_format);
+  switch (m_viewType) {
+  case TextureViewType::View1D:
+    desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1D;
+    desc.Texture1D = {.MipSlice = m_baseMipLevel};
+    break;
+  case TextureViewType::View1DArray:
+    desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
+    desc.Texture1DArray = {.MipSlice = m_baseMipLevel,
+                           .FirstArraySlice = m_baseArrayLayer,
+                           .ArraySize = m_arrayLayerCount};
+    break;
+  case TextureViewType::View2D:
+    if (!m_bArrayResource) {
+      desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+      desc.Texture2D = {.MipSlice = m_baseMipLevel, .PlaneSlice = 0};
+      break;
+    }
+    CH_FALLTHROUGH;
+  // Unordered access has no cube views; shaders write the faces as layers.
+  case TextureViewType::View2DArray:
+  case TextureViewType::ViewCube:
+  case TextureViewType::ViewCubeArray:
+    desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+    desc.Texture2DArray = {.MipSlice = m_baseMipLevel,
+                           .FirstArraySlice = m_baseArrayLayer,
+                           .ArraySize = m_arrayLayerCount,
+                           .PlaneSlice = 0};
+    break;
+  case TextureViewType::View3D:
+    desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+    desc.Texture3D = {.MipSlice = m_baseMipLevel, .FirstWSlice = 0, .WSize = ~0u};
+    break;
+  default:
+    CH_ASSERT(false && "Unknown texture view type");
+    break;
+  }
+
+  DX12API& dx12API = g_dx12API();
+  DX12DescriptorHeap& heap = dx12API.getResourceHeap();
+  m_storageBindlessIndex = heap.allocate();
+  dx12API.getDevice()->CreateUnorderedAccessView(resource, nullptr, &desc,
+                                                 heap.getCpuHandle(m_storageBindlessIndex));
 }
 
 } // namespace chEngineSDK

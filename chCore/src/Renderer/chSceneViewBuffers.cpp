@@ -34,8 +34,22 @@ struct ViewData
   uint32 shadowBufferIndex;
   uint32 shadowSamplerIndex;
   uint32 debugShadowIndex;
-  uint32 padding[3];
+  uint32 featureFlags;
+  uint32 padding[2];
 };
+
+// Must match the kFeature flags in chView.hlsli.
+constexpr uint32 kFeatureNormalMaps = 1u << 0;
+constexpr uint32 kFeatureOcclusionMaps = 1u << 1;
+constexpr uint32 kFeatureEmissive = 1u << 2;
+
+uint32
+getFeatureFlags()
+{
+  return (g_cvarNormalMaps.get() ? kFeatureNormalMaps : 0u) |
+         (g_cvarOcclusionMaps.get() ? kFeatureOcclusionMaps : 0u) |
+         (g_cvarEmissive.get() ? kFeatureEmissive : 0u);
+}
 
 // Must match kNoShadow in chShadows.hlsli.
 constexpr uint32 kNoShadow = 0xFFFFFFFF;
@@ -217,7 +231,8 @@ SceneViewBuffers::update(const RenderView& view)
       .shadowSamplerIndex = m_shadowSampler->getBindlessIndex(),
       .debugShadowIndex =
           view.bShowShadowCascades ? findCascadedShadowIndex(view.shadows) : kNoShadow,
-      .padding = {0, 0, 0}};
+      .featureFlags = getFeatureFlags(),
+      .padding = {0, 0}};
   IBuffer& viewBuffer = *m_viewBuffers[frameIndex];
   viewBuffer.update(&viewData, sizeof(viewData));
   return viewBuffer.getBindlessIndex();

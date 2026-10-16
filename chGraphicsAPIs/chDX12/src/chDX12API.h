@@ -66,6 +66,9 @@ class DX12API : public IGraphicsAPI
   NODISCARD SPtr<IPipeline>
   createGraphicsPipeline(const GraphicsPipelineDesc& desc) override;
 
+  NODISCARD SPtr<IPipeline>
+  createComputePipeline(const ComputePipelineDesc& desc) override;
+
   NODISCARD SPtr<ISampler>
   createSampler(const SamplerCreateInfo& createInfo) override;
 

@@ -76,6 +76,9 @@ class VulkanCommandList : public ICommandList
               uint32 firstInstance = 0) override;
 
   void
+  dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1) override;
+
+  void
   setViewport(float x,
               float y,
               float width,

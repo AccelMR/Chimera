@@ -71,15 +71,23 @@ PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
   surface.baseColor = baseColor.rgb;
   surface.metallic = metallicRoughness.x;
   surface.roughness = metallicRoughness.y;
-  surface.normal = faceNormal(getSurfaceNormal(material, textureSampler, input.texCoord,
-                                               normalize(input.normal), input.tangent),
+  const float3 vertexNormal = normalize(input.normal);
+  surface.normal = faceNormal(isFeatureOn(view, kFeatureNormalMaps)
+                                  ? getSurfaceNormal(material, textureSampler,
+                                                     input.texCoord, vertexNormal,
+                                                     input.tangent)
+                                  : vertexNormal,
                               isFrontFace);
 
   const float3 viewDirection = normalize(view.cameraPosition - input.worldPosition);
   float3 color = evaluateLights(surface, input.worldPosition, viewDirection, view);
-  color += evaluateAmbient(surface, view.ambient,
-                           getOcclusion(material, textureSampler, input.texCoord));
-  color += getEmissive(material, textureSampler, input.texCoord);
+  const float occlusion = isFeatureOn(view, kFeatureOcclusionMaps)
+                              ? getOcclusion(material, textureSampler, input.texCoord)
+                              : 1.0f;
+  color += evaluateAmbient(surface, view.ambient, occlusion);
+  if (isFeatureOn(view, kFeatureEmissive)) {
+    color += getEmissive(material, textureSampler, input.texCoord);
+  }
   color = applyShadowCascadeTint(color, input.worldPosition, view);
   return float4(color, baseColor.a);
 }

@@ -74,6 +74,12 @@ visitRequiredFeatures(DeviceFeatureChain& chain, Visitor&& visit)
   visit(chain.core.features.depthClamp, "depthClamp");
   // TextureCubeArray views (point light shadow maps).
   visit(chain.core.features.imageCubeArray, "imageCubeArray");
+  // Shaders declare storage images without a format (-fspv-use-unknown-image-format), so
+  // one RWTexture type writes every format.
+  visit(chain.core.features.shaderStorageImageReadWithoutFormat,
+        "shaderStorageImageReadWithoutFormat");
+  visit(chain.core.features.shaderStorageImageWriteWithoutFormat,
+        "shaderStorageImageWriteWithoutFormat");
   visit(chain.vulkan13.dynamicRendering, "dynamicRendering");
   visit(chain.vulkan13.synchronization2, "synchronization2");
   // DXC turns discard into a demote to helper invocation.
@@ -319,6 +325,15 @@ VulkanAPI::createShader(const ShaderCreateInfo& createInfo) {
  */
 NODISCARD SPtr<IPipeline>
 VulkanAPI::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
+{
+  return chMakeShared<VulkanPipeline>(m_vulkanData->device, m_bindlessHeap.getPipelineLayout(),
+                                      desc);
+}
+
+/*
+ */
+NODISCARD SPtr<IPipeline>
+VulkanAPI::createComputePipeline(const ComputePipelineDesc& desc)
 {
   return chMakeShared<VulkanPipeline>(m_vulkanData->device, m_bindlessHeap.getPipelineLayout(),
                                       desc);

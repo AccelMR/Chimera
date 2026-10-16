@@ -187,6 +187,7 @@ DebugRenderPath::addWireframeOverlay(RenderGraph& graph,
       .color = kOverlayLineColor};
 
   graph.addPass("WireframeOverlay")
+      .setOptional()
       .writeColor(output, LoadOp::Load)
       .writeDepth(depth, LoadOp::Load)
       .setExecute([this, settings](RenderPassContext& context) {

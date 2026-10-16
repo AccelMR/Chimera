@@ -21,6 +21,7 @@ namespace chEngineSDK {
 class DebugRenderPath;
 class DeferredRenderPath;
 class ForwardRenderPath;
+class ImageBasedLighting;
 class ShadowRenderer;
 class TonemapPass;
 
@@ -111,6 +112,12 @@ class CH_CORE_EXPORT SceneRenderer
   RGTextureHandle
   addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output);
 
+  /**
+   * Drops the visible lights of the types the Renderer.*Lights settings turn off.
+   */
+  void
+  filterLightTypes();
+
   void
   updateSettings();
 
@@ -122,6 +129,7 @@ class CH_CORE_EXPORT SceneRenderer
   IRenderPath* m_renderPath = nullptr;
   UniquePtr<DebugRenderPath> m_debugRenderPath;
   UniquePtr<ShadowRenderer> m_shadowRenderer;
+  UniquePtr<ImageBasedLighting> m_imageBasedLighting;
   UniquePtr<TonemapPass> m_tonemapPass;
 
   ViewMode m_viewMode = ViewMode::Lit;
@@ -129,6 +137,9 @@ class CH_CORE_EXPORT SceneRenderer
   // change.
   String m_viewModeText;
   String m_renderPathText;
+  String m_disabledPassesText;
+  // Parsed from Renderer.DisabledPasses; the graph keeps views of them.
+  Vector<String> m_disabledPasses;
 
   // Kept between frames, so gathering the visible items and lights does not allocate.
   Vector<const RenderItem*> m_visibleItems;

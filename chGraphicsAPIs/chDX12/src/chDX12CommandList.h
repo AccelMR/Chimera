@@ -18,7 +18,8 @@ class DX12Pipeline;
 
 /**
  * Direct3D 12 graphics command list. Every pipeline shares one root signature and the two
- * bindless heaps, so begin() sets them once and pushConstants() writes the root constants
+ * bindless heaps, so begin() sets them once, for graphics and compute, and pushConstants()
+ * writes the root constants
  * without a pipeline.
  */
 class DX12CommandList : public ICommandList
@@ -78,6 +79,9 @@ class DX12CommandList : public ICommandList
               uint32 firstInstance = 0) override;
 
   void
+  dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1) override;
+
+  void
   setViewport(float x,
               float y,
               float width,
@@ -117,6 +121,8 @@ class DX12CommandList : public ICommandList
   const DX12Pipeline* m_pipeline = nullptr;
   Array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BINDINGS> m_vertexBuffers{};
   uint32 m_boundVertexBuffers = 0;
+  // Push constants go to the root arguments of the kind of pipeline bound last.
+  bool m_bComputeBound = false;
 
   // end() resolves the timestamps of the frame into the readback buffer, which stays
   // mapped.

@@ -322,6 +322,33 @@ VulkanPipeline::VulkanPipeline(VkDevice device,
 
 /*
  */
+VulkanPipeline::VulkanPipeline(VkDevice device,
+                               VkPipelineLayout layout,
+                               const ComputePipelineDesc& desc)
+  : m_bindPoint(VK_PIPELINE_BIND_POINT_COMPUTE)
+{
+  CH_ASSERT(desc.computeShader);
+  const auto* computeShader = static_cast<const VulkanShader*>(desc.computeShader.get());
+  const VkComputePipelineCreateInfo pipelineInfo{
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                .module = computeShader->getHandle(),
+                .pName = computeShader->getEntryPoint().c_str(),
+                .pSpecializationInfo = nullptr},
+      .layout = layout,
+      .basePipelineHandle = VK_NULL_HANDLE,
+      .basePipelineIndex = 0};
+  VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+                                    &m_pipeline));
+}
+
+/*
+ */
 VulkanPipeline::~VulkanPipeline()
 {
   g_vulkanAPI().getDeletionQueue().enqueue(VK_OBJECT_TYPE_PIPELINE, m_pipeline);

@@ -38,6 +38,14 @@ struct CommandListStats
   }
 
   FORCEINLINE void
+  recordDispatch() noexcept
+  {
+#if USING(CH_PROFILER)
+    ++dispatches;
+#endif // USING(CH_PROFILER)
+  }
+
+  FORCEINLINE void
   recordPipelineBind() noexcept
   {
 #if USING(CH_PROFILER)
@@ -67,6 +75,7 @@ struct CommandListStats
   operator-(const CommandListStats& other) const noexcept
   {
     return {.drawCalls = drawCalls - other.drawCalls,
+            .dispatches = dispatches - other.dispatches,
             .pipelineBinds = pipelineBinds - other.pipelineBinds,
             .barriers = barriers - other.barriers,
             .renderings = renderings - other.renderings,
@@ -75,6 +84,7 @@ struct CommandListStats
   }
 
   uint32 drawCalls = 0;
+  uint32 dispatches = 0;
   uint32 pipelineBinds = 0;
   uint32 barriers = 0;
   uint32 renderings = 0;
@@ -106,12 +116,17 @@ class ICommandList
   virtual void
   barrier(Span<const TextureBarrier> textureBarriers) = 0;
 
+  /**
+   * Graphics or compute pipeline. A compute pipeline is bound outside a rendering.
+   */
   virtual void
   bindPipeline(const IPipeline& pipeline) = 0;
 
   /**
    * Writes the push constants every shader reads (at most
-   * GraphicsLimits::PUSH_CONSTANTS_SIZE bytes, offset included).
+   * GraphicsLimits::PUSH_CONSTANTS_SIZE bytes, offset included). They reach the kind of
+   * pipeline (graphics or compute) bound last, graphics before any bind, so push them after
+   * binding the pipeline that reads them.
    */
   virtual void
   pushConstants(const void* data, uint32 size, uint32 offset = 0) = 0;
@@ -134,6 +149,12 @@ class ICommandList
               uint32 firstIndex = 0,
               int32 vertexOffset = 0,
               uint32 firstInstance = 0) = 0;
+
+  /**
+   * Runs the bound compute pipeline over a grid of thread groups. Not inside a rendering.
+   */
+  virtual void
+  dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1) = 0;
 
   virtual void
   setViewport(float x, float y,
