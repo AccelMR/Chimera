@@ -168,6 +168,7 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
   for (const ShadowView& shadow : view.shadows) {
     pass.read(shadow.texture);
   }
+  view.ibl.declareReads(pass);
   pass.setExecute([this, gbuffer, viewIndex](RenderPassContext& context) {
     const LightingPushConstants pushConstants{
         .gbuffer = getGBufferTextures(context, gbuffer),

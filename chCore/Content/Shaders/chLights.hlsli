@@ -80,12 +80,41 @@ evaluateLights(SurfaceData surface, float3 worldPosition, float3 viewDirection, 
   return result;
 }
 
-// The constant light from all sides that stands in for the environment. Only diffuse:
-// without an environment there is nothing for it to reflect.
+// Light from the environment: the sky light's diffuse and reflections (image based
+// lighting), or without one the constant ambient, which is only diffuse because there is
+// nothing for it to reflect. viewDirection points away from the surface.
 float3
-evaluateAmbient(SurfaceData surface, float ambient, float occlusion)
+evaluateAmbient(SurfaceData surface, float3 viewDirection, float occlusion, ViewData view)
 {
-  return surface.baseColor * (1.0f - surface.metallic) * ambient * occlusion;
+  const float3 diffuseColor = surface.baseColor * (1.0f - surface.metallic);
+  if (view.irradianceIndex == kNoEnvironment) {
+    return diffuseColor * view.ambient * occlusion;
+  }
+
+  TextureCube<float4> irradiance = ResourceDescriptorHeap[view.irradianceIndex];
+  TextureCube<float4> prefiltered = ResourceDescriptorHeap[view.prefilteredIndex];
+  Texture2D<float2> brdfLut = ResourceDescriptorHeap[view.brdfLutIndex];
+  SamplerState environmentSampler = SamplerDescriptorHeap[view.environmentSamplerIndex];
+
+  // Split sum: the prefiltered reflection times the integrated BRDF, which turns the
+  // reflectance at normal incidence into the one over the whole lobe.
+  const float normalDotView = max(dot(surface.normal, viewDirection), 1e-4f);
+  const float roughness = max(surface.roughness, kMinRoughness);
+  const float3 reflectance0 =
+      lerp(kDielectricReflectance.xxx, surface.baseColor, surface.metallic);
+  const float2 scaleBias =
+      brdfLut.SampleLevel(environmentSampler, float2(normalDotView, roughness), 0.0f);
+  const float3 specularColor = reflectance0 * scaleBias.x + scaleBias.y;
+  const float3 reflection = reflect(-viewDirection, surface.normal);
+  const float3 specular =
+      prefiltered.SampleLevel(environmentSampler, reflection,
+                              roughness * view.prefilteredMaxMip).rgb * specularColor;
+
+  // What the surface reflects as specular is not diffused.
+  const float3 diffuse = irradiance.SampleLevel(environmentSampler, surface.normal, 0.0f).rgb *
+                         diffuseColor * (1.0f - specularColor);
+
+  return (diffuse + specular) * view.environmentIntensity * occlusion;
 }
 
 // The ShadowCascades view mode: the lit color tinted by the cascade each pixel reads. Some of

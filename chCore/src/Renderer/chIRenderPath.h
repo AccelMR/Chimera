@@ -10,6 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chImageBasedLighting.h"
 #include "chLinearColor.h"
 #include "chMatrix4.h"
 #include "chRenderGraph.h"
@@ -99,6 +100,9 @@ struct RenderView
   Span<const RenderItem* const> items;
   Span<const LightItem* const> lights;
   Span<const ShadowView> shadows{};
+  // The sky light's image based lighting; without an environment the paths use the constant
+  // ambient.
+  ImageBasedLightingView ibl{};
   LinearColor clearColor = LinearColor::Black;
   // Tints the lit image by the shadow cascade each pixel reads.
   bool bShowShadowCascades = false;

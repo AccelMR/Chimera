@@ -62,7 +62,7 @@ PSMain(float4 position : SV_Position) : SV_Target0
 
   const float3 viewDirection = normalize(view.cameraPosition - worldPosition);
   float3 color = evaluateLights(gbuffer.surface, worldPosition, viewDirection, view);
-  color += evaluateAmbient(gbuffer.surface, view.ambient, gbuffer.occlusion);
+  color += evaluateAmbient(gbuffer.surface, viewDirection, gbuffer.occlusion, view);
   color += gbuffer.emissive;
   color = applyShadowCascadeTint(color, worldPosition, view);
   return float4(color, 1.0f);

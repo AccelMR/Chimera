@@ -20,8 +20,19 @@ struct ViewData
   uint debugShadowIndex;
   // kFeature bits of the parts of the lighting that are on.
   uint featureFlags;
-  uint2 padding;
+  // Image based lighting of the sky light (chIBL.hlsli); irradianceIndex is kNoEnvironment
+  // when there is none, and the constant ambient is used instead.
+  uint irradianceIndex;
+  uint prefilteredIndex;
+  uint brdfLutIndex;
+  uint environmentSamplerIndex;
+  float environmentIntensity;
+  // Mip of the prefiltered cube that roughness 1 reads.
+  float prefilteredMaxMip;
 };
+
+// Must match kNoEnvironment in chSceneViewBuffers.cpp.
+static const uint kNoEnvironment = 0xFFFFFFFF;
 
 // Must match the flags in chSceneViewBuffers.cpp.
 static const uint kFeatureNormalMaps = 1u << 0;

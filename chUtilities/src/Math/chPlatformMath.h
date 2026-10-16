@@ -74,6 +74,9 @@ class PlatformMath
   NODISCARD static CH_UTILITY_EXPORT float
   ceil(float value) noexcept;
 
+  NODISCARD static CH_UTILITY_EXPORT float
+  log2(float value) noexcept;
+
   template<class T>
   NODISCARD static FORCEINLINE constexpr T
   square(T value) noexcept

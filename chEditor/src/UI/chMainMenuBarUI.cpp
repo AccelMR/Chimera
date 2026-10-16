@@ -178,6 +178,76 @@ renderShadowSettings()
     resetSetting(g_cvarShadowMapSize);
   }
 }
+
+/*
+ * Every power of two from minSize to maxSize, as radio buttons.
+ */
+void
+renderPowerOfTwoChoice(const ANSICHAR* label,
+                       ConsoleVariable<int32>& cvar,
+                       int32 minSize,
+                       int32 maxSize)
+{
+  ImGui::TextUnformatted(label);
+  ImGui::PushID(label);
+  for (int32 size = minSize; size <= maxSize; size *= 2) {
+    if (size > minSize) {
+      ImGui::SameLine();
+    }
+    // One more for the '\0' ImGui needs, which toChars does not write.
+    ANSICHAR text[StringUtils::MAX_INTEGER_CHARS + 1];
+    text[StringUtils::toChars(text, size).size()] = '\0';
+    ImGui::PushID(size);
+    if (ImGui::RadioButton(text, cvar.get() == size)) {
+      cvar.set(size, ConsoleVariableSource::Console);
+    }
+    ImGui::PopID();
+    ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
+  }
+  ImGui::PopID();
+}
+
+/*
+ * The cubes and the table are built again after a change, which takes a few milliseconds,
+ * so dragging a slider rebuilds them on every frame of the drag.
+ */
+void
+renderImageBasedLightingSettings()
+{
+  bool bEnabled = g_cvarImageBasedLighting.get();
+  if (ImGui::Checkbox("Enabled##IBL", &bEnabled)) {
+    g_cvarImageBasedLighting.set(bEnabled, ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", g_cvarImageBasedLighting.getHelp().c_str());
+  editSetting("Ambient (without sky light)", g_cvarAmbient, 0.001f, 0.0f, 1.0f, "%.3f");
+
+  ImGui::SeparatorText("Environment");
+  renderPowerOfTwoChoice("Cube size", g_cvarIBLCubeSize, 128, 2048);
+  ImGui::SeparatorText("Diffuse");
+  renderPowerOfTwoChoice("Irradiance size", g_cvarIBLIrradianceSize, 8, 128);
+  editSetting("Irradiance Samples", g_cvarIBLIrradianceSamples, 16, 4096);
+  ImGui::SeparatorText("Reflections");
+  renderPowerOfTwoChoice("Prefiltered size", g_cvarIBLPrefilterSize, 32, 1024);
+  editSetting("Prefiltered Mips", g_cvarIBLPrefilterMips, 2, 10);
+  editSetting("Prefiltered Samples", g_cvarIBLPrefilterSamples, 16, 4096);
+  ImGui::SeparatorText("Lookup Table");
+  renderPowerOfTwoChoice("Table size", g_cvarIBLBrdfLutSize, 32, 1024);
+  editSetting("Table Samples", g_cvarIBLBrdfLutSamples, 16, 8192);
+
+  ImGui::Separator();
+  if (ImGui::MenuItem("Reset to Defaults##IBL")) {
+    resetSetting(g_cvarImageBasedLighting);
+    resetSetting(g_cvarAmbient);
+    resetSetting(g_cvarIBLCubeSize);
+    resetSetting(g_cvarIBLIrradianceSize);
+    resetSetting(g_cvarIBLIrradianceSamples);
+    resetSetting(g_cvarIBLPrefilterSize);
+    resetSetting(g_cvarIBLPrefilterMips);
+    resetSetting(g_cvarIBLPrefilterSamples);
+    resetSetting(g_cvarIBLBrdfLutSize);
+    resetSetting(g_cvarIBLBrdfLutSamples);
+  }
+}
 } // namespace
 
 /*
@@ -221,6 +291,10 @@ MainMenuBarUI::renderMainMenuBar() {
     }
     if (ImGui::BeginMenu("Shadows")) {
       renderShadowSettings();
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Image Based Lighting")) {
+      renderImageBasedLightingSettings();
       ImGui::EndMenu();
     }
     ImGui::Separator(); //--------------------------------------------------------------

@@ -300,6 +300,59 @@ ConsoleVariable<float> g_cvarPointShadowSlopeBias(
     "the light.",
     "PointShadowSlopeBias");
 
+ConsoleVariable<bool> g_cvarImageBasedLighting(
+    "Renderer.IBL",
+    true,
+    "The sky light lights the scene with its image (diffuse and reflections); off, or "
+    "without a sky light, surfaces get the constant Renderer.Ambient.",
+    "IBL");
+
+ConsoleVariable<int32> g_cvarIBLCubeSize(
+    "Renderer.IBLCubeSize",
+    512,
+    "Width and height of each face of the cube the sky image is turned into (64 to 2048). "
+    "The reflections and the diffuse light are filtered from it.");
+
+ConsoleVariable<int32> g_cvarIBLIrradianceSize(
+    "Renderer.IBLIrradianceSize",
+    32,
+    "Width and height of each face of the irradiance cube, the diffuse light (8 to 128). It "
+    "is very blurred, so a small one is enough.");
+
+ConsoleVariable<int32> g_cvarIBLIrradianceSamples(
+    "Renderer.IBLIrradianceSamples",
+    512,
+    "Samples per texel of the irradiance cube (16 to 4096).");
+
+ConsoleVariable<int32> g_cvarIBLPrefilterSize(
+    "Renderer.IBLPrefilterSize",
+    256,
+    "Width and height of each face of the sharpest mip of the prefiltered cube, the "
+    "reflections of smooth surfaces (32 to 1024).");
+
+ConsoleVariable<int32> g_cvarIBLPrefilterMips(
+    "Renderer.IBLPrefilterMips",
+    6,
+    "Mips of the prefiltered cube; roughness 0 reads the first and 1 the last (2 to 10, "
+    "never more than its size allows).");
+
+ConsoleVariable<int32> g_cvarIBLPrefilterSamples(
+    "Renderer.IBLPrefilterSamples",
+    256,
+    "GGX samples per texel of the prefiltered cube (16 to 4096).");
+
+ConsoleVariable<int32> g_cvarIBLBrdfLutSize(
+    "Renderer.IBLBrdfLutSize",
+    128,
+    "Width and height of the split sum lookup table of the image based lighting (32 to "
+    "1024). The table is smooth, so a small one is enough.");
+
+ConsoleVariable<int32> g_cvarIBLBrdfLutSamples(
+    "Renderer.IBLBrdfLutSamples",
+    512,
+    "GGX samples per texel of the split sum lookup table (16 to 8192). Built once, so its "
+    "cost does not matter per frame.");
+
 /*
  */
 StringView

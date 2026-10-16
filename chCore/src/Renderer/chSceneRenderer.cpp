@@ -146,11 +146,12 @@ SceneRenderer::execute(ICommandList& commandList)
 RGTextureHandle
 SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output)
 {
-  static_cast<void>(m_imageBasedLighting->addPasses(m_graph));
   const RenderView litView{.camera = view.camera,
                            .items = view.items,
                            .lights = view.lights,
                            .shadows = m_shadowRenderer->addPasses(m_graph, scene, view),
+                           .ibl = m_imageBasedLighting->addPasses(
+                               m_graph, scene.getActiveSkyLight()),
                            .clearColor = view.clearColor,
                            .bShowShadowCascades = view.bShowShadowCascades};
   const RGTextureDesc outputDesc = m_graph.getTextureDesc(output);

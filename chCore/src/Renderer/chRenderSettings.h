@@ -177,4 +177,25 @@ extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowNormalOffset;
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowDepthBias;
 extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarPointShadowSlopeBias;
 
+// The sky light lights the scene through image based lighting; off, or without a sky light,
+// the constant Renderer.Ambient is used.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarImageBasedLighting;
+
+// Width and height of each face of the cube the sky image is turned into.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLCubeSize;
+
+// Size of each face of the irradiance cube (diffuse light), and its samples per texel.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLIrradianceSize;
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLIrradianceSamples;
+
+// Size of each face of the prefiltered cube (reflections), how many mips spread the
+// roughness from 0 to 1, and its samples per texel.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLPrefilterSize;
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLPrefilterMips;
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLPrefilterSamples;
+
+// Size of the split sum lookup table and its samples per texel.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLBrdfLutSize;
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLBrdfLutSamples;
+
 } // namespace chEngineSDK

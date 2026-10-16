@@ -35,8 +35,14 @@ struct ViewData
   uint32 shadowSamplerIndex;
   uint32 debugShadowIndex;
   uint32 featureFlags;
-  uint32 padding[2];
+  uint32 irradianceIndex;
+  uint32 prefilteredIndex;
+  uint32 brdfLutIndex;
+  uint32 environmentSamplerIndex;
+  float environmentIntensity;
+  float prefilteredMaxMip;
 };
+static_assert(sizeof(ViewData) % 16 == 0, "Constant buffers are read in 16-byte rows");
 
 // Must match the kFeature flags in chView.hlsli.
 constexpr uint32 kFeatureNormalMaps = 1u << 0;
@@ -53,6 +59,9 @@ getFeatureFlags()
 
 // Must match kNoShadow in chShadows.hlsli.
 constexpr uint32 kNoShadow = 0xFFFFFFFF;
+
+// Must match kNoEnvironment in chView.hlsli.
+constexpr uint32 kNoEnvironment = 0xFFFFFFFF;
 
 // Enough for a small scene, so most frames never make the light buffers again.
 constexpr uint32 kInitialLightCapacity = 16;
@@ -217,6 +226,7 @@ SceneViewBuffers::update(const RenderView& view)
   const IBuffer& shadowBuffer =
       writeStorageBuffer(m_shadowBuffers, m_shadowBufferCapacities, frameIndex, m_gpuShadows);
 
+  const ImageBasedLightingView& ibl = view.ibl;
   const Camera& camera = view.camera;
   const Vector3& cameraPosition = camera.getPosition();
   const ViewData viewData{
@@ -232,7 +242,12 @@ SceneViewBuffers::update(const RenderView& view)
       .debugShadowIndex =
           view.bShowShadowCascades ? findCascadedShadowIndex(view.shadows) : kNoShadow,
       .featureFlags = getFeatureFlags(),
-      .padding = {0, 0}};
+      .irradianceIndex = ibl.hasEnvironment() ? ibl.irradianceIndex : kNoEnvironment,
+      .prefilteredIndex = ibl.prefilteredIndex,
+      .brdfLutIndex = ibl.brdfLutIndex,
+      .environmentSamplerIndex = ibl.samplerIndex,
+      .environmentIntensity = ibl.intensity,
+      .prefilteredMaxMip = ibl.prefilteredMaxMip};
   IBuffer& viewBuffer = *m_viewBuffers[frameIndex];
   viewBuffer.update(&viewData, sizeof(viewData));
   return viewBuffer.getBindlessIndex();

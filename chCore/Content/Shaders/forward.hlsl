@@ -84,7 +84,7 @@ PSMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
   const float occlusion = isFeatureOn(view, kFeatureOcclusionMaps)
                               ? getOcclusion(material, textureSampler, input.texCoord)
                               : 1.0f;
-  color += evaluateAmbient(surface, view.ambient, occlusion);
+  color += evaluateAmbient(surface, viewDirection, occlusion, view);
   if (isFeatureOn(view, kFeatureEmissive)) {
     color += getEmissive(material, textureSampler, input.texCoord);
   }

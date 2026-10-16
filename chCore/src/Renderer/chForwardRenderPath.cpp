@@ -79,6 +79,7 @@ ForwardRenderPath::addPasses(RenderGraph& graph,
   for (const ShadowView& shadow : view.shadows) {
     pass.read(shadow.texture);
   }
+  view.ibl.declareReads(pass);
   pass.setExecute([this, items = view.items, viewIndex](RenderPassContext& context) {
     recordDraws(context, items, viewIndex);
   });

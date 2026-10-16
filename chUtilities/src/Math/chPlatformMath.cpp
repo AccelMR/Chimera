@@ -57,6 +57,14 @@ PlatformMath::ceil(float value) noexcept
 /*
  */
 float
+PlatformMath::log2(float value) noexcept
+{
+  return std::log2(value);
+}
+
+/*
+ */
+float
 PlatformMath::fmod(float value, float divisor) noexcept
 {
   return std::fmod(value, divisor);

@@ -2,8 +2,7 @@
 // was drawn (depth still 1) shows the image in the direction of its view ray.
 
 #include "chFullscreen.hlsli"
-
-static const float kPi = 3.14159265f;
+#include "chIBL.hlsli"
 
 // Must match SkyPushConstants in chSkyPass.cpp.
 // Flat, because a struct inside push constants is laid out differently by each target.
@@ -36,16 +35,6 @@ VSMain(uint vertexId : SV_VertexID)
   output.position = fullscreenTrianglePosition(vertexId);
   output.clipPosition = output.position.xy;
   return output;
-}
-
-// Longitude around the up axis (Z) from forward (X) towards right (Y) runs along the
-// width, latitude from up to down along the height.
-float2
-directionToEquirect(float3 direction)
-{
-  const float longitude = atan2(direction.y, direction.x);
-  const float latitude = asin(clamp(direction.z, -1.0f, 1.0f));
-  return float2(0.5f + longitude / (2.0f * kPi), 0.5f - latitude / kPi);
 }
 
 float4

@@ -102,6 +102,7 @@ renderFeatures()
     featureCheckbox("Normal Maps", g_cvarNormalMaps);
     featureCheckbox("Occlusion Maps", g_cvarOcclusionMaps);
     featureCheckbox("Emissive", g_cvarEmissive);
+    featureCheckbox("Image Based Lighting", g_cvarImageBasedLighting);
     ImGui::TableNextColumn();
     featureCheckbox("Directional Lights", g_cvarDirectionalLights);
     featureCheckbox("Point Lights", g_cvarPointLights);
@@ -119,6 +120,7 @@ renderFeatures()
   if (ImGui::Button("Reset All")) {
     for (ConsoleVariable<bool>* variable :
          {&g_cvarShadows, &g_cvarNormalMaps, &g_cvarOcclusionMaps, &g_cvarEmissive,
+          &g_cvarImageBasedLighting,
           &g_cvarDirectionalLights, &g_cvarPointLights, &g_cvarSpotLights, &g_cvarTonemap}) {
       variable->set(variable->getDefault(), ConsoleVariableSource::Console);
     }
