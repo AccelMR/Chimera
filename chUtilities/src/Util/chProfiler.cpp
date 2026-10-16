@@ -47,12 +47,26 @@ struct AggregateNode
   int64 nanoseconds = 0;
 };
 
+/**
+ * A GPU time being averaged. They arrive in the order they ran, parents first, so the list
+ * keeps that order and depth is enough to nest them.
+ */
+struct GpuNode
+{
+  StringView name;
+  uint32 depth = 0;
+  uint32 calls = 0;
+  double milliseconds = 0.0;
+};
+
 struct ProfilerData
 {
   ProfilerData()
   {
     nodes.reserve(Profiler::MAX_SCOPES_PER_FRAME);
     published.reserve(Profiler::MAX_SCOPES_PER_FRAME);
+    gpuNodes.reserve(Profiler::MAX_GPU_SCOPES);
+    publishedGpu.reserve(Profiler::MAX_GPU_SCOPES);
     resetInterval(0);
   }
 
@@ -61,6 +75,7 @@ struct ProfilerData
   {
     nodes.clear();
     nodes.push_back({.name = "Frame"});
+    gpuNodes.clear();
     intervalStart = now;
     intervalFrames = 0;
   }
@@ -82,6 +97,10 @@ struct ProfilerData
 
   Vector<ProfilerScopeStats> published;
   float averageFrameMilliseconds = 0.0f;
+
+  Vector<GpuNode> gpuNodes;
+  Vector<ProfilerScopeStats> publishedGpu;
+  float averageGpuFrameMilliseconds = 0.0f;
 
   Array<float, Profiler::FRAME_HISTORY_SIZE> history{};
   uint32 historyNext = 0;
@@ -205,7 +224,63 @@ Profiler::endFrame()
   data.published.clear();
   publishNode(data, 0, 0);
   data.averageFrameMilliseconds = data.published.front().milliseconds;
+
+  const float frames = static_cast<float>(data.intervalFrames);
+  data.publishedGpu.clear();
+  data.averageGpuFrameMilliseconds = 0.0f;
+  for (const GpuNode& node : data.gpuNodes) {
+    const float milliseconds = static_cast<float>(node.milliseconds) / frames;
+    data.publishedGpu.push_back({.name = node.name,
+                                 .depth = node.depth,
+                                 .callsPerFrame = static_cast<float>(node.calls) / frames,
+                                 .milliseconds = milliseconds});
+    if (node.depth == 0) {
+      data.averageGpuFrameMilliseconds += milliseconds;
+    }
+  }
+
   data.resetInterval(frameEnd);
+}
+
+/*
+ */
+void
+Profiler::addGpuTime(StringView name, uint32 depth, float milliseconds)
+{
+  ProfilerData& data = getData();
+  if (!t_bMainThread || !data.bInFrame) {
+    return;
+  }
+
+  for (GpuNode& node : data.gpuNodes) {
+    if (node.depth == depth && node.name == name) {
+      node.calls += 1;
+      node.milliseconds += static_cast<double>(milliseconds);
+      return;
+    }
+  }
+  if (data.gpuNodes.size() < MAX_GPU_SCOPES) {
+    data.gpuNodes.push_back({.name = name,
+                             .depth = depth,
+                             .calls = 1,
+                             .milliseconds = static_cast<double>(milliseconds)});
+  }
+}
+
+/*
+ */
+Span<const ProfilerScopeStats>
+Profiler::getGpuScopeStats()
+{
+  return getData().publishedGpu;
+}
+
+/*
+ */
+float
+Profiler::getAverageGpuFrameMilliseconds()
+{
+  return getData().averageGpuFrameMilliseconds;
 }
 
 /*

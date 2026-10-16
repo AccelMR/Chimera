@@ -50,6 +50,7 @@ SceneRenderer::beginFrame()
 {
   updateSettings();
   m_graph.reset();
+  m_gpuProfiler.beginFrame();
   return m_graph;
 }
 
@@ -122,7 +123,9 @@ SceneRenderer::execute(ICommandList& commandList)
   CH_PROFILE_SCOPE("ExecuteGraph");
 #if USING(CH_PROFILER)
   const CommandListStats statsBefore = commandList.getStats();
-  m_graph.execute(commandList, m_texturePool);
+  const uint32 gpuScope = m_gpuProfiler.beginScope(commandList, "RenderGraph");
+  m_graph.execute(commandList, m_texturePool, &m_gpuProfiler);
+  m_gpuProfiler.endScope(commandList, gpuScope);
   m_frameCommandStats = commandList.getStats() - statsBefore;
 #else
   m_graph.execute(commandList, m_texturePool);

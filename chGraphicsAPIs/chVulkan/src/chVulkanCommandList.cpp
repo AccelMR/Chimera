@@ -10,6 +10,7 @@
 #include "chVulkanCommandList.h"
 
 #include "chVulkanAPI.h"
+#include "chMath.h"
 #include "chVulkanBuffer.h"
 #include "chVulkanPipeline.h"
 #include "chVulkanTexture.h"
@@ -98,10 +99,24 @@ toVkStoreOp(StoreOp storeOp)
 
 /*
  */
-VulkanCommandList::VulkanCommandList(VkDevice device, VkCommandPool commandPool)
+VulkanCommandList::VulkanCommandList(VkDevice device,
+                                     VkCommandPool commandPool,
+                                     uint32 timestampValidBits)
   : m_device(device),
     m_commandPool(commandPool)
 {
+  if (timestampValidBits > 0) {
+    const VkQueryPoolCreateInfo queryPoolInfo{
+        .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .queryType = VK_QUERY_TYPE_TIMESTAMP,
+        .queryCount = GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME,
+        .pipelineStatistics = 0};
+    VK_CHECK(vkCreateQueryPool(device, &queryPoolInfo, nullptr, &m_timestampPool));
+    m_timestampMask = timestampValidBits >= 64 ? ~0ull : (1ull << timestampValidBits) - 1;
+  }
+
   const VkCommandBufferAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .pNext = nullptr,
@@ -123,6 +138,10 @@ VulkanCommandList::~VulkanCommandList()
     vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
     m_commandBuffer = VK_NULL_HANDLE;
   }
+  if (m_timestampPool != VK_NULL_HANDLE) {
+    vkDestroyQueryPool(m_device, m_timestampPool, nullptr);
+    m_timestampPool = VK_NULL_HANDLE;
+  }
 }
 
 /*
@@ -137,6 +156,13 @@ VulkanCommandList::begin()
                                            .pInheritanceInfo = nullptr};
   VK_CHECK(vkBeginCommandBuffer(m_commandBuffer, &beginInfo));
   m_stats = {};
+
+  // Queries must be reset before they are written again.
+  m_timestampCount = 0;
+  if (m_timestampPool != VK_NULL_HANDLE) {
+    vkCmdResetQueryPool(m_commandBuffer, m_timestampPool, 0,
+                        GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME);
+  }
 
   // Every pipeline uses the same layout, so the heap stays bound for the whole buffer.
   vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
@@ -378,6 +404,43 @@ VulkanCommandList::setScissor(uint32 x, uint32 y, uint32 width, uint32 height)
   const VkRect2D scissor{.offset = {static_cast<int32>(x), static_cast<int32>(y)},
                          .extent = {width, height}};
   vkCmdSetScissor(m_commandBuffer, 0, 1, &scissor);
+}
+
+/*
+ */
+void
+VulkanCommandList::writeTimestamp(uint32 index)
+{
+  if (m_timestampPool == VK_NULL_HANDLE) {
+    return;
+  }
+  CH_ASSERT(index < GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME);
+  vkCmdWriteTimestamp2(m_commandBuffer, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, m_timestampPool,
+                       index);
+  m_timestampCount = Math::max(m_timestampCount, index + 1);
+}
+
+/*
+ */
+uint32
+VulkanCommandList::readTimestamps(Span<uint64> out) const
+{
+  const uint32 count = Math::min(m_timestampCount, static_cast<uint32>(out.size()));
+  if (m_timestampPool == VK_NULL_HANDLE || count == 0) {
+    return 0;
+  }
+
+  // The frame is finished, so every written query is available and nothing waits.
+  const VkResult result =
+      vkGetQueryPoolResults(m_device, m_timestampPool, 0, count, count * sizeof(uint64),
+                            out.data(), sizeof(uint64), VK_QUERY_RESULT_64_BIT);
+  if (result != VK_SUCCESS) {
+    return 0;
+  }
+  for (uint32 i = 0; i < count; ++i) {
+    out[i] &= m_timestampMask;
+  }
+  return count;
 }
 
 } // namespace chEngineSDK

@@ -2740,6 +2740,27 @@ TEST_CASE("chUtilities - Profiler")
     REQUIRE(Profiler::getFrameHistory()[newest] >= 0.0f);
   }
 
+  SECTION("GPU times add up by name and depth")
+  {
+    Profiler::setEnabled(true);
+    Profiler::beginFrame();
+    Profiler::addGpuTime("RenderGraph", 0, 3.0f);
+    Profiler::addGpuTime("GBuffer", 1, 1.0f);
+    Profiler::addGpuTime("Lighting", 1, 1.5f);
+    Profiler::addGpuTime("GBuffer", 1, 0.5f);
+    Profiler::endFrame();
+
+    const Span<const ProfilerScopeStats> scopes = Profiler::getGpuScopeStats();
+    REQUIRE(scopes.size() == 3);
+    REQUIRE(scopes[0].name == "RenderGraph");
+    REQUIRE(scopes[0].depth == 0);
+    REQUIRE(scopes[1].name == "GBuffer");
+    REQUIRE(scopes[1].milliseconds == 1.5f);
+    REQUIRE(scopes[1].callsPerFrame == 2.0f);
+    REQUIRE(scopes[2].name == "Lighting");
+    REQUIRE(Profiler::getAverageGpuFrameMilliseconds() == 3.0f);
+  }
+
   SECTION("Other threads are not measured")
   {
     Profiler::setEnabled(true);

@@ -77,6 +77,18 @@ class VulkanAPI : public IGraphicsAPI {
     return m_frameIndex;
   }
 
+  NODISCARD Span<const uint64>
+  getCompletedTimestamps() const override
+  {
+    return Span<const uint64>(m_completedTimestamps.data(), m_completedTimestampCount);
+  }
+
+  NODISCARD double
+  getTimestampPeriod() const override
+  {
+    return m_timestampPeriod;
+  }
+
   /**
    * Called by a swap chain that acquired an image in the current frame, so endFrame waits
    * for the image and signals the semaphore its present waits on.
@@ -208,6 +220,9 @@ class VulkanAPI : public IGraphicsAPI {
 
   Array<FrameData, GraphicsLimits::MAX_FRAMES_IN_FLIGHT> m_frames;
   uint32 m_frameIndex = 0;
+  Array<uint64, GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME> m_completedTimestamps{};
+  uint32 m_completedTimestampCount = 0;
+  double m_timestampPeriod = 1.0;
   // Swap chains that acquired an image in the current frame.
   Array<const VulkanSwapChain*, MAX_FRAME_SWAP_CHAINS> m_frameSwapChains{};
   uint32 m_frameSwapChainCount = 0;

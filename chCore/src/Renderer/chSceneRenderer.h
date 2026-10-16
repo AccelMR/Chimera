@@ -10,6 +10,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chGpuProfiler.h"
 #include "chIRenderPath.h"
 #include "chRenderGraph.h"
 #include "chRenderSettings.h"
@@ -133,6 +134,7 @@ class CH_CORE_EXPORT SceneRenderer
   Vector<const RenderItem*> m_visibleItems;
   Vector<const LightItem*> m_visibleLights;
   CommandListStats m_frameCommandStats;
+  GpuProfiler m_gpuProfiler;
 };
 
 } // namespace chEngineSDK

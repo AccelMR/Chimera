@@ -20,6 +20,7 @@ namespace chEngineSDK {
 class RenderGraph;
 class RenderPassContext;
 class TransientTexturePool;
+class GpuProfiler;
 
 /**
  * Names a texture of the current frame of a RenderGraph; it means nothing after reset().
@@ -200,10 +201,13 @@ class CH_CORE_EXPORT RenderGraph
    * Records the compiled passes into the command list: the barriers, the rendering of the
    * passes that write color or depth (with a viewport and scissor over the whole target),
    * and the code of each pass. Created textures come from pool, which must outlive the
-   * frames in flight.
+   * frames in flight. With gpuProfiler every pass, its barriers included, is timed on the
+   * GPU under its name.
    */
   void
-  execute(ICommandList& commandList, TransientTexturePool& pool);
+  execute(ICommandList& commandList,
+          TransientTexturePool& pool,
+          GpuProfiler* gpuProfiler = nullptr);
 
   /**
    * What each pass of the last execute() recorded, in the order they ran. Kept until the

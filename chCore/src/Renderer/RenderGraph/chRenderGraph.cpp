@@ -9,6 +9,7 @@
 
 #include "chRenderGraph.h"
 
+#include "chGpuProfiler.h"
 #include "chICommandList.h"
 #include "chITexture.h"
 #include "chProfiler.h"
@@ -199,9 +200,14 @@ RenderGraph::compile()
 /*
  */
 void
-RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
+RenderGraph::execute(ICommandList& commandList,
+                     TransientTexturePool& pool,
+                     GpuProfiler* gpuProfiler)
 {
   CH_ASSERT(m_compiled);
+#if !USING(CH_PROFILER)
+  CH_PARAMETER_UNUSED(gpuProfiler);
+#endif // !USING(CH_PROFILER)
 
   m_slotEntries.resize(m_slots.size());
   for (SIZE_T i = 0; i < m_slots.size(); ++i) {
@@ -234,6 +240,8 @@ RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
 #if USING(CH_PROFILER)
     const ProfileScope profileScope(pass.name);
     const CommandListStats statsBefore = commandList.getStats();
+    const uint32 gpuScope = gpuProfiler ? gpuProfiler->beginScope(commandList, pass.name)
+                                        : GpuProfiler::INVALID_SCOPE;
 #endif // USING(CH_PROFILER)
 
     submitBarriers(commandList, pool, getCompiledPassBarriers(compiledIndex));
@@ -283,6 +291,9 @@ RenderGraph::execute(ICommandList& commandList, TransientTexturePool& pool)
     }
 
 #if USING(CH_PROFILER)
+    if (gpuProfiler) {
+      gpuProfiler->endScope(commandList, gpuScope);
+    }
     m_executedPassStats.push_back(
         {.name = pass.name, .commands = commandList.getStats() - statsBefore});
 #endif // USING(CH_PROFILER)

@@ -88,6 +88,16 @@ class DX12CommandList : public ICommandList
   void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override;
 
+  void
+  writeTimestamp(uint32 index) override;
+
+  /**
+   * Copies the timestamps the last recording wrote into out and returns how many. The GPU
+   * must have finished that recording, and begin() must not have run since.
+   */
+  NODISCARD uint32
+  readTimestamps(Span<uint64> out) const;
+
   NODISCARD FORCEINLINE ID3D12GraphicsCommandList7*
   getHandle() const
   {
@@ -107,6 +117,13 @@ class DX12CommandList : public ICommandList
   const DX12Pipeline* m_pipeline = nullptr;
   Array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BINDINGS> m_vertexBuffers{};
   uint32 m_boundVertexBuffers = 0;
+
+  // end() resolves the timestamps of the frame into the readback buffer, which stays
+  // mapped.
+  ComPtr<ID3D12QueryHeap> m_timestampHeap;
+  ComPtr<ID3D12Resource> m_timestampReadback;
+  const uint64* m_mappedTimestamps = nullptr;
+  uint32 m_timestampCount = 0;
 };
 
 } // namespace chEngineSDK

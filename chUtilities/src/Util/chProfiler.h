@@ -85,6 +85,24 @@ class Profiler
 
   NODISCARD CH_UTILITY_EXPORT static uint32
   getFrameHistoryOffset();
+
+  /**
+   * Adds a time the GPU measured. The renderer reads them a few frames late, so they come
+   * in already measured, nested by depth like the CPU scopes, and are averaged over the
+   * same interval; times with the same name and depth add up. Call between beginFrame and
+   * endFrame, on the measured thread.
+   */
+  CH_UTILITY_EXPORT static void
+  addGpuTime(StringView name, uint32 depth, float milliseconds);
+
+  NODISCARD CH_UTILITY_EXPORT static Span<const ProfilerScopeStats>
+  getGpuScopeStats();
+
+  /**
+   * Sum of the GPU times at depth 0.
+   */
+  NODISCARD CH_UTILITY_EXPORT static float
+  getAverageGpuFrameMilliseconds();
 #else
   static void
   beginFrame()
@@ -142,9 +160,30 @@ class Profiler
   {
     return 0;
   }
+
+  static void
+  addGpuTime(StringView name, uint32 depth, float milliseconds)
+  {
+    CH_PARAMETER_UNUSED(name);
+    CH_PARAMETER_UNUSED(depth);
+    CH_PARAMETER_UNUSED(milliseconds);
+  }
+
+  NODISCARD static Span<const ProfilerScopeStats>
+  getGpuScopeStats()
+  {
+    return {};
+  }
+
+  NODISCARD static float
+  getAverageGpuFrameMilliseconds()
+  {
+    return 0.0f;
+  }
 #endif // USING(CH_PROFILER)
 
   static constexpr uint32 MAX_SCOPES_PER_FRAME = 1024;
+  static constexpr uint32 MAX_GPU_SCOPES = 256;
   static constexpr uint32 MAX_SCOPE_DEPTH = 32;
   static constexpr uint32 FRAME_HISTORY_SIZE = 240;
   static constexpr uint32 INVALID_SCOPE = ~0u;

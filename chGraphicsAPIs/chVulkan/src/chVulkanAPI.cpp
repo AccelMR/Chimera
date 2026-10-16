@@ -347,6 +347,9 @@ VulkanAPI::beginFrame()
                                      .pValues = &frame.submitValue};
   VK_CHECK(vkWaitSemaphores(m_vulkanData->device, &waitInfo, UINT64_MAX));
 
+  // Before begin(), which resets the queries for this frame.
+  m_completedTimestampCount = frame.commandList->readTimestamps(m_completedTimestamps);
+
   VK_CHECK(vkResetCommandPool(m_vulkanData->device, frame.commandPool, 0));
   frame.commandList->begin();
   return *frame.commandList;
@@ -441,12 +444,29 @@ VulkanAPI::createFrames()
                                          .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
                                          .queueFamilyIndex = m_graphicsQueueFamilyIndex};
 
+  // A queue family with no valid timestamp bits cannot measure time.
+  uint32 queueFamilyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanData->physicalDevice, &queueFamilyCount,
+                                           nullptr);
+  Vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanData->physicalDevice, &queueFamilyCount,
+                                           queueFamilies.data());
+  const uint32 timestampValidBits =
+      queueFamilies[m_graphicsQueueFamilyIndex].timestampValidBits;
+  VkPhysicalDeviceProperties deviceProperties;
+  vkGetPhysicalDeviceProperties(m_vulkanData->physicalDevice, &deviceProperties);
+  m_timestampPeriod = static_cast<double>(deviceProperties.limits.timestampPeriod);
+  if (timestampValidBits == 0) {
+    CH_LOG_WARNING(Vulkan, "The graphics queue cannot measure time; no GPU times.");
+  }
+
   for (uint32 i = 0; i < GraphicsLimits::MAX_FRAMES_IN_FLIGHT; ++i) {
     FrameData& frame = m_frames[i];
     VK_CHECK(vkCreateCommandPool(m_vulkanData->device, &poolInfo, nullptr,
                                  &frame.commandPool));
     frame.commandList = chMakeUnique<VulkanCommandList>(m_vulkanData->device,
-                                                        frame.commandPool);
+                                                        frame.commandPool,
+                                                        timestampValidBits);
 
     const String poolName = StringUtils::format("Frame Command Pool {0}", i);
     setDebugName(VK_OBJECT_TYPE_COMMAND_POOL, frame.commandPool, poolName.c_str());

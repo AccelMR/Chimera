@@ -17,6 +17,7 @@
 #include "chDX12Shader.h"
 #include "chDX12SwapChain.h"
 #include "chDX12Texture.h"
+#include "chMath.h"
 #include "chUnicode.h"
 
 namespace chEngineSDK {
@@ -126,6 +127,12 @@ DX12API::initialize(const GraphicsAPIInfo& graphicsAPIInfo)
                                           outPtr(m_queue)));
   setDebugName(m_queue.Get(), "Direct Queue");
 
+  uint64 timestampFrequency = 0;
+  DX12_CHECK(m_queue->GetTimestampFrequency(&timestampFrequency));
+  m_timestampPeriod =
+      1000000000.0 /
+      static_cast<double>(Math::max(timestampFrequency, static_cast<uint64>(1)));
+
   DX12_CHECK(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_ID3D12Fence,
                                   outPtr(m_idleFence)));
   setDebugName(m_idleFence.Get(), "Idle Fence");
@@ -205,6 +212,8 @@ DX12API::beginFrame()
 {
   FrameData& frame = m_frames[m_frameIndex];
   m_deletionQueue.waitForValue(frame.submitValue);
+  // Before begin(), which starts counting the timestamps of this frame.
+  m_completedTimestampCount = frame.commandList->readTimestamps(m_completedTimestamps);
 
   DX12_CHECK(frame.allocator->Reset());
   frame.commandList->begin(frame.allocator.Get());

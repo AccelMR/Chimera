@@ -106,6 +106,21 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual uint32
   getFrameIndex() const = 0;
 
+  /**
+   * The timestamps (ICommandList::writeTimestamp) of the last frame that used the current
+   * slot, read by beginFrame once the GPU finished it, so they arrive
+   * GraphicsLimits::MAX_FRAMES_IN_FLIGHT frames late without waiting for the GPU. In ticks;
+   * empty when that frame wrote none or the GPU cannot measure time.
+   */
+  NODISCARD virtual Span<const uint64>
+  getCompletedTimestamps() const = 0;
+
+  /**
+   * Nanoseconds per timestamp tick.
+   */
+  NODISCARD virtual double
+  getTimestampPeriod() const = 0;
+
   virtual void
   waitIdle() = 0;
 };

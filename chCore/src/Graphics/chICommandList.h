@@ -144,6 +144,16 @@ class ICommandList
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) = 0;
 
   /**
+   * Records the GPU time once the commands before it finish, at index (below
+   * GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME). Any order works, but by the end of the frame
+   * every index below the highest one must be written, or the frame's times are lost;
+   * IGraphicsAPI::getCompletedTimestamps gives them back. Not inside a rendering. Does
+   * nothing when the GPU cannot measure time.
+   */
+  virtual void
+  writeTimestamp(uint32 index) = 0;
+
+  /**
    * Counts since the list was opened for the frame.
    */
   NODISCARD FORCEINLINE const CommandListStats&

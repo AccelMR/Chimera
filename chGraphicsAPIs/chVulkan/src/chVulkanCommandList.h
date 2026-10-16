@@ -22,7 +22,10 @@ namespace chEngineSDK {
 class VulkanCommandList : public ICommandList
 {
  public:
-  VulkanCommandList(VkDevice device, VkCommandPool commandPool);
+  /**
+   * timestampValidBits comes from the queue family; 0 means it cannot measure time.
+   */
+  VulkanCommandList(VkDevice device, VkCommandPool commandPool, uint32 timestampValidBits);
   ~VulkanCommandList() override;
 
   VulkanCommandList(const VulkanCommandList&) = delete;
@@ -83,6 +86,16 @@ class VulkanCommandList : public ICommandList
   void
   setScissor(uint32 x, uint32 y, uint32 width, uint32 height) override;
 
+  void
+  writeTimestamp(uint32 index) override;
+
+  /**
+   * Copies the timestamps the last recording wrote into out and returns how many. The GPU
+   * must have finished that recording, and begin() must not have run since.
+   */
+  NODISCARD uint32
+  readTimestamps(Span<uint64> out) const;
+
   NODISCARD FORCEINLINE VkCommandBuffer
   getHandle() const
   {
@@ -95,6 +108,12 @@ class VulkanCommandList : public ICommandList
   VkCommandPool m_commandPool = VK_NULL_HANDLE;
   VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
   VkDescriptorSet m_bindlessSet = VK_NULL_HANDLE;
+
+  // Null when the queue cannot measure time.
+  VkQueryPool m_timestampPool = VK_NULL_HANDLE;
+  // Bits of a timestamp that hold time; the rest are undefined.
+  uint64 m_timestampMask = 0;
+  uint32 m_timestampCount = 0;
 };
 
 } // namespace chEngineSDK

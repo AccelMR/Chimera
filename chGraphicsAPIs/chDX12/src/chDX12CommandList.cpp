@@ -14,6 +14,7 @@
 #include "chDX12Pipeline.h"
 #include "chDX12Texture.h"
 #include "chDX12TextureView.h"
+#include "chMath.h"
 
 namespace chEngineSDK {
 namespace {
@@ -102,6 +103,38 @@ DX12CommandList::DX12CommandList(ID3D12Device4* device,
                                         D3D12_COMMAND_LIST_FLAG_NONE,
                                         IID_ID3D12GraphicsCommandList7,
                                         outPtr(m_commandList)));
+
+  const D3D12_QUERY_HEAP_DESC queryHeapDesc{
+      .Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
+      .Count = GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME,
+      .NodeMask = 0};
+  DX12_CHECK(device->CreateQueryHeap(&queryHeapDesc, IID_ID3D12QueryHeap,
+                                     outPtr(m_timestampHeap)));
+
+  const D3D12_HEAP_PROPERTIES readbackHeap{.Type = D3D12_HEAP_TYPE_READBACK,
+                                           .CPUPageProperty =
+                                               D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                           .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+                                           .CreationNodeMask = 0,
+                                           .VisibleNodeMask = 0};
+  const D3D12_RESOURCE_DESC readbackDesc{
+      .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+      .Alignment = 0,
+      .Width = GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME * sizeof(uint64),
+      .Height = 1,
+      .DepthOrArraySize = 1,
+      .MipLevels = 1,
+      .Format = DXGI_FORMAT_UNKNOWN,
+      .SampleDesc = {.Count = 1, .Quality = 0},
+      .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+      .Flags = D3D12_RESOURCE_FLAG_NONE};
+  DX12_CHECK(device->CreateCommittedResource(&readbackHeap, D3D12_HEAP_FLAG_NONE,
+                                             &readbackDesc, D3D12_RESOURCE_STATE_COPY_DEST,
+                                             nullptr, IID_ID3D12Resource,
+                                             outPtr(m_timestampReadback)));
+  void* mapped = nullptr;
+  DX12_CHECK(m_timestampReadback->Map(0, nullptr, &mapped));
+  m_mappedTimestamps = static_cast<const uint64*>(mapped);
 }
 
 /*
@@ -117,6 +150,7 @@ DX12CommandList::begin(ID3D12CommandAllocator* allocator)
   m_pipeline = nullptr;
   m_boundVertexBuffers = 0;
   m_stats = {};
+  m_timestampCount = 0;
 }
 
 /*
@@ -124,6 +158,10 @@ DX12CommandList::begin(ID3D12CommandAllocator* allocator)
 void
 DX12CommandList::end()
 {
+  if (m_timestampCount > 0) {
+    m_commandList->ResolveQueryData(m_timestampHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0,
+                                    m_timestampCount, m_timestampReadback.Get(), 0);
+  }
   DX12_CHECK(m_commandList->Close());
 }
 
@@ -353,6 +391,28 @@ DX12CommandList::setScissor(uint32 x, uint32 y, uint32 width, uint32 height)
                            .right = static_cast<LONG>(x + width),
                            .bottom = static_cast<LONG>(y + height)};
   m_commandList->RSSetScissorRects(1, &scissor);
+}
+
+/*
+ */
+void
+DX12CommandList::writeTimestamp(uint32 index)
+{
+  CH_ASSERT(index < GraphicsLimits::MAX_TIMESTAMPS_PER_FRAME);
+  m_commandList->EndQuery(m_timestampHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index);
+  m_timestampCount = Math::max(m_timestampCount, index + 1);
+}
+
+/*
+ */
+uint32
+DX12CommandList::readTimestamps(Span<uint64> out) const
+{
+  const uint32 count = Math::min(m_timestampCount, static_cast<uint32>(out.size()));
+  for (uint32 i = 0; i < count; ++i) {
+    out[i] = m_mappedTimestamps[i];
+  }
+  return count;
 }
 
 } // namespace chEngineSDK

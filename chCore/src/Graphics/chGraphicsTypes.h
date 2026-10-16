@@ -30,6 +30,8 @@ class GraphicsLimits
   static constexpr uint32 INVALID_BINDLESS_INDEX = ~0u;
   // The CPU records one frame while the GPU runs the one before it.
   static constexpr uint32 MAX_FRAMES_IN_FLIGHT = 2;
+  // GPU times a frame can write with ICommandList::writeTimestamp.
+  static constexpr uint32 MAX_TIMESTAMPS_PER_FRAME = 256;
 };
 
 enum class CompareOp {

@@ -88,8 +88,9 @@ renderFrameGraph()
     highest = Math::max(highest, milliseconds);
   }
 
-  ImGui::Text("%.1f FPS  %.2f ms", static_cast<double>(getFramesPerSecond()),
-              static_cast<double>(Profiler::getAverageFrameMilliseconds()));
+  ImGui::Text("%.1f FPS  %.2f ms   GPU %.2f ms", static_cast<double>(getFramesPerSecond()),
+              static_cast<double>(Profiler::getAverageFrameMilliseconds()),
+              static_cast<double>(Profiler::getAverageGpuFrameMilliseconds()));
   ImGui::PlotLines("##FrameTimes", history.data(), static_cast<int32>(history.size()),
                    static_cast<int32>(Profiler::getFrameHistoryOffset()), nullptr, 0.0f,
                    highest, ImVec2(-1.0f, kGraphHeight));
@@ -98,12 +99,12 @@ renderFrameGraph()
 }
 
 void
-renderScopeTree()
+renderScopeTree(const ANSICHAR* tableId, Span<const ProfilerScopeStats> scopes)
 {
   constexpr ImGuiTableFlags kTableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV |
                                           ImGuiTableFlags_Resizable |
                                           ImGuiTableFlags_SizingStretchProp;
-  if (!ImGui::BeginTable("##Scopes", 3, kTableFlags)) {
+  if (!ImGui::BeginTable(tableId, 3, kTableFlags)) {
     return;
   }
   ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch, 3.0f);
@@ -113,7 +114,6 @@ renderScopeTree()
 
   // The scopes are listed parent first; the children of a closed scope are skipped by
   // their depth.
-  const Span<const ProfilerScopeStats> scopes = Profiler::getScopeStats();
   uint32 openDepth = 0;
   for (SIZE_T i = 0; i < scopes.size(); ++i) {
     const ProfilerScopeStats& scope = scopes[i];
@@ -155,12 +155,33 @@ renderScopeTree()
   ImGui::EndTable();
 }
 
+/**
+ * The averaged GPU time of a scope, or a negative value when there is none.
+ */
+float
+findGpuMilliseconds(StringView name, uint32 depth)
+{
+  for (const ProfilerScopeStats& scope : Profiler::getGpuScopeStats()) {
+    if (scope.depth == depth && scope.name == name) {
+      return scope.milliseconds;
+    }
+  }
+  return -1.0f;
+}
+
 void
-renderPassRow(const ANSICHAR* name, int32 nameLength, const CommandListStats& commands)
+renderPassRow(StringView name, float gpuMilliseconds, const CommandListStats& commands)
 {
   ImGui::TableNextRow();
   ImGui::TableNextColumn();
-  ImGui::Text("%.*s", nameLength, name);
+  ImGui::Text("%.*s", static_cast<int32>(name.size()), name.data());
+  ImGui::TableNextColumn();
+  if (gpuMilliseconds >= 0.0f) {
+    textMilliseconds(gpuMilliseconds);
+  }
+  else {
+    ImGui::TextDisabled("-");
+  }
   ImGui::TableNextColumn();
   textCount(commands.drawCalls);
   ImGui::TableNextColumn();
@@ -179,21 +200,23 @@ renderPassTable(const RenderFrameStats& stats)
   constexpr ImGuiTableFlags kTableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV |
                                           ImGuiTableFlags_Resizable |
                                           ImGuiTableFlags_SizingStretchProp;
-  if (!ImGui::BeginTable("##Passes", 5, kTableFlags)) {
+  if (!ImGui::BeginTable("##Passes", 6, kTableFlags)) {
     return;
   }
   ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+  ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_WidthStretch, 1.2f);
   ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Triangles", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Pipelines", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableSetupColumn("Barriers", ImGuiTableColumnFlags_WidthStretch, 1.0f);
   ImGui::TableHeadersRow();
 
+  // The GPU times of the passes are nested under the whole graph's.
   for (const RenderPassStats& pass : stats.passes) {
-    renderPassRow(pass.name.data(), static_cast<int32>(pass.name.size()), pass.commands);
+    renderPassRow(pass.name, findGpuMilliseconds(pass.name, 1), pass.commands);
   }
   // Also counts the barriers that end the frame, which belong to no pass.
-  renderPassRow("Total", 5, stats.commands);
+  renderPassRow("Total", findGpuMilliseconds("RenderGraph", 0), stats.commands);
   ImGui::EndTable();
 }
 
@@ -219,7 +242,10 @@ renderWindow(const RenderFrameStats& stats)
 #endif // !USING(CH_PROFILER)
   renderFrameGraph();
   if (ImGui::CollapsingHeader("CPU", ImGuiTreeNodeFlags_DefaultOpen)) {
-    renderScopeTree();
+    renderScopeTree("##CpuScopes", Profiler::getScopeStats());
+  }
+  if (ImGui::CollapsingHeader("GPU", ImGuiTreeNodeFlags_DefaultOpen)) {
+    renderScopeTree("##GpuScopes", Profiler::getGpuScopeStats());
   }
   if (ImGui::CollapsingHeader("Render Passes", ImGuiTreeNodeFlags_DefaultOpen)) {
     renderPassTable(stats);
@@ -262,6 +288,8 @@ renderOverlay(const RenderFrameStats& stats)
     ImGui::Text("%.1f", static_cast<double>(getFramesPerSecond()));
     label("Frame");
     textMilliseconds(Profiler::getAverageFrameMilliseconds());
+    label("GPU");
+    textMilliseconds(Profiler::getAverageGpuFrameMilliseconds());
     label("Draws");
     textCount(stats.commands.drawCalls);
     label("Triangles");
