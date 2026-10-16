@@ -18,6 +18,7 @@
 #include "chGameObject.h"
 #include "chGameObjectSerializer.h"
 #include "chLightComponent.h"
+#include "chSkyLightComponent.h"
 #include "chLogger.h"
 #include "chModelComponent.h"
 #include "chPrefabAsset.h"
@@ -116,7 +117,8 @@ addSun(Scene& scene)
 }
 
 /*
- * A new scene starts with a sun, so what is dropped in it is lit.
+ * A new scene starts with a sun, so what is dropped in it is lit, and a sky light without
+ * an image, ready for one to be dropped on it.
  */
 SPtr<Scene>
 makeNewScene()
@@ -125,6 +127,7 @@ makeNewScene()
   const SPtr<Scene> scene = sceneManager.createAndLoadScene(String(kNewSceneName)).lock();
   if (scene) {
     addSun(*scene);
+    scene->createGameObject("Sky Light")->addComponent<SkyLightComponent>();
   }
   return scene;
 }

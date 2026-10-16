@@ -24,6 +24,7 @@
 #include "chLightComponent.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
+#include "chFloat16.h"
 #include "chGameObjectSerializer.h"
 #include "chMaterial.h"
 #include "chMaterialAsset.h"
@@ -45,6 +46,7 @@
 #include "chSceneHistory.h"
 #include "chShadowRenderer.h"
 #include "chShapeOverlap.h"
+#include "chSkyLightComponent.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
 #include "chTextureMips.h"
@@ -2506,5 +2508,108 @@ TEST_CASE("chCore - Texture mips")
     REQUIRE(pixels[9] == 188);
     REQUIRE(pixels[10] == 188);
     REQUIRE(pixels[11] == 128);
+  }
+
+  SECTION("HDR chains keep values above 1 as half floats")
+  {
+    // 2x1: a bright pixel (light above 1) and a black one.
+    const Vector<float> hdr = {16.0f, 4.0f, 0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    const auto readHalf = [](const Vector<uint8>& data, SIZE_T index) {
+      uint16 half = 0;
+      std::memcpy(&half, data.data() + index * sizeof(uint16), sizeof(half));
+      return Float16::toFloat(half);
+    };
+
+    Vector<uint8> data;
+    REQUIRE(TextureMips::buildChainRGBA16F(hdr, 2, 1, false, data) == 1);
+    REQUIRE(data.size() == 2 * 4 * sizeof(uint16));
+    REQUIRE(readHalf(data, 0) == 16.0f);
+    REQUIRE(readHalf(data, 2) == 0.5f);
+
+    REQUIRE(TextureMips::buildChainRGBA16F(hdr, 2, 1, true, data) == 2);
+    REQUIRE(data.size() == 3 * 4 * sizeof(uint16));
+    // Light is averaged as is, no sRGB.
+    REQUIRE(readHalf(data, 8) == 8.0f);
+    REQUIRE(readHalf(data, 9) == 2.0f);
+    REQUIRE(readHalf(data, 10) == 0.25f);
+    REQUIRE(readHalf(data, 11) == 1.0f);
+  }
+}
+
+TEST_CASE("chCore - Sky lights")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  REQUIRE(scene.getActiveSkyLight() == nullptr);
+
+  const SPtr<GameObject> first = scene.createGameObject("First Sky");
+  SkyLightComponent& firstSky = first->addComponent<SkyLightComponent>();
+  scene.updateTransforms();
+  const SkyLightItem* active = scene.getActiveSkyLight();
+  REQUIRE(active != nullptr);
+  REQUIRE(active->owner == first.get());
+  REQUIRE(active->texture == nullptr);
+  REQUIRE(active->intensity == 1.0f);
+  REQUIRE(active->bShowSky);
+
+  SECTION("The last sky light registered is used")
+  {
+    const SPtr<GameObject> second = scene.createGameObject("Second Sky");
+    second->addComponent<SkyLightComponent>();
+    REQUIRE(scene.getActiveSkyLight()->owner == second.get());
+
+    scene.destroyGameObject(*second);
+    REQUIRE(scene.getActiveSkyLight()->owner == first.get());
+
+    firstSky.setEnabled(false);
+    REQUIRE(scene.getActiveSkyLight() == nullptr);
+  }
+
+  SECTION("Turning the object turns the image")
+  {
+    // Yaw 90 turns local forward (X) to world right (Y), so looking right sees the part of
+    // the image that was in front.
+    first->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+    first->getTransform().setLocalScale(Vector3(3.0f, 3.0f, 3.0f));
+    scene.updateTransforms();
+    const Matrix4& worldToSky = scene.getActiveSkyLight()->worldToSky;
+    REQUIRE(worldToSky.transformVector(Vector3::RIGHT).nearEqual(Vector4(1.0f, 0.0f, 0.0f, 0.0f)));
+    REQUIRE(worldToSky.transformVector(Vector3::UP).nearEqual(Vector4(0.0f, 0.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("Values are saved, and a missing image keeps its id")
+  {
+    firstSky.setIntensity(2.5f);
+    firstSky.setShowSky(false);
+    REQUIRE(scene.getActiveSkyLight()->intensity == 2.5f);
+    REQUIRE_FALSE(scene.getActiveSkyLight()->bShowSky);
+
+    MemoryDataStream stream(256);
+    firstSky.serialize(stream);
+    stream.seek(0);
+    SkyLightComponent loaded;
+    REQUIRE(loaded.deserialize(stream));
+    REQUIRE(loaded.getIntensity() == 2.5f);
+    REQUIRE_FALSE(loaded.getShowSky());
+    REQUIRE(loaded.getTextureId().isNull());
+
+    // Version 1 data that names an image no asset manager knows.
+    const chEngineSDK::UUID imageId = chEngineSDK::UUID::createRandom();
+    MemoryDataStream withImage(256);
+    const uint32 version = 1;
+    const float intensity = 1.0f;
+    const uint32 showSky = 1;
+    withImage.write(&version, sizeof(version));
+    withImage.write(&imageId, sizeof(imageId));
+    withImage.write(&intensity, sizeof(intensity));
+    withImage.write(&showSky, sizeof(showSky));
+    withImage.seek(0);
+    SkyLightComponent missing;
+    REQUIRE(missing.deserialize(withImage));
+    REQUIRE(missing.getTexture() == nullptr);
+    REQUIRE(missing.getTextureId() == imageId);
+    Vector<chEngineSDK::UUID> references;
+    missing.collectReferences(references);
+    REQUIRE(references.size() == 1);
+    REQUIRE(references[0] == imageId);
   }
 }

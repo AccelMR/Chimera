@@ -18,6 +18,7 @@
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLightComponent.h"
+#include "chSkyLightComponent.h"
 #include "chMath.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
@@ -77,6 +78,9 @@ renderCreateLightItems(Scene& scene, GameObject* parent)
   }
   if (ImGui::MenuItem("Spot Light")) {
     createLight<SpotLightComponent>(scene, "Spot Light", parent);
+  }
+  if (ImGui::MenuItem("Sky Light")) {
+    createLight<SkyLightComponent>(scene, "Sky Light", parent);
   }
   ImGui::EndMenu();
 }

@@ -25,6 +25,7 @@
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
+#include "chSkyLightComponent.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
 
@@ -183,6 +184,9 @@ InspectorUI::renderInspectorUI()
     renderModelComponent(*modelComponent);
   }
   renderLightComponent(*selected);
+  if (SkyLightComponent* skyLight = selected->getComponent<SkyLightComponent>()) {
+    renderSkyLightComponent(*skyLight);
+  }
   ImGui::EndDisabled();
   ImGui::End();
 }
@@ -413,6 +417,78 @@ InspectorUI::renderLightComponent(GameObject& gameObject)
       spotLight->setConeAngles(Degree(inner), Degree(outer));
     }
   }
+}
+
+/*
+ * The image turns with the GameObject's rotation, so it has no angle of its own here.
+ */
+void
+InspectorUI::renderSkyLightComponent(SkyLightComponent& skyLight)
+{
+  if (!ImGui::CollapsingHeader("Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+  GameObject& gameObject = *skyLight.getOwner();
+
+  bool bEnabled = skyLight.isEnabled();
+  if (ImGui::Checkbox("Enabled##Sky", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
+    skyLight.setEnabled(bEnabled);
+  }
+
+  // Equirectangular images are twice as wide as tall.
+  constexpr ImVec2 kThumbnailSize(96.0f, 48.0f);
+  const SPtr<TextureAsset>& texture = skyLight.getTexture();
+  const ITexture* gpuTexture = texture ? texture->getTexture().get() : nullptr;
+  const uint64 textureId = gpuTexture ? ImGuiRenderer::getTextureId(*gpuTexture) : 0;
+  if (textureId != 0) {
+    ImGui::Image(static_cast<ImTextureID>(textureId), kThumbnailSize);
+  }
+  else {
+    ImGui::Button("##noSkyImage", kThumbnailSize);
+  }
+  const auto acceptDrop = [&]() {
+    if (!ImGui::BeginDragDropTarget()) {
+      return;
+    }
+    if (SPtr<TextureAsset> dropped = AssetDragDrop::acceptTexture()) {
+      EditorScene::recordChange(gameObject, "Set Sky Image");
+      skyLight.setTexture(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  };
+  acceptDrop();
+  ImGui::SameLine();
+  ImGui::BeginGroup();
+  ImGui::TextUnformatted("Image");
+  if (texture) {
+    ImGui::TextDisabled("%s", texture->getName());
+  }
+  else if (!skyLight.getTextureId().isNull()) {
+    ImGui::TextDisabled("Missing image");
+  }
+  else {
+    ImGui::TextDisabled("None (drop an HDR image)");
+  }
+  if (!skyLight.getTextureId().isNull() && ImGui::SmallButton("Clear##Sky")) {
+    EditorScene::recordChange(gameObject, "Clear Sky Image");
+    skyLight.setTexture(nullptr);
+  }
+  ImGui::EndGroup();
+  acceptDrop();
+
+  float intensity = skyLight.getIntensity();
+  if (ImGui::DragFloat("Intensity##Sky", &intensity, 0.01f, 0.0f, 1000.0f)) {
+    EditorScene::recordChange(gameObject, "Edit Intensity");
+    skyLight.setIntensity(intensity);
+  }
+
+  bool bShowSky = skyLight.getShowSky();
+  if (ImGui::Checkbox("Show Sky", &bShowSky)) {
+    EditorScene::recordChange(gameObject, "Edit Show Sky");
+    skyLight.setShowSky(bShowSky);
+  }
+  ImGui::SetItemTooltip("Draws the image behind the scene");
 }
 
 /*

@@ -23,6 +23,7 @@ class DeferredRenderPath;
 class ForwardRenderPath;
 class ImageBasedLighting;
 class ShadowRenderer;
+class SkyPass;
 class TonemapPass;
 
 /**
@@ -40,9 +41,10 @@ struct RenderFrameStats
 /**
  * Exists so an application only says where the frame goes and what it draws on top: it
  * owns the frame's render graph, the textures the graph makes, and the render path that
- * draws a scene. Lit view modes draw the shadow maps first, then the scene into an HDR
- * scene color that a tonemap pass takes to the output; the debug views write the output directly. A frame is beginFrame(), imports
- * and addScenePasses() (plus any passes of the application, the editor UI), then execute().
+ * draws a scene. Lit view modes draw the shadow maps first, then the scene (with the sky
+ * light's image behind it) into an HDR scene color that a tonemap pass takes to the output;
+ * the debug views write the output directly. A frame is beginFrame(), imports and
+ * addScenePasses() (plus any passes of the application, the editor UI), then execute().
  * What the scene passes show follows the Renderer.ViewMode console variable, and the path
  * of the Lit modes follows Renderer.Path, both read once per frame.
  *
@@ -130,6 +132,7 @@ class CH_CORE_EXPORT SceneRenderer
   UniquePtr<DebugRenderPath> m_debugRenderPath;
   UniquePtr<ShadowRenderer> m_shadowRenderer;
   UniquePtr<ImageBasedLighting> m_imageBasedLighting;
+  UniquePtr<SkyPass> m_skyPass;
   UniquePtr<TonemapPass> m_tonemapPass;
 
   ViewMode m_viewMode = ViewMode::Lit;

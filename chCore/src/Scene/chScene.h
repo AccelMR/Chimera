@@ -14,6 +14,7 @@
 #include "chGameObject.h"
 #include "chObject.h"
 #include "chLightItem.h"
+#include "chSkyLightItem.h"
 #include "chRenderItem.h"
 
 namespace chEngineSDK {
@@ -149,6 +150,25 @@ class CH_CORE_EXPORT Scene : public Object
   void
   gatherLights(const Frustum& frustum, Vector<const LightItem*>& outLights) const;
 
+  /**
+   * Returns an id that stays valid until removeSkyLight.
+   */
+  NODISCARD uint32
+  addSkyLight(const SkyLightItem& skyLight);
+
+  NODISCARD FORCEINLINE SkyLightItem&
+  getSkyLight(uint32 id) { return m_skyLights[id]; }
+
+  void
+  removeSkyLight(uint32 id);
+
+  /**
+   * The sky light that lights the scene: the last one registered, null when there is none.
+   * A scene holds one or two, so the search is cheap enough for every frame.
+   */
+  NODISCARD const SkyLightItem*
+  getActiveSkyLight() const;
+
  private:
   Vector<SPtr<GameObject>> m_rootGameObjects;
   Vector<RenderItem> m_renderItems;
@@ -157,6 +177,9 @@ class CH_CORE_EXPORT Scene : public Object
   Vector<LightItem> m_lights;
   Vector<uint32> m_freeLights;
   uint32 m_lightCount = 0;
+  Vector<SkyLightItem> m_skyLights;
+  Vector<uint32> m_freeSkyLights;
+  uint32 m_nextSkyLightOrder = 0;
 };
 
 } // namespace chEngineSDK

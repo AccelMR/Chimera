@@ -293,4 +293,48 @@ Scene::gatherLights(const Frustum& frustum, Vector<const LightItem*>& outLights)
   }
 }
 
+/*
+ */
+uint32
+Scene::addSkyLight(const SkyLightItem& skyLight)
+{
+  uint32 id = 0;
+  if (!m_freeSkyLights.empty()) {
+    id = m_freeSkyLights.back();
+    m_freeSkyLights.pop_back();
+    m_skyLights[id] = skyLight;
+  }
+  else {
+    id = static_cast<uint32>(m_skyLights.size());
+    m_skyLights.push_back(skyLight);
+  }
+  m_skyLights[id].bInUse = true;
+  m_skyLights[id].order = m_nextSkyLightOrder++;
+  return id;
+}
+
+/*
+ */
+void
+Scene::removeSkyLight(uint32 id)
+{
+  CH_ASSERT(id < m_skyLights.size() && m_skyLights[id].bInUse);
+  m_skyLights[id] = SkyLightItem{};
+  m_freeSkyLights.push_back(id);
+}
+
+/*
+ */
+const SkyLightItem*
+Scene::getActiveSkyLight() const
+{
+  const SkyLightItem* active = nullptr;
+  for (const SkyLightItem& skyLight : m_skyLights) {
+    if (skyLight.bInUse && (active == nullptr || skyLight.order > active->order)) {
+      active = &skyLight;
+    }
+  }
+  return active;
+}
+
 } // namespace chEngineSDK

@@ -20,6 +20,7 @@
 #include "chEventSystem.h"
 #include "chFileStream.h"
 #include "chFileSystem.h"
+#include "chFloat16.h"
 #include "chFrustum.h"
 #include "chHash.h"
 #include "chLinearAllocator.h"
@@ -2776,3 +2777,55 @@ TEST_CASE("chUtilities - Profiler")
   REQUIRE(updateInterval->setFromString("0.5", ConsoleVariableSource::Console));
 }
 #endif // USING(CH_PROFILER)
+
+TEST_CASE("chUtilities - Float16")
+{
+  SECTION("Exact values")
+  {
+    REQUIRE(Float16::fromFloat(0.0f) == 0x0000);
+    REQUIRE(Float16::fromFloat(-0.0f) == 0x8000);
+    REQUIRE(Float16::fromFloat(1.0f) == 0x3C00);
+    REQUIRE(Float16::fromFloat(-2.0f) == 0xC000);
+    REQUIRE(Float16::fromFloat(0.5f) == 0x3800);
+    REQUIRE(Float16::fromFloat(65504.0f) == 0x7BFF);
+    // Smallest normal and smallest subnormal half.
+    REQUIRE(Float16::fromFloat(6.103515625e-05f) == 0x0400);
+    REQUIRE(Float16::fromFloat(5.9604644775390625e-08f) == 0x0001);
+  }
+
+  SECTION("Rounding")
+  {
+    // 1 + 2^-11 is halfway between 1 and the next half: ties go to the even one.
+    REQUIRE(Float16::fromFloat(1.0f + 1.0f / 2048.0f) == 0x3C00);
+    REQUIRE(Float16::fromFloat(1.0f + 3.0f / 2048.0f) == 0x3C02);
+    REQUIRE(Float16::fromFloat(1.0f + 1.1f / 2048.0f) == 0x3C01);
+    // Half of the smallest subnormal rounds to zero, a bit more rounds up.
+    REQUIRE(Float16::fromFloat(2.98023223876953125e-08f) == 0x0000);
+    REQUIRE(Float16::fromFloat(3.1e-08f) == 0x0001);
+  }
+
+  SECTION("Out of range")
+  {
+    REQUIRE(Float16::fromFloat(65520.0f) == 0x7C00);
+    REQUIRE(Float16::fromFloat(-1.0e10f) == 0xFC00);
+    REQUIRE(Float16::fromFloat(std::numeric_limits<float>::infinity()) == 0x7C00);
+    const uint16 nan = Float16::fromFloat(std::numeric_limits<float>::quiet_NaN());
+    REQUIRE((nan & 0x7C00) == 0x7C00);
+    REQUIRE((nan & 0x03FF) != 0);
+    REQUIRE(std::isnan(Float16::toFloat(nan)));
+  }
+
+  SECTION("Every half survives a round trip")
+  {
+    for (uint32 bits = 0; bits <= 0xFFFF; ++bits) {
+      const uint16 half = static_cast<uint16>(bits);
+      const float value = Float16::toFloat(half);
+      if (std::isnan(value)) {
+        continue;
+      }
+      REQUIRE(Float16::fromFloat(value) == half);
+    }
+    REQUIRE(Float16::toFloat(0x0001) == 5.9604644775390625e-08f);
+    REQUIRE(Float16::toFloat(0x3555) == 0.333251953125f);
+  }
+}

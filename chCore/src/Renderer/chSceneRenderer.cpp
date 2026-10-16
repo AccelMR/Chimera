@@ -20,6 +20,7 @@
 #include "chProfiler.h"
 #include "chScene.h"
 #include "chShadowRenderer.h"
+#include "chSkyPass.h"
 #include "chStringUtils.h"
 #include "chTonemapPass.h"
 
@@ -41,6 +42,7 @@ SceneRenderer::SceneRenderer()
     m_debugRenderPath(new DebugRenderPath()),
     m_shadowRenderer(new ShadowRenderer()),
     m_imageBasedLighting(new ImageBasedLighting()),
+    m_skyPass(new SkyPass()),
     m_tonemapPass(new TonemapPass())
 {}
 
@@ -156,6 +158,7 @@ SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextur
       "SceneColor",
       {.format = kSceneColorFormat, .width = outputDesc.width, .height = outputDesc.height});
   const RGTextureHandle depth = m_renderPath->addPasses(m_graph, litView, sceneColor);
+  m_skyPass->addPass(m_graph, view.camera, scene.getActiveSkyLight(), sceneColor, depth);
   m_tonemapPass->addPass(m_graph, sceneColor, output);
   return depth;
 }

@@ -77,12 +77,17 @@ class ImGuiRenderer
     if (bindlessIndex == GraphicsLimits::INVALID_BINDLESS_INDEX) {
       return 0;
     }
-    const bool isSrgb = FormatUtils::getInfo(texture.getFormat()).isSrgb;
-    return (static_cast<uint64>(bindlessIndex) + 1) | (isSrgb ? TEXTURE_ID_SRGB_BIT : 0);
+    // HDR color textures hold linear light too, so they are encoded like sRGB ones.
+    const Format format = texture.getFormat();
+    const bool isLinearColor = FormatUtils::getInfo(format).isSrgb ||
+                               format == Format::R16G16B16A16_SFLOAT ||
+                               format == Format::R32G32B32A32_SFLOAT;
+    return (static_cast<uint64>(bindlessIndex) + 1) |
+           (isLinearColor ? TEXTURE_ID_SRGB_BIT : 0);
   }
 
-  // Set in an ImTextureID when the texture is sRGB: sampling gives linear values, and the UI
-  // writes sRGB values, so the shader turns them back.
+  // Set in an ImTextureID when sampling the texture gives linear color (sRGB and HDR
+  // textures), and the UI writes sRGB values, so the shader encodes them.
   static constexpr uint64 TEXTURE_ID_SRGB_BIT = 1ull << 32;
 
  private:

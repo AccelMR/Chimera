@@ -34,6 +34,20 @@ class CH_CORE_EXPORT TextureMips
    */
   static uint32
   appendChainRGBA8(Vector<uint8>& pixels, uint32 width, uint32 height, bool srgb);
+
+  /**
+   * Fills outData with R16G16B16A16_SFLOAT texels from pixels, linear RGBA floats of mip 0,
+   * plus the smaller levels when generateMips is true. Used for HDR images, whose values
+   * pass 1 and are already linear.
+   *
+   * @return the number of levels outData holds.
+   */
+  static uint32
+  buildChainRGBA16F(Vector<float> pixels,
+                    uint32 width,
+                    uint32 height,
+                    bool generateMips,
+                    Vector<uint8>& outData);
 };
 
 } // namespace chEngineSDK

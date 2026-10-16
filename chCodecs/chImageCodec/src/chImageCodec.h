@@ -61,8 +61,13 @@ class ImageCodec : public IAssetCodec {
                         const ImportSettings& settings) override;
 
  private:
+  /**
+   * 8-bit images become RGBA8 (sRGB or not, as the settings say); HDR images (.hdr) become
+   * R16G16B16A16_SFLOAT, linear, keeping values above 1.
+   */
   SPtr<IAsset>
   createTextureAsset(Vector<uint8> pixels,
+                     Vector<float> hdrPixels,
                      int32 width,
                      int32 height,
                      const String& assetName,
