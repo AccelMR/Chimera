@@ -15,6 +15,7 @@
 
 #include "chAssetManager.h"
 #include "chEditorScene.h"
+#include "chEditorSelection.h"
 #include "chEditorTheme.h"
 #include "chEnginePaths.h"
 #include "chImportDialog.h"
@@ -469,6 +470,26 @@ MainMenuBarUI::renderEditMenu()
           : String(ICON_FA_REDO "  Redo");
   if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, EditorScene::canRedo())) {
     EditorScene::requestRedo();
+  }
+
+  ImGui::Separator();
+  const bool bSelection = !EditorSelection::getSelection().empty();
+  if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, bSelection)) {
+    EditorScene::copySelection();
+  }
+  if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, EditorScene::canPaste())) {
+    EditorScene::requestPaste();
+  }
+  if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, bSelection)) {
+    EditorScene::requestDuplicate();
+  }
+  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", "Del", false, bSelection)) {
+    EditorScene::requestDelete();
+  }
+  ImGui::Separator();
+  if (ImGui::MenuItem(ICON_FA_CHECK_DOUBLE "  Select All", "Ctrl+A", false,
+                      EditorScene::getScene() != nullptr)) {
+    EditorSelection::selectAll(*EditorScene::getScene(), EditorScene::getPrefabRoot().get());
   }
   ImGui::EndMenu();
 }

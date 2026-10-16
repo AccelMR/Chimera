@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chEditorScene.h"
 
+#include "chAlgorithm.h"
 #include "chAssetManager.h"
 #include "chCamera.h"
 #include "chConsoleVariable.h"
@@ -74,6 +75,20 @@ struct EditorSceneState
   SceneHistory history;
   bool bUndoRequested = false;
   bool bRedoRequested = false;
+  // Asked while panels draw and their trees are walked, so they wait for applyPending.
+  bool bDuplicateRequested = false;
+  bool bDeleteRequested = false;
+  bool bPasteRequested = false;
+  bool bCreatePrefabsRequested = false;
+  Path prefabFolder;
+  bool bReparentRequested = false;
+  SPtr<GameObject> reparentParent;
+  SPtr<GameObject> reparentSibling;
+  bool bReparentAfterSibling = false;
+  // What copySelection wrote, read back by every paste.
+  Vector<uint8> clipboard;
+  // Reused by every request, so they do not allocate once it has grown.
+  Vector<SPtr<GameObject>> targets;
 
   // Waits for the unsaved changes question or the Save As name, then runs in applyPending.
   PendingAction action = PendingAction::None;
@@ -520,6 +535,263 @@ applyHistory(EditorSceneState& state, bool bEditing)
     setDirty(state, !state.history.isAtSavedState());
   }
 }
+
+/*
+ * "Lamp" copies as "Lamp (1)" and "Lamp (1)" as "Lamp (2)", not "Lamp (1) (1)", with the
+ * first number no sibling uses.
+ */
+String
+makeDuplicateName(const GameObject& source)
+{
+  StringView base = source.getName();
+  const SIZE_T open = base.rfind(" (");
+  if (open != StringView::npos && base.size() > open + 3 && base.back() == ')') {
+    bool bNumber = true;
+    for (SIZE_T i = open + 2; i + 1 < base.size(); ++i) {
+      bNumber = bNumber && base[i] >= '0' && base[i] <= '9';
+    }
+    if (bNumber) {
+      base = base.substr(0, open);
+    }
+  }
+
+  const GameObject* parent = source.getParent();
+  const Vector<SPtr<GameObject>>& siblings =
+      parent ? parent->getChildren() : source.getScene()->getRootGameObjects();
+  for (uint32 number = 1;; ++number) {
+    String name = StringUtils::format("{0} ({1})", base, number);
+    const bool bTaken =
+        Algorithm::containsIf(siblings, [&name](const SPtr<GameObject>& sibling) {
+          return sibling->getName() == name;
+        });
+    if (!bTaken) {
+      return name;
+    }
+  }
+}
+
+/*
+ * The top-level selected objects of the open scene that test accepts, into state.targets.
+ */
+template <typename Test>
+void
+gatherTargets(EditorSceneState& state, Test test)
+{
+  EditorSelection::getTopLevel(state.targets);
+  Algorithm::removeAllIf(state.targets, [&state, &test](const SPtr<GameObject>& object) {
+    return object->getScene() != state.scene.get() || !test(*object);
+  });
+}
+
+/*
+ * One object keeps the "<action> <name>" the history gives it.
+ */
+void
+nameGroupEntry(EditorSceneState& state, StringView action, SIZE_T count)
+{
+  if (count > 1) {
+    state.history.setEntryName(StringUtils::format("{0} {1} objects", action, count));
+  }
+}
+
+/*
+ * Moves gameObject right before or after sibling, which shares its parent.
+ */
+void
+placeNextTo(Scene& scene, GameObject& gameObject, const GameObject& sibling, bool bAfter)
+{
+  const uint32 index = scene.getSiblingIndex(gameObject);
+  const uint32 target = scene.getSiblingIndex(sibling);
+  // Taking gameObject out first shifts the places after it by one.
+  const uint32 shift = index < target ? 1 : 0;
+  scene.setSiblingIndex(gameObject, bAfter ? target + 1 - shift : target - shift);
+}
+
+/*
+ * The copies are selected, so the gizmo moves them off their sources at once.
+ */
+void
+applyDuplicate(EditorSceneState& state)
+{
+  gatherTargets(state, [](GameObject& object) {
+    return EditorScene::canDuplicateOrDelete(object);
+  });
+  EditorSelection::clear();
+  for (const SPtr<GameObject>& source : state.targets) {
+    const SPtr<GameObject> copy = GameObjectSerializer::duplicate(*source);
+    if (!copy) {
+      CH_LOG_ERROR(EditorSceneLog, "Could not duplicate {0}.", source->getName());
+      continue;
+    }
+    copy->setName(makeDuplicateName(*source));
+    EditorSelection::add(copy);
+    EditorScene::recordCreated(*copy, "Duplicate");
+  }
+  nameGroupEntry(state, "Duplicate", state.targets.size());
+}
+
+/*
+ */
+void
+applyDelete(EditorSceneState& state)
+{
+  gatherTargets(state, [](GameObject& object) {
+    return EditorScene::canDuplicateOrDelete(object);
+  });
+  for (const SPtr<GameObject>& object : state.targets) {
+    EditorScene::recordChange(*object, "Delete");
+    state.scene->destroyGameObject(*object);
+  }
+  nameGroupEntry(state, "Delete", state.targets.size());
+  EditorSelection::removeDetached();
+}
+
+/*
+ * The world placement is kept, so objects stay where they are seen.
+ */
+void
+applyReparent(EditorSceneState& state)
+{
+  const SPtr<GameObject> newParent = std::move(state.reparentParent);
+  const SPtr<GameObject> sibling = std::move(state.reparentSibling);
+  Scene& scene = *state.scene;
+  if ((newParent && (newParent->getScene() != &scene ||
+                     newParent->getOutermostPrefabInstance())) ||
+      (sibling && sibling->getParent() != newParent.get())) {
+    return;
+  }
+
+  gatherTargets(state, [&newParent, &sibling](GameObject& object) {
+    if (!EditorScene::canDuplicateOrDelete(object) || &object == sibling.get()) {
+      return false;
+    }
+    // Under itself or one of its children it would leave the tree.
+    for (const GameObject* parent = newParent.get(); parent; parent = parent->getParent()) {
+      if (parent == &object) {
+        return false;
+      }
+    }
+    return true;
+  });
+  if (state.targets.empty()) {
+    return;
+  }
+
+  scene.updateTransforms();
+  const GameObject* anchor = sibling.get();
+  bool bAfter = state.bReparentAfterSibling;
+  for (const SPtr<GameObject>& object : state.targets) {
+    EditorScene::recordChange(*object, "Reparent");
+    if (!scene.setParent(*object, newParent.get())) {
+      continue;
+    }
+    if (anchor) {
+      placeNextTo(scene, *object, *anchor, bAfter);
+      // The next one goes after this one, so their order stays as it was selected.
+      anchor = object.get();
+      bAfter = true;
+    }
+  }
+  nameGroupEntry(state, "Reparent", state.targets.size());
+}
+
+/*
+ */
+void
+applyCreatePrefabs(EditorSceneState& state)
+{
+  gatherTargets(state, [](GameObject& object) {
+    GameObject* instance = object.getOutermostPrefabInstance();
+    return !instance || instance == &object;
+  });
+  for (const SPtr<GameObject>& object : state.targets) {
+    CH_PARAMETER_UNUSED(EditorScene::createPrefab(*object, state.prefabFolder));
+  }
+}
+
+/*
+ * True when gameObject or something below it is an instance of prefab or of a prefab that
+ * holds it, which would put prefab inside itself.
+ */
+bool
+holdsPrefab(const GameObject& gameObject, const PrefabAsset& prefab)
+{
+  if (!gameObject.getPrefab().isNull()) {
+    const SPtr<IAsset> asset = AssetManager::instance().getAsset(gameObject.getPrefab());
+    const SPtr<PrefabAsset> instanced = asset ? asset->as<PrefabAsset>() : nullptr;
+    if (instanced && instanced->dependsOn(prefab.getUUID())) {
+      return true;
+    }
+  }
+  for (const SPtr<GameObject>& child : gameObject.getChildren()) {
+    if (holdsPrefab(*child, prefab)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ * As siblings right after the active object, as in Unity. The prefab's root has no
+ * siblings in prefab mode, so what is pasted on it goes inside it.
+ */
+void
+applyPaste(EditorSceneState& state)
+{
+  if (state.clipboard.empty()) {
+    return;
+  }
+  Scene& scene = *state.scene;
+  GameObject* parent = state.prefabRoot.get();
+  const GameObject* after = nullptr;
+  const SPtr<GameObject>& active = EditorSelection::getSelectedGameObject();
+  if (active && active->getScene() == &scene && active != state.prefabRoot) {
+    GameObject* activeParent = active->getParent();
+    const bool bInsidePrefab = !state.prefabRoot || activeParent;
+    if (bInsidePrefab && (!activeParent || !activeParent->getOutermostPrefabInstance())) {
+      parent = activeParent;
+      after = active.get();
+    }
+  }
+
+  const Vector<SPtr<GameObject>>& siblings =
+      parent ? parent->getChildren() : scene.getRootGameObjects();
+  const SIZE_T firstNew = siblings.size();
+  // Only read, so the bytes are never changed through the stream.
+  MemoryDataStream stream(state.clipboard.data(), state.clipboard.size(), false);
+  const bool bRead = GameObjectSerializer::readCopies(stream, scene, parent);
+  state.targets.assign(siblings.begin() + firstNew, siblings.end());
+
+  bool bRefused = false;
+  if (state.prefab) {
+    for (const SPtr<GameObject>& object : state.targets) {
+      bRefused = bRefused || holdsPrefab(*object, *state.prefab);
+    }
+  }
+  if (!bRead || bRefused) {
+    for (const SPtr<GameObject>& object : state.targets) {
+      scene.destroyGameObject(*object);
+    }
+    if (bRefused) {
+      CH_LOG_WARNING(EditorSceneLog, "A prefab cannot be pasted inside itself.");
+    }
+    else {
+      CH_LOG_ERROR(EditorSceneLog, "Could not paste the copied objects.");
+    }
+    return;
+  }
+
+  EditorSelection::clear();
+  for (const SPtr<GameObject>& object : state.targets) {
+    if (after) {
+      placeNextTo(scene, *object, *after, true);
+      after = object.get();
+    }
+    EditorSelection::add(object);
+    EditorScene::recordCreated(*object, "Paste");
+  }
+  nameGroupEntry(state, "Paste", state.targets.size());
+}
 } // namespace
 
 /*
@@ -557,6 +829,9 @@ EditorScene::shutDown()
   state.returnAsset.reset();
   state.actionAsset.reset();
   state.actionPrefab.reset();
+  state.reparentParent.reset();
+  state.reparentSibling.reset();
+  state.targets.clear();
   state.camera = nullptr;
 }
 
@@ -666,6 +941,90 @@ void
 EditorScene::requestRedo()
 {
   getState().bRedoRequested = true;
+}
+
+/*
+ * The prefab's root holds the whole prefab, and what is inside an instance comes from its
+ * prefab, so neither has a place for a copy.
+ */
+bool
+EditorScene::canDuplicateOrDelete(GameObject& gameObject)
+{
+  const GameObject* instance = gameObject.getOutermostPrefabInstance();
+  return &gameObject != getState().prefabRoot.get() && (!instance || instance == &gameObject);
+}
+
+/*
+ */
+void
+EditorScene::requestDuplicate()
+{
+  getState().bDuplicateRequested = true;
+}
+
+/*
+ */
+void
+EditorScene::requestDelete()
+{
+  getState().bDeleteRequested = true;
+}
+
+/*
+ */
+void
+EditorScene::requestCreatePrefabs(const Path& folder)
+{
+  EditorSceneState& state = getState();
+  state.bCreatePrefabsRequested = true;
+  state.prefabFolder = folder;
+}
+
+/*
+ */
+void
+EditorScene::requestReparent(const SPtr<GameObject>& newParent,
+                             const SPtr<GameObject>& sibling,
+                             bool bAfterSibling)
+{
+  EditorSceneState& state = getState();
+  state.bReparentRequested = true;
+  state.reparentParent = newParent;
+  state.reparentSibling = sibling;
+  state.bReparentAfterSibling = bAfterSibling;
+}
+
+/*
+ */
+void
+EditorScene::copySelection()
+{
+  EditorSceneState& state = getState();
+  EditorSelection::getTopLevel(state.targets);
+  if (state.targets.empty()) {
+    return;
+  }
+  MemoryDataStream stream;
+  GameObjectSerializer::write(stream, state.targets);
+  const uint8* bytes = stream.getStartPtr();
+  state.clipboard.assign(bytes, bytes + stream.size());
+  CH_LOG_INFO(EditorSceneLog, "Copied {0} object(s).", state.targets.size());
+}
+
+/*
+ */
+bool
+EditorScene::canPaste()
+{
+  return !getState().clipboard.empty();
+}
+
+/*
+ */
+void
+EditorScene::requestPaste()
+{
+  getState().bPasteRequested = true;
 }
 
 /*
@@ -847,7 +1206,31 @@ EditorScene::applyPending(bool bEditing)
 {
   EditorSceneState& state = getState();
   if (state.scene) {
+    if (state.bReparentRequested) {
+      applyReparent(state);
+    }
+    if (state.bDuplicateRequested) {
+      applyDuplicate(state);
+    }
+    if (state.bPasteRequested) {
+      applyPaste(state);
+    }
+    if (state.bCreatePrefabsRequested) {
+      applyCreatePrefabs(state);
+    }
+    if (state.bDeleteRequested) {
+      applyDelete(state);
+    }
+    state.bReparentRequested = false;
+    state.bDuplicateRequested = false;
+    state.bPasteRequested = false;
+    state.bCreatePrefabsRequested = false;
+    state.bDeleteRequested = false;
+    // Clear keeps the capacity; holding the objects would keep deleted ones alive.
+    state.targets.clear();
     applyHistory(state, bEditing);
+    // An undo may have replaced selected objects with new ones.
+    EditorSelection::removeDetached();
   }
   if (!state.bActionReady) {
     return;

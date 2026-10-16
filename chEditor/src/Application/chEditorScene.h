@@ -99,6 +99,57 @@ class EditorScene
   static void
   requestRedo();
 
+  /**
+   * False for the prefab's root in prefab mode and for objects inside a prefab instance.
+   */
+  NODISCARD static bool
+  canDuplicateOrDelete(GameObject& gameObject);
+
+  /**
+   * The requests below act on the top-level selected objects in applyPending, once no panel
+   * is walking the scene or the asset list, and skip the objects they cannot change. Each is
+   * one undo step.
+   *
+   * Duplicate puts each copy right after its source, named "Name (1)", and selects the
+   * copies.
+   */
+  static void
+  requestDuplicate();
+
+  static void
+  requestDelete();
+
+  /**
+   * Makes a prefab in folder from each object (see createPrefab).
+   */
+  static void
+  requestCreatePrefabs(const Path& folder);
+
+  /**
+   * Moves the objects under newParent (null for the scene's root): before or after sibling
+   * when given (one of newParent's children), else last.
+   */
+  static void
+  requestReparent(const SPtr<GameObject>& newParent,
+                  const SPtr<GameObject>& sibling,
+                  bool bAfterSibling);
+
+  /**
+   * Keeps a copy of the top-level selected objects; it survives opening another scene.
+   */
+  static void
+  copySelection();
+
+  NODISCARD static bool
+  canPaste();
+
+  /**
+   * Adds the copied objects after the active object, under its parent (under the default
+   * parent when nothing is selected), and selects them.
+   */
+  static void
+  requestPaste();
+
   NODISCARD static bool
   isDirty();
 

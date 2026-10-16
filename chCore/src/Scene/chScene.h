@@ -84,6 +84,15 @@ class CH_CORE_EXPORT Scene : public Object
   setSiblingIndex(GameObject& gameObject, uint32 index);
 
   /**
+   * Moves the object, with its children, under newParent (a root object when null), last
+   * among its new siblings, and keeps where it stands in the world. Reads the world matrices
+   * of the last updateTransforms. False, with nothing changed, when newParent is the object,
+   * one of its children or in another scene.
+   */
+  NODISCARD bool
+  setParent(GameObject& gameObject, GameObject* newParent);
+
+  /**
    * Updates the components of every object.
    */
   void

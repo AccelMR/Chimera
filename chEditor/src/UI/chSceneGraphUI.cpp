@@ -35,6 +35,8 @@
 namespace chEngineSDK {
 
 namespace {
+const SPtr<GameObject> kNoParent;
+
 /**
  * True when ancestor is gameObject or one of its parents, so deleting ancestor removes
  * gameObject too.
@@ -136,22 +138,64 @@ SceneGraphUI::renderSceneGraphUI()
   }
 
   ImGui::Begin(m_windowTitle.c_str(), &m_isVisible);
-  if (scene) {
-    // In prefab mode only the prefab is shown; the light that shows it is not part of it.
-    if (const SPtr<GameObject>& prefabRoot = EditorScene::getPrefabRoot()) {
-      ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
-      renderGameObject(*scene, prefabRoot);
-    }
-    else {
-      for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
-        renderGameObject(*scene, root);
-      }
-    }
-    renderEmptyAreaContextMenu(*scene);
-    renderEmptyAreaDropTarget();
-    applyPendingChanges(*scene);
+  if (!scene) {
+    ImGui::End();
+    return;
   }
+
+  handleKeys();
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  ImGui::InputTextWithHint("##search", ICON_FA_SEARCH "  Search", m_searchBuffer,
+                           sizeof(m_searchBuffer));
+
+  const GameObject* active = EditorSelection::getSelectedGameObject().get();
+  m_revealTarget = active != m_lastSeenActive ? active : nullptr;
+  m_visibleRows.clear();
+
+  ImGui::BeginChild("##tree");
+  // In prefab mode only the prefab is shown; the light that shows it is not part of it.
+  const SPtr<GameObject>& prefabRoot = EditorScene::getPrefabRoot();
+  if (m_searchBuffer[0] != '\0') {
+    renderSearchResults(*scene,
+                        prefabRoot ? prefabRoot->getChildren() : scene->getRootGameObjects());
+  }
+  else if (prefabRoot) {
+    ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
+    renderGameObject(*scene, prefabRoot, kNoParent, false);
+  }
+  else {
+    for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
+      renderGameObject(*scene, root, kNoParent, false);
+    }
+  }
+  if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+      !ImGui::IsAnyItemHovered()) {
+    EditorSelection::clear();
+  }
+  renderEmptyAreaContextMenu(*scene);
+  renderEmptyAreaDropTarget();
+  ImGui::EndChild();
+
+  applyPendingChanges(*scene);
+  m_lastSeenActive = EditorSelection::getSelectedGameObject().get();
   ImGui::End();
+}
+
+/*
+ */
+void
+SceneGraphUI::handleKeys()
+{
+  if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+      ImGui::GetIO().WantTextInput) {
+    return;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+    beginRename(EditorSelection::getSelectedGameObject());
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+    EditorScene::requestDelete();
+  }
 }
 
 /*
@@ -159,6 +203,29 @@ SceneGraphUI::renderSceneGraphUI()
 void
 SceneGraphUI::applyPendingChanges(Scene& scene)
 {
+  if (m_pendingRangeEnd) {
+    // Every row is drawn now, so both ends of the range have their place.
+    constexpr SIZE_T kNotFound = static_cast<SIZE_T>(-1);
+    SIZE_T anchor = kNotFound;
+    SIZE_T end = kNotFound;
+    for (SIZE_T i = 0; i < m_visibleRows.size(); ++i) {
+      const GameObject* row = m_visibleRows[i]->get();
+      anchor = row == m_rangeAnchor ? i : anchor;
+      end = row == m_pendingRangeEnd ? i : end;
+    }
+    if (end != kNotFound && anchor != kNotFound) {
+      EditorSelection::clear();
+      for (SIZE_T i = Math::min(anchor, end); i <= Math::max(anchor, end); ++i) {
+        EditorSelection::add(*m_visibleRows[i]);
+      }
+      EditorSelection::add(*m_visibleRows[end]);
+    }
+    else if (end != kNotFound) {
+      EditorSelection::setSelectedGameObject(*m_visibleRows[end]);
+    }
+    m_pendingRangeEnd = nullptr;
+  }
+
   if (m_pendingModel || m_pendingPrefab) {
     addPendingObject(scene);
   }
@@ -169,34 +236,42 @@ SceneGraphUI::applyPendingChanges(Scene& scene)
     }
     m_pendingExpand.reset();
   }
-  if (m_pendingCreatePrefab && m_contentBrowser) {
-    CH_PARAMETER_UNUSED(EditorScene::createPrefab(*m_pendingCreatePrefab,
-                                                  m_contentBrowser->getCurrentFolderPath()));
-    m_pendingCreatePrefab.reset();
-  }
-  if (m_pendingDelete) {
-    const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
-    if (isInSubtree(selected.get(), *m_pendingDelete)) {
-      EditorSelection::setSelectedGameObject(nullptr);
+}
+
+/*
+ */
+void
+SceneGraphUI::renderSearchResults(Scene& scene, const Vector<SPtr<GameObject>>& gameObjects)
+{
+  for (const SPtr<GameObject>& gameObject : gameObjects) {
+    if (StringUtils::containsIgnoreCase(gameObject->getName(), m_searchBuffer)) {
+      renderGameObject(scene, gameObject, kNoParent, true);
     }
-    EditorScene::recordChange(*m_pendingDelete, "Delete");
-    scene.destroyGameObject(*m_pendingDelete);
-    m_pendingDelete.reset();
+    renderSearchResults(scene, gameObject->getChildren());
   }
 }
 
 /*
  */
 void
-SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
+SceneGraphUI::renderGameObject(Scene& scene,
+                               const SPtr<GameObject>& gameObject,
+                               const SPtr<GameObject>& parent,
+                               bool bFlat)
 {
+  m_visibleRows.push_back(&gameObject);
+  const bool bSelected = EditorSelection::isSelected(*gameObject);
+
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                              ImGuiTreeNodeFlags_SpanAvailWidth;
-  if (gameObject->getChildren().empty()) {
+  if (bFlat) {
+    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+  }
+  else if (gameObject->getChildren().empty()) {
     flags |= ImGuiTreeNodeFlags_Leaf;
   }
-  if (EditorSelection::getSelectedGameObject() == gameObject) {
+  if (bSelected) {
     flags |= ImGuiTreeNodeFlags_Selected;
   }
 
@@ -211,32 +286,79 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
   // Objects can share a name, so the pointer keeps their tree nodes apart.
   ImGui::PushID(gameObject.get());
   if (gameObject.get() == m_openOnNextDraw) {
-    // A model just split into parts opens, so the parts show at once.
+    // A model just split into parts, or a row that just got children, opens to show them.
     ImGui::SetNextItemOpen(true);
     m_openOnNextDraw = nullptr;
+  }
+  else if (!bFlat && m_revealTarget && m_revealTarget != gameObject.get() &&
+           isInSubtree(m_revealTarget, *gameObject)) {
+    ImGui::SetNextItemOpen(true);
   }
   if (bLocked) {
     ImGui::PushStyleColor(ImGuiCol_Text, bInstanceRoot ? ImVec4(0.45f, 0.7f, 1.0f, 1.0f)
                                                        : ImVec4(0.55f, 0.55f, 0.6f, 1.0f));
   }
-  const bool bOpen = ImGui::TreeNodeEx("##node", flags, "%s  %s", getObjectIcon(*gameObject),
-                                       gameObject->getName().c_str());
+  const bool bRenaming = m_renaming == gameObject;
+  bool bOpen = false;
+  if (bRenaming) {
+    // Without the full width, so the name field after the icon gets the clicks.
+    bOpen = ImGui::TreeNodeEx("##node", flags & ~ImGuiTreeNodeFlags_SpanAvailWidth, "%s",
+                              getObjectIcon(*gameObject));
+  }
+  else {
+    bOpen = ImGui::TreeNodeEx("##node", flags, "%s  %s", getObjectIcon(*gameObject),
+                              gameObject->getName().c_str());
+  }
   if (bLocked) {
     ImGui::PopStyleColor();
   }
-  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-    EditorSelection::setSelectedGameObject(gameObject);
+  if (m_revealTarget == gameObject.get() && !ImGui::IsItemVisible()) {
+    ImGui::SetScrollHereY(0.5f);
   }
 
-  if (!bLocked && ImGui::BeginDragDropTarget()) {
-    if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
-      m_pendingModel = std::move(model);
-      m_pendingParent = gameObject;
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
+    handleRowClick(gameObject, bSelected);
+  }
+  // The context menu acts on the selection, so it must hold the row it opens on.
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !bSelected) {
+    EditorSelection::setSelectedGameObject(gameObject);
+  }
+  if (m_pendingSingleSelect == gameObject.get() &&
+      ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    const ImGuiIO& io = ImGui::GetIO();
+    if (io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <
+        io.MouseDragThreshold * io.MouseDragThreshold) {
+      EditorSelection::setSelectedGameObject(gameObject);
+      m_rangeAnchor = gameObject.get();
     }
-    if (SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
-      m_pendingPrefab = std::move(prefab);
-      m_pendingParent = gameObject;
+    m_pendingSingleSelect = nullptr;
+  }
+
+  if (!bRenaming && !bInsideInstance && !bPrefabRoot) {
+    // A drop acts on the selection, so a row dragged without being selected becomes it.
+    if (!bSelected && ImGui::IsItemActive() &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      EditorSelection::setSelectedGameObject(gameObject);
     }
+    AssetDragDrop::source(*gameObject);
+  }
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (!bLocked) {
+      if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+        m_pendingModel = std::move(model);
+        m_pendingParent = gameObject;
+      }
+      if (SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
+        m_pendingPrefab = std::move(prefab);
+        m_pendingParent = gameObject;
+      }
+    }
+    // A search result does not know its parent, the prefab's root has no siblings in prefab
+    // mode, and nothing can be put next to the content of an instance.
+    const bool bSiblingsAllowed =
+        !bFlat && !bPrefabRoot && !(parent && parent->getOutermostPrefabInstance());
+    acceptObjectDrop(gameObject, parent, bLocked, bSiblingsAllowed);
     ImGui::EndDragDropTarget();
   }
 
@@ -245,14 +367,106 @@ SceneGraphUI::renderGameObject(Scene& scene, const SPtr<GameObject>& gameObject)
     renderObjectContextMenu(scene, gameObject, bLocked, bInsideInstance, bPrefabRoot);
     ImGui::EndPopup();
   }
+  if (bRenaming) {
+    renderRenameField(*gameObject);
+  }
 
-  if (bOpen) {
+  if (bOpen && !bFlat) {
     for (const SPtr<GameObject>& child : gameObject->getChildren()) {
-      renderGameObject(scene, child);
+      renderGameObject(scene, child, gameObject, false);
     }
     ImGui::TreePop();
   }
   ImGui::PopID();
+}
+
+/*
+ */
+void
+SceneGraphUI::handleRowClick(const SPtr<GameObject>& gameObject, bool bSelected)
+{
+  const ImGuiIO& io = ImGui::GetIO();
+  if (io.KeyCtrl) {
+    EditorSelection::toggle(gameObject);
+    m_rangeAnchor = gameObject.get();
+  }
+  else if (io.KeyShift && m_rangeAnchor) {
+    // Applied once every row is drawn, since the range may end below this row.
+    m_pendingRangeEnd = gameObject.get();
+  }
+  else if (bSelected && EditorSelection::getSelection().size() > 1) {
+    m_pendingSingleSelect = gameObject.get();
+  }
+  else {
+    EditorSelection::setSelectedGameObject(gameObject);
+    m_rangeAnchor = gameObject.get();
+  }
+}
+
+/*
+ */
+void
+SceneGraphUI::acceptObjectDrop(const SPtr<GameObject>& gameObject,
+                               const SPtr<GameObject>& parent,
+                               bool bLocked,
+                               bool bSiblingsAllowed)
+{
+  const SPtr<GameObject> dragged = AssetDragDrop::getDraggedGameObject();
+  if (!dragged) {
+    return;
+  }
+
+  enum class DropPlace
+  {
+    Before,
+    Inside,
+    After
+  };
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  const float edge = (max.y - min.y) * 0.25f;
+  const float mouseY = ImGui::GetMousePos().y;
+  DropPlace place = DropPlace::Inside;
+  if (bSiblingsAllowed && mouseY < min.y + edge) {
+    place = DropPlace::Before;
+  }
+  else if (bSiblingsAllowed && mouseY > max.y - edge) {
+    place = DropPlace::After;
+  }
+
+  // Refused before it highlights: the dragged object cannot go inside, before or after
+  // itself or one of its children, nothing goes inside an instance, and a drop into its own
+  // parent would change nothing. The other selected objects are checked when applied.
+  if (isInSubtree(gameObject.get(), *dragged) ||
+      (place == DropPlace::Inside && (bLocked || dragged->getParent() == gameObject.get()))) {
+    return;
+  }
+  constexpr ImGuiDragDropFlags kFlags =
+      ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
+  if (!AssetDragDrop::acceptGameObject(kFlags)) {
+    return;
+  }
+
+  ImDrawList& drawList = *ImGui::GetWindowDrawList();
+  const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+  if (place == DropPlace::Inside) {
+    drawList.AddRect(min, max, color, 0.0f, 0, 2.0f);
+  }
+  else {
+    const float lineY = place == DropPlace::Before ? min.y : max.y;
+    drawList.AddLine(ImVec2(min.x, lineY), ImVec2(max.x, lineY), color, 2.0f);
+  }
+
+  if (!ImGui::GetDragDropPayload()->IsDelivery()) {
+    return;
+  }
+  if (place == DropPlace::Inside) {
+    EditorScene::requestReparent(gameObject, nullptr, false);
+    m_openOnNextDraw = gameObject.get();
+  }
+  else {
+    EditorScene::requestReparent(parent, gameObject, place == DropPlace::After);
+  }
 }
 
 /*
@@ -285,9 +499,26 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
     ImGui::EndMenu();
   }
 
+  // From here on the items act on the whole selection, which holds this row.
   ImGui::Separator();
-  if (ImGui::MenuItem(ICON_FA_CUBES "  Create Prefab", nullptr, false, !bInsideInstance)) {
-    m_pendingCreatePrefab = gameObject;
+  if (ImGui::MenuItem(ICON_FA_PEN "  Rename", "F2", false, !bInsideInstance)) {
+    beginRename(gameObject);
+  }
+  if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C")) {
+    EditorScene::copySelection();
+  }
+  if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, EditorScene::canPaste())) {
+    EditorScene::requestPaste();
+  }
+  if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false,
+                      EditorScene::canDuplicateOrDelete(*gameObject))) {
+    EditorScene::requestDuplicate();
+  }
+
+  ImGui::Separator();
+  if (ImGui::MenuItem(ICON_FA_CUBES "  Create Prefab", nullptr, false,
+                      !bInsideInstance && m_contentBrowser)) {
+    EditorScene::requestCreatePrefabs(m_contentBrowser->getCurrentFolderPath());
   }
   if (!gameObject->getPrefab().isNull()) {
     const SPtr<IAsset> asset = AssetManager::instance().getAsset(gameObject->getPrefab());
@@ -303,9 +534,9 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   }
 
   ImGui::Separator();
-  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", nullptr, false,
+  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", "Del", false,
                       !bInsideInstance && !bPrefabRoot)) {
-    m_pendingDelete = gameObject;
+    EditorScene::requestDelete();
   }
 }
 
@@ -322,6 +553,11 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
       EditorScene::recordCreated(*scene.createGameObject("GameObject", parent), "Create");
     }
     renderCreateLightItems(scene, parent);
+    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, EditorScene::canPaste())) {
+      // Pasted where objects made without a parent go.
+      EditorSelection::clear();
+      EditorScene::requestPaste();
+    }
     ImGui::EndPopup();
   }
 }
@@ -341,17 +577,25 @@ SceneGraphUI::renderEmptyAreaDropTarget()
   ImGui::InvisibleButton("##emptyAreaDrop", ImVec2(Math::max(available.x, 1.0f),
                                                    Math::max(available.y,
                                                              ImGui::GetFrameHeight())));
-  if (ImGui::BeginDragDropTarget()) {
-    if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
-      m_pendingModel = std::move(model);
-      m_pendingParent.reset();
-    }
-    if (SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
-      m_pendingPrefab = std::move(prefab);
-      m_pendingParent.reset();
-    }
-    ImGui::EndDragDropTarget();
+  if (!ImGui::BeginDragDropTarget()) {
+    return;
   }
+  if (SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+    m_pendingModel = std::move(model);
+    m_pendingParent.reset();
+  }
+  if (SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
+    m_pendingPrefab = std::move(prefab);
+    m_pendingParent.reset();
+  }
+  // In prefab mode the empty area stands for the prefab's root.
+  const SPtr<GameObject>& defaultParent = EditorScene::getPrefabRoot();
+  const SPtr<GameObject> dragged = AssetDragDrop::getDraggedGameObject();
+  if (dragged && dragged->getParent() != defaultParent.get() &&
+      AssetDragDrop::acceptGameObject()) {
+    EditorScene::requestReparent(defaultParent, nullptr, false);
+  }
+  ImGui::EndDragDropTarget();
 }
 
 /*
@@ -377,6 +621,56 @@ SceneGraphUI::addPendingObject(Scene& scene)
   if (ModelComponent::getHierarchyWorldBounds(*gameObject, bounds)) {
     m_editorCamera->focus(bounds);
   }
+}
+
+/*
+ */
+void
+SceneGraphUI::beginRename(const SPtr<GameObject>& gameObject)
+{
+  if (!gameObject) {
+    return;
+  }
+  // What is inside an instance takes its names from the prefab.
+  const GameObject* instance = gameObject->getOutermostPrefabInstance();
+  if (instance && instance != gameObject.get()) {
+    return;
+  }
+  m_renaming = gameObject;
+  StringUtils::copyToBuffer(m_renameBuffer, gameObject->getName());
+  m_bRenameFocusRequested = true;
+}
+
+/*
+ * The name changes once, when Enter is pressed or the field is left, so a rename is one undo
+ * step. Escape keeps the old name.
+ */
+void
+SceneGraphUI::renderRenameField(GameObject& gameObject)
+{
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  if (m_bRenameFocusRequested) {
+    ImGui::SetKeyboardFocusHere();
+    m_bRenameFocusRequested = false;
+  }
+  const bool bEnter = ImGui::InputText("##rename", m_renameBuffer, sizeof(m_renameBuffer),
+                                       ImGuiInputTextFlags_EnterReturnsTrue |
+                                           ImGuiInputTextFlags_AutoSelectAll);
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    m_renaming.reset();
+    return;
+  }
+  if (!bEnter && !ImGui::IsItemDeactivated()) {
+    return;
+  }
+
+  const StringView name = StringUtils::trimView(StringView(m_renameBuffer));
+  if (!name.empty() && name != gameObject.getName()) {
+    EditorScene::recordChange(gameObject, "Rename");
+    gameObject.setName(String(name));
+  }
+  m_renaming.reset();
 }
 
 } // namespace chEngineSDK

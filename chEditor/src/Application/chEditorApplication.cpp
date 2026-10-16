@@ -352,6 +352,19 @@ EditorApplication::bindEvents() {
                  (data.key == chKeyBoard::Key::Z && bShift)) {
           EditorScene::requestRedo();
         }
+        else if (data.key == chKeyBoard::Key::D) {
+          EditorScene::requestDuplicate();
+        }
+        else if (data.key == chKeyBoard::Key::C) {
+          EditorScene::copySelection();
+        }
+        else if (data.key == chKeyBoard::Key::V) {
+          EditorScene::requestPaste();
+        }
+        else if (data.key == chKeyBoard::Key::A && EditorScene::getScene()) {
+          EditorSelection::selectAll(*EditorScene::getScene(),
+                                     EditorScene::getPrefabRoot().get());
+        }
       }
 
       if (data.key == chKeyBoard::Key::F5) {

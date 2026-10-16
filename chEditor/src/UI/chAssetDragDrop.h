@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/07
  * @details
- *  Assets dragged from the Content Browser and dropped on other editor windows.
+ *  Assets dragged from the Content Browser and GameObjects dragged from the Scene Graph.
  */
 /************************************************************************/
 #pragma once
@@ -18,9 +18,9 @@ class PrefabAsset;
 class TextureAsset;
 
 /**
- * Exists so every window that takes assets from the Content Browser agrees on the payload:
- * the asset UUID, under one payload name per asset type, so a window only highlights for
- * the types it accepts.
+ * Exists so every window that takes assets from the Content Browser, or GameObjects from the
+ * Scene Graph, agrees on the payload: the UUID, under one payload name per asset type (and
+ * one for GameObjects), so a window only highlights for the types it accepts.
  */
 class AssetDragDrop
 {
@@ -56,6 +56,27 @@ class AssetDragDrop
    */
   NODISCARD static SPtr<PrefabAsset>
   acceptPrefab();
+
+  /**
+   * Makes the last ImGui item a drag source for gameObject, an object of the open scene. When
+   * it is selected, the drop acts on the whole selection.
+   */
+  static void
+  source(const GameObject& gameObject);
+
+  /**
+   * The object of the open scene being dragged, or null when the payload is something else.
+   * Lets a target refuse a drop before it highlights.
+   */
+  NODISCARD static SPtr<GameObject>
+  getDraggedGameObject();
+
+  /**
+   * Same as acceptModel, for an object of the open scene. imguiFlags are ImGuiDragDropFlags,
+   * so a target can take the payload before the drop to draw where it would land.
+   */
+  NODISCARD static SPtr<GameObject>
+  acceptGameObject(int32 imguiFlags = 0);
 
   /**
    * Adds a GameObject with the model under parent (a root object when null) and selects it.

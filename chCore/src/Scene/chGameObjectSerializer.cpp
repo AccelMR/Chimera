@@ -208,6 +208,25 @@ GameObjectSerializer::write(DataStream& stream, const GameObject& gameObject)
 bool
 GameObjectSerializer::read(DataStream& stream, Scene& scene, GameObject* parent)
 {
+  return readStream(stream, scene, parent, false);
+}
+
+/*
+ */
+bool
+GameObjectSerializer::readCopies(DataStream& stream, Scene& scene, GameObject* parent)
+{
+  return readStream(stream, scene, parent, true);
+}
+
+/*
+ */
+bool
+GameObjectSerializer::readStream(DataStream& stream,
+                                 Scene& scene,
+                                 GameObject* parent,
+                                 bool bNewUuids)
+{
   uint32 version = 0;
   uint32 count = 0;
   if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
@@ -216,7 +235,7 @@ GameObjectSerializer::read(DataStream& stream, Scene& scene, GameObject* parent)
     return false;
   }
   ReadContext context{
-      .stream = stream, .scene = scene, .version = version, .bNewUuids = false};
+      .stream = stream, .scene = scene, .version = version, .bNewUuids = bNewUuids};
   return readList(context, parent, count, 0);
 }
 
@@ -251,6 +270,37 @@ GameObjectSerializer::readInto(DataStream& stream, GameObject& target)
   target.setName(header.name);
   target.m_prefab = UUID::null();
   return fillObject(context, target, header, 0);
+}
+
+/*
+ */
+SPtr<GameObject>
+GameObjectSerializer::duplicate(const GameObject& source)
+{
+  CH_ASSERT(source.getScene() && "The source must be in a scene.");
+  Scene& scene = *source.getScene();
+  MemoryDataStream written;
+  write(written, source);
+
+  // Only read, so the bytes are never changed through the stream.
+  MemoryDataStream stream(written.getStartPtr(), written.size(), false);
+  GameObject* parent = source.m_parent;
+  const Vector<SPtr<GameObject>>& siblings =
+      parent ? parent->m_children : scene.getRootGameObjects();
+  const SIZE_T siblingCount = siblings.size();
+  const bool bRead = readCopies(stream, scene, parent);
+  if (siblings.size() == siblingCount) {
+    return nullptr;
+  }
+
+  SPtr<GameObject> copy = siblings.back();
+  if (!bRead) {
+    // What was read is half an object, not a copy.
+    scene.destroyGameObject(*copy);
+    return nullptr;
+  }
+  scene.setSiblingIndex(*copy, scene.getSiblingIndex(source) + 1);
+  return copy;
 }
 
 /*

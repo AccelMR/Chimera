@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/07
  * @details
- *  Assets dragged from the Content Browser and dropped on other editor windows.
+ *  Assets dragged from the Content Browser and GameObjects dragged from the Scene Graph.
  */
 /************************************************************************/
 #include "chAssetDragDrop.h"
@@ -41,6 +41,41 @@ constexpr const ANSICHAR* kModelPayload = "CH_MODEL";
 constexpr const ANSICHAR* kTexturePayload = "CH_TEXTURE";
 constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
 constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
+constexpr const ANSICHAR* kGameObjectPayload = "CH_GAMEOBJECT";
+
+/*
+ * Targets ask for the dragged object every frame of a drag, so the last one found is kept
+ * instead of walking the scene each time.
+ */
+WeakPtr<GameObject>&
+getDraggedCache()
+{
+  static WeakPtr<GameObject> dragged;
+  return dragged;
+}
+
+/*
+ */
+SPtr<GameObject>
+findPayloadGameObject(const ImGuiPayload& payload)
+{
+  if (!payload.IsDataType(kGameObjectPayload) ||
+      payload.DataSize != static_cast<int32>(sizeof(UUID))) {
+    return nullptr;
+  }
+  UUID uuid;
+  std::memcpy(&uuid, payload.Data, sizeof(UUID));
+
+  WeakPtr<GameObject>& cache = getDraggedCache();
+  SPtr<GameObject> gameObject = cache.lock();
+  if (gameObject && gameObject->getUUID() == uuid && gameObject->getScene()) {
+    return gameObject;
+  }
+  const SPtr<Scene>& scene = EditorScene::getScene();
+  gameObject = scene ? scene->findGameObject(uuid) : nullptr;
+  cache = gameObject;
+  return gameObject;
+}
 
 /*
  * Null for asset types that cannot be dropped anywhere.
@@ -139,6 +174,43 @@ SPtr<PrefabAsset>
 AssetDragDrop::acceptPrefab()
 {
   return acceptAsset<PrefabAsset>(kPrefabPayload);
+}
+
+/*
+ */
+void
+AssetDragDrop::source(const GameObject& gameObject)
+{
+  if (ImGui::BeginDragDropSource()) {
+    const UUID& uuid = gameObject.getUUID();
+    ImGui::SetDragDropPayload(kGameObjectPayload, &uuid, sizeof(UUID));
+    const SIZE_T selected = EditorSelection::getSelection().size();
+    if (selected > 1 && EditorSelection::isSelected(gameObject)) {
+      ImGui::Text("%u objects", static_cast<uint32>(selected));
+    }
+    else {
+      ImGui::TextUnformatted(gameObject.getName().c_str());
+    }
+    ImGui::EndDragDropSource();
+  }
+}
+
+/*
+ */
+SPtr<GameObject>
+AssetDragDrop::getDraggedGameObject()
+{
+  const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+  return payload ? findPayloadGameObject(*payload) : nullptr;
+}
+
+/*
+ */
+SPtr<GameObject>
+AssetDragDrop::acceptGameObject(int32 imguiFlags)
+{
+  const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kGameObjectPayload, imguiFlags);
+  return payload ? findPayloadGameObject(*payload) : nullptr;
 }
 
 /*

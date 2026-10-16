@@ -2462,6 +2462,132 @@ TEST_CASE("chCore - Scene history")
   }
 }
 
+TEST_CASE("chCore - Scene reparent and duplicate")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> parent = scene.createGameObject("Parent");
+  parent->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+  parent->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  parent->getTransform().setLocalScale(Vector3(2.0f, 2.0f, 2.0f));
+  const SPtr<GameObject> lamp = scene.createGameObject("Lamp");
+  lamp->getTransform().setLocalPosition(Vector3(0.0f, 4.0f, 1.0f));
+  lamp->addComponent<PointLightComponent>().setRange(7.0f);
+  const SPtr<GameObject> bulb = scene.createGameObject("Bulb", lamp.get());
+  const SPtr<GameObject> last = scene.createGameObject("Last");
+  scene.updateTransforms();
+
+  SECTION("Reparenting keeps the world placement")
+  {
+    REQUIRE(scene.setParent(*lamp, parent.get()));
+    REQUIRE(lamp->getParent() == parent.get());
+    REQUIRE(parent->getChildren().back() == lamp);
+    REQUIRE(scene.getRootGameObjects().size() == 2);
+    REQUIRE(lamp->getTransform().getLocalScale().nearEqual(Vector3(0.5f, 0.5f, 0.5f), 1e-5f));
+    scene.updateTransforms();
+    REQUIRE(lamp->getTransform().getWorldPosition().nearEqual(Vector3(0.0f, 4.0f, 1.0f),
+                                                              1e-4f));
+    REQUIRE(bulb->getParent() == lamp.get());
+
+    // Back to the root, last among the roots.
+    REQUIRE(scene.setParent(*lamp, nullptr));
+    REQUIRE(scene.getRootGameObjects().back() == lamp);
+    scene.updateTransforms();
+    REQUIRE(lamp->getTransform().getWorldPosition().nearEqual(Vector3(0.0f, 4.0f, 1.0f),
+                                                              1e-4f));
+  }
+
+  SECTION("An object cannot go under itself or its children")
+  {
+    REQUIRE_FALSE(scene.setParent(*lamp, lamp.get()));
+    REQUIRE_FALSE(scene.setParent(*lamp, bulb.get()));
+    Scene other("Other", chEngineSDK::UUID::createRandom());
+    const SPtr<GameObject> stranger = other.createGameObject("Stranger");
+    REQUIRE_FALSE(scene.setParent(*lamp, stranger.get()));
+    REQUIRE(lamp->getParent() == nullptr);
+    REQUIRE(scene.getSiblingIndex(*lamp) == 1);
+  }
+
+  SECTION("Undo puts a reparented object back in its place")
+  {
+    SceneHistory history;
+    history.recordChange(*lamp, "Reparent");
+    REQUIRE(scene.setParent(*lamp, parent.get()));
+    history.commit(scene);
+    chEngineSDK::UUID focus = chEngineSDK::UUID::null();
+    REQUIRE(history.undo(scene, focus));
+    const SPtr<GameObject> restored = scene.findGameObject(focus);
+    REQUIRE(restored != nullptr);
+    REQUIRE(restored->getParent() == nullptr);
+    REQUIRE(scene.getSiblingIndex(*restored) == 1);
+    REQUIRE(restored->getTransform().getLocalPosition() == Vector3(0.0f, 4.0f, 1.0f));
+    REQUIRE(parent->getChildren().empty());
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(scene.findGameObject(focus)->getParent() == parent.get());
+  }
+
+  SECTION("A duplicate goes right after its source, with new UUIDs")
+  {
+    const SPtr<GameObject> copy = GameObjectSerializer::duplicate(*lamp);
+    REQUIRE(copy != nullptr);
+    REQUIRE(scene.getRootGameObjects().size() == 4);
+    REQUIRE(scene.getRootGameObjects()[2] == copy);
+    REQUIRE(scene.getRootGameObjects()[3] == last);
+    REQUIRE(copy->getName() == "Lamp");
+    REQUIRE(copy->getUUID() != lamp->getUUID());
+    REQUIRE(copy->getTransform().getLocalPosition() == Vector3(0.0f, 4.0f, 1.0f));
+    const PointLightComponent* light = copy->getComponent<PointLightComponent>();
+    REQUIRE(light != nullptr);
+    REQUIRE(light->getRange() == 7.0f);
+    REQUIRE(scene.getLightCount() == 2);
+    REQUIRE(copy->getChildren().size() == 1);
+    REQUIRE(copy->getChildren()[0]->getUUID() != bulb->getUUID());
+
+    // A child is copied under the same parent.
+    const SPtr<GameObject> bulbCopy = GameObjectSerializer::duplicate(*bulb);
+    REQUIRE(bulbCopy != nullptr);
+    REQUIRE(bulbCopy->getParent() == lamp.get());
+    REQUIRE(lamp->getChildren().size() == 2);
+  }
+
+  SECTION("Copies read back get new UUIDs, as a paste")
+  {
+    MemoryDataStream stream;
+    const SPtr<GameObject> copied[] = {lamp, last};
+    GameObjectSerializer::write(stream, Span<const SPtr<GameObject>>(copied));
+    stream.seek(0);
+    REQUIRE(GameObjectSerializer::readCopies(stream, scene, parent.get()));
+    REQUIRE(parent->getChildren().size() == 2);
+    REQUIRE(parent->getChildren()[0]->getName() == "Lamp");
+    REQUIRE(parent->getChildren()[0]->getUUID() != lamp->getUUID());
+    REQUIRE(parent->getChildren()[0]->getChildren().size() == 1);
+    REQUIRE(parent->getChildren()[1]->getName() == "Last");
+    REQUIRE(scene.getLightCount() == 2);
+  }
+
+  SECTION("Undo puts reordered siblings back in their order")
+  {
+    SceneHistory history;
+    history.recordChange(*last, "Reparent");
+    scene.setSiblingIndex(*last, 0);
+    history.recordChange(*lamp, "Reparent");
+    scene.setSiblingIndex(*lamp, 0);
+    history.setEntryName("Reparent 2 objects");
+    REQUIRE(history.getUndoName() == "Reparent 2 objects");
+    history.commit(scene);
+    REQUIRE(scene.getRootGameObjects()[0] == lamp);
+    REQUIRE(scene.getRootGameObjects()[1] == last);
+
+    chEngineSDK::UUID focus = chEngineSDK::UUID::null();
+    REQUIRE(history.undo(scene, focus));
+    REQUIRE(scene.getRootGameObjects()[0] == parent);
+    REQUIRE(scene.getRootGameObjects()[1] == lamp);
+    REQUIRE(scene.getRootGameObjects()[2] == last);
+    REQUIRE(history.redo(scene, focus));
+    REQUIRE(scene.getRootGameObjects()[0] == lamp);
+    REQUIRE(scene.getRootGameObjects()[1] == last);
+  }
+}
+
 TEST_CASE("chCore - Texture mips")
 {
   REQUIRE(TextureMips::getMipCount(1, 1) == 1);

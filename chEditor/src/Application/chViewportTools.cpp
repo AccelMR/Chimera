@@ -212,7 +212,10 @@ ViewportTools::handleShortcuts()
     focusSelection();
   }
   if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-    EditorSelection::setSelectedGameObject(nullptr);
+    EditorSelection::clear();
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+    EditorScene::requestDelete();
   }
 }
 
@@ -404,10 +407,8 @@ ViewportTools::renderLights(const Camera& camera)
   // The scene is under every window, so the lights draw behind them too.
   const ImGuiViewport& viewport = *ImGui::GetMainViewport();
   ImDrawList& drawList = *ImGui::GetBackgroundDrawList(ImGui::GetMainViewport());
-  const GameObject* selected = EditorSelection::getSelectedGameObject().get();
-
   for (const LightItem* light : m_visibleLights) {
-    const bool bSelected = light->owner && light->owner == selected;
+    const bool bSelected = light->owner && EditorSelection::isSelected(*light->owner);
     if (bSelected) {
       const Vector3& position = light->position;
       const Vector3& direction = light->direction;
@@ -551,22 +552,42 @@ ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
     return;
   }
 
-  // world = local * parentWorld, so the local matrix takes the inverse of the parent's.
-  const GameObject* parent = selected->getParent();
-  const Matrix4 local =
-      parent ? world * parent->getTransform().getWorldMatrix().getInverseAffine() : world;
-  Vector3 scale;
-  Quaternion rotation;
-  Vector3 position;
-  if (local.decompose(scale, rotation, position)) {
-    const StringView action = m_operation == Operation::Rotate  ? "Rotate"
-                              : m_operation == Operation::Scale ? "Scale"
-                                                                : "Move";
-    EditorScene::recordChange(*selected, action);
-    transform.setLocalPosition(position);
-    transform.setLocalRotation(rotation);
-    transform.setLocalScale(scale);
+  // The gizmo stands on the active object. What it did, as a change in world space, moves
+  // every top-level selected object the same way, so a group turns and scales around the
+  // active one. When the active object is below another selected one, its parent carries it.
+  const Matrix4 change = transform.getWorldMatrix().getInverseAffine() * world;
+  const StringView action = m_operation == Operation::Rotate  ? "Rotate"
+                            : m_operation == Operation::Scale ? "Scale"
+                                                              : "Move";
+  const GameObject* prefabRoot = EditorScene::getPrefabRoot().get();
+  EditorSelection::getTopLevel(m_gizmoTargets);
+  for (const SPtr<GameObject>& target : m_gizmoTargets) {
+    const GameObject* targetInstance = target->getOutermostPrefabInstance();
+    if (target->getScene() != &scene || (targetInstance && targetInstance != target.get())) {
+      continue;
+    }
+    // world = local * parentWorld, so the local matrix takes the inverse of the parent's.
+    Transform& targetTransform = target->getTransform();
+    const Matrix4 targetWorld = targetTransform.getWorldMatrix() * change;
+    const GameObject* parent = target->getParent();
+    const Matrix4 local =
+        parent ? targetWorld * parent->getTransform().getWorldMatrix().getInverseAffine()
+               : targetWorld;
+    Vector3 scale;
+    Quaternion rotation;
+    Vector3 position;
+    if (!local.decompose(scale, rotation, position)) {
+      continue;
+    }
+    EditorScene::recordChange(*target, action);
+    if (target.get() != prefabRoot) {
+      targetTransform.setLocalPosition(position);
+    }
+    targetTransform.setLocalRotation(rotation);
+    targetTransform.setLocalScale(scale);
   }
+  // Clear keeps the capacity; holding the objects would keep deleted ones alive.
+  m_gizmoTargets.clear();
 }
 
 /*
@@ -695,7 +716,14 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
     }
   }
 
-  EditorSelection::setSelectedGameObject(picked ? findShared(scene, *picked) : nullptr);
+  // Ctrl adds or removes the picked object; a Ctrl click on nothing keeps the selection.
+  const SPtr<GameObject> pickedShared = picked ? findShared(scene, *picked) : nullptr;
+  if (io.KeyCtrl) {
+    EditorSelection::toggle(pickedShared);
+  }
+  else {
+    EditorSelection::setSelectedGameObject(pickedShared);
+  }
 }
 
 /*
@@ -703,20 +731,28 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
 void
 ViewportTools::focusSelection()
 {
-  const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
-  if (!selected) {
-    return;
-  }
-
-  // A model split into parts has its meshes on the children.
-  AABox bounds(Vector3::ZERO, Vector3::ZERO);
-  if (ModelComponent::getHierarchyWorldBounds(*selected, bounds)) {
-    m_editorCamera.focus(bounds);
-    return;
-  }
-  const Vector3 position = selected->getTransform().getWorldPosition();
+  // A model split into parts has its meshes on the children; an object without meshes (a
+  // light) counts as a small box around it.
   const Vector3 extent(kLightFocusExtent, kLightFocusExtent, kLightFocusExtent);
-  m_editorCamera.focus(AABox(position - extent, position + extent));
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  bool bHasBounds = false;
+  for (const SPtr<GameObject>& selected : EditorSelection::getSelection()) {
+    AABox objectBounds(Vector3::ZERO, Vector3::ZERO);
+    if (!ModelComponent::getHierarchyWorldBounds(*selected, objectBounds)) {
+      const Vector3 position = selected->getTransform().getWorldPosition();
+      objectBounds = AABox(position - extent, position + extent);
+    }
+    if (bHasBounds) {
+      bounds += objectBounds;
+    }
+    else {
+      bounds = objectBounds;
+      bHasBounds = true;
+    }
+  }
+  if (bHasBounds) {
+    m_editorCamera.focus(bounds);
+  }
 }
 
 } // namespace chEngineSDK

@@ -286,6 +286,8 @@ ContentAssetUI::renderAssetDisplayArea()
   renderEmptyAreaContextMenu();
 
   ImGui::EndChild();
+  // A folder inside the area is a smaller target, so ImGui gives it the drop instead.
+  acceptPrefabDrop(getCurrentFolderPath());
 }
 
 /*
@@ -995,6 +997,27 @@ ContentAssetUI::requestFolder(uint32 folderIndex)
 }
 
 /*
+ * One prefab per selected object, made after the frame's UI, because saving refreshes the
+ * asset list.
+ */
+void
+ContentAssetUI::acceptPrefabDrop(const Path& folder)
+{
+  if (!ImGui::BeginDragDropTarget()) {
+    return;
+  }
+  if (const SPtr<GameObject> gameObject = AssetDragDrop::acceptGameObject()) {
+    // A drag selects its row when it starts, so this only matters if something changed the
+    // selection during the drag.
+    if (!EditorSelection::isSelected(*gameObject)) {
+      EditorSelection::setSelectedGameObject(gameObject);
+    }
+    EditorScene::requestCreatePrefabs(folder);
+  }
+  ImGui::EndDragDropTarget();
+}
+
+/*
  */
 void
 ContentAssetUI::renderFolderTree()
@@ -1045,6 +1068,7 @@ ContentAssetUI::renderFolderTreeNode(uint32 folderIndex)
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
     requestFolder(folderIndex);
   }
+  acceptPrefabDrop(folder.path);
   if (bOpen) {
     for (const uint32 child : folder.children) {
       renderFolderTreeNode(child);
@@ -1106,6 +1130,7 @@ ContentAssetUI::renderGridFolderItem(uint32 folderIndex, int32 column)
     requestFolder(folderIndex);
     m_bRevealCurrentFolder = true;
   }
+  acceptPrefabDrop(folder.path);
 
   const ImVec2 buttonMin = ImGui::GetItemRectMin();
   const ImVec2 iconPos =
@@ -1145,6 +1170,7 @@ ContentAssetUI::renderListFolderItem(uint32 folderIndex)
     requestFolder(folderIndex);
     m_bRevealCurrentFolder = true;
   }
+  acceptPrefabDrop(folder.path);
 
   ImGui::TableSetColumnIndex(2);
   ImGui::TextUnformatted("Folder");

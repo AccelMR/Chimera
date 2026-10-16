@@ -164,6 +164,12 @@ InspectorUI::renderInspectorUI()
     ImGui::End();
     return;
   }
+  // Only the active object is edited here; the others move with it through the gizmo.
+  const SIZE_T selectedCount = EditorSelection::getSelection().size();
+  if (selectedCount > 1) {
+    ImGui::TextDisabled(ICON_FA_LAYER_GROUP "  %u objects selected, showing the last one",
+                        static_cast<uint32>(selectedCount));
+  }
 
   // What an instance holds comes from its prefab and is not saved with the scene, so it is
   // shown but cannot be edited; only the instance's own name and transform can.

@@ -138,6 +138,54 @@ Scene::setSiblingIndex(GameObject& gameObject, uint32 index)
 
 /*
  */
+bool
+Scene::setParent(GameObject& gameObject, GameObject* newParent)
+{
+  if (gameObject.m_scene != this || (newParent && newParent->m_scene != this)) {
+    return false;
+  }
+  for (const GameObject* ancestor = newParent; ancestor; ancestor = ancestor->m_parent) {
+    if (ancestor == &gameObject) {
+      return false;
+    }
+  }
+  if (gameObject.m_parent == newParent) {
+    return true;
+  }
+
+  Transform& transform = gameObject.m_transform;
+  const Matrix4& world = transform.getWorldMatrix();
+  const Matrix4 local =
+      newParent ? world * newParent->m_transform.getWorldMatrix().getInverseAffine() : world;
+  Vector3 scale;
+  Quaternion rotation;
+  Vector3 position;
+  if (local.decompose(scale, rotation, position)) {
+    transform.setLocalScale(scale);
+    transform.setLocalRotation(rotation);
+    transform.setLocalPosition(position);
+  }
+  else {
+    // A zero scale has no rotation to read; the local values stay, and the world matrix is
+    // still built again under the new parent.
+    transform.setLocalPosition(transform.getLocalPosition());
+  }
+
+  Vector<SPtr<GameObject>>& oldSiblings =
+      gameObject.m_parent ? gameObject.m_parent->m_children : m_rootGameObjects;
+  const SIZE_T index = getSiblingIndex(gameObject);
+  // Kept alive here, since the old list may hold its last reference.
+  SPtr<GameObject> moved = std::move(oldSiblings[index]);
+  oldSiblings.erase(oldSiblings.begin() + index);
+
+  gameObject.m_parent = newParent;
+  Vector<SPtr<GameObject>>& newSiblings = newParent ? newParent->m_children : m_rootGameObjects;
+  newSiblings.push_back(std::move(moved));
+  return true;
+}
+
+/*
+ */
 void
 Scene::update(float deltaTime)
 {

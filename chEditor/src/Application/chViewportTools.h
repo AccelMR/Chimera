@@ -102,6 +102,8 @@ class ViewportTools
 
   // Kept between frames, so finding the lights to draw does not allocate.
   Vector<const LightItem*> m_visibleLights;
+  // The objects a gizmo drag moves, refilled on each frame that changes them.
+  Vector<SPtr<GameObject>> m_gizmoTargets;
 };
 
 } // namespace chEngineSDK

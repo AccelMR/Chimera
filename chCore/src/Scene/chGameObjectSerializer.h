@@ -47,12 +47,27 @@ class CH_CORE_EXPORT GameObjectSerializer
   read(DataStream& stream, Scene& scene, GameObject* parent);
 
   /**
+   * Same as read, but every object gets a new UUID, so the objects can live next to the
+   * ones they were written from (paste). The new objects are the last children of parent.
+   */
+  NODISCARD static bool
+  readCopies(DataStream& stream, Scene& scene, GameObject* parent);
+
+  /**
    * Reads one object written by write() into target (which must be in a scene), replacing its
    * name, transform, prefab link, components and children; target keeps its UUID and place.
    * The children get their saved UUIDs. False for broken data.
    */
   NODISCARD static bool
   readInto(DataStream& stream, GameObject& target);
+
+  /**
+   * Makes a copy of source (which must be in a scene) and its children with new UUIDs, right
+   * after it under the same parent. A prefab instance is copied as another instance. Null
+   * when the copy cannot be read back.
+   */
+  static SPtr<GameObject>
+  duplicate(const GameObject& source);
 
   /**
    * Makes an instance of prefab under parent: an object named after the prefab, linked to it,
@@ -86,6 +101,9 @@ class CH_CORE_EXPORT GameObjectSerializer
  private:
   struct ReadContext;
   struct ObjectHeader;
+
+  NODISCARD static bool
+  readStream(DataStream& stream, Scene& scene, GameObject* parent, bool bNewUuids);
 
   NODISCARD static bool
   readList(ReadContext& context, GameObject* parent, uint32 count, uint32 depth);

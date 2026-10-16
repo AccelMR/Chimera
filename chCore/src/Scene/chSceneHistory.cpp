@@ -87,6 +87,16 @@ SceneHistory::recordCreated(GameObject& gameObject, StringView action)
 /*
  */
 void
+SceneHistory::setEntryName(StringView name)
+{
+  if (m_bEntryOpen) {
+    m_openEntry.name.assign(name);
+  }
+}
+
+/*
+ */
+void
 SceneHistory::commit(Scene& scene)
 {
   if (!m_bEntryOpen) {
@@ -199,6 +209,26 @@ SceneHistory::redo(Scene& scene, UUID& outFocus)
   for (const ObjectRecord& record : entry.records) {
     applyRecord(scene, record, false);
   }
+
+  // The places after the change were all saved at commit, so they are set again from the
+  // lowest up; set in record order, a later move would shift one already placed.
+  if (entry.records.size() > 1) {
+    Vector<const ObjectRecord*> byPlace;
+    byPlace.reserve(entry.records.size());
+    for (const ObjectRecord& record : entry.records) {
+      byPlace.push_back(&record);
+    }
+    Algorithm::sort(byPlace, [](const ObjectRecord* a, const ObjectRecord* b) {
+      return a->indexAfter < b->indexAfter;
+    });
+    for (const ObjectRecord* record : byPlace) {
+      const SPtr<GameObject> gameObject = scene.findGameObject(record->object);
+      if (gameObject && !record->after.empty() &&
+          getParentId(*gameObject) == record->parentAfter) {
+        scene.setSiblingIndex(*gameObject, record->indexAfter);
+      }
+    }
+  }
   outFocus = entry.records.front().object;
   return true;
 }
@@ -285,6 +315,8 @@ SceneHistory::applyRecord(Scene& scene, const ObjectRecord& record, bool bBefore
     if (!GameObjectSerializer::readInto(stream, *existing)) {
       CH_LOG_ERROR(SceneManagerLog, "Could not restore {0}.", existing->getName());
     }
+    // A reorder among the same siblings only changed the place.
+    scene.setSiblingIndex(*existing, index);
     return;
   }
 

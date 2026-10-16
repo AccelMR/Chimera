@@ -163,6 +163,13 @@ class ContentAssetUI
   void
   requestFolder(uint32 folderIndex);
 
+  /**
+   * Makes the last ImGui item a target for objects dragged from the Scene Graph, which
+   * become prefabs in folder.
+   */
+  void
+  acceptPrefabDrop(const Path& folder);
+
   void
   renderGridFolderItem(uint32 folderIndex, int32 column);
 

@@ -46,6 +46,12 @@ class CH_CORE_EXPORT SceneHistory
   isEntryOpen() const { return m_bEntryOpen; }
 
   /**
+   * Renames the open entry, for a change to several objects ("Delete 3 objects").
+   */
+  void
+  setEntryName(StringView name);
+
+  /**
    * Saves how the recorded objects are now and closes the open entry. An entry that changed
    * nothing is dropped. Throws away what could be redone.
    */

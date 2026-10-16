@@ -35,6 +35,13 @@ class Algorithm
     return std::find(container.begin(), container.end(), value) != container.end();
   }
 
+  template<typename Container, typename Predicate>
+  NODISCARD static FORCEINLINE bool
+  containsIf(const Container& container, Predicate matches)
+  {
+    return std::any_of(container.begin(), container.end(), matches);
+  }
+
   /**
    * Erases the first element equal to value.
    *
