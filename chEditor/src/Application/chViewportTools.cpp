@@ -25,6 +25,7 @@
 #include "chScene.h"
 #include "chTransform.h"
 #include "chVector2.h"
+#include "chViewportGrid.h"
 
 #include "imgui.h"
 #include "ImGuizmo.h"
@@ -292,6 +293,23 @@ ViewportTools::renderToolbar()
   ImGui::TextDisabled("|");
   ImGui::SameLine();
   renderCameraSettings();
+
+  ImGui::SameLine();
+  const bool bGrid = ViewportGrid::isVisible();
+  if (bGrid) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+  }
+  if (ImGui::Button("Grid")) {
+    ViewportGrid::setVisible(!bGrid);
+  }
+  if (bGrid) {
+    ImGui::PopStyleColor();
+  }
+  ImGui::SetItemTooltip("Ground grid; right click for its settings");
+  if (ImGui::BeginPopupContextItem("##GridSettings")) {
+    ViewportGrid::renderSettings();
+    ImGui::EndPopup();
+  }
 
   ImGui::SameLine();
   const bool bStats = ProfilerUI::isOverlayVisible();

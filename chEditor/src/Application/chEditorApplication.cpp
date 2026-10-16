@@ -37,6 +37,7 @@
 #include "chRayCast.h"
 #include "chRotator.h"
 #include "chUIHelpers.h"
+#include "chViewportGrid.h"
 #include "chViewportTools.h"
 #include "chImportDialog.h"
 #include "chScene.h"
@@ -132,6 +133,7 @@ EditorApplication::destroyModules()
     m_editorCamera->unbindInputEvents();
     m_editorCamera.reset();
   }
+  m_viewportGrid.reset();
   m_sceneRenderer.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorScene::shutDown();
@@ -213,10 +215,12 @@ EditorApplication::onRender(ICommandList& commandList,
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
                           swapChain.getCurrentTextureView(), ResourceState::Undefined,
                           ResourceState::Present);
-  m_sceneRenderer->addScenePasses(scene, m_editorCamera->getCamera(), backBuffer,
-                                  UIHelpers::rendererColor);
+  const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(
+      scene, m_editorCamera->getCamera(), backBuffer, UIHelpers::rendererColor);
 
+  // F11 hides the grid with the rest of the editor, so the image looks like the game.
   if (UIHelpers::bRenderImGui) {
+    m_viewportGrid->addPass(graph, m_editorCamera->getCamera(), backBuffer, sceneDepth);
     graph.addPass("EditorUI")
         .writeColor(backBuffer, LoadOp::Load)
         .setExecute([this, format = swapChain.getFormat()](RenderPassContext& context) {
@@ -286,6 +290,7 @@ EditorApplication::initializeEditorComponents() {
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
 
   m_sceneRenderer = chMakeUnique<SceneRenderer>();
+  m_viewportGrid = chMakeUnique<ViewportGrid>();
 
   const ISwapChain& swapChain = *getSwapChain();
   m_viewportWidth = swapChain.getWidth();

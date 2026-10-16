@@ -28,6 +28,7 @@
 #include "chSceneAsset.h"
 #include "chStringUtils.h"
 #include "chUIHelpers.h"
+#include "chViewportGrid.h"
 
 #include "imgui.h"
 
@@ -370,6 +371,10 @@ MainMenuBarUI::renderMainMenuBar() {
     if (ImGui::MenuItem(ICON_FA_TACHOMETER_ALT "  Stats Overlay", nullptr,
                         ProfilerUI::isOverlayVisible())) {
       ProfilerUI::setOverlayVisible(!ProfilerUI::isOverlayVisible());
+    }
+    if (ImGui::BeginMenu(ICON_FA_TH "  Grid")) {
+      ViewportGrid::renderSettings();
+      ImGui::EndMenu();
     }
     ImGui::MenuItem(ICON_FA_QUESTION_CIRCLE "  Show ImGui Demo Window", nullptr,
                     &UIHelpers::bShowDemoWindow);

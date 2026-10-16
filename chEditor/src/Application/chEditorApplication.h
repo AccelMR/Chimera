@@ -26,6 +26,7 @@ class InspectorUI;
 class ImGuiRenderer;
 class EditorCamera;
 class ViewportTools;
+class ViewportGrid;
 class ModelAsset;
 
 class EditorApplication : public WindowedApplication
@@ -96,6 +97,7 @@ class EditorApplication : public WindowedApplication
 
  private:
   UniquePtr<SceneRenderer> m_sceneRenderer;
+  UniquePtr<ViewportGrid> m_viewportGrid;
   // Size of the swap chain the camera was last set up for.
   uint32 m_viewportWidth = 0;
   uint32 m_viewportHeight = 0;
