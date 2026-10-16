@@ -19,7 +19,12 @@ struct PushConstants
   uint depthIndex;
   uint viewIndex;
   float2 inverseSize;
+  // kNoScreenSpaceAO when Renderer.SSAO is off.
+  uint screenSpaceAOIndex;
 };
+
+// Must match GraphicsLimits::INVALID_BINDLESS_INDEX.
+static const uint kNoScreenSpaceAO = 0xFFFFFFFF;
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push : register(b0);
 
@@ -62,7 +67,14 @@ PSMain(float4 position : SV_Position) : SV_Target0
 
   const float3 viewDirection = normalize(view.cameraPosition - worldPosition);
   float3 color = evaluateLights(gbuffer.surface, worldPosition, viewDirection, view);
-  color += evaluateAmbient(gbuffer.surface, viewDirection, gbuffer.occlusion, view);
+  // The material and the screen both estimate how much of the environment is hidden, so
+  // the stronger one wins instead of darkening the same crease twice.
+  float occlusion = gbuffer.occlusion;
+  if (g_push.screenSpaceAOIndex != kNoScreenSpaceAO) {
+    Texture2D<float> screenSpaceAO = ResourceDescriptorHeap[g_push.screenSpaceAOIndex];
+    occlusion = min(occlusion, screenSpaceAO.Load(texel));
+  }
+  color += evaluateAmbient(gbuffer.surface, viewDirection, occlusion, view);
   color += gbuffer.emissive;
   color = applyShadowCascadeTint(color, worldPosition, view);
   return float4(color, 1.0f);

@@ -48,13 +48,15 @@ static_assert(sizeof(ViewData) % 16 == 0, "Constant buffers are read in 16-byte 
 constexpr uint32 kFeatureNormalMaps = 1u << 0;
 constexpr uint32 kFeatureOcclusionMaps = 1u << 1;
 constexpr uint32 kFeatureEmissive = 1u << 2;
+constexpr uint32 kFeatureAOMultiBounce = 1u << 3;
 
 uint32
 getFeatureFlags()
 {
   return (g_cvarNormalMaps.get() ? kFeatureNormalMaps : 0u) |
          (g_cvarOcclusionMaps.get() ? kFeatureOcclusionMaps : 0u) |
-         (g_cvarEmissive.get() ? kFeatureEmissive : 0u);
+         (g_cvarEmissive.get() ? kFeatureEmissive : 0u) |
+         (g_cvarAOMultiBounce.get() ? kFeatureAOMultiBounce : 0u);
 }
 
 // Must match kNoShadow in chShadows.hlsli.

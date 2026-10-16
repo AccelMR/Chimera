@@ -16,13 +16,15 @@
 #include "chPipelineCache.h"
 #include "chRenderSettings.h"
 #include "chSceneViewBuffers.h"
+#include "chScreenSpaceAO.h"
 
 namespace chEngineSDK {
 
 /**
  * Exists so the cost of the lights does not grow with how many fragments the items draw:
- * a GBuffer pass writes the material of the nearest surface of each pixel, and a full
- * screen pass evaluates every light once per pixel with the same BRDF as the forward path.
+ * a GBuffer pass writes the material of the nearest surface of each pixel, the ambient
+ * occlusion is measured on its depth and normals, and a full screen pass evaluates every
+ * light once per pixel with the same BRDF as the forward path.
  * The GBuffer can also be shown channel by channel (the GBuffer view modes).
  */
 class CH_CORE_EXPORT DeferredRenderPath : public IRenderPath
@@ -39,8 +41,8 @@ class CH_CORE_EXPORT DeferredRenderPath : public IRenderPath
   addPasses(RenderGraph& graph, const RenderView& view, RGTextureHandle output) override;
 
   /**
-   * Draws the GBuffer and shows the channel of a GBuffer view mode (BaseColor to Emissive)
-   * in output, encoded for a back buffer.
+   * Draws the GBuffer and shows the channel of a GBuffer view mode (BaseColor to Emissive,
+   * or the ScreenSpaceAO it measures) in output, encoded for a back buffer.
    *
    * @return the scene depth.
    */
@@ -98,6 +100,7 @@ class CH_CORE_EXPORT DeferredRenderPath : public IRenderPath
   PipelineCache m_pipelineCache;
 
   SceneViewBuffers m_viewBuffers;
+  ScreenSpaceAO m_screenSpaceAO;
 
   // For items without a material.
   Material m_defaultMaterial;

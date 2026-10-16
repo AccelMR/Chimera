@@ -74,16 +74,18 @@ struct LightingPushConstants
   GBufferTextures gbuffer;
   uint32 viewIndex;
   float inverseSize[2];
+  uint32 screenSpaceAOIndex;
 };
-static_assert(sizeof(LightingPushConstants) == 32);
+static_assert(sizeof(LightingPushConstants) == 36);
 
 // Must match PushConstants in gbufferview.hlsl.
 struct GBufferViewPushConstants
 {
   GBufferTextures gbuffer;
   uint32 mode;
+  uint32 screenSpaceAOIndex;
 };
-static_assert(sizeof(GBufferViewPushConstants) == 24);
+static_assert(sizeof(GBufferViewPushConstants) == 28);
 
 // Must match the kMode constants in gbufferview.hlsl.
 enum class GBufferViewMode : uint32
@@ -92,8 +94,20 @@ enum class GBufferViewMode : uint32
   Metallic,
   Roughness,
   Occlusion,
-  Emissive
+  Emissive,
+  ScreenSpaceAO
 };
+
+// The bindless index of the ambient occlusion, or the invalid index the shaders read as
+// nothing occluded.
+NODISCARD uint32
+getScreenSpaceAOIndex(const RenderPassContext& context, RGTextureHandle occlusion)
+{
+  if (!occlusion.isValid()) {
+    return GraphicsLimits::INVALID_BINDLESS_INDEX;
+  }
+  return context.getView(occlusion).getBindlessIndex();
+}
 
 NODISCARD GBufferViewMode
 toGBufferViewMode(ViewMode mode)
@@ -105,6 +119,8 @@ toGBufferViewMode(ViewMode mode)
       return GBufferViewMode::Roughness;
     case ViewMode::AmbientOcclusion:
       return GBufferViewMode::Occlusion;
+    case ViewMode::ScreenSpaceAO:
+      return GBufferViewMode::ScreenSpaceAO;
     case ViewMode::Emissive:
       return GBufferViewMode::Emissive;
     case ViewMode::BaseColor:
@@ -155,6 +171,8 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
   const uint32 viewIndex = m_viewBuffers.update(view);
   const GBuffer gbuffer =
       addGBufferPass(graph, view, viewIndex, outputDesc.width, outputDesc.height);
+  const RGTextureHandle occlusion =
+      m_screenSpaceAO.addPasses(graph, gbuffer.depth, gbuffer.normal, viewIndex);
   updateFullscreenPipeline(m_lighting, outputDesc.format);
 
   RenderPassBuilder pass = graph.addPass("DeferredLighting");
@@ -165,16 +183,20 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
       .read(gbuffer.emissive)
       .read(gbuffer.depth)
       .writeColor(output, LoadOp::Clear, view.clearColor);
+  if (occlusion.isValid()) {
+    pass.read(occlusion);
+  }
   for (const ShadowView& shadow : view.shadows) {
     pass.read(shadow.texture);
   }
   view.ibl.declareReads(pass);
-  pass.setExecute([this, gbuffer, viewIndex](RenderPassContext& context) {
+  pass.setExecute([this, gbuffer, viewIndex, occlusion](RenderPassContext& context) {
     const LightingPushConstants pushConstants{
         .gbuffer = getGBufferTextures(context, gbuffer),
         .viewIndex = viewIndex,
         .inverseSize = {1.0f / static_cast<float>(context.getWidth()),
-                        1.0f / static_cast<float>(context.getHeight())}};
+                        1.0f / static_cast<float>(context.getHeight())},
+        .screenSpaceAOIndex = getScreenSpaceAOIndex(context, occlusion)};
     ICommandList& commandList = context.getCommandList();
     commandList.bindPipeline(*m_lighting.pipeline);
     commandList.pushConstants(&pushConstants, sizeof(pushConstants));
@@ -195,25 +217,33 @@ DeferredRenderPath::addGBufferViewPasses(RenderGraph& graph,
   const uint32 viewIndex = m_viewBuffers.update(view);
   const GBuffer gbuffer =
       addGBufferPass(graph, view, viewIndex, outputDesc.width, outputDesc.height);
+  const GBufferViewMode shaderMode = toGBufferViewMode(mode);
+  const RGTextureHandle occlusion =
+      shaderMode == GBufferViewMode::ScreenSpaceAO
+          ? m_screenSpaceAO.addPasses(graph, gbuffer.depth, gbuffer.normal, viewIndex)
+          : RGTextureHandle{};
   updateFullscreenPipeline(m_gbufferView, outputDesc.format);
 
-  const uint32 shaderMode = static_cast<uint32>(toGBufferViewMode(mode));
-  graph.addPass("GBufferView")
-      .read(gbuffer.baseColor)
+  RenderPassBuilder pass = graph.addPass("GBufferView");
+  pass.read(gbuffer.baseColor)
       .read(gbuffer.normal)
       .read(gbuffer.surface)
       .read(gbuffer.emissive)
       .read(gbuffer.depth)
-      .writeColor(output, LoadOp::Clear, view.clearColor)
-      .setExecute([this, gbuffer, shaderMode](RenderPassContext& context) {
-        const GBufferViewPushConstants pushConstants{
-            .gbuffer = getGBufferTextures(context, gbuffer),
-            .mode = shaderMode};
-        ICommandList& commandList = context.getCommandList();
-        commandList.bindPipeline(*m_gbufferView.pipeline);
-        commandList.pushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.draw(3);
-      });
+      .writeColor(output, LoadOp::Clear, view.clearColor);
+  if (occlusion.isValid()) {
+    pass.read(occlusion);
+  }
+  pass.setExecute([this, gbuffer, shaderMode, occlusion](RenderPassContext& context) {
+    const GBufferViewPushConstants pushConstants{
+        .gbuffer = getGBufferTextures(context, gbuffer),
+        .mode = static_cast<uint32>(shaderMode),
+        .screenSpaceAOIndex = getScreenSpaceAOIndex(context, occlusion)};
+    ICommandList& commandList = context.getCommandList();
+    commandList.bindPipeline(*m_gbufferView.pipeline);
+    commandList.pushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.draw(3);
+  });
   return gbuffer.depth;
 }
 

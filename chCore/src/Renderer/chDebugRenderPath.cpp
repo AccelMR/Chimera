@@ -82,6 +82,7 @@ toDebugMode(ViewMode mode)
     case ViewMode::Metallic:
     case ViewMode::Roughness:
     case ViewMode::AmbientOcclusion:
+    case ViewMode::ScreenSpaceAO:
     case ViewMode::Emissive:
     case ViewMode::ShadowCascades:
     case ViewMode::ShadowMaps:

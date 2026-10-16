@@ -38,6 +38,8 @@ static const uint kNoEnvironment = 0xFFFFFFFF;
 static const uint kFeatureNormalMaps = 1u << 0;
 static const uint kFeatureOcclusionMaps = 1u << 1;
 static const uint kFeatureEmissive = 1u << 2;
+// Occlusion gives back the light that bounces between the occluding surfaces.
+static const uint kFeatureAOMultiBounce = 1u << 3;
 
 bool
 isFeatureOn(ViewData view, uint feature)

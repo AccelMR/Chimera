@@ -103,11 +103,13 @@ renderFeatures()
     featureCheckbox("Occlusion Maps", g_cvarOcclusionMaps);
     featureCheckbox("Emissive", g_cvarEmissive);
     featureCheckbox("Image Based Lighting", g_cvarImageBasedLighting);
+    featureCheckbox("Screen Space AO", g_cvarSSAO);
     ImGui::TableNextColumn();
     featureCheckbox("Directional Lights", g_cvarDirectionalLights);
     featureCheckbox("Point Lights", g_cvarPointLights);
     featureCheckbox("Spot Lights", g_cvarSpotLights);
     featureCheckbox("Tonemap Curve", g_cvarTonemap);
+    featureCheckbox("AO Multi Bounce", g_cvarAOMultiBounce);
     ImGui::EndTable();
   }
 
@@ -120,7 +122,7 @@ renderFeatures()
   if (ImGui::Button("Reset All")) {
     for (ConsoleVariable<bool>* variable :
          {&g_cvarShadows, &g_cvarNormalMaps, &g_cvarOcclusionMaps, &g_cvarEmissive,
-          &g_cvarImageBasedLighting,
+          &g_cvarImageBasedLighting, &g_cvarSSAO, &g_cvarAOMultiBounce,
           &g_cvarDirectionalLights, &g_cvarPointLights, &g_cvarSpotLights, &g_cvarTonemap}) {
       variable->set(variable->getDefault(), ConsoleVariableSource::Console);
     }

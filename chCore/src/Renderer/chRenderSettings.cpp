@@ -25,6 +25,7 @@ constexpr StringView kViewModeNames[] = {"Lit",
                                          "Metallic",
                                          "Roughness",
                                          "AmbientOcclusion",
+                                         "ScreenSpaceAO",
                                          "Emissive",
                                          "ShadowCascades",
                                          "ShadowMaps"};
@@ -52,8 +53,8 @@ ConsoleVariable<String> g_cvarViewMode(
     "Renderer.ViewMode",
     "Lit",
     "What the scene shows: Lit, LitWireframe, Wireframe, Unlit, Normals, Depth, TexCoords, "
-    "a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive, or "
-    "ShadowCascades (Lit tinted by the shadow cascade of each pixel) or ShadowMaps (the shadow "
+    "a GBuffer channel: BaseColor, Metallic, Roughness, AmbientOcclusion, Emissive, "
+    "ScreenSpaceAO (the occlusion Renderer.SSAO measures), or ShadowCascades (Lit tinted by the shadow cascade of each pixel) or ShadowMaps (the shadow "
     "atlases of the frame).",
     "ViewMode");
 
@@ -352,6 +353,75 @@ ConsoleVariable<int32> g_cvarIBLBrdfLutSamples(
     512,
     "GGX samples per texel of the split sum lookup table (16 to 8192). Built once, so its "
     "cost does not matter per frame.");
+
+ConsoleVariable<bool> g_cvarSSAO(
+    "Renderer.SSAO",
+    true,
+    "The deferred path darkens the ambient light (sky light or Renderer.Ambient) where "
+    "nearby surfaces hide it, measured on the depth of the frame. Direct lights are not "
+    "darkened; their shadows do that.",
+    "SSAO");
+
+ConsoleVariable<bool> g_cvarSSAOHalfResolution(
+    "Renderer.SSAOHalfResolution",
+    false,
+    "Computes the ambient occlusion at half the width and height, about a third of the "
+    "cost, then scales it up following the depth.");
+
+ConsoleVariable<float> g_cvarSSAORadius(
+    "Renderer.SSAORadius",
+    1.0f,
+    "How far around each pixel, in world units, surfaces occlude it. Depends on the scale "
+    "of the scene.");
+
+ConsoleVariable<float> g_cvarSSAOFalloff(
+    "Renderer.SSAOFalloff",
+    0.6f,
+    "Fraction of the radius (0 to 1) over which occluders fade out with their distance, so "
+    "the edge of the radius does not show.");
+
+ConsoleVariable<int32> g_cvarSSAOSlices(
+    "Renderer.SSAOSlices",
+    3,
+    "Directions around each pixel the occlusion is measured in (1 to 8).");
+
+ConsoleVariable<int32> g_cvarSSAOSteps(
+    "Renderer.SSAOSteps",
+    4,
+    "Depth samples on each side of every direction (1 to 16); more find thin occluders.");
+
+ConsoleVariable<float> g_cvarSSAOPower(
+    "Renderer.SSAOPower",
+    2.2f,
+    "Power applied to the measured visibility (0.5 to 4); above 1 makes the occlusion "
+    "darker.");
+
+ConsoleVariable<float> g_cvarSSAOMaxPixelRadius(
+    "Renderer.SSAOMaxPixelRadius",
+    256.0f,
+    "Largest radius on screen, in pixels of the full image (16 to 1024). Surfaces close to "
+    "the camera would otherwise sample far across the screen, which is slow and finds "
+    "unrelated occluders.");
+
+ConsoleVariable<int32> g_cvarSSAOBlurRadius(
+    "Renderer.SSAOBlurRadius",
+    2,
+    "Texels on each side the blur of the ambient occlusion averages (0 to 6, 0 turns it "
+    "off). The noise repeats every 4 texels, so 2 hides it.");
+
+ConsoleVariable<float> g_cvarSSAODepthTolerance(
+    "Renderer.SSAODepthTolerance",
+    0.05f,
+    "How far a texel may be from the surface of the pixel, as a fraction of its distance "
+    "to the camera, and still be blended in by the blur and the scale up (0.001 to 1). "
+    "Smaller keeps edges sharper.");
+
+ConsoleVariable<bool> g_cvarAOMultiBounce(
+    "Renderer.AOMultiBounce",
+    true,
+    "Occluded surfaces get back the light that bounces between them, more the brighter "
+    "their color, so bright corners do not turn gray. Applies to the material occlusion "
+    "too.");
 
 /*
  */

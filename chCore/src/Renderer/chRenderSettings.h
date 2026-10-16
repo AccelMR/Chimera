@@ -33,6 +33,7 @@ enum class ViewMode : uint32
   Metallic,
   Roughness,
   AmbientOcclusion,
+  ScreenSpaceAO,
   Emissive,
   ShadowCascades,
   ShadowMaps,
@@ -197,5 +198,38 @@ extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLPrefilterSamples;
 // Size of the split sum lookup table and its samples per texel.
 extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLBrdfLutSize;
 extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarIBLBrdfLutSamples;
+
+// The deferred path darkens the ambient light where nearby surfaces hide the sky, measured
+// on the depth of the frame (ground truth ambient occlusion).
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarSSAO;
+
+// Computes the occlusion at half the width and height, then scales it up.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarSSAOHalfResolution;
+
+// How far around each pixel, in world units, surfaces occlude it.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAORadius;
+
+// Fraction of the radius over which far occluders fade out.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAOFalloff;
+
+// Directions around each pixel and depth samples along each side of a direction.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarSSAOSlices;
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarSSAOSteps;
+
+// Power applied to the visibility; above 1 darkens the occlusion.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAOPower;
+
+// Largest radius on screen, in pixels, so a surface close to the camera does not read the
+// whole screen.
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAOMaxPixelRadius;
+
+// Texels on each side the blur averages (0 turns it off), and how much depth, as a fraction
+// of the pixel's distance, it still blends across.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarSSAOBlurRadius;
+extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAODepthTolerance;
+
+// Occluded surfaces get back some of the light bouncing between them, more the brighter
+// their color; without it bright occluded areas turn too dark.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarAOMultiBounce;
 
 } // namespace chEngineSDK

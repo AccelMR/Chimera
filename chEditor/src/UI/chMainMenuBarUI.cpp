@@ -248,6 +248,53 @@ renderImageBasedLightingSettings()
     resetSetting(g_cvarIBLBrdfLutSamples);
   }
 }
+
+void
+editSetting(const ANSICHAR* label, ConsoleVariable<bool>& cvar)
+{
+  bool bValue = cvar.get();
+  if (ImGui::Checkbox(label, &bValue)) {
+    cvar.set(bValue, ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", cvar.getHelp().c_str());
+}
+
+void
+renderAmbientOcclusionSettings()
+{
+  editSetting("Screen Space AO", g_cvarSSAO);
+  editSetting("Half Resolution", g_cvarSSAOHalfResolution);
+  // The radius is in world units, so it depends on the scale of the scene.
+  editSetting("Radius", g_cvarSSAORadius, 0.01f, 0.01f, 100.0f, "%.2f",
+              ImGuiSliderFlags_Logarithmic);
+  editSetting("Falloff", g_cvarSSAOFalloff, 0.005f, 0.01f, 1.0f, "%.2f");
+  editSetting("Power", g_cvarSSAOPower, 0.01f, 0.5f, 4.0f, "%.2f");
+  editSetting("Slices", g_cvarSSAOSlices, 1, 8);
+  editSetting("Steps", g_cvarSSAOSteps, 1, 16);
+  editSetting("Max Pixel Radius", g_cvarSSAOMaxPixelRadius, 1.0f, 16.0f, 1024.0f, "%.0f px",
+              ImGuiSliderFlags_Logarithmic);
+  ImGui::SeparatorText("Denoise");
+  editSetting("Blur Radius", g_cvarSSAOBlurRadius, 0, 6);
+  editSetting("Depth Tolerance", g_cvarSSAODepthTolerance, 0.001f, 0.001f, 1.0f, "%.3f",
+              ImGuiSliderFlags_Logarithmic);
+  ImGui::Separator();
+  editSetting("Multi Bounce", g_cvarAOMultiBounce);
+
+  ImGui::Separator();
+  if (ImGui::MenuItem("Reset to Defaults##AO")) {
+    resetSetting(g_cvarSSAO);
+    resetSetting(g_cvarSSAOHalfResolution);
+    resetSetting(g_cvarSSAORadius);
+    resetSetting(g_cvarSSAOFalloff);
+    resetSetting(g_cvarSSAOPower);
+    resetSetting(g_cvarSSAOSlices);
+    resetSetting(g_cvarSSAOSteps);
+    resetSetting(g_cvarSSAOMaxPixelRadius);
+    resetSetting(g_cvarSSAOBlurRadius);
+    resetSetting(g_cvarSSAODepthTolerance);
+    resetSetting(g_cvarAOMultiBounce);
+  }
+}
 } // namespace
 
 /*
@@ -295,6 +342,10 @@ MainMenuBarUI::renderMainMenuBar() {
     }
     if (ImGui::BeginMenu("Image Based Lighting")) {
       renderImageBasedLightingSettings();
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Ambient Occlusion")) {
+      renderAmbientOcclusionSettings();
       ImGui::EndMenu();
     }
     ImGui::Separator(); //--------------------------------------------------------------

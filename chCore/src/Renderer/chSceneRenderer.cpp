@@ -105,6 +105,7 @@ SceneRenderer::addScenePasses(const Scene& scene,
     case ViewMode::Metallic:
     case ViewMode::Roughness:
     case ViewMode::AmbientOcclusion:
+    case ViewMode::ScreenSpaceAO:
     case ViewMode::Emissive:
       return m_deferredRenderPath->addGBufferViewPasses(m_graph, view, output, m_viewMode);
     case ViewMode::ShadowMaps:

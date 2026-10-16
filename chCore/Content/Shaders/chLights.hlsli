@@ -80,15 +80,41 @@ evaluateLights(SurfaceData surface, float3 worldPosition, float3 viewDirection, 
   return result;
 }
 
+// Occlusion of the diffuse light with the light that bounces between the occluding
+// surfaces added back (Jimenez et al. 2016, fitted per color channel), so bright corners do
+// not turn gray.
+float3
+applyMultiBounce(float visibility, float3 albedo)
+{
+  const float3 a = 2.0404f * albedo - 0.3324f;
+  const float3 b = -4.7951f * albedo + 0.6417f;
+  const float3 c = 2.7552f * albedo + 0.6903f;
+  return max(visibility, ((visibility * a + b) * visibility + c) * visibility);
+}
+
+// Occlusion of the reflections from the occlusion of the diffuse light (Lagarde and de
+// Rousiers 2014): a smooth surface seen head on reflects a narrow cone that occlusion
+// barely hides, a rough one or one seen at a grazing angle is hidden like the diffuse.
+float
+getSpecularOcclusion(float normalDotView, float occlusion, float roughness)
+{
+  return saturate(pow(normalDotView + occlusion, exp2(-16.0f * roughness - 1.0f)) - 1.0f +
+                  occlusion);
+}
+
 // Light from the environment: the sky light's diffuse and reflections (image based
 // lighting), or without one the constant ambient, which is only diffuse because there is
-// nothing for it to reflect. viewDirection points away from the surface.
+// nothing for it to reflect. viewDirection points away from the surface; occlusion is the
+// share of the environment nearby surfaces leave visible.
 float3
 evaluateAmbient(SurfaceData surface, float3 viewDirection, float occlusion, ViewData view)
 {
   const float3 diffuseColor = surface.baseColor * (1.0f - surface.metallic);
+  const float3 diffuseOcclusion = isFeatureOn(view, kFeatureAOMultiBounce)
+                                      ? applyMultiBounce(occlusion, diffuseColor)
+                                      : occlusion.xxx;
   if (view.irradianceIndex == kNoEnvironment) {
-    return diffuseColor * view.ambient * occlusion;
+    return diffuseColor * view.ambient * diffuseOcclusion;
   }
 
   TextureCube<float4> irradiance = ResourceDescriptorHeap[view.irradianceIndex];
@@ -114,7 +140,9 @@ evaluateAmbient(SurfaceData surface, float3 viewDirection, float occlusion, View
   const float3 diffuse = irradiance.SampleLevel(environmentSampler, surface.normal, 0.0f).rgb *
                          diffuseColor * (1.0f - specularColor);
 
-  return (diffuse + specular) * view.environmentIntensity * occlusion;
+  const float specularOcclusion = getSpecularOcclusion(normalDotView, occlusion, roughness);
+  return (diffuse * diffuseOcclusion + specular * specularOcclusion) *
+         view.environmentIntensity;
 }
 
 // The ShadowCascades view mode: the lit color tinted by the cascade each pixel reads. Some of
