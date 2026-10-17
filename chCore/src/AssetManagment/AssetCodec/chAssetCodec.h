@@ -15,6 +15,7 @@
 #include "chIAsset.h"
 #include "chAssetManager.h"
 #include "chImportSettings.h"
+#include "chImportTask.h"
 #include "chPath.h"
 #include "chStringUtils.h"
 
@@ -41,35 +42,51 @@ class CH_CORE_EXPORT IAssetCodec {
   getSupportedExtensions() const = 0;
 
   /**
-   * Saves the new asset (and anything it needs) in assetFolder, a virtual path under /Game.
-   * The name gets a suffix when the folder already has an asset with it.
+   * The import of filePath as a new asset named assetName (it gets a suffix when the folder
+   * already has one), split so it can be read on a worker thread. See IImportTask.
    */
-  virtual SPtr<IAsset>
-  importAsset(const Path& filePath,
-              const String& assetName,
-              const Path& assetFolder,
-              const ImportSettings& settings) = 0;
+  NODISCARD virtual UniquePtr<IImportTask>
+  createImportTask(const Path& filePath,
+                   const String& assetName,
+                   const ImportSettings& settings) = 0;
 
   /**
-   * Same as importAsset for a file already in memory (a texture inside a model file).
-   * sourceFile and sourcePart name where the data came from in the .meta file, so a later
-   * import can find the asset. Codecs that cannot read memory return null.
+   * Same for a file already in memory (a texture inside a model file); data must stay
+   * valid until readSource returns. sourceFile and sourcePart name where the data came from
+   * in the .meta file, so a later import can find the asset. Codecs that cannot read memory
+   * return null.
    */
-  virtual SPtr<IAsset>
-  importAssetFromMemory(Span<const uint8> data,
-                        const String& assetName,
-                        const Path& assetFolder,
-                        const Path& sourceFile,
-                        StringView sourcePart,
-                        const ImportSettings& settings)
+  NODISCARD virtual UniquePtr<IImportTask>
+  createImportTaskFromMemory(Span<const uint8> data,
+                             const String& assetName,
+                             const Path& sourceFile,
+                             StringView sourcePart,
+                             const ImportSettings& settings)
   {
     CH_PARAMETER_UNUSED(data);
     CH_PARAMETER_UNUSED(assetName);
-    CH_PARAMETER_UNUSED(assetFolder);
     CH_PARAMETER_UNUSED(sourceFile);
     CH_PARAMETER_UNUSED(sourcePart);
     CH_PARAMETER_UNUSED(settings);
     return nullptr;
+  }
+
+  /**
+   * Runs the whole import on the calling thread, which must be the main thread. Saves the
+   * new asset (and anything it needs) in assetFolder, a virtual path under /Game.
+   */
+  SPtr<IAsset>
+  importAsset(const Path& filePath,
+              const String& assetName,
+              const Path& assetFolder,
+              const ImportSettings& settings)
+  {
+    const UniquePtr<IImportTask> task = createImportTask(filePath, assetName, settings);
+    ImportProgress progress;
+    if (!task || !task->readSource(progress)) {
+      return nullptr;
+    }
+    return task->createAssets(assetFolder);
   }
 
   /**
@@ -90,8 +107,9 @@ class CH_CORE_EXPORT IAssetCodec {
   virtual Vector<UUID>
   getSupportedAssetTypes() const = 0;
 
-  void
-  registerNewAsset(const SPtr<IAsset>& asset) {
+  static void
+  registerNewAsset(const SPtr<IAsset>& asset)
+  {
     CH_ASSERT(asset && "Asset cannot be null");
     AssetManager::instance().registerNewAsset(asset);
   }
@@ -100,7 +118,7 @@ class CH_CORE_EXPORT IAssetCodec {
    * Records where the asset came from and how (its .meta file), saves it and adds it to the
    * AssetManager.
    */
-  NODISCARD bool
+  NODISCARD static bool
   saveAndRegister(const SPtr<IAsset>& asset,
                   const Path& sourceFile,
                   StringView sourcePart,

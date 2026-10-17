@@ -30,6 +30,7 @@
 
 #include <assimp/GltfMaterial.h>
 #include <assimp/Importer.hpp>
+#include <assimp/ProgressHandler.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
@@ -416,9 +417,417 @@ readAlphaMode(const aiMaterial& source, Material& material, bool bAutoMask)
     material.setAlphaMode(MaterialAlphaMode::Mask);
   }
 }
-} // namespace MeshManagerHelpers
 
-using namespace MeshManagerHelpers;
+/**
+ * Exists so assimp can report how far the read got and stop it when the import is
+ * cancelled.
+ */
+class AssimpProgress final : public Assimp::ProgressHandler
+{
+ public:
+  explicit AssimpProgress(ImportProgress& progress) : m_progress(progress) {}
+
+  bool
+  Update(float percentage) override
+  {
+    if (percentage >= 0.0f) {
+      m_progress.setFraction(percentage * READ_SHARE);
+    }
+    return !m_progress.isCancelled();
+  }
+
+  // Parts of the progress bar: reading the file, converting meshes, then textures.
+  static constexpr float READ_SHARE = 0.4f;
+  static constexpr float MESH_SHARE = 0.1f;
+
+ private:
+  ImportProgress& m_progress;
+};
+
+/**
+ * Exists so the slow part of a model import (assimp, mesh conversion, texture decoding) runs
+ * on the import's worker thread, and the part that needs AssetManager (folder, reuse, asset
+ * names, saving) and the graphics API (textures) runs on the main thread.
+ */
+class MeshImportTask final : public IImportTask
+{
+ public:
+  MeshImportTask(const Path& filePath, const String& assetName, const ImportSettings& settings)
+    : m_filePath(filePath),
+      m_assetName(assetName),
+      m_settings(settings)
+  {}
+
+  NODISCARD bool
+  readSource(ImportProgress& progress) override;
+
+  SPtr<IAsset>
+  createAssets(const Path& assetFolder) override;
+
+ private:
+  /**
+   * One texture the materials point at, read on the worker and turned into an asset on the
+   * main thread when a new material needs it.
+   */
+  struct TextureSource
+  {
+    String reference;
+    ImportSettings settings;
+    // Where a later import finds the asset: the texture file, or the model file plus the
+    // reference for an embedded texture.
+    Path sourceFile;
+    String sourcePart;
+    String assetName;
+    // A texture file or a compressed embedded image.
+    UniquePtr<IImportTask> task;
+    // An uncompressed embedded image.
+    Vector<uint8> pixels;
+    uint32 width = 0;
+    uint32 height = 0;
+    uint32 mipLevels = 1;
+    Format format = Format::Unknown;
+    bool bRead = false;
+    bool bCreated = false;
+    SPtr<TextureAsset> asset;
+  };
+
+  NODISCARD int32
+  addTextureSource(const aiString& reference, const ImportSettings& settings);
+
+  void
+  findMaterialTextures();
+
+  NODISCARD bool
+  readTexture(TextureSource& texture, ImportProgress& progress);
+
+  NODISCARD SPtr<TextureAsset>
+  getTextureAsset(int32 index, const Path& folder);
+
+  NODISCARD ModelMaterialSlot
+  createMaterial(uint32 index, const Path& folder);
+
+  static constexpr int32 NO_TEXTURE = -1;
+  static constexpr SIZE_T TEXTURE_KINDS = static_cast<SIZE_T>(MaterialTexture::COUNT);
+
+  Path m_filePath;
+  String m_assetName;
+  ImportSettings m_settings;
+  // Absolute, so it can be stored as the source of everything made from it.
+  Path m_sourceFile;
+
+  // The scene belongs to the importer and stays alive until the task is destroyed, because
+  // materials are read on the main thread and embedded images point into it.
+  Assimp::Importer m_importer;
+  const aiScene* m_scene = nullptr;
+  SPtr<Model> m_model;
+  Vector<TextureSource> m_textures;
+  // Per material, the index into m_textures of each MaterialTexture, or NO_TEXTURE.
+  Vector<Array<int32, TEXTURE_KINDS>> m_materialTextures;
+};
+
+/*
+ */
+int32
+MeshImportTask::addTextureSource(const aiString& reference, const ImportSettings& settings)
+{
+  // A texture used by several materials is read once; the first use decides its settings.
+  for (SIZE_T i = 0; i < m_textures.size(); ++i) {
+    if (m_textures[i].reference == reference.C_Str()) {
+      return static_cast<int32>(i);
+    }
+  }
+  TextureSource& texture = m_textures.emplace_back();
+  texture.reference = reference.C_Str();
+  texture.settings = settings;
+  return static_cast<int32>(m_textures.size() - 1);
+}
+
+/*
+ */
+void
+MeshImportTask::findMaterialTextures()
+{
+  constexpr ImportSettings kColorSettings{.srgb = true};
+  constexpr ImportSettings kDataSettings{.srgb = false};
+  constexpr aiTextureType kBaseColorTypes[] = {aiTextureType_BASE_COLOR,
+                                               aiTextureType_DIFFUSE};
+  constexpr aiTextureType kNormalTypes[] = {aiTextureType_NORMALS,
+                                            aiTextureType_NORMAL_CAMERA};
+  constexpr aiTextureType kEmissiveTypes[] = {aiTextureType_EMISSIVE,
+                                              aiTextureType_EMISSION_COLOR};
+  // glTF's occlusion arrives as a lightmap.
+  constexpr aiTextureType kOcclusionTypes[] = {aiTextureType_AMBIENT_OCCLUSION,
+                                               aiTextureType_LIGHTMAP};
+
+  m_materialTextures.resize(m_scene->mNumMaterials);
+  for (uint32 i = 0; i < m_scene->mNumMaterials; ++i) {
+    const aiMaterial& source = *m_scene->mMaterials[i];
+    Array<int32, TEXTURE_KINDS>& textures = m_materialTextures[i];
+    textures.fill(NO_TEXTURE);
+
+    aiString reference;
+    if (findTextureReference(source, kBaseColorTypes, reference)) {
+      textures[static_cast<SIZE_T>(MaterialTexture::BaseColor)] =
+          addTextureSource(reference, kColorSettings);
+    }
+    if (findMetallicRoughnessReference(source, reference)) {
+      textures[static_cast<SIZE_T>(MaterialTexture::MetallicRoughness)] =
+          addTextureSource(reference, kDataSettings);
+    }
+    if (findTextureReference(source, kNormalTypes, reference)) {
+      textures[static_cast<SIZE_T>(MaterialTexture::Normal)] =
+          addTextureSource(reference, kDataSettings);
+    }
+    if (findTextureReference(source, kEmissiveTypes, reference)) {
+      textures[static_cast<SIZE_T>(MaterialTexture::Emissive)] =
+          addTextureSource(reference, kColorSettings);
+    }
+    if (findTextureReference(source, kOcclusionTypes, reference)) {
+      textures[static_cast<SIZE_T>(MaterialTexture::Occlusion)] =
+          addTextureSource(reference, kDataSettings);
+    }
+  }
+}
+
+/*
+ */
+bool
+MeshImportTask::readTexture(TextureSource& texture, ImportProgress& progress)
+{
+  AssetCodecManager& codecs = AssetCodecManager::instance();
+  if (const aiTexture* embedded = m_scene->GetEmbeddedTexture(texture.reference.c_str())) {
+    texture.sourceFile = m_sourceFile;
+    texture.sourcePart = texture.reference;
+    // Embedded textures may have no file name ("*0"), so the model name stands in.
+    const Path embeddedName(embedded->mFilename.C_Str());
+    texture.assetName = "T_";
+    texture.assetName += embeddedName.empty() ? m_assetName : embeddedName.getFileName(false);
+
+    // A height of zero means mWidth bytes of a compressed file (PNG, JPG...).
+    if (embedded->mHeight == 0) {
+      const Span<const uint8> data(reinterpret_cast<const uint8*>(embedded->pcData),
+                                   embedded->mWidth);
+      texture.task = codecs.createImportTaskFromMemory(data, embedded->achFormatHint,
+                                                       texture.assetName, m_sourceFile,
+                                                       texture.reference, texture.settings);
+      return texture.task && texture.task->readSource(progress);
+    }
+
+    const SIZE_T texelCount = static_cast<SIZE_T>(embedded->mWidth) * embedded->mHeight;
+    texture.pixels.resize(texelCount * 4);
+    for (SIZE_T i = 0; i < texelCount; ++i) {
+      const aiTexel& texel = embedded->pcData[i];
+      texture.pixels[i * 4 + 0] = texel.r;
+      texture.pixels[i * 4 + 1] = texel.g;
+      texture.pixels[i * 4 + 2] = texel.b;
+      texture.pixels[i * 4 + 3] = texel.a;
+    }
+    texture.width = embedded->mWidth;
+    texture.height = embedded->mHeight;
+    texture.mipLevels = texture.settings.generateMips
+                            ? TextureMips::appendChainRGBA8(texture.pixels, texture.width,
+                                                            texture.height,
+                                                            texture.settings.srgb)
+                            : 1;
+    texture.format =
+        texture.settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
+    return true;
+  }
+
+  // Files often keep the path of the machine that made them, so the texture is also looked
+  // for by name next to the source file.
+  const Path referencePath(texture.reference);
+  const Path sourceFolder = m_sourceFile.getDirectory();
+  const Path candidates[] = {sourceFolder.join(referencePath),
+                             sourceFolder.join(Path(referencePath.getFileName()))};
+  const Path* found = nullptr;
+  for (const Path& candidate : candidates) {
+    if (FileSystem::isFile(candidate)) {
+      found = &candidate;
+      break;
+    }
+  }
+  if (!found) {
+    CH_LOG_WARNING(MeshSystem, "Texture {0} not found near {1}", texture.reference,
+                   m_sourceFile);
+    return false;
+  }
+
+  texture.sourceFile = FileSystem::absolutePath(*found);
+  texture.assetName = "T_" + texture.sourceFile.getFileName(false);
+  texture.task =
+      codecs.createImportTask(texture.sourceFile, texture.assetName, texture.settings);
+  return texture.task && texture.task->readSource(progress);
+}
+
+/*
+ */
+bool
+MeshImportTask::readSource(ImportProgress& progress)
+{
+  progress.set("Reading file", 0.0f);
+  if (!FileSystem::isFile(m_filePath)) {
+    CH_LOG_ERROR(MeshSystem, "File not found: {0}", m_filePath.toString());
+    return false;
+  }
+  m_sourceFile = FileSystem::absolutePath(m_filePath);
+
+  // The importer deletes its progress handler.
+  m_importer.SetProgressHandler(new AssimpProgress(progress));
+  m_scene = m_importer.ReadFile(m_filePath.toString(),
+                                aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs |
+                                    aiProcess_MakeLeftHanded | aiProcess_FlipWindingOrder);
+  if (progress.isCancelled()) {
+    return false;
+  }
+  if (!m_scene || m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_scene->mRootNode) {
+    CH_LOG_ERROR(MeshSystem, "Assimp error: {0}", m_importer.GetErrorString());
+    return false;
+  }
+
+  progress.set("Converting meshes", AssimpProgress::READ_SHARE);
+  findMaterialTextures();
+  m_model = chMakeShared<Model>();
+  // Converted once per assimp mesh, so nodes that share one share the Meshes too.
+  Vector<Vector<SPtr<Mesh>>> meshes(m_scene->mNumMeshes);
+  for (uint32 i = 0; i < m_scene->mNumMeshes; ++i) {
+    if (progress.isCancelled()) {
+      return false;
+    }
+    progress.setFraction(AssimpProgress::READ_SHARE + AssimpProgress::MESH_SHARE *
+                                                          static_cast<float>(i) /
+                                                          static_cast<float>(m_scene->mNumMeshes));
+    SPtr<Mesh> mesh = processMesh(*m_scene->mMeshes[i]);
+    meshes[i] =
+        m_settings.splitParts ? MeshSplit::splitParts(mesh) : Vector<SPtr<Mesh>>{mesh};
+  }
+  processNode(*m_scene->mRootNode, meshes, *m_model, nullptr);
+  m_model->updateTransforms();
+
+  // Every texture is read here, although a material reused from an earlier import of the
+  // same file does not need its own: which ones are reused is only known on the main thread.
+  constexpr float kTexturesStart = AssimpProgress::READ_SHARE + AssimpProgress::MESH_SHARE;
+  progress.set("Reading textures", kTexturesStart);
+  for (SIZE_T i = 0; i < m_textures.size(); ++i) {
+    if (progress.isCancelled()) {
+      return false;
+    }
+    progress.setFraction(kTexturesStart + (1.0f - kTexturesStart) * static_cast<float>(i) /
+                                              static_cast<float>(m_textures.size()));
+    m_textures[i].bRead = readTexture(m_textures[i], progress);
+  }
+  return !progress.isCancelled();
+}
+
+/*
+ */
+SPtr<TextureAsset>
+MeshImportTask::getTextureAsset(int32 index, const Path& folder)
+{
+  if (NO_TEXTURE == index) {
+    return nullptr;
+  }
+  TextureSource& texture = m_textures[static_cast<SIZE_T>(index)];
+  if (texture.bCreated || !texture.bRead) {
+    return texture.asset;
+  }
+  texture.bCreated = true;
+
+  if (SPtr<TextureAsset> existing =
+          findImported<TextureAsset>(texture.sourceFile, texture.sourcePart)) {
+    texture.asset = std::move(existing);
+    return texture.asset;
+  }
+
+  if (texture.task) {
+    const SPtr<IAsset> asset = texture.task->createAssets(folder);
+    texture.asset = asset ? asset->as<TextureAsset>() : nullptr;
+    return texture.asset;
+  }
+
+  const AssetMetadata metadata =
+      IAssetCodec::makeMetadata<TextureAsset>(texture.assetName, folder);
+  SPtr<TextureAsset> textureAsset =
+      chMakeShared<TextureAsset>(metadata, std::move(texture.pixels), texture.width,
+                                 texture.height, texture.format, texture.mipLevels);
+  if (!IAssetCodec::saveAndRegister(textureAsset, texture.sourceFile, texture.sourcePart,
+                                    texture.settings)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save texture asset: {0}", texture.assetName);
+    return nullptr;
+  }
+  texture.asset = std::move(textureAsset);
+  return texture.asset;
+}
+
+/*
+ */
+ModelMaterialSlot
+MeshImportTask::createMaterial(uint32 index, const Path& folder)
+{
+  const aiMaterial& source = *m_scene->mMaterials[index];
+  ModelMaterialSlot slot;
+  slot.name = source.GetName().C_Str();
+  if (slot.name.empty()) {
+    ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+    slot.name = "Material";
+    slot.name += StringUtils::toChars(numberBuffer, index);
+  }
+
+  if (SPtr<MaterialAsset> existing = findImported<MaterialAsset>(m_sourceFile, slot.name)) {
+    slot.materialId = existing->getUUID();
+    slot.material = std::move(existing);
+    return slot;
+  }
+
+  const AssetMetadata metadata =
+      IAssetCodec::makeMetadata<MaterialAsset>("M_" + slot.name, folder);
+  SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
+  Material& material = materialAsset->getMaterial();
+  const Array<int32, TEXTURE_KINDS>& textures = m_materialTextures[index];
+  for (SIZE_T kind = 0; kind < TEXTURE_KINDS; ++kind) {
+    if (SPtr<TextureAsset> texture = getTextureAsset(textures[kind], folder)) {
+      material.setTexture(static_cast<MaterialTexture>(kind), std::move(texture));
+    }
+  }
+
+  readMaterialFactors(source, material);
+  readAlphaMode(source, material, m_settings.autoAlphaMask);
+
+  if (!IAssetCodec::saveAndRegister(materialAsset, m_sourceFile, slot.name, m_settings)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);
+    return slot;
+  }
+
+  slot.materialId = materialAsset->getUUID();
+  slot.material = std::move(materialAsset);
+  return slot;
+}
+
+/*
+ */
+SPtr<IAsset>
+MeshImportTask::createAssets(const Path& assetFolder)
+{
+  const Path modelFolder = makeUniqueFolder(assetFolder, m_assetName);
+  if (!FileSystem::createDirectories(modelFolder)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to create the folder {0}", modelFolder);
+    return nullptr;
+  }
+
+  for (uint32 i = 0; i < m_scene->mNumMaterials; ++i) {
+    m_model->addMaterialSlot(createMaterial(i, modelFolder));
+  }
+
+  const AssetMetadata metadata =
+      IAssetCodec::makeMetadata<ModelAsset>(m_assetName, modelFolder);
+  SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, m_model);
+  if (!IAssetCodec::saveAndRegister(modelAsset, m_sourceFile, StringView(), m_settings)) {
+    CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", m_assetName);
+    return nullptr;
+  }
+  return modelAsset;
+}
+} // namespace MeshManagerHelpers
 
 /*
  */
@@ -441,232 +850,14 @@ MeshCodec::MeshCodec()
 
 /*
  */
-SPtr<IAsset>
-MeshCodec::importAsset(const Path& filePath,
-                       const String& assetName,
-                       const Path& assetFolder,
-                       const ImportSettings& settings)
+UniquePtr<IImportTask>
+MeshCodec::createImportTask(const Path& filePath,
+                            const String& assetName,
+                            const ImportSettings& settings)
 {
   CH_LOG_INFO(MeshSystem, "Importing asset: {0}", filePath.toString());
-  if (!FileSystem::isFile(filePath)) {
-    CH_LOG_ERROR(MeshSystem, "File not found: {0}", filePath.toString());
-    return nullptr;
-  }
-
-  Assimp::Importer importer;
-  const aiScene* scene = importer.ReadFile(filePath.toString(),
-                                           aiProcessPreset_TargetRealtime_MaxQuality |
-                                               aiProcess_FlipUVs | aiProcess_MakeLeftHanded |
-                                               aiProcess_FlipWindingOrder);
-  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-    CH_LOG_ERROR(MeshSystem, "Assimp error: {0}", importer.GetErrorString());
-    return nullptr;
-  }
-
-  const Path modelFolder = makeUniqueFolder(assetFolder, assetName);
-  if (!FileSystem::createDirectories(modelFolder)) {
-    CH_LOG_ERROR(MeshSystem, "Failed to create the folder {0}", modelFolder);
-    return nullptr;
-  }
-
-  const ImportContext context{.scene = scene,
-                              .sourceFile = FileSystem::absolutePath(filePath),
-                              .assetFolder = modelFolder,
-                              .modelName = assetName,
-                              .settings = settings};
-
-  SPtr<Model> model = chMakeShared<Model>();
-  for (uint32 i = 0; i < scene->mNumMaterials; ++i) {
-    model->addMaterialSlot(importMaterial(context, *scene->mMaterials[i], i));
-  }
-
-  // Converted once per assimp mesh, so nodes that share one share the Meshes too.
-  Vector<Vector<SPtr<Mesh>>> meshes(scene->mNumMeshes);
-  for (uint32 i = 0; i < scene->mNumMeshes; ++i) {
-    SPtr<Mesh> mesh = processMesh(*scene->mMeshes[i]);
-    meshes[i] = settings.splitParts ? MeshSplit::splitParts(mesh) : Vector<SPtr<Mesh>>{mesh};
-  }
-  processNode(*scene->mRootNode, meshes, *model, nullptr);
-  model->updateTransforms();
-
-  const AssetMetadata metadata =
-      makeMetadata<ModelAsset>(assetName, modelFolder);
-  SPtr<ModelAsset> modelAsset = chMakeShared<ModelAsset>(metadata, model);
-  if (!saveAndRegister(modelAsset, context.sourceFile, StringView(), settings)) {
-    CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", assetName);
-    return nullptr;
-  }
-
-  return modelAsset;
-}
-
-/*
- */
-ModelMaterialSlot
-MeshCodec::importMaterial(const ImportContext& context, const aiMaterial& source, uint32 index)
-{
-  ModelMaterialSlot slot;
-  slot.name = source.GetName().C_Str();
-  if (slot.name.empty()) {
-    ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
-    slot.name = "Material";
-    slot.name += StringUtils::toChars(numberBuffer, index);
-  }
-
-  if (SPtr<MaterialAsset> existing =
-          findImported<MaterialAsset>(context.sourceFile, slot.name)) {
-    slot.materialId = existing->getUUID();
-    slot.material = std::move(existing);
-    return slot;
-  }
-
-  const AssetMetadata metadata =
-      makeMetadata<MaterialAsset>("M_" + slot.name, context.assetFolder);
-  SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
-  Material& material = materialAsset->getMaterial();
-
-  constexpr ImportSettings kColorSettings{.srgb = true};
-  constexpr ImportSettings kDataSettings{.srgb = false};
-  constexpr aiTextureType kBaseColorTypes[] = {aiTextureType_BASE_COLOR,
-                                               aiTextureType_DIFFUSE};
-  constexpr aiTextureType kNormalTypes[] = {aiTextureType_NORMALS,
-                                            aiTextureType_NORMAL_CAMERA};
-  constexpr aiTextureType kEmissiveTypes[] = {aiTextureType_EMISSIVE,
-                                              aiTextureType_EMISSION_COLOR};
-  // glTF's occlusion arrives as a lightmap.
-  constexpr aiTextureType kOcclusionTypes[] = {aiTextureType_AMBIENT_OCCLUSION,
-                                               aiTextureType_LIGHTMAP};
-
-  aiString reference;
-  if (findTextureReference(source, kBaseColorTypes, reference)) {
-    material.setTexture(MaterialTexture::BaseColor,
-                        importTexture(context, source, reference, kColorSettings));
-  }
-  if (findMetallicRoughnessReference(source, reference)) {
-    material.setTexture(MaterialTexture::MetallicRoughness,
-                        importTexture(context, source, reference, kDataSettings));
-  }
-  if (findTextureReference(source, kNormalTypes, reference)) {
-    material.setTexture(MaterialTexture::Normal,
-                        importTexture(context, source, reference, kDataSettings));
-  }
-  if (findTextureReference(source, kEmissiveTypes, reference)) {
-    material.setTexture(MaterialTexture::Emissive,
-                        importTexture(context, source, reference, kColorSettings));
-  }
-  if (findTextureReference(source, kOcclusionTypes, reference)) {
-    material.setTexture(MaterialTexture::Occlusion,
-                        importTexture(context, source, reference, kDataSettings));
-  }
-
-  readMaterialFactors(source, material);
-  readAlphaMode(source, material, context.settings.autoAlphaMask);
-
-  if (!saveAndRegister(materialAsset, context.sourceFile, slot.name, context.settings)) {
-    CH_LOG_ERROR(MeshSystem, "Failed to save material asset: {0}", slot.name);
-    return slot;
-  }
-
-  slot.materialId = materialAsset->getUUID();
-  slot.material = std::move(materialAsset);
-  return slot;
-}
-
-/*
- */
-SPtr<TextureAsset>
-MeshCodec::importTexture(const ImportContext& context,
-                         const aiMaterial& source,
-                         const aiString& reference,
-                         const ImportSettings& settings)
-{
-  if (const aiTexture* embedded = context.scene->GetEmbeddedTexture(reference.C_Str())) {
-    return importEmbeddedTexture(context, *embedded, reference.C_Str(), settings);
-  }
-
-  // Files often keep the path of the machine that made them, so the texture is also looked
-  // for by name next to the source file.
-  const Path referencePath(reference.C_Str());
-  const Path sourceFolder = context.sourceFile.getDirectory();
-  const Path candidates[] = {sourceFolder.join(referencePath),
-                             sourceFolder.join(Path(referencePath.getFileName()))};
-  const Path* found = nullptr;
-  for (const Path& candidate : candidates) {
-    if (FileSystem::isFile(candidate)) {
-      found = &candidate;
-      break;
-    }
-  }
-  if (!found) {
-    CH_LOG_WARNING(MeshSystem, "Texture {0} of material {1} not found near {2}",
-                   reference.C_Str(), source.GetName().C_Str(), context.sourceFile);
-    return nullptr;
-  }
-
-  const Path texturePath = FileSystem::absolutePath(*found);
-  if (SPtr<TextureAsset> existing = findImported<TextureAsset>(texturePath, StringView())) {
-    return existing;
-  }
-
-  const SPtr<IAsset> asset = AssetCodecManager::instance().importAsset(
-      texturePath, "T_" + texturePath.getFileName(false), context.assetFolder, settings);
-  return asset ? asset->as<TextureAsset>() : nullptr;
-}
-
-/*
- */
-SPtr<TextureAsset>
-MeshCodec::importEmbeddedTexture(const ImportContext& context,
-                                 const aiTexture& texture,
-                                 StringView reference,
-                                 const ImportSettings& settings)
-{
-  if (SPtr<TextureAsset> existing =
-          findImported<TextureAsset>(context.sourceFile, reference)) {
-    return existing;
-  }
-
-  // Embedded textures may have no file name ("*0"), so the model name stands in.
-  String assetName = "T_";
-  const Path embeddedName(texture.mFilename.C_Str());
-  assetName += embeddedName.empty() ? context.modelName : embeddedName.getFileName(false);
-
-  // A height of zero means mWidth bytes of a compressed file (PNG, JPG...).
-  if (texture.mHeight == 0) {
-    const Span<const uint8> data(reinterpret_cast<const uint8*>(texture.pcData),
-                                 texture.mWidth);
-    const SPtr<IAsset> asset = AssetCodecManager::instance().importAssetFromMemory(
-        data, texture.achFormatHint, assetName, context.assetFolder, context.sourceFile,
-        reference, settings);
-    return asset ? asset->as<TextureAsset>() : nullptr;
-  }
-
-  const SIZE_T texelCount = static_cast<SIZE_T>(texture.mWidth) * texture.mHeight;
-  Vector<uint8> pixels(texelCount * 4);
-  for (SIZE_T i = 0; i < texelCount; ++i) {
-    const aiTexel& texel = texture.pcData[i];
-    pixels[i * 4 + 0] = texel.r;
-    pixels[i * 4 + 1] = texel.g;
-    pixels[i * 4 + 2] = texel.b;
-    pixels[i * 4 + 3] = texel.a;
-  }
-
-  const AssetMetadata metadata =
-      makeMetadata<TextureAsset>(assetName, context.assetFolder);
-  const uint32 mipLevels = settings.generateMips
-                               ? TextureMips::appendChainRGBA8(pixels, texture.mWidth,
-                                                               texture.mHeight, settings.srgb)
-                               : 1;
-  const Format format = settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
-  SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
-      metadata, std::move(pixels), texture.mWidth, texture.mHeight, format, mipLevels);
-  if (!saveAndRegister(textureAsset, context.sourceFile, reference, settings)) {
-    CH_LOG_ERROR(MeshSystem, "Failed to save texture asset: {0}", assetName);
-    return nullptr;
-  }
-  return textureAsset;
+  return chMakeUnique<MeshManagerHelpers::MeshImportTask>(filePath, assetName, settings);
 }
 
 } // namespace chEngineSDK
-
 #endif // USING(CH_CODECS)

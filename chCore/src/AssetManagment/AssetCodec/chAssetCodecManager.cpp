@@ -56,24 +56,40 @@ AssetCodecManager::importAsset(const Path& importPath,
 
 /*
 */
-SPtr<IAsset>
-AssetCodecManager::importAssetFromMemory(Span<const uint8> data,
-                                         StringView extension,
-                                         const String& assetName,
-                                         const Path& assetFolder,
-                                         const Path& sourceFile,
-                                         StringView sourcePart,
-                                         const ImportSettings& settings)
+UniquePtr<IImportTask>
+AssetCodecManager::createImportTask(const Path& importPath,
+                                    const String& assetName,
+                                    const ImportSettings& settings) const
 {
   CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
 
-  SPtr<IAssetCodec> codec = m_codecRegistry->getCodecForExtension(extension);
+  const String extension = importPath.getExtension();
+  const SPtr<IAssetCodec> codec = m_codecRegistry->getCodecForExtension(extension);
   if (!codec) {
     CH_LOG_ERROR(AssetCodecSystem, "No codec found for file extension {0}", extension);
     return nullptr;
   }
-  return codec->importAssetFromMemory(data, assetName, assetFolder, sourceFile, sourcePart,
-                                      settings);
+  return codec->createImportTask(importPath, assetName, settings);
+}
+
+/*
+*/
+UniquePtr<IImportTask>
+AssetCodecManager::createImportTaskFromMemory(Span<const uint8> data,
+                                              StringView extension,
+                                              const String& assetName,
+                                              const Path& sourceFile,
+                                              StringView sourcePart,
+                                              const ImportSettings& settings) const
+{
+  CH_ASSERT(m_codecRegistry && "AssetCodecRegistry must be initialized before importing.");
+
+  const SPtr<IAssetCodec> codec = m_codecRegistry->getCodecForExtension(extension);
+  if (!codec) {
+    CH_LOG_ERROR(AssetCodecSystem, "No codec found for file extension {0}", extension);
+    return nullptr;
+  }
+  return codec->createImportTaskFromMemory(data, assetName, sourceFile, sourcePart, settings);
 }
 
 /*

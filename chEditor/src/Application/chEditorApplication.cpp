@@ -102,6 +102,8 @@ void
 EditorApplication::destroyModules()
 {
   CH_LOG_INFO(EditorApp, "EditorApplication destroying modules.");
+  // Its worker runs codec code and uses the codec manager.
+  ImportDialog::shutDown();
   if (IGraphicsAPI::isStarted()) {
     IGraphicsAPI::instance().waitIdle();
   }
@@ -183,6 +185,7 @@ EditorApplication::onRender(ICommandList& commandList,
     CH_PROFILE_SCOPE("BuildUI");
     renderUI();
   }
+  ImportDialog::update();
   // A drag or a text field still going on keeps its changes in one undo step.
   EditorScene::applyPending(UIHelpers::bRenderImGui &&
                             (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse()));

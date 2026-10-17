@@ -21,14 +21,7 @@
 #include "chModelAsset.h"
 #include "chUUID.h"
 
-//Forward declarations from Assimp
-struct aiMaterial;
-struct aiScene;
-struct aiString;
-struct aiTexture;
-
 namespace chEngineSDK {
-class TextureAsset;
 
 /**
  * Exists to turn model files read by Assimp into engine assets. Besides the model it imports
@@ -57,38 +50,17 @@ class MeshCodec  : public IAssetCodec {
     return m_extensions;
   }
 
-  SPtr<IAsset>
-  importAsset(const Path& filePath,
-              const String& assetName,
-              const Path& assetFolder,
-              const ImportSettings& settings) override;
+  /**
+   * The worker part reads the file, converts the meshes and decodes the textures; the main
+   * thread part makes the folder, the materials and the assets, reusing what an earlier
+   * import of the same file made.
+   */
+  NODISCARD UniquePtr<IImportTask>
+  createImportTask(const Path& filePath,
+                   const String& assetName,
+                   const ImportSettings& settings) override;
 
  private:
-  struct ImportContext
-  {
-    const aiScene* scene = nullptr;
-    // Absolute, so it can be stored as the source of everything made from it.
-    Path sourceFile;
-    Path assetFolder;
-    String modelName;
-    ImportSettings settings;
-  };
-
-  NODISCARD ModelMaterialSlot
-  importMaterial(const ImportContext& context, const aiMaterial& source, uint32 index);
-
-  NODISCARD SPtr<TextureAsset>
-  importTexture(const ImportContext& context,
-                const aiMaterial& source,
-                const aiString& reference,
-                const ImportSettings& settings);
-
-  NODISCARD SPtr<TextureAsset>
-  importEmbeddedTexture(const ImportContext& context,
-                        const aiTexture& texture,
-                        StringView reference,
-                        const ImportSettings& settings);
-
   Vector<String> m_extensions;
 };
 DECLARE_ASSET_TYPE(MeshCodec);

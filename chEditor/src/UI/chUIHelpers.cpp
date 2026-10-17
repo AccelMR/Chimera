@@ -22,7 +22,6 @@
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
-#include <nfd.hpp>
 
 #if USING(CH_DISPLAY_SDL3)
 
@@ -127,42 +126,6 @@ UIHelpers::bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler) {
 #endif // USING(CH_DISPLAY_SDL3)
   });
 }
-
-/*
- */
-Path
-UIHelpers::openFileExplorer(const Path& pathToOpen, const Vector<String>& filters) {
-  NFD::Guard nfdGuard;
-  NFD::UniquePath outPath;
-
-  // This is too specific to the NFD library, but we need to convert the filters
-  String supportedExtensionsStr;
-  for (SIZE_T i = 0; i < filters.size(); ++i) {
-    if (i > 0) {
-      supportedExtensionsStr += ",";
-    }
-    supportedExtensionsStr += filters[i];
-  }
-
-  const nfdfilteritem_t nfdFilter{"Supported Files", supportedExtensionsStr.c_str()};
-
-  nfdresult_t result = NFD::OpenDialog(outPath, &nfdFilter, 1, pathToOpen.toString().c_str());
-
-  if (result == NFD_OKAY) {
-    CH_LOG_INFO(UIImguiHelper, "Selected file: {0}", outPath.get());
-
-    const Path selectedFilePath(outPath.get());
-    return selectedFilePath;
-  }
-  else if (result == NFD_CANCEL) {
-    CH_LOG_INFO(UIImguiHelper, "User cancelled the file selection.");
-  }
-  else {
-    CH_LOG_ERROR(UIImguiHelper, "Error opening file dialog: {0}", NFD::GetError());
-  }
-  return Path(); // Return an empty path if no file was selected or an error occurred
-}
-
 
 /*
  */

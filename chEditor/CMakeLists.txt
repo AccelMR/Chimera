@@ -1,13 +1,9 @@
-# ---------- nativefiledialog-extended ----------
-add_subdirectory(Externals/nativefiledialog-extended SYSTEM)
-ch_set_folder_for_directory(Externals/nativefiledialog-extended Externals/nfd)
-
 # ---------- Editor ----------
 ch_collect_sources(EDITOR_SOURCES)
 ch_add_executable(chEditor FOLDER Editor SOURCES chEditorMain.cpp ${EDITOR_SOURCES})
 ch_include_subfolders(chEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-target_link_libraries(chEditor PRIVATE chCore chImguiSDL3 chImGuizmo nfd)
+target_link_libraries(chEditor PRIVATE chCore chImguiSDL3 chImGuizmo)
 
 # Plugins are loaded at run time, so nothing links them; building the editor builds them too.
 foreach(PLUGIN chVulkan chDX12 chImageCodec chMeshCodec)

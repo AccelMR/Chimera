@@ -109,6 +109,14 @@ using WeakPtr = std::weak_ptr<T>;
 template<typename T>
 struct ForwardDeleter
 {
+  ForwardDeleter() noexcept = default;
+
+  // Lets a UniquePtr of a derived class become one of its base, as std::default_delete does.
+  template<typename U>
+    requires std::is_convertible_v<U*, T*>
+  ForwardDeleter(const ForwardDeleter<U>&) noexcept
+  {}
+
   void
   operator()(T* ptr) const
   {

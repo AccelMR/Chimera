@@ -46,36 +46,23 @@ class ImageCodec : public IAssetCodec {
     return m_extensions;
   }
 
-  SPtr<IAsset>
-  importAsset(const Path& filePath,
-              const String& assetName,
-              const Path& assetFolder,
-              const ImportSettings& settings) override;
-
-  SPtr<IAsset>
-  importAssetFromMemory(Span<const uint8> data,
-                        const String& assetName,
-                        const Path& assetFolder,
-                        const Path& sourceFile,
-                        StringView sourcePart,
-                        const ImportSettings& settings) override;
-
- private:
   /**
    * 8-bit images become RGBA8 (sRGB or not, as the settings say); HDR images (.hdr) become
    * R16G16B16A16_SFLOAT, linear, keeping values above 1.
    */
-  SPtr<IAsset>
-  createTextureAsset(Vector<uint8> pixels,
-                     Vector<float> hdrPixels,
-                     int32 width,
-                     int32 height,
-                     const String& assetName,
-                     const Path& assetFolder,
-                     const Path& sourceFile,
-                     StringView sourcePart,
-                     const ImportSettings& settings);
+  NODISCARD UniquePtr<IImportTask>
+  createImportTask(const Path& filePath,
+                   const String& assetName,
+                   const ImportSettings& settings) override;
 
+  NODISCARD UniquePtr<IImportTask>
+  createImportTaskFromMemory(Span<const uint8> data,
+                             const String& assetName,
+                             const Path& sourceFile,
+                             StringView sourcePart,
+                             const ImportSettings& settings) override;
+
+ private:
   // The formats stb_image reads. It has no EXR support.
   const Vector<String> m_extensions = {"png", "jpg", "jpeg", "bmp", "tga", "hdr"};
 };

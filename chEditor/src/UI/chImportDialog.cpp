@@ -14,10 +14,18 @@
 #include "chEnginePaths.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
+#include "chSTDThreading.h"
+#include "chStringUtils.h"
 #include "chTextureAsset.h"
 #include "chUIHelpers.h"
 
 #include "imgui.h"
+
+#if USING(CH_DISPLAY_SDL3)
+#include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_video.h>
+#endif // USING(CH_DISPLAY_SDL3)
 
 namespace chEngineSDK {
 using namespace chUIHelpers;
@@ -34,8 +42,20 @@ constexpr const ANSICHAR* kExpandModeLabels[] = {"Whole model", "One object per 
 struct DialogState
 {
   // Raw, because codecs live in plugins and must not be kept alive past their unloading;
-  // the dialog only uses it while it is open.
+  // the dialog only uses it while it is open. Not null from open() until the options close,
+  // so a second import waits for the first.
   IAssetCodec* codec = nullptr;
+  // The file dialog keeps pointers to these until it answers.
+  String filterPattern;
+  String defaultLocation;
+#if USING(CH_DISPLAY_SDL3)
+  SDL_DialogFileFilter filter{};
+#endif // USING(CH_DISPLAY_SDL3)
+  bool bBrowsing = false;
+  // Written by the file dialog's callback, which may run on another thread; chosenFile is
+  // only read after bFileChosen is seen true.
+  String chosenFile;
+  Atomic<bool> bFileChosen{false};
   Path sourceFile;
   Path assetFolder;
   String fileName;
@@ -43,6 +63,13 @@ struct DialogState
   bool bModelOptions = false;
   bool bTextureOptions = false;
   bool bOpenRequested = false;
+  // The running import. The worker only touches task, progress and bReadSucceeded, and
+  // bReadSucceeded is only read after bReadDone is seen true.
+  UniquePtr<IImportTask> task;
+  UniquePtr<ImportProgress> progress;
+  Thread worker;
+  bool bReadSucceeded = false;
+  Atomic<bool> bReadDone{false};
   Event<void(const SPtr<IAsset>&)> onImported;
 };
 
@@ -92,36 +119,79 @@ renderTextureOptions(ImportSettings& settings)
 /*
  */
 void
-runImport(DialogState& state)
+startImport(DialogState& state)
 {
-  const SPtr<IAsset> asset = state.codec->importAsset(state.sourceFile, state.fileName,
-                                                      state.assetFolder, state.settings);
-  if (!asset) {
+  state.task = state.codec->createImportTask(state.sourceFile, state.fileName, state.settings);
+  if (!state.task) {
     CH_LOG_ERROR(ImportDialogLog, "Failed to import asset: {0}", state.sourceFile);
+    state.codec = nullptr;
     return;
   }
-  CH_LOG_INFO(ImportDialogLog, "Imported {0} as {1}", state.sourceFile, asset->getName());
-  state.onImported(asset);
+  state.progress = chMakeUnique<ImportProgress>();
+  state.bReadSucceeded = false;
+  state.bReadDone.store(false, std::memory_order_relaxed);
+  state.worker = Thread([&state]() {
+    state.bReadSucceeded = state.task->readSource(*state.progress);
+    state.bReadDone.store(true, std::memory_order_release);
+  });
 }
-} // namespace
 
 /*
  */
 void
-ImportDialog::open(IAssetCodec& codec, const Path& assetFolder)
+endImport(DialogState& state)
 {
-  const Path file = UIHelpers::openFileExplorer(EnginePaths::getAbsoluteGameAssetDirectory(),
-                                                codec.getSupportedExtensions());
-  // openFileExplorer already logs a cancelled dialog or a dialog error.
-  if (file.empty()) {
-    return;
-  }
+  state.task.reset();
+  state.progress.reset();
+  state.codec = nullptr;
+}
 
-  DialogState& state = getState();
-  const Vector<UUID> assetTypes = codec.getSupportedAssetTypes();
-  state.codec = &codec;
+/*
+ */
+void
+renderProgress(DialogState& state)
+{
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImVec2 corner(viewport->WorkPos.x + viewport->WorkSize.x,
+                      viewport->WorkPos.y + viewport->WorkSize.y);
+  const float margin = ImGui::GetFontSize();
+  ImGui::SetNextWindowPos(ImVec2(corner.x - margin, corner.y - margin), ImGuiCond_Appearing,
+                          ImVec2(1.0f, 1.0f));
+  constexpr ImGuiWindowFlags kFlags = ImGuiWindowFlags_AlwaysAutoResize |
+                                      ImGuiWindowFlags_NoCollapse |
+                                      ImGuiWindowFlags_NoDocking |
+                                      ImGuiWindowFlags_NoSavedSettings;
+  if (ImGui::Begin("Importing###ImportProgress", nullptr, kFlags)) {
+    ImportProgress& progress = *state.progress;
+    ImGui::Text("%s", state.sourceFile.getFileName().c_str());
+    ImGui::TextDisabled("%s", progress.getLabel());
+    const ImVec2 barSize(ImGui::GetFontSize() * 18.0f, 0.0f);
+    const float fraction = progress.getFraction();
+    if (fraction < 0.0f) {
+      // A negative fraction draws ImGui's moving bar, for imports that cannot tell.
+      ImGui::ProgressBar(-static_cast<float>(ImGui::GetTime()), barSize, "");
+    }
+    else {
+      ImGui::ProgressBar(fraction, barSize);
+    }
+
+    const bool bCancelled = progress.isCancelled();
+    ImGui::BeginDisabled(bCancelled);
+    if (ImGui::Button(bCancelled ? "Cancelling..." : "Cancel")) {
+      progress.cancel();
+    }
+    ImGui::EndDisabled();
+  }
+  ImGui::End();
+}
+
+/*
+ */
+void
+showOptions(DialogState& state, const Path& file)
+{
+  const Vector<UUID> assetTypes = state.codec->getSupportedAssetTypes();
   state.sourceFile = file;
-  state.assetFolder = assetFolder;
   state.fileName = file.getFileName(false);
   state.settings = ImportSettings{};
   state.bModelOptions =
@@ -131,12 +201,92 @@ ImportDialog::open(IAssetCodec& codec, const Path& assetFolder)
   state.bOpenRequested = true;
 }
 
+#if USING(CH_DISPLAY_SDL3)
+/*
+ */
+void SDLCALL
+onFileChosen(void* userData, const ANSICHAR* const* fileList, int32 filter)
+{
+  CH_PARAMETER_UNUSED(userData);
+  CH_PARAMETER_UNUSED(filter);
+  DialogState& state = getState();
+  state.chosenFile.clear();
+  if (!fileList) {
+    // SDL keeps the error per thread, so it must be read here.
+    CH_LOG_ERROR(ImportDialogLog, "Could not open the file dialog: {0}", SDL_GetError());
+  }
+  else if (fileList[0]) {
+    state.chosenFile = fileList[0];
+  }
+  state.bFileChosen.store(true, std::memory_order_release);
+}
+#endif // USING(CH_DISPLAY_SDL3)
+
+/*
+ */
+void
+takeChosenFile(DialogState& state)
+{
+  if (!state.bBrowsing || !state.bFileChosen.load(std::memory_order_acquire)) {
+    return;
+  }
+  state.bFileChosen.store(false, std::memory_order_relaxed);
+  state.bBrowsing = false;
+  if (state.chosenFile.empty()) {
+    state.codec = nullptr;
+    return;
+  }
+  CH_LOG_INFO(ImportDialogLog, "Selected file: {0}", state.chosenFile);
+  showOptions(state, Path(state.chosenFile));
+}
+} // namespace
+
+/*
+ */
+void
+ImportDialog::open(IAssetCodec& codec, const Path& assetFolder)
+{
+  DialogState& state = getState();
+  if (state.codec) {
+    CH_LOG_WARNING(ImportDialogLog, "An import is already open; finish it first.");
+    return;
+  }
+
+#if USING(CH_DISPLAY_SDL3)
+  state.codec = &codec;
+  state.assetFolder = assetFolder;
+  state.filterPattern = StringUtils::join(codec.getSupportedExtensions(), ";");
+  // A trailing separator tells SDL the location is a folder, not a file name, and the
+  // Windows shell does not parse forward slashes.
+  state.defaultLocation = EnginePaths::getAbsoluteGameAssetDirectory().toString() + "/";
+#if USING(CH_PLATFORM_WIN32)
+  state.defaultLocation = StringUtils::replaceAllChars(state.defaultLocation, '/', '\\');
+#endif // USING(CH_PLATFORM_WIN32)
+  state.bBrowsing = true;
+
+  state.filter = {"Supported files", state.filterPattern.c_str()};
+  // The SDL3 platform backend keeps the SDL window id in PlatformHandle.
+  SDL_Window* window = SDL_GetWindowFromID(static_cast<SDL_WindowID>(
+      reinterpret_cast<SIZE_T>(ImGui::GetMainViewport()->PlatformHandle)));
+  SDL_ShowOpenFileDialog(onFileChosen, nullptr, window, &state.filter, 1,
+                         state.defaultLocation.c_str(), false);
+#else
+  CH_PARAMETER_UNUSED(codec);
+  CH_PARAMETER_UNUSED(assetFolder);
+  CH_LOG_ERROR(ImportDialogLog, "There is no file dialog without SDL3.");
+#endif // USING(CH_DISPLAY_SDL3)
+}
+
 /*
  */
 void
 ImportDialog::render()
 {
   DialogState& state = getState();
+  takeChosenFile(state);
+  if (state.task) {
+    renderProgress(state);
+  }
   if (state.bOpenRequested) {
     ImGui::OpenPopup(kPopupName);
     state.bOpenRequested = false;
@@ -169,11 +319,53 @@ ImportDialog::render()
   ImGui::EndPopup();
 
   if (bImport && state.codec) {
-    runImport(state);
+    startImport(state);
   }
-  if (bImport || bCancel) {
+  else if (bCancel) {
     state.codec = nullptr;
   }
+}
+
+/*
+ */
+void
+ImportDialog::update()
+{
+  DialogState& state = getState();
+  if (!state.task || !state.bReadDone.load(std::memory_order_acquire)) {
+    return;
+  }
+  state.worker.join();
+
+  if (state.progress->isCancelled()) {
+    CH_LOG_INFO(ImportDialogLog, "Import of {0} cancelled", state.sourceFile);
+  }
+  else if (!state.bReadSucceeded) {
+    CH_LOG_ERROR(ImportDialogLog, "Failed to import asset: {0}", state.sourceFile);
+  }
+  else if (const SPtr<IAsset> asset = state.task->createAssets(state.assetFolder)) {
+    CH_LOG_INFO(ImportDialogLog, "Imported {0} as {1}", state.sourceFile, asset->getName());
+    endImport(state);
+    state.onImported(asset);
+    return;
+  }
+  else {
+    CH_LOG_ERROR(ImportDialogLog, "Failed to import asset: {0}", state.sourceFile);
+  }
+  endImport(state);
+}
+
+/*
+ */
+void
+ImportDialog::shutDown()
+{
+  DialogState& state = getState();
+  if (state.worker.joinable()) {
+    state.progress->cancel();
+    state.worker.join();
+  }
+  endImport(state);
 }
 
 /*

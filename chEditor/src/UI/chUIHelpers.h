@@ -38,9 +38,6 @@ class UIHelpers {
   NODISCARD static HEvent
   bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler);
 
-  static Path
-  openFileExplorer(const Path& pathToOpen, const Vector<String>& filters = {});
-
   NODISCARD static const ANSICHAR*
   getFolderIcon(bool bOpen);
 

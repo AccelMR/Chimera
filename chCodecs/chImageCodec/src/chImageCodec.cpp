@@ -52,122 +52,176 @@ takeHdrImage(float* data, int32 width, int32 height) {
   }
   return imageData;
 }
-} // namespace ImageImpoterHelpers
+
+/**
+ * Exists so the image is decoded and its mips built on the import's worker thread, and only
+ * the texture asset is made on the main thread.
+ */
+class ImageImportTask final : public IImportTask
+{
+ public:
+  ImageImportTask(const Path& filePath,
+                  Span<const uint8> data,
+                  const String& assetName,
+                  const Path& sourceFile,
+                  StringView sourcePart,
+                  const ImportSettings& settings)
+    : m_filePath(filePath),
+      m_data(data),
+      m_assetName(assetName),
+      m_sourceFile(sourceFile),
+      m_sourcePart(sourcePart),
+      m_settings(settings)
+  {}
+
+  NODISCARD bool
+  readSource(ImportProgress& progress) override;
+
+  SPtr<IAsset>
+  createAssets(const Path& assetFolder) override;
+
+ private:
+  NODISCARD bool
+  decode(Vector<float>& outHdrPixels);
+
+  // Empty when the image is read from m_data.
+  Path m_filePath;
+  Span<const uint8> m_data;
+  String m_assetName;
+  Path m_sourceFile;
+  String m_sourcePart;
+  ImportSettings m_settings;
+
+  Vector<uint8> m_pixels;
+  uint32 m_width = 0;
+  uint32 m_height = 0;
+  uint32 m_mipLevels = 1;
+  Format m_format = Format::Unknown;
+};
 
 /*
-*/
-SPtr<IAsset>
-ImageCodec::importAsset(const Path& filePath,
-                        const String& assetName,
-                        const Path& assetFolder,
-                        const ImportSettings& settings) {
-  CH_ASSERT(FileSystem::isFile(filePath) && "File does not exist");
-
+ * Fills m_pixels for an 8-bit image or outHdrPixels for an HDR one.
+ */
+bool
+ImageImportTask::decode(Vector<float>& outHdrPixels)
+{
   int32 width = 0;
   int32 height = 0;
   int32 channels = 0;
-  const String path = filePath.toString();
-  Vector<uint8> imageData;
-  Vector<float> hdrData;
-  // Loaded before the take, which reads the size the load writes.
-  if (stbi_is_hdr(path.c_str())) {
-    float* pixels = stbi_loadf(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-    hdrData = ImageImpoterHelpers::takeHdrImage(pixels, width, height);
+  // Each load goes into a local before the take, which reads the size the load writes.
+  if (m_filePath.empty()) {
+    const int32 size = static_cast<int32>(m_data.size());
+    if (stbi_is_hdr_from_memory(m_data.data(), size)) {
+      float* pixels = stbi_loadf_from_memory(m_data.data(), size, &width, &height, &channels,
+                                             STBI_rgb_alpha);
+      outHdrPixels = takeHdrImage(pixels, width, height);
+    }
+    else {
+      uint8* pixels = stbi_load_from_memory(m_data.data(), size, &width, &height, &channels,
+                                            STBI_rgb_alpha);
+      m_pixels = takeImage(pixels, width, height);
+    }
   }
   else {
-    uint8* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-    imageData = ImageImpoterHelpers::takeImage(pixels, width, height);
-  }
-  if (imageData.empty() && hdrData.empty()) {
-    CH_LOG_ERROR(ImageCodecLog, "Failed to load image from path {0}: {1}", path,
-                 stbi_failure_reason());
-    return nullptr;
+    const String& path = m_filePath.toString();
+    if (stbi_is_hdr(path.c_str())) {
+      float* pixels = stbi_loadf(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+      outHdrPixels = takeHdrImage(pixels, width, height);
+    }
+    else {
+      uint8* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+      m_pixels = takeImage(pixels, width, height);
+    }
   }
 
-  return createTextureAsset(std::move(imageData), std::move(hdrData), width, height,
-                            assetName, assetFolder, FileSystem::absolutePath(filePath),
-                            StringView(), settings);
+  if (m_pixels.empty() && outHdrPixels.empty()) {
+    // stb keeps the failure reason per thread.
+    CH_LOG_ERROR(ImageCodecLog, "Failed to read image {0} {1}: {2}", m_sourceFile,
+                 m_sourcePart, stbi_failure_reason());
+    return false;
+  }
+  m_width = static_cast<uint32>(width);
+  m_height = static_cast<uint32>(height);
+  return true;
 }
 
 /*
-*/
-SPtr<IAsset>
-ImageCodec::importAssetFromMemory(Span<const uint8> data,
-                                  const String& assetName,
-                                  const Path& assetFolder,
-                                  const Path& sourceFile,
-                                  StringView sourcePart,
-                                  const ImportSettings& settings) {
-  int32 width = 0;
-  int32 height = 0;
-  int32 channels = 0;
-  const int32 size = static_cast<int32>(data.size());
-  Vector<uint8> imageData;
-  Vector<float> hdrData;
-  // Loaded before the take, which reads the size the load writes.
-  if (stbi_is_hdr_from_memory(data.data(), size)) {
-    float* pixels =
-        stbi_loadf_from_memory(data.data(), size, &width, &height, &channels, STBI_rgb_alpha);
-    hdrData = ImageImpoterHelpers::takeHdrImage(pixels, width, height);
-  }
-  else {
-    uint8* pixels =
-        stbi_load_from_memory(data.data(), size, &width, &height, &channels, STBI_rgb_alpha);
-    imageData = ImageImpoterHelpers::takeImage(pixels, width, height);
-  }
-  if (imageData.empty() && hdrData.empty()) {
-    CH_LOG_ERROR(ImageCodecLog, "Failed to read image {0} of {1}: {2}", sourcePart,
-                 sourceFile, stbi_failure_reason());
-    return nullptr;
+ */
+bool
+ImageImportTask::readSource(ImportProgress& progress)
+{
+  if (!m_filePath.empty() && !FileSystem::isFile(m_filePath)) {
+    CH_LOG_ERROR(ImageCodecLog, "File not found: {0}", m_filePath);
+    return false;
   }
 
-  return createTextureAsset(std::move(imageData), std::move(hdrData), width, height,
-                            assetName, assetFolder, sourceFile, sourcePart, settings);
+  Vector<float> hdrPixels;
+  if (!decode(hdrPixels) || progress.isCancelled()) {
+    return false;
+  }
+
+  if (!hdrPixels.empty()) {
+    // HDR files hold linear light, so the sRGB setting does not apply.
+    m_mipLevels = TextureMips::buildChainRGBA16F(std::move(hdrPixels), m_width, m_height,
+                                                 m_settings.generateMips, m_pixels);
+    m_format = Format::R16G16B16A16_SFLOAT;
+  }
+  else {
+    m_mipLevels = m_settings.generateMips
+                      ? TextureMips::appendChainRGBA8(m_pixels, m_width, m_height,
+                                                      m_settings.srgb)
+                      : 1;
+    m_format = m_settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
+  }
+  return true;
 }
 
 /*
-*/
+ */
 SPtr<IAsset>
-ImageCodec::createTextureAsset(Vector<uint8> pixels,
-                               Vector<float> hdrPixels,
-                               int32 width,
-                               int32 height,
-                               const String& assetName,
-                               const Path& assetFolder,
-                               const Path& sourceFile,
-                               StringView sourcePart,
-                               const ImportSettings& settings) {
+ImageImportTask::createAssets(const Path& assetFolder)
+{
   CH_ASSERT(IGraphicsAPI::isStarted() && "Graphics API is not initialized");
 
   const AssetMetadata metadata =
-      makeMetadata<TextureAsset>(assetName, assetFolder);
-  const uint32 textureWidth = static_cast<uint32>(width);
-  const uint32 textureHeight = static_cast<uint32>(height);
-  uint32 mipLevels = 1;
-  Format format = Format::Unknown;
-  if (!hdrPixels.empty()) {
-    // HDR files hold linear light, so the sRGB setting does not apply.
-    mipLevels = TextureMips::buildChainRGBA16F(std::move(hdrPixels), textureWidth,
-                                               textureHeight, settings.generateMips, pixels);
-    format = Format::R16G16B16A16_SFLOAT;
-  }
-  else {
-    mipLevels = settings.generateMips ? TextureMips::appendChainRGBA8(
-                                            pixels, textureWidth, textureHeight, settings.srgb)
-                                      : 1;
-    format = settings.srgb ? Format::R8G8B8A8_SRGB : Format::R8G8B8A8_UNORM;
-  }
+      IAssetCodec::makeMetadata<TextureAsset>(m_assetName, assetFolder);
   SPtr<TextureAsset> textureAsset = chMakeShared<TextureAsset>(
-      metadata, std::move(pixels), textureWidth, textureHeight, format, mipLevels);
+      metadata, std::move(m_pixels), m_width, m_height, m_format, m_mipLevels);
 
-  if (!saveAndRegister(textureAsset, sourceFile, sourcePart, settings)) {
-    CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: {0}", assetName);
+  if (!IAssetCodec::saveAndRegister(textureAsset, m_sourceFile, m_sourcePart, m_settings)) {
+    CH_LOG_ERROR(ImageCodecLog, "Failed to save texture asset: {0}", m_assetName);
     return nullptr;
   }
 
   CH_LOG_INFO(ImageCodecLog, "Imported image asset: {0} from {1}", textureAsset->getName(),
-              sourceFile);
+              m_sourceFile);
   return textureAsset;
+}
+} // namespace ImageImpoterHelpers
+
+/*
+*/
+UniquePtr<IImportTask>
+ImageCodec::createImportTask(const Path& filePath,
+                             const String& assetName,
+                             const ImportSettings& settings)
+{
+  return chMakeUnique<ImageImpoterHelpers::ImageImportTask>(
+      filePath, Span<const uint8>(), assetName, FileSystem::absolutePath(filePath),
+      StringView(), settings);
+}
+
+/*
+*/
+UniquePtr<IImportTask>
+ImageCodec::createImportTaskFromMemory(Span<const uint8> data,
+                                       const String& assetName,
+                                       const Path& sourceFile,
+                                       StringView sourcePart,
+                                       const ImportSettings& settings)
+{
+  return chMakeUnique<ImageImpoterHelpers::ImageImportTask>(Path(), data, assetName,
+                                                            sourceFile, sourcePart, settings);
 }
 
 } // namespace chEngineSDK

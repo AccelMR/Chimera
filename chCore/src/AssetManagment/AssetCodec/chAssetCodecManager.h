@@ -35,17 +35,25 @@ class CH_CORE_EXPORT AssetCodecManager : public Module<AssetCodecManager>
               const ImportSettings& settings = {});
 
   /**
-   * Same as importAsset for a file already in memory; the codec is picked by extension
-   * (with or without the dot). See IAssetCodec::importAssetFromMemory.
+   * IAssetCodec::createImportTask of the codec registered for the file's extension; null
+   * when no codec handles it. Safe from any thread once the codecs are registered.
    */
-  SPtr<IAsset>
-  importAssetFromMemory(Span<const uint8> data,
-                        StringView extension,
-                        const String& assetName,
-                        const Path& assetFolder,
-                        const Path& sourceFile,
-                        StringView sourcePart,
-                        const ImportSettings& settings = {});
+  NODISCARD UniquePtr<IImportTask>
+  createImportTask(const Path& importPath,
+                   const String& assetName,
+                   const ImportSettings& settings = {}) const;
+
+  /**
+   * IAssetCodec::createImportTaskFromMemory of the codec picked by extension (with or
+   * without the dot). Safe from any thread once the codecs are registered.
+   */
+  NODISCARD UniquePtr<IImportTask>
+  createImportTaskFromMemory(Span<const uint8> data,
+                             StringView extension,
+                             const String& assetName,
+                             const Path& sourceFile,
+                             StringView sourcePart,
+                             const ImportSettings& settings = {}) const;
 
   template<typename AssetCodecType>
   NODISCARD FORCEINLINE SPtr<AssetCodecType>
