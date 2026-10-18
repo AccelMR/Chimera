@@ -17,7 +17,6 @@
 
 #include "chEventSystem.h"
 #include "chDisplayEvent.h"
-#include "chResizeDebouncer.h"
 
 #ifdef CH_CROSS_WINDOW
 namespace xwin{
