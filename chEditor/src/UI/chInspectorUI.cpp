@@ -25,6 +25,7 @@
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
+#include "chShapeComponent.h"
 #include "chSkyLightComponent.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
@@ -188,6 +189,9 @@ InspectorUI::renderInspectorUI()
   ImGui::BeginDisabled(instance != nullptr);
   if (ModelComponent* modelComponent = selected->getComponent<ModelComponent>()) {
     renderModelComponent(*modelComponent);
+  }
+  if (ShapeComponent* shapeComponent = selected->getComponent<ShapeComponent>()) {
+    renderShapeComponent(*shapeComponent);
   }
   renderLightComponent(*selected);
   if (SkyLightComponent* skyLight = selected->getComponent<SkyLightComponent>()) {
@@ -355,6 +359,112 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
     ImGui::PopID();
   }
   ImGui::TreePop();
+}
+
+/*
+ * Only the sizes the shape's type reads are shown; the others keep their values, so
+ * switching the type back finds them again. A drag builds a new mesh on every change,
+ * which is cheap at these vertex counts.
+ */
+void
+InspectorUI::renderShapeComponent(ShapeComponent& shapeComponent)
+{
+  if (!ImGui::CollapsingHeader(ICON_FA_SHAPES "  Shape###Shape",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+  GameObject& gameObject = *shapeComponent.getOwner();
+
+  bool bEnabled = shapeComponent.isEnabled();
+  if (ImGui::Checkbox("Visible##Shape", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Visible");
+    shapeComponent.setEnabled(bEnabled);
+  }
+
+  ShapeDesc shape = shapeComponent.getShape();
+  bool bChanged = false;
+  if (ImGui::BeginCombo("Type", MeshGenerator::getName(shape.type))) {
+    for (uint32 i = 0; i < static_cast<uint32>(ShapeType::COUNT); ++i) {
+      const ShapeType type = static_cast<ShapeType>(i);
+      if (ImGui::Selectable(MeshGenerator::getName(type), type == shape.type)) {
+        bChanged |= type != shape.type;
+        shape.type = type;
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  const float minSize = MeshGenerator::MIN_SIZE;
+  constexpr float kMaxSize = 100000.0f;
+  constexpr float kSizeSpeed = 0.01f;
+  const auto dragCount = [&bChanged](const ANSICHAR* label, uint32& value, uint32 low,
+                                     uint32 high) {
+    int32 count = static_cast<int32>(value);
+    if (ImGui::DragInt(label, &count, 0.2f, static_cast<int32>(low),
+                       static_cast<int32>(high), "%d", ImGuiSliderFlags_AlwaysClamp)) {
+      value = static_cast<uint32>(count);
+      bChanged = true;
+    }
+  };
+  switch (shape.type) {
+    case ShapeType::Plane:
+      bChanged |= ImGui::DragFloat2("Size", &shape.size.x, kSizeSpeed, minSize, kMaxSize);
+      dragCount("Subdivisions", shape.subdivisions, 1, MeshGenerator::MAX_SUBDIVISIONS);
+      break;
+    case ShapeType::Box:
+      bChanged |= ImGui::DragFloat3("Size", &shape.size.x, kSizeSpeed, minSize, kMaxSize);
+      break;
+    case ShapeType::Sphere:
+    case ShapeType::Capsule:
+    case ShapeType::Cylinder:
+    case ShapeType::Cone:
+      bChanged |= ImGui::DragFloat("Radius", &shape.radius, kSizeSpeed, minSize, kMaxSize);
+      if (shape.type != ShapeType::Sphere) {
+        bChanged |= ImGui::DragFloat("Height", &shape.height, kSizeSpeed, minSize, kMaxSize);
+        if (shape.type == ShapeType::Capsule) {
+          ImGui::SetItemTooltip("From tip to tip; at least twice the radius");
+        }
+      }
+      dragCount("Segments", shape.segments, MeshGenerator::MIN_SEGMENTS,
+                MeshGenerator::MAX_SEGMENTS);
+      ImGui::SetItemTooltip("Sides around the Z axis");
+      if (shape.type == ShapeType::Sphere || shape.type == ShapeType::Capsule) {
+        dragCount("Rings", shape.rings, MeshGenerator::MIN_RINGS, MeshGenerator::MAX_RINGS);
+        ImGui::SetItemTooltip("Rows from pole to pole");
+      }
+      break;
+    case ShapeType::COUNT:
+      break;
+  }
+  if (bChanged) {
+    EditorScene::recordChange(gameObject, "Edit Shape");
+    shapeComponent.setShape(shape);
+  }
+
+  // Dropping a material sets it on this shape only; editing it changes the shared asset.
+  const SPtr<MaterialAsset>& material = shapeComponent.getMaterial();
+  const ANSICHAR* materialName = "None (drop a material)";
+  if (material) {
+    materialName = material->getName();
+  }
+  else if (!shapeComponent.getMaterialId().isNull()) {
+    materialName = "Missing material";
+  }
+  ImGui::Button(materialName, ImVec2(-FLT_MIN, 0.0f));
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<MaterialAsset> dropped = AssetDragDrop::acceptMaterial()) {
+      EditorScene::recordChange(gameObject, "Set Material");
+      shapeComponent.setMaterial(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+  if (!shapeComponent.getMaterialId().isNull() && ImGui::SmallButton("Clear##ShapeMaterial")) {
+    EditorScene::recordChange(gameObject, "Clear Material");
+    shapeComponent.setMaterial(nullptr);
+  }
+  if (material) {
+    renderMaterial(material);
+  }
 }
 
 /*

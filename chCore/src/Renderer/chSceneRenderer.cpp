@@ -11,6 +11,7 @@
 
 #include "chAlgorithm.h"
 #include "chCamera.h"
+#include "chDebugLinePass.h"
 #include "chDebugRenderPath.h"
 #include "chDeferredRenderPath.h"
 #include "chForwardRenderPath.h"
@@ -40,6 +41,9 @@ SceneRenderer::SceneRenderer()
     m_deferredRenderPath(new DeferredRenderPath()),
     m_renderPath(m_deferredRenderPath.get()),
     m_debugRenderPath(new DebugRenderPath()),
+#if USING(CH_DEBUG_DRAW)
+    m_debugLinePass(new DebugLinePass()),
+#endif // USING(CH_DEBUG_DRAW)
     m_shadowRenderer(new ShadowRenderer()),
     m_imageBasedLighting(new ImageBasedLighting()),
     m_skyPass(new SkyPass()),
@@ -67,7 +71,8 @@ RGTextureHandle
 SceneRenderer::addScenePasses(const Scene& scene,
                               const Camera& camera,
                               RGTextureHandle output,
-                              const LinearColor& clearColor)
+                              const LinearColor& clearColor,
+                              const DebugDraw* extraLines)
 {
   CH_PROFILE_SCOPE("AddScenePasses");
   const Frustum& frustum = camera.getFrustum();
@@ -83,6 +88,26 @@ SceneRenderer::addScenePasses(const Scene& scene,
                         .clearColor = clearColor,
                         .bShowShadowCascades = m_viewMode == ViewMode::ShadowCascades};
 
+  const RGTextureHandle depth = addViewModePasses(scene, view, output);
+#if USING(CH_DEBUG_DRAW)
+  // The shadow map view shows textures, not the scene, so lines would not match it.
+  if (g_cvarDebugLines.get() && m_viewMode != ViewMode::ShadowMaps) {
+    const DebugDraw* lists[] = {&scene.getDebugDraw(), extraLines};
+    m_debugLinePass->addPass(m_graph, camera, lists, output, depth);
+  }
+#else
+  CH_PARAMETER_UNUSED(extraLines);
+#endif // USING(CH_DEBUG_DRAW)
+  return depth;
+}
+
+/*
+ */
+RGTextureHandle
+SceneRenderer::addViewModePasses(const Scene& scene,
+                                 const RenderView& view,
+                                 RGTextureHandle output)
+{
   switch (m_viewMode) {
     case ViewMode::Lit:
     case ViewMode::ShadowCascades:

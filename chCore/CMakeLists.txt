@@ -7,7 +7,8 @@ target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3)
 target_compile_definitions(chCore PUBLIC
   CH_SDL3_ENABLED
   $<$<BOOL:${CH_BUILD_EDITOR}>:CH_EDITOR_ENABLED>
-  $<$<BOOL:${CH_BUILD_CODECS}>:CH_CODECS_ENABLED>)
+  $<$<BOOL:${CH_BUILD_CODECS}>:CH_CODECS_ENABLED>
+  $<$<BOOL:${CH_ENABLE_DEBUG_DRAW}>:CH_DEBUG_DRAW_ENABLED>)
 target_compile_definitions(chCore PRIVATE
   CH_DEFAULT_GRAPHICS_API="${CH_DEFAULT_GRAPHICS_API}")
 

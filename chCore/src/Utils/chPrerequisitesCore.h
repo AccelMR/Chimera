@@ -35,6 +35,13 @@
 # define CH_CODECS NOT_IN_USE
 #endif
 
+// Off in shipping game builds, so debug lines and their pass compile to nothing.
+#ifdef CH_DEBUG_DRAW_ENABLED
+# define CH_DEBUG_DRAW IN_USE
+#else
+# define CH_DEBUG_DRAW NOT_IN_USE
+#endif
+
 #if defined(CH_STATIC_LIB)
 # define CH_CORE_EXPORT
 #elif defined(CH_CORE_EXPORTS)

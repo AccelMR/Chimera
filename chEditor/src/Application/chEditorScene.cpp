@@ -317,7 +317,7 @@ openPrefabMode(EditorSceneState& state, const SPtr<PrefabAsset>& prefab)
 
   scene->updateTransforms();
   AABox bounds(Vector3::ZERO, Vector3::ZERO);
-  if (state.camera && ModelComponent::getHierarchyWorldBounds(*root, bounds)) {
+  if (state.camera && root->getHierarchyWorldBounds(bounds)) {
     state.camera->focus(bounds);
   }
 }

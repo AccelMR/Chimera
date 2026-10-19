@@ -58,6 +58,13 @@ class CH_CORE_EXPORT Component
   collectReferences(Vector<UUID>& outReferences) const;
 
   /**
+   * Box around what the component draws, in world space as of the last transform update.
+   * False when it draws nothing.
+   */
+  NODISCARD virtual bool
+  getWorldBounds(AABox& outBounds) const;
+
+  /**
    * A disabled component is unregistered: it stays on its GameObject but leaves the scene.
    */
   void

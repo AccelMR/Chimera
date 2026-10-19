@@ -11,11 +11,16 @@
 
 #include "chBox.h"
 #include "chCamera.h"
+#include "chConsoleVariable.h"
+#include "chDebugDraw.h"
 #include "chEditorCamera.h"
 #include "chEditorScene.h"
 #include "chEditorSelection.h"
+#include "chEngineConfig.h"
 #include "chGameObject.h"
 #include "chLightItem.h"
+#include "chLinearColor.h"
+#include "chMesh.h"
 #include "chMath.h"
 #include "chMatrix4.h"
 #include "chModelComponent.h"
@@ -33,6 +38,13 @@
 namespace chEngineSDK {
 
 namespace {
+ConsoleVariable<bool> g_cvarShowBounds(
+    "Editor.ShowBounds",
+    false,
+    "Draws the bounds of what the selected objects draw: the world box in yellow and the "
+    "mesh's own box, turned with the object, in orange.",
+    "ShowBounds");
+
 // Below this many pixels of movement a press and release is a click, not a drag.
 constexpr float kClickMaxDragPixels = 4.0f;
 // In font heights, so the icons follow the editor font size.
@@ -310,6 +322,21 @@ ViewportTools::renderToolbar()
     ViewportGrid::renderSettings();
     ImGui::EndPopup();
   }
+
+#if USING(CH_DEBUG_DRAW)
+  ImGui::SameLine();
+  const bool bBounds = areBoundsVisible();
+  if (bBounds) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+  }
+  if (ImGui::Button("Bounds")) {
+    setBoundsVisible(!bBounds);
+  }
+  if (bBounds) {
+    ImGui::PopStyleColor();
+  }
+  ImGui::SetItemTooltip("%s", g_cvarShowBounds.getHelp().c_str());
+#endif // USING(CH_DEBUG_DRAW)
 
   ImGui::SameLine();
   const bool bStats = ProfilerUI::isOverlayVisible();
@@ -756,7 +783,7 @@ ViewportTools::focusSelection()
   bool bHasBounds = false;
   for (const SPtr<GameObject>& selected : EditorSelection::getSelection()) {
     AABox objectBounds(Vector3::ZERO, Vector3::ZERO);
-    if (!ModelComponent::getHierarchyWorldBounds(*selected, objectBounds)) {
+    if (!selected->getHierarchyWorldBounds(objectBounds)) {
       const Vector3 position = selected->getTransform().getWorldPosition();
       objectBounds = AABox(position - extent, position + extent);
     }
@@ -771,6 +798,55 @@ ViewportTools::focusSelection()
   if (bHasBounds) {
     m_editorCamera.focus(bounds);
   }
+}
+
+/*
+ */
+void
+ViewportTools::addSelectionBounds(const Scene& scene, DebugDraw& outLines)
+{
+#if USING(CH_DEBUG_DRAW)
+  if (!g_cvarShowBounds.get() || EditorSelection::getSelection().empty()) {
+    return;
+  }
+
+  const auto isInSelection = [](const GameObject* gameObject) {
+    for (; gameObject; gameObject = gameObject->getParent()) {
+      if (EditorSelection::isSelected(*gameObject)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const RenderItem& item : scene.getRenderItemSlots()) {
+    if (item.mesh == nullptr || !isInSelection(item.owner)) {
+      continue;
+    }
+    outLines.box(item.worldBounds.getBox(), LinearColor::Yellow);
+    outLines.box(item.mesh->getBounds().getBox(), item.worldMatrix, LinearColor::Orange);
+  }
+#else
+  // Nothing would be drawn, so the render items are not walked.
+  CH_PARAMETER_UNUSED(scene);
+  CH_PARAMETER_UNUSED(outLines);
+#endif // USING(CH_DEBUG_DRAW)
+}
+
+/*
+ */
+bool
+ViewportTools::areBoundsVisible()
+{
+  return g_cvarShowBounds.get();
+}
+
+/*
+ */
+void
+ViewportTools::setBoundsVisible(bool bVisible)
+{
+  g_cvarShowBounds.set(bVisible, ConsoleVariableSource::Console);
+  EngineConfig::setUserValue("Editor", "Editor", "ShowBounds", bVisible ? "true" : "false");
 }
 
 } // namespace chEngineSDK

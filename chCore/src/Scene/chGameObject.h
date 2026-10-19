@@ -102,6 +102,13 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD GameObject*
   getOutermostPrefabInstance();
 
+  /**
+   * Box around what the components of this object and of all its children draw, in world
+   * space as of the last transform update. False when none draws anything.
+   */
+  NODISCARD bool
+  getHierarchyWorldBounds(AABox& outBounds) const;
+
  private:
   friend class Scene;
   friend class GameObjectSerializer;

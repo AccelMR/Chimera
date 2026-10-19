@@ -11,6 +11,8 @@
 
 #include "chBox.h"
 #include "chCamera.h"
+#include "chCapsule.h"
+#include "chDebugDraw.h"
 #include "chAngle.h"
 #include "chAssetFile.h"
 #include "chAssetMeta.h"
@@ -31,6 +33,7 @@
 #include "chMath.h"
 #include "chMatrixHelpers.h"
 #include "chMesh.h"
+#include "chMeshGenerator.h"
 #include "chMeshSplit.h"
 #include "chModel.h"
 #include "chModelAsset.h"
@@ -45,7 +48,11 @@
 #include "chScene.h"
 #include "chSceneHistory.h"
 #include "chShadowRenderer.h"
+#include "chShapeComponent.h"
 #include "chShapeOverlap.h"
+#include "chSphere.h"
+#include "chOrientedBox.h"
+#include "chLinearColor.h"
 #include "chSkyLightComponent.h"
 #include "chSphereBoxBounds.h"
 #include "chStringUtils.h"
@@ -461,8 +468,9 @@ TEST_CASE("chCore - Scene render items")
     REQUIRE(visible[0]->worldBounds.center.nearEqual(Vector3(-20.0f, 1.0f, 0.0f)));
     scene.gatherRenderItems(camera.getFrustum(), visible);
     REQUIRE(visible.empty());
-    REQUIRE(modelComponent.getWorldBounds().getCenter().nearEqual(
-        Vector3(-20.0f, 1.0f, 0.0f)));
+    AABox bounds(Vector3::ZERO, Vector3::ZERO);
+    REQUIRE(modelComponent.getWorldBounds(bounds));
+    REQUIRE(bounds.getCenter().nearEqual(Vector3(-20.0f, 1.0f, 0.0f)));
   }
 
   SECTION("Disabling unregisters")
@@ -1941,7 +1949,7 @@ TEST_CASE("chCore - Model expand")
   REQUIRE(scene.getRenderItemCount() == 4);
 
   AABox wholeBounds(Vector3::ZERO, Vector3::ZERO);
-  REQUIRE(ModelComponent::getHierarchyWorldBounds(*gameObject, wholeBounds));
+  REQUIRE(gameObject->getHierarchyWorldBounds(wholeBounds));
 
   const auto findChild = [](const GameObject& parent, const String& name) -> GameObject* {
     for (const SPtr<GameObject>& child : parent.getChildren()) {
@@ -1952,7 +1960,9 @@ TEST_CASE("chCore - Model expand")
     return nullptr;
   };
   const auto partCenter = [](const GameObject& part) {
-    return part.getComponent<ModelComponent>()->getWorldBounds().getCenter();
+    AABox bounds(Vector3::ZERO, Vector3::ZERO);
+    REQUIRE(part.getComponent<ModelComponent>()->getWorldBounds(bounds));
+    return bounds.getCenter();
   };
 
   REQUIRE_FALSE(ModelExpand::expand(scene, *gameObject, ModelExpandMode::Single));
@@ -1986,7 +1996,7 @@ TEST_CASE("chCore - Model expand")
     REQUIRE(root->getComponent<ModelComponent>()->getUsedMaterialSlots().size() == 1);
 
     AABox expandedBounds(Vector3::ZERO, Vector3::ZERO);
-    REQUIRE(ModelComponent::getHierarchyWorldBounds(*gameObject, expandedBounds));
+    REQUIRE(gameObject->getHierarchyWorldBounds(expandedBounds));
     REQUIRE(expandedBounds.minPoint.nearEqual(wholeBounds.minPoint));
     REQUIRE(expandedBounds.maxPoint.nearEqual(wholeBounds.maxPoint));
 
@@ -2739,3 +2749,374 @@ TEST_CASE("chCore - Sky lights")
     REQUIRE(references[0] == imageId);
   }
 }
+
+namespace {
+/*
+ * Checks what every generated shape must hold: valid indices, triangles that show their
+ * front to the outside (clockwise, away from center, or up for the plane), unit normals,
+ * tangents along U and bitangents up the image, and a texture that is not mirrored.
+ */
+void
+checkGeneratedMesh(const Mesh& mesh, const ShapeDesc& desc)
+{
+  const Vector<VertexStatic> vertices = mesh.getVertexData<VertexStatic>();
+  Vector<uint32> indices;
+  REQUIRE(mesh.readIndices(indices));
+  REQUIRE_FALSE(vertices.empty());
+  REQUIRE(indices.size() % 3 == 0);
+  REQUIRE(indices.size() >= 3);
+  REQUIRE(mesh.getIndexType() ==
+          (vertices.size() <= 65535 ? IndexType::UInt16 : IndexType::UInt32));
+
+  for (const VertexStatic& vertex : vertices) {
+    REQUIRE(Math::abs(vertex.normal.magnitude() - 1.0f) < 1e-4f);
+    const Vector3 tangent(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    REQUIRE(Math::abs(tangent.magnitude() - 1.0f) < 1e-4f);
+    REQUIRE(Math::abs(tangent.dot(vertex.normal)) < 1e-4f);
+    // Seen from outside, right is cross(normal, up), so an unmirrored map has w = -1.
+    REQUIRE(vertex.tangent.w == -1.0f);
+  }
+
+  for (SIZE_T i = 0; i < indices.size(); i += 3) {
+    REQUIRE(indices[i] < vertices.size());
+    REQUIRE(indices[i + 1] < vertices.size());
+    REQUIRE(indices[i + 2] < vertices.size());
+    const VertexStatic& a = vertices[indices[i]];
+    const VertexStatic& b = vertices[indices[i + 1]];
+    const VertexStatic& c = vertices[indices[i + 2]];
+    const Vector3 edge1 = b.position - a.position;
+    const Vector3 edge2 = c.position - a.position;
+    const Vector3 faceNormal = edge1.cross(edge2);
+    REQUIRE(faceNormal.sqrMagnitude() > 0.0f);
+
+    const Vector3 centroid = (a.position + b.position + c.position) / 3.0f;
+    if (desc.type == ShapeType::Plane) {
+      REQUIRE(faceNormal.z > 0.0f);
+    }
+    else {
+      // Every other shape is convex around the origin.
+      REQUIRE(faceNormal.dot(centroid) > 0.0f);
+    }
+
+    // Where U and V grow on the triangle must match the tangent frame of its vertices.
+    const float du1 = b.texCoord.x - a.texCoord.x;
+    const float dv1 = b.texCoord.y - a.texCoord.y;
+    const float du2 = c.texCoord.x - a.texCoord.x;
+    const float dv2 = c.texCoord.y - a.texCoord.y;
+    const float determinant = du1 * dv2 - du2 * dv1;
+    if (Math::abs(determinant) < 1e-8f) {
+      continue;
+    }
+    const Vector3 alongU = (edge1 * dv2 - edge2 * dv1) / determinant;
+    const Vector3 alongV = (edge2 * du1 - edge1 * du2) / determinant;
+    for (const VertexStatic* vertex : {&a, &b, &c}) {
+      const Vector3 tangent(vertex->tangent.x, vertex->tangent.y, vertex->tangent.z);
+      const Vector3 imageUp = vertex->normal.cross(tangent) * vertex->tangent.w;
+      REQUIRE(alongU.dot(tangent) > 0.0f);
+      REQUIRE((-alongV).dot(imageUp) > 0.0f);
+    }
+  }
+}
+} // namespace
+
+TEST_CASE("chCore - Mesh generator")
+{
+  SECTION("Every shape faces out with a correct tangent frame")
+  {
+    const ShapeDesc shapes[] = {
+        {.type = ShapeType::Plane},
+        {.type = ShapeType::Plane, .size = Vector3(4.0f, 2.0f, 1.0f), .subdivisions = 3},
+        {.type = ShapeType::Box, .size = Vector3(2.0f, 3.0f, 4.0f)},
+        {.type = ShapeType::Sphere},
+        {.type = ShapeType::Sphere, .segments = 3, .rings = 2},
+        {.type = ShapeType::Capsule, .radius = 0.5f, .height = 3.0f},
+        // No straight part: the two halves meet at the equator.
+        {.type = ShapeType::Capsule, .radius = 0.5f, .height = 1.0f, .rings = 5},
+        {.type = ShapeType::Cylinder, .radius = 1.0f, .height = 2.0f, .segments = 5},
+        {.type = ShapeType::Cone},
+        {.type = ShapeType::Cone, .radius = 2.0f, .height = 0.5f, .segments = 3}};
+    for (const ShapeDesc& desc : shapes) {
+      INFO(MeshGenerator::getName(desc.type));
+      Mesh mesh;
+      MeshGenerator::generate(desc, mesh);
+      checkGeneratedMesh(mesh, desc);
+    }
+  }
+
+  SECTION("Bounds follow the sizes, centered on the origin")
+  {
+    const auto boundsOf = [](const ShapeDesc& desc) {
+      Mesh mesh;
+      MeshGenerator::generate(desc, mesh);
+      return mesh.getBounds().getBox();
+    };
+    const AABox box = boundsOf({.type = ShapeType::Box, .size = Vector3(2.0f, 3.0f, 4.0f)});
+    REQUIRE(box.minPoint.nearEqual(Vector3(-1.0f, -1.5f, -2.0f)));
+    REQUIRE(box.maxPoint.nearEqual(Vector3(1.0f, 1.5f, 2.0f)));
+
+    const AABox plane =
+        boundsOf({.type = ShapeType::Plane, .size = Vector3(4.0f, 2.0f, 9.0f)});
+    REQUIRE(plane.minPoint.nearEqual(Vector3(-2.0f, -1.0f, 0.0f)));
+    REQUIRE(plane.maxPoint.nearEqual(Vector3(2.0f, 1.0f, 0.0f)));
+
+    const AABox sphere =
+        boundsOf({.type = ShapeType::Sphere, .radius = 2.0f, .segments = 4});
+    REQUIRE(sphere.maxPoint.nearEqual(Vector3(2.0f, 2.0f, 2.0f), 1e-4f));
+    REQUIRE(sphere.minPoint.nearEqual(Vector3(-2.0f, -2.0f, -2.0f), 1e-4f));
+
+    const AABox capsule = boundsOf(
+        {.type = ShapeType::Capsule, .radius = 0.5f, .height = 3.0f, .segments = 4});
+    REQUIRE(capsule.maxPoint.nearEqual(Vector3(0.5f, 0.5f, 1.5f), 1e-4f));
+
+    const AABox cone = boundsOf(
+        {.type = ShapeType::Cone, .radius = 1.0f, .height = 2.0f, .segments = 4});
+    REQUIRE(Math::abs(cone.maxPoint.z - 1.0f) < 1e-5f);
+    REQUIRE(Math::abs(cone.minPoint.z + 1.0f) < 1e-5f);
+  }
+
+  SECTION("Big meshes use 32-bit indices")
+  {
+    Mesh mesh;
+    MeshGenerator::generate({.type = ShapeType::Plane, .subdivisions = 256}, mesh);
+    REQUIRE(mesh.getVertexCount() == 257 * 257);
+    REQUIRE(mesh.getIndexType() == IndexType::UInt32);
+    REQUIRE(mesh.getIndexCount() == 256 * 256 * 6);
+  }
+
+  SECTION("Clamped and canonical descriptions")
+  {
+    const ShapeDesc clamped = MeshGenerator::getClamped({.type = ShapeType::Capsule,
+                                                         .radius = 1.0f,
+                                                         .height = 0.5f,
+                                                         .segments = 1,
+                                                         .rings = 1000});
+    REQUIRE(clamped.height == 2.0f);
+    REQUIRE(clamped.segments == MeshGenerator::MIN_SEGMENTS);
+    REQUIRE(clamped.rings == MeshGenerator::MAX_RINGS);
+
+    // Fields a type does not read do not tell two meshes apart.
+    const ShapeDesc boxA{.type = ShapeType::Box, .radius = 3.0f, .segments = 7};
+    const ShapeDesc boxB{.type = ShapeType::Box};
+    REQUIRE_FALSE(boxA == boxB);
+    REQUIRE(MeshGenerator::getCanonical(boxA) == MeshGenerator::getCanonical(boxB));
+    REQUIRE(MeshGenerator::getCanonical(boxA).getHash() ==
+            MeshGenerator::getCanonical(boxB).getHash());
+    const ShapeDesc sphere{.type = ShapeType::Sphere, .radius = 3.0f};
+    REQUIRE_FALSE(MeshGenerator::getCanonical(sphere) == MeshGenerator::getCanonical(boxB));
+  }
+}
+
+TEST_CASE("chCore - Shape component")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Sphere");
+  ShapeComponent& shape =
+      gameObject->addComponent<ShapeComponent>(ShapeDesc{.type = ShapeType::Sphere});
+  gameObject->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+  scene.updateTransforms();
+  REQUIRE(scene.getRenderItemCount() == 1);
+
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  REQUIRE(shape.getWorldBounds(bounds));
+  REQUIRE(bounds.getCenter().nearEqual(Vector3(10.0f, 0.0f, 0.0f), 1e-4f));
+
+  SECTION("A ray picks it")
+  {
+    SceneRayHit hit;
+    REQUIRE(scene.raycast(Ray(Vector3::ZERO, Vector3::FORWARD), hit));
+    REQUIRE(hit.gameObject == gameObject.get());
+    REQUIRE(Math::abs(hit.distance - 9.5f) < 0.01f);
+  }
+
+  SECTION("Equal shapes share one mesh")
+  {
+    const SPtr<GameObject> other = scene.createGameObject("Other Sphere");
+    ShapeComponent& otherShape =
+        other->addComponent<ShapeComponent>(ShapeDesc{.type = ShapeType::Sphere});
+    REQUIRE(otherShape.getMesh() == shape.getMesh());
+
+    otherShape.setShape({.type = ShapeType::Sphere, .radius = 2.0f});
+    REQUIRE(otherShape.getMesh() != shape.getMesh());
+    scene.updateTransforms();
+    REQUIRE(other->getHierarchyWorldBounds(bounds));
+    REQUIRE(bounds.maxPoint.nearEqual(Vector3(2.0f, 2.0f, 2.0f), 1e-3f));
+  }
+
+  SECTION("Changing the shape changes the drawn mesh")
+  {
+    const Mesh* sphereMesh = shape.getMesh().get();
+    shape.setShape({.type = ShapeType::Box, .size = Vector3(4.0f, 4.0f, 4.0f)});
+    REQUIRE(shape.getMesh().get() != sphereMesh);
+    REQUIRE(shape.getWorldBounds(bounds));
+    REQUIRE(bounds.maxPoint.nearEqual(Vector3(12.0f, 2.0f, 2.0f), 1e-4f));
+  }
+
+  SECTION("Parents frame their shapes")
+  {
+    const SPtr<GameObject> child = scene.createGameObject("Child", gameObject.get());
+    child->addComponent<ShapeComponent>(ShapeDesc{.type = ShapeType::Box});
+    child->getTransform().setLocalPosition(Vector3(0.0f, 5.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(gameObject->getHierarchyWorldBounds(bounds));
+    REQUIRE(bounds.minPoint.nearEqual(Vector3(9.5f, -0.5f, -0.5f), 1e-4f));
+    REQUIRE(bounds.maxPoint.nearEqual(Vector3(10.5f, 5.5f, 0.5f), 1e-4f));
+  }
+
+  SECTION("Disabling removes the render item")
+  {
+    shape.setEnabled(false);
+    REQUIRE(scene.getRenderItemCount() == 0);
+    REQUIRE_FALSE(shape.getWorldBounds(bounds));
+  }
+
+  SECTION("Saved with its sizes, and a missing material keeps its id")
+  {
+    shape.setShape(
+        {.type = ShapeType::Cone, .radius = 2.0f, .height = 3.0f, .segments = 12});
+    MemoryDataStream stream(256);
+    shape.serialize(stream);
+    stream.seek(0);
+    ShapeComponent loaded;
+    REQUIRE(loaded.deserialize(stream));
+    REQUIRE(loaded.getShape() == shape.getShape());
+    REQUIRE(loaded.getMaterialId().isNull());
+
+    const chEngineSDK::UUID materialId = chEngineSDK::UUID::createRandom();
+    const uint32 version = 1;
+    const float values[5] = {1.0f, 1.0f, 1.0f, 0.25f, 2.0f};
+    const uint32 counts[3] = {8, 4, 1};
+    const auto writeShape = [&](MemoryDataStream& out, uint32 type) {
+      out.write(&version, sizeof(version));
+      out.write(&materialId, sizeof(materialId));
+      out.write(&type, sizeof(type));
+      out.write(values, sizeof(values));
+      out.write(counts, sizeof(counts));
+      out.seek(0);
+    };
+    MemoryDataStream withMaterial(256);
+    writeShape(withMaterial, static_cast<uint32>(ShapeType::Cylinder));
+    ShapeComponent missing;
+    REQUIRE(missing.deserialize(withMaterial));
+    REQUIRE(missing.getShape().type == ShapeType::Cylinder);
+    REQUIRE(missing.getShape().radius == 0.25f);
+    REQUIRE(missing.getShape().segments == 8);
+    REQUIRE(missing.getMaterial() == nullptr);
+    REQUIRE(missing.getMaterialId() == materialId);
+    Vector<chEngineSDK::UUID> references;
+    missing.collectReferences(references);
+    REQUIRE(references.size() == 1);
+    REQUIRE(references[0] == materialId);
+
+    // A type the engine does not know is refused.
+    MemoryDataStream badType(256);
+    writeShape(badType, static_cast<uint32>(ShapeType::COUNT));
+    ShapeComponent refused;
+    REQUIRE_FALSE(refused.deserialize(badType));
+  }
+
+  SECTION("Made from its saved type id")
+  {
+    const UniquePtr<Component> created =
+        ComponentRegister::create(TypeTraits<ShapeComponent>::getTypeId());
+    REQUIRE(created != nullptr);
+    REQUIRE(StringView(ComponentRegister::getTypeName(
+                TypeTraits<ShapeComponent>::getTypeId())) == "ShapeComponent");
+  }
+}
+
+#if USING(CH_DEBUG_DRAW)
+TEST_CASE("chCore - Debug draw")
+{
+  DebugDraw debugDraw;
+  REQUIRE(debugDraw.getLineCount() == 0);
+
+  SECTION("Each shape adds its lines")
+  {
+    debugDraw.box(AABox(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f)),
+                  LinearColor::Red);
+    REQUIRE(debugDraw.getLineCount() == 12);
+    debugDraw.circle(Vector3::ZERO, Vector3::UP, 1.0f, LinearColor::Red, DebugDepth::Tested,
+                     16);
+    REQUIRE(debugDraw.getLineCount() == 28);
+    debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::Red, DebugDepth::Tested, 8);
+    REQUIRE(debugDraw.getLineCount() == 52);
+    // Two circles, four side lines and four half circles.
+    debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::Red,
+                      DebugDepth::Tested, 8);
+    REQUIRE(debugDraw.getLineCount() == 52 + 16 + 4 + 16);
+    debugDraw.axes(Matrix4::IDENTITY, 1.0f);
+    REQUIRE(debugDraw.getLineCount() == 91);
+    REQUIRE(debugDraw.getVertices(DebugDepth::OnTop).empty());
+
+    debugDraw.clear();
+    REQUIRE(debugDraw.getLineCount() == 0);
+  }
+
+  SECTION("Lines on top are kept apart, with their color packed")
+  {
+    debugDraw.line(Vector3::ZERO, Vector3::UP, LinearColor(1.0f, 0.5f, 0.0f, 1.0f),
+                   DebugDepth::OnTop);
+    REQUIRE(debugDraw.getVertices(DebugDepth::Tested).empty());
+    const Span<const DebugLineVertex> vertices = debugDraw.getVertices(DebugDepth::OnTop);
+    REQUIRE(vertices.size() == 2);
+    REQUIRE(vertices[1].position == Vector3::UP);
+    REQUIRE(vertices[0].color == 0xFF0080FFu);
+  }
+
+  SECTION("An oriented box turns with its rotation")
+  {
+    debugDraw.orientedBox(OrientedBox(Vector3(0.0f, 0.0f, 5.0f), Vector3(2.0f, 1.0f, 1.0f),
+                                      Quaternion(Rotator(0.0f, 90.0f, 0.0f))),
+                          LinearColor::Green);
+    REQUIRE(debugDraw.getLineCount() == 12);
+    for (const DebugLineVertex& vertex : debugDraw.getVertices(DebugDepth::Tested)) {
+      REQUIRE(Math::abs(Math::abs(vertex.position.x) - 1.0f) < 1e-4f);
+      REQUIRE(Math::abs(Math::abs(vertex.position.y) - 2.0f) < 1e-4f);
+      REQUIRE(Math::abs(Math::abs(vertex.position.z - 5.0f) - 1.0f) < 1e-4f);
+    }
+  }
+
+  SECTION("A frustum joins the corners of what the camera sees")
+  {
+    const Camera camera(Vector3::ZERO, Vector3::FORWARD, 1280.0f, 720.0f);
+    debugDraw.frustum(camera.getViewProjectionMatrix(), LinearColor::White);
+    REQUIRE(debugDraw.getLineCount() == 12);
+    for (const DebugLineVertex& vertex : debugDraw.getVertices(DebugDepth::Tested)) {
+      // In front of the camera, between its near and far planes.
+      REQUIRE(vertex.position.x >= camera.getNearClipPlane() * 0.99f);
+      REQUIRE(vertex.position.x <= camera.getFarClipPlane() * 1.01f);
+    }
+  }
+
+  SECTION("Lines past the limit are dropped")
+  {
+    g_cvarDebugLinesMax.set(10, ConsoleVariableSource::Console);
+    debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::Red);
+    REQUIRE(debugDraw.getLineCount() == 10);
+    g_cvarDebugLinesMax.set(g_cvarDebugLinesMax.getDefault(), ConsoleVariableSource::Console);
+  }
+
+  SECTION("A scene forgets its lines when it updates")
+  {
+    Scene scene("Test", chEngineSDK::UUID::createRandom());
+    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+    REQUIRE(scene.getDebugDraw().getLineCount() == 1);
+    scene.update(0.016f);
+    REQUIRE(scene.getDebugDraw().getLineCount() == 0);
+  }
+}
+#else
+TEST_CASE("chCore - Debug draw")
+{
+  // Built without the debug lines: every call compiles and keeps nothing.
+  DebugDraw debugDraw;
+  debugDraw.line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+  debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::Red, DebugDepth::OnTop);
+  debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::Red);
+  debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::Red);
+  debugDraw.frustum(Matrix4::IDENTITY, LinearColor::Red);
+  debugDraw.axes(Matrix4::IDENTITY, 1.0f);
+  REQUIRE(debugDraw.getLineCount() == 0);
+  REQUIRE(debugDraw.getVertices(DebugDepth::Tested).empty());
+}
+#endif // USING(CH_DEBUG_DRAW)

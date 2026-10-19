@@ -18,6 +18,8 @@
 
 namespace chEngineSDK {
 
+class DebugDraw;
+class DebugLinePass;
 class DebugRenderPath;
 class DeferredRenderPath;
 class ForwardRenderPath;
@@ -69,7 +71,8 @@ class CH_CORE_EXPORT SceneRenderer
   beginFrame();
 
   /**
-   * Adds the passes that draw what the camera sees of the scene into output.
+   * Adds the passes that draw what the camera sees of the scene into output, then the
+   * scene's debug lines and those of extraLines (the application's, may be null).
    * Scene::updateTransforms must have run this frame, and the camera must stay alive until
    * execute().
    *
@@ -80,7 +83,8 @@ class CH_CORE_EXPORT SceneRenderer
   addScenePasses(const Scene& scene,
                  const Camera& camera,
                  RGTextureHandle output,
-                 const LinearColor& clearColor);
+                 const LinearColor& clearColor,
+                 const DebugDraw* extraLines = nullptr);
 
   NODISCARD FORCEINLINE ViewMode
   getViewMode() const
@@ -108,6 +112,12 @@ class CH_CORE_EXPORT SceneRenderer
 
  private:
   /**
+   * What the view mode draws; returns the scene depth like addScenePasses.
+   */
+  RGTextureHandle
+  addViewModePasses(const Scene& scene, const RenderView& view, RGTextureHandle output);
+
+  /**
    * The shadow maps, the active render path into an HDR scene color, then the tonemap into
    * output.
    */
@@ -130,6 +140,9 @@ class CH_CORE_EXPORT SceneRenderer
   // The one of the two above that draws the Lit view modes.
   IRenderPath* m_renderPath = nullptr;
   UniquePtr<DebugRenderPath> m_debugRenderPath;
+#if USING(CH_DEBUG_DRAW)
+  UniquePtr<DebugLinePass> m_debugLinePass;
+#endif // USING(CH_DEBUG_DRAW)
   UniquePtr<ShadowRenderer> m_shadowRenderer;
   UniquePtr<ImageBasedLighting> m_imageBasedLighting;
   UniquePtr<SkyPass> m_skyPass;

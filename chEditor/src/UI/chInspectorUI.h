@@ -16,6 +16,7 @@
 namespace chEngineSDK {
 class Material;
 class MaterialAsset;
+class ShapeComponent;
 class SkyLightComponent;
 enum class MaterialTexture : uint32;
 
@@ -46,6 +47,9 @@ class InspectorUI
 
   void
   renderModelComponent(ModelComponent& modelComponent);
+
+  void
+  renderShapeComponent(ShapeComponent& shapeComponent);
 
   void
   renderLightComponent(GameObject& gameObject);

@@ -18,6 +18,7 @@
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLightComponent.h"
+#include "chShapeComponent.h"
 #include "chSkyLightComponent.h"
 #include "chMath.h"
 #include "chModelAsset.h"
@@ -94,6 +95,9 @@ getObjectIcon(const GameObject& gameObject)
     if (typeId == TypeTraits<ModelComponent>::getTypeId()) {
       icon = ICON_FA_CUBE;
     }
+    else if (typeId == TypeTraits<ShapeComponent>::getTypeId()) {
+      icon = ICON_FA_SHAPES;
+    }
   }
   return icon;
 }
@@ -117,6 +121,29 @@ renderCreateLightItems(Scene& scene, GameObject* parent)
   }
   if (ImGui::MenuItem(ICON_FA_CLOUD_SUN "  Sky Light")) {
     createLight<SkyLightComponent>(scene, "Sky Light", parent);
+  }
+  ImGui::EndMenu();
+}
+
+/*
+ * The new shape goes under parent (a root object when null), named after its type, and is
+ * selected, so the Inspector edits its sizes at once.
+ */
+void
+renderCreateShapeItems(Scene& scene, GameObject* parent)
+{
+  if (!ImGui::BeginMenu(ICON_FA_SHAPES "  Create Shape")) {
+    return;
+  }
+  for (uint32 i = 0; i < static_cast<uint32>(ShapeType::COUNT); ++i) {
+    const ShapeType type = static_cast<ShapeType>(i);
+    const ANSICHAR* name = MeshGenerator::getName(type);
+    if (ImGui::MenuItem(name)) {
+      const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
+      gameObject->addComponent<ShapeComponent>(ShapeDesc{.type = type});
+      EditorSelection::setSelectedGameObject(gameObject);
+      EditorScene::recordCreated(*gameObject, "Create");
+    }
   }
   ImGui::EndMenu();
 }
@@ -483,6 +510,7 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
                                "Create");
   }
   if (!bLocked) {
+    renderCreateShapeItems(scene, gameObject.get());
     renderCreateLightItems(scene, gameObject.get());
   }
   const ModelComponent* model = gameObject->getComponent<ModelComponent>();
@@ -552,6 +580,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
     if (ImGui::MenuItem(ICON_FA_PLUS "  Create Empty")) {
       EditorScene::recordCreated(*scene.createGameObject("GameObject", parent), "Create");
     }
+    renderCreateShapeItems(scene, parent);
     renderCreateLightItems(scene, parent);
     if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, EditorScene::canPaste())) {
       // Pasted where objects made without a parent go.
@@ -618,7 +647,7 @@ SceneGraphUI::addPendingObject(Scene& scene)
   // Under a moved parent the render items are only in place after the transform update.
   scene.updateTransforms();
   AABox bounds(Vector3::ZERO, Vector3::ZERO);
-  if (ModelComponent::getHierarchyWorldBounds(*gameObject, bounds)) {
+  if (gameObject->getHierarchyWorldBounds(bounds)) {
     m_editorCamera->focus(bounds);
   }
 }

@@ -106,19 +106,8 @@ class CH_CORE_EXPORT ModelComponent : public Component
   NODISCARD const SPtr<MaterialAsset>&
   getMaterial(uint32 slot) const;
 
-  /**
-   * Box around everything it draws, in world space as of the last transform update. Zero at
-   * the origin when it draws nothing.
-   */
-  NODISCARD AABox
-  getWorldBounds() const;
-
-  /**
-   * Box around what every ModelComponent of gameObject and its children draws. False when
-   * none draws anything.
-   */
-  NODISCARD static bool
-  getHierarchyWorldBounds(const GameObject& gameObject, AABox& outBounds);
+  NODISCARD bool
+  getWorldBounds(AABox& outBounds) const override;
 
   void
   serialize(DataStream& stream) const override;

@@ -13,6 +13,7 @@
 namespace chEngineSDK {
 
 class Camera;
+class DebugDraw;
 class EditorCamera;
 class Scene;
 struct LightItem;
@@ -52,6 +53,23 @@ class ViewportTools
    */
   NODISCARD bool
   isUsingMouse() const;
+
+  /**
+   * With Editor.ShowBounds on, adds the bounds of what the selected objects and their
+   * children draw: the world box, and the mesh's own box turned with the object. Walks
+   * every render item, so it costs nothing only while the setting is off.
+   */
+  static void
+  addSelectionBounds(const Scene& scene, DebugDraw& outLines);
+
+  NODISCARD static bool
+  areBoundsVisible();
+
+  /**
+   * Also saves the choice in /Saved/Config/Editor.ini.
+   */
+  static void
+  setBoundsVisible(bool bVisible);
 
  private:
   enum class Operation : uint32

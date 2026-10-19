@@ -232,4 +232,13 @@ extern CH_CORE_EXPORT ConsoleVariable<float> g_cvarSSAODepthTolerance;
 // their color; without it bright occluded areas turn too dark.
 extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarAOMultiBounce;
 
+#if USING(CH_DEBUG_DRAW)
+// Draws the lines of DebugDraw (the scene's and the application's) over the image.
+extern CH_CORE_EXPORT ConsoleVariable<bool> g_cvarDebugLines;
+
+// Most lines one DebugDraw keeps between two clears, so lines added while nothing is drawn
+// (a minimized window) cannot grow without end.
+extern CH_CORE_EXPORT ConsoleVariable<int32> g_cvarDebugLinesMax;
+#endif // USING(CH_DEBUG_DRAW)
+
 } // namespace chEngineSDK

@@ -189,6 +189,7 @@ Scene::setParent(GameObject& gameObject, GameObject* newParent)
 void
 Scene::update(float deltaTime)
 {
+  m_debugDraw.clear();
   for (const SPtr<GameObject>& root : m_rootGameObjects) {
     root->update(deltaTime);
   }

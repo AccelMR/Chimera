@@ -13,6 +13,7 @@
 #include "chLogger.h"
 #include "chModelComponent.h"
 #include "chSceneManager.h"
+#include "chShapeComponent.h"
 #include "chSkyLightComponent.h"
 
 namespace chEngineSDK {
@@ -41,6 +42,7 @@ getTypes()
     addBuiltIn.operator()<PointLightComponent>();
     addBuiltIn.operator()<SpotLightComponent>();
     addBuiltIn.operator()<SkyLightComponent>();
+    addBuiltIn.operator()<ShapeComponent>();
     return builtIn;
   }();
   return types;

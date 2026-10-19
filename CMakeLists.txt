@@ -17,6 +17,7 @@ option(CH_BUILD_VULKAN "Build the Vulkan graphics plugin" ON)
 cmake_dependent_option(CH_BUILD_DX12 "Build the Direct3D 12 graphics plugin" ON "WIN32" OFF)
 option(CH_BUILD_TESTS "Build the unit tests" ON)
 option(CH_ENABLE_PROFILER "Build the profiler (CPU scopes, render stats); off for shipping" ON)
+option(CH_ENABLE_DEBUG_DRAW "Build the debug lines (DebugDraw and its pass); off for shipping" ON)
 
 # Graphics plugin a windowed application loads when -GraphicsAPI is not given. The engine
 # code never names a graphics API, so the build chooses it.

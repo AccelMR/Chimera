@@ -11,6 +11,7 @@
 
 #include "chWindowedApplication.h"
 
+#include "chDebugDraw.h"
 #include "chSceneRenderer.h"
 
 #include "chUUID.h"
@@ -103,6 +104,9 @@ class EditorApplication : public WindowedApplication
   uint32 m_viewportHeight = 0;
   UniquePtr<EditorCamera> m_editorCamera;
   UniquePtr<ViewportTools> m_viewportTools;
+  // Lines of the editor (selection bounds), filled again every frame; kept so it does not
+  // allocate.
+  DebugDraw m_editorLines;
   // The title the window was made with, before the scene name.
   String m_windowTitle;
   uint32 m_titleRevision = ~0u;

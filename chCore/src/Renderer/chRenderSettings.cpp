@@ -423,6 +423,20 @@ ConsoleVariable<bool> g_cvarAOMultiBounce(
     "their color, so bright corners do not turn gray. Applies to the material occlusion "
     "too.");
 
+#if USING(CH_DEBUG_DRAW)
+ConsoleVariable<bool> g_cvarDebugLines(
+    "Renderer.DebugLines",
+    true,
+    "Draws the debug lines of the scene and of the editor (bounds, shapes) over the image.",
+    "DebugLines");
+
+ConsoleVariable<int32> g_cvarDebugLinesMax(
+    "Renderer.DebugLinesMax",
+    65536,
+    "Most debug lines one DebugDraw keeps between two clears; more are dropped with a "
+    "warning.");
+#endif // USING(CH_DEBUG_DRAW)
+
 /*
  */
 StringView

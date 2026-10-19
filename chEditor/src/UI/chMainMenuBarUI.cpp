@@ -29,6 +29,7 @@
 #include "chStringUtils.h"
 #include "chUIHelpers.h"
 #include "chViewportGrid.h"
+#include "chViewportTools.h"
 
 #include "imgui.h"
 
@@ -376,6 +377,17 @@ MainMenuBarUI::renderMainMenuBar() {
       ViewportGrid::renderSettings();
       ImGui::EndMenu();
     }
+#if USING(CH_DEBUG_DRAW)
+    if (ImGui::MenuItem(ICON_FA_VECTOR_SQUARE "  Selection Bounds", nullptr,
+                        ViewportTools::areBoundsVisible())) {
+      ViewportTools::setBoundsVisible(!ViewportTools::areBoundsVisible());
+    }
+    bool bDebugLines = g_cvarDebugLines.get();
+    if (ImGui::MenuItem(ICON_FA_DRAW_POLYGON "  Debug Lines", nullptr, &bDebugLines)) {
+      g_cvarDebugLines.set(bDebugLines, ConsoleVariableSource::Console);
+    }
+    ImGui::SetItemTooltip("%s", g_cvarDebugLines.getHelp().c_str());
+#endif // USING(CH_DEBUG_DRAW)
     ImGui::MenuItem(ICON_FA_QUESTION_CIRCLE "  Show ImGui Demo Window", nullptr,
                     &UIHelpers::bShowDemoWindow);
     ImGui::EndMenu();

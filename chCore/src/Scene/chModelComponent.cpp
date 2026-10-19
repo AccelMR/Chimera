@@ -249,60 +249,19 @@ ModelComponent::getRenderMaterial(uint32 slot) const
 
 /*
  */
-AABox
-ModelComponent::getWorldBounds() const
+bool
+ModelComponent::getWorldBounds(AABox& outBounds) const
 {
-  AABox bounds(Vector3::ZERO, Vector3::ZERO);
   if (!isRegistered() || m_parts.empty()) {
-    return bounds;
+    return false;
   }
 
   Scene& scene = *getOwner()->getScene();
-  bounds = scene.getRenderItem(m_parts[0].renderItemId).worldBounds.getBox();
+  outBounds = scene.getRenderItem(m_parts[0].renderItemId).worldBounds.getBox();
   for (const MeshPart& part : Span<const MeshPart>(m_parts).subspan(1)) {
-    bounds += scene.getRenderItem(part.renderItemId).worldBounds.getBox();
+    outBounds += scene.getRenderItem(part.renderItemId).worldBounds.getBox();
   }
-  return bounds;
-}
-
-/*
- */
-bool
-ModelComponent::getHierarchyWorldBounds(const GameObject& gameObject, AABox& outBounds)
-{
-  bool bFound = false;
-  for (const UniquePtr<Component>& component : gameObject.getComponents()) {
-    if (component->getTypeId() != TypeTraits<ModelComponent>::getTypeId()) {
-      continue;
-    }
-    const ModelComponent& model = static_cast<const ModelComponent&>(*component);
-    if (!model.isRegistered() || model.m_parts.empty()) {
-      continue;
-    }
-    const AABox modelBounds = model.getWorldBounds();
-    if (bFound) {
-      outBounds += modelBounds;
-    }
-    else {
-      outBounds = modelBounds;
-      bFound = true;
-    }
-  }
-
-  for (const SPtr<GameObject>& child : gameObject.getChildren()) {
-    AABox childBounds(Vector3::ZERO, Vector3::ZERO);
-    if (!getHierarchyWorldBounds(*child, childBounds)) {
-      continue;
-    }
-    if (bFound) {
-      outBounds += childBounds;
-    }
-    else {
-      outBounds = childBounds;
-      bFound = true;
-    }
-  }
-  return bFound;
+  return true;
 }
 
 /*

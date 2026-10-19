@@ -213,13 +213,20 @@ EditorApplication::onRender(ICommandList& commandList,
     scene.updateTransforms();
   }
 
+  // Like the grid, the editor's lines hide with the rest of the UI.
+  m_editorLines.clear();
+  if (UIHelpers::bRenderImGui) {
+    ViewportTools::addSelectionBounds(scene, m_editorLines);
+  }
+
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
                           swapChain.getCurrentTextureView(), ResourceState::Undefined,
                           ResourceState::Present);
-  const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(
-      scene, m_editorCamera->getCamera(), backBuffer, UIHelpers::rendererColor);
+  const RGTextureHandle sceneDepth =
+      m_sceneRenderer->addScenePasses(scene, m_editorCamera->getCamera(), backBuffer,
+                                      UIHelpers::rendererColor, &m_editorLines);
 
   // F11 hides the grid with the rest of the editor, so the image looks like the game.
   if (UIHelpers::bRenderImGui) {

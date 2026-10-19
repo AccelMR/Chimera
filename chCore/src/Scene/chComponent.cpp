@@ -48,6 +48,15 @@ Component::collectReferences(Vector<UUID>& outReferences) const
 
 /*
  */
+bool
+Component::getWorldBounds(AABox& outBounds) const
+{
+  CH_PARAMETER_UNUSED(outBounds);
+  return false;
+}
+
+/*
+ */
 void
 Component::setEnabled(bool enabled)
 {

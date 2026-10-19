@@ -21,8 +21,8 @@ namespace chEngineSDK {
 struct CommandListStats
 {
   /**
-   * count is vertices, or indices for indexed draws. Triangles assume triangle lists, the
-   * only topology the engine draws.
+   * count is vertices, or indices for indexed draws. Triangles assume triangle lists, so the
+   * debug line draws add count / 3 triangles they do not have.
    */
   FORCEINLINE void
   recordDraw(uint32 count, uint32 instanceCount) noexcept

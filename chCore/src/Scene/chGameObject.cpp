@@ -10,6 +10,7 @@
 #include "chGameObject.h"
 
 #include "chAlgorithm.h"
+#include "chBox.h"
 
 namespace chEngineSDK {
 
@@ -57,6 +58,36 @@ GameObject::getOutermostPrefabInstance()
     }
   }
   return outermost;
+}
+
+/*
+ */
+bool
+GameObject::getHierarchyWorldBounds(AABox& outBounds) const
+{
+  bool bFound = false;
+  const auto addBounds = [&outBounds, &bFound](const AABox& bounds) {
+    if (bFound) {
+      outBounds += bounds;
+    }
+    else {
+      outBounds = bounds;
+      bFound = true;
+    }
+  };
+
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  for (const UniquePtr<Component>& component : m_components) {
+    if (component->getWorldBounds(bounds)) {
+      addBounds(bounds);
+    }
+  }
+  for (const SPtr<GameObject>& child : m_children) {
+    if (child->getHierarchyWorldBounds(bounds)) {
+      addBounds(bounds);
+    }
+  }
+  return bFound;
 }
 
 /*

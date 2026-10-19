@@ -11,6 +11,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chDebugDraw.h"
 #include "chGameObject.h"
 #include "chObject.h"
 #include "chLightItem.h"
@@ -121,6 +122,13 @@ class CH_CORE_EXPORT Scene : public Object
   getRenderItemCount() const { return m_renderItemCount; }
 
   /**
+   * Every slot, free ones included (their mesh is null). For tools that look at all items;
+   * the renderer uses gatherRenderItems.
+   */
+  NODISCARD FORCEINLINE Span<const RenderItem>
+  getRenderItemSlots() const { return m_renderItems; }
+
+  /**
    * Replaces the contents of outItems with the items whose bounds touch the frustum. The
    * pointers are valid until the next add or remove. Reusing outItems every frame keeps it
    * from allocating.
@@ -178,6 +186,16 @@ class CH_CORE_EXPORT Scene : public Object
   NODISCARD const SkyLightItem*
   getActiveSkyLight() const;
 
+  /**
+   * Lines the scene's components draw. Cleared when update() starts, so lines drawn during
+   * an update show on every frame until the next one.
+   */
+  NODISCARD FORCEINLINE DebugDraw&
+  getDebugDraw() { return m_debugDraw; }
+
+  NODISCARD FORCEINLINE const DebugDraw&
+  getDebugDraw() const { return m_debugDraw; }
+
  private:
   Vector<SPtr<GameObject>> m_rootGameObjects;
   Vector<RenderItem> m_renderItems;
@@ -189,6 +207,7 @@ class CH_CORE_EXPORT Scene : public Object
   Vector<SkyLightItem> m_skyLights;
   Vector<uint32> m_freeSkyLights;
   uint32 m_nextSkyLightOrder = 0;
+  DebugDraw m_debugDraw;
 };
 
 } // namespace chEngineSDK
