@@ -117,6 +117,14 @@ class ICommandList
   barrier(Span<const TextureBarrier> textureBarriers) = 0;
 
   /**
+   * Orders every access of the before state recorded earlier (also in earlier frames)
+   * before every access of the after state recorded later, for all buffers at once. Buffers
+   * have no layout, so one barrier covers any number of them.
+   */
+  virtual void
+  memoryBarrier(ResourceState before, ResourceState after) = 0;
+
+  /**
    * Graphics or compute pipeline. A compute pipeline is bound outside a rendering.
    */
   virtual void

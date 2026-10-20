@@ -15,8 +15,16 @@
 #include "chMath.h"
 #include "chRay.h"
 #include "chRayCast.h"
+#include "chVector4.h"
 
 namespace chEngineSDK {
+namespace {
+NODISCARD FORCEINLINE Vector3
+toVector3(const Vector4& vector)
+{
+  return Vector3(vector.x, vector.y, vector.z);
+}
+} // namespace
 
 /*
  */
@@ -118,7 +126,52 @@ Mesh::raycast(const Ray& localRay, float& outDistance) const
     return false;
   }
   const uint32 stride = m_vertexLayout.getVertexSize();
+  return raycastTriangles(
+      localRay,
+      [firstPosition, stride](uint32 index) {
+        return readPositionAt(firstPosition, stride, index);
+      },
+      outDistance);
+}
 
+/*
+ */
+bool
+Mesh::raycastSkinned(const Ray& ray, Span<const Matrix4> skinMatrices, float& outDistance) const
+{
+  const uint8* firstPosition = getFirstPosition();
+  if (!firstPosition || m_skin.vertices.size() != m_vertexCount ||
+      skinMatrices.size() != m_skin.boneNodes.size()) {
+    return false;
+  }
+  const uint32 stride = m_vertexLayout.getVertexSize();
+
+  // Each vertex is used by several triangles, so it is skinned once up front.
+  Vector<Vector3> positions(m_vertexCount);
+  for (uint32 i = 0; i < m_vertexCount; ++i) {
+    const Vector3 position = readPositionAt(firstPosition, stride, i);
+    const VertexSkin& skin = m_skin.vertices[i];
+    Vector3 skinned = Vector3::ZERO;
+    for (uint32 influence = 0; influence < MeshSkin::MAX_INFLUENCES; ++influence) {
+      const uint32 bone = skin.bones[influence];
+      if (skin.weights[influence] == 0 || bone >= skinMatrices.size()) {
+        continue;
+      }
+      const float weight = static_cast<float>(skin.weights[influence]) / 255.0f;
+      skinned += toVector3(skinMatrices[bone].transformPosition(position)) * weight;
+    }
+    positions[i] = skinned;
+  }
+  return raycastTriangles(
+      ray, [&positions](uint32 index) { return positions[index]; }, outDistance);
+}
+
+/*
+ */
+template<typename PositionAt>
+bool
+Mesh::raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistance) const
+{
   const bool bHasIndices = m_indexCount > 0;
   const SIZE_T indexSize = m_indexType == IndexType::UInt16 ? sizeof(uint16) : sizeof(uint32);
   const uint32 cornerCount = bHasIndices ? m_indexCount : m_vertexCount;
@@ -150,9 +203,7 @@ Mesh::raycast(const Ray& localRay, float& outDistance) const
     }
 
     float distance = 0.0f;
-    if (RayCast::triangle(localRay, readPositionAt(firstPosition, stride, a),
-                          readPositionAt(firstPosition, stride, b),
-                          readPositionAt(firstPosition, stride, c), distance) &&
+    if (RayCast::triangle(ray, positionAt(a), positionAt(b), positionAt(c), distance) &&
         (!bHit || distance < outDistance)) {
       outDistance = distance;
       bHit = true;
@@ -267,14 +318,85 @@ Mesh::getIndexBuffer() const
 /*
  */
 void
+Mesh::setSkin(MeshSkin skin)
+{
+  m_skin = std::move(skin);
+  // The vertex buffer's usage depends on the skin.
+  onDataChanged();
+}
+
+/*
+ */
+const Vector<SkinBoneBounds>&
+Mesh::getSkinBoneBounds() const
+{
+  if (!m_bSkinBoundsDirty) {
+    return m_skinBoneBounds;
+  }
+  m_bSkinBoundsDirty = false;
+  m_skinBoneBounds.clear();
+
+  const uint8* firstPosition = getFirstPosition();
+  if (!firstPosition || m_skin.vertices.size() != m_vertexCount) {
+    return m_skinBoneBounds;
+  }
+  const uint32 stride = m_vertexLayout.getVertexSize();
+  const SIZE_T boneCount = m_skin.boneNodes.size();
+  // Per bone, the index into m_skinBoneBounds, or kNoBounds until a vertex uses it.
+  constexpr uint32 kNoBounds = 0xFFFFFFFFu;
+  Vector<uint32> boundsOfBone(boneCount, kNoBounds);
+  for (uint32 i = 0; i < m_vertexCount; ++i) {
+    const Vector3 position = readPositionAt(firstPosition, stride, i);
+    const VertexSkin& skin = m_skin.vertices[i];
+    for (uint32 influence = 0; influence < MeshSkin::MAX_INFLUENCES; ++influence) {
+      const uint32 bone = skin.bones[influence];
+      if (skin.weights[influence] == 0 || bone >= boneCount) {
+        continue;
+      }
+      const Vector3 bonePosition =
+          toVector3(m_skin.inverseBindMatrices[bone].transformPosition(position));
+      if (boundsOfBone[bone] == kNoBounds) {
+        boundsOfBone[bone] = static_cast<uint32>(m_skinBoneBounds.size());
+        m_skinBoneBounds.push_back({.bone = bone, .box = AABox(bonePosition, bonePosition)});
+      }
+      else {
+        m_skinBoneBounds[boundsOfBone[bone]].box += bonePosition;
+      }
+    }
+  }
+  return m_skinBoneBounds;
+}
+
+/*
+ */
+const IBuffer*
+Mesh::getSkinBuffer() const
+{
+  if (!m_skinBuffer && !m_skin.vertices.empty()) {
+    const uint32 size = static_cast<uint32>(m_skin.vertices.size() * sizeof(VertexSkin));
+    m_skinBuffer = IGraphicsAPI::instance().createBuffer({.size = size,
+                                                          .usage = BufferUsage::StorageBuffer,
+                                                          .memoryUsage = MemoryUsage::GpuOnly,
+                                                          .initialData = m_skin.vertices.data(),
+                                                          .initialDataSize = size});
+  }
+  return m_skinBuffer.get();
+}
+
+/*
+ */
+void
 Mesh::createGpuBuffers() const
 {
   IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
 
   if (!m_vertexBuffer && !m_vertexData.empty()) {
     const uint32 size = static_cast<uint32>(m_vertexData.size());
+    const BufferUsageFlags usage = hasSkin()
+                                       ? BufferUsage::VertexBuffer | BufferUsage::StorageBuffer
+                                       : BufferUsageFlags(BufferUsage::VertexBuffer);
     m_vertexBuffer = graphicsAPI.createBuffer({.size = size,
-                                               .usage = BufferUsage::VertexBuffer,
+                                               .usage = usage,
                                                .memoryUsage = MemoryUsage::GpuOnly,
                                                .initialData = m_vertexData.data(),
                                                .initialDataSize = size});

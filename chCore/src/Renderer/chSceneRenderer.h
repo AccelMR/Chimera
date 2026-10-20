@@ -25,6 +25,7 @@ class DeferredRenderPath;
 class ForwardRenderPath;
 class ImageBasedLighting;
 class ShadowRenderer;
+class SkinningPass;
 class SkyPass;
 class TonemapPass;
 
@@ -162,6 +163,7 @@ class CH_CORE_EXPORT SceneRenderer
   UniquePtr<DebugLinePass> m_debugLinePass;
 #endif // USING(CH_DEBUG_DRAW)
   UniquePtr<ShadowRenderer> m_shadowRenderer;
+  UniquePtr<SkinningPass> m_skinningPass;
   UniquePtr<ImageBasedLighting> m_imageBasedLighting;
   UniquePtr<SkyPass> m_skyPass;
   UniquePtr<TonemapPass> m_tonemapPass;

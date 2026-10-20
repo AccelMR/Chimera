@@ -8,6 +8,7 @@
 /************************************************************************/
 #include "chRenderFrame.h"
 
+#include "chMesh.h"
 #include "chRenderCulling.h"
 #include "chScene.h"
 
@@ -24,11 +25,30 @@ RenderFrame::extract(const Scene& scene,
   m_camera = camera;
   m_clearColor = clearColor;
 
-  // Free slots are left out, so the renderer walks only what draws.
+  // Free slots are left out, so the renderer walks only what draws. The skin matrices are
+  // copied too, because the component may change them while the frame is drawn.
   m_items.clear();
-  for (const RenderItem& item : scene.getRenderItemSlots()) {
-    if (item.mesh) {
-      m_items.push_back(item);
+  m_skinMatrices.clear();
+  const Span<const RenderItem> slots = scene.getRenderItemSlots();
+  for (SIZE_T slot = 0; slot < slots.size(); ++slot) {
+    const RenderItem& item = slots[slot];
+    if (!item.mesh) {
+      continue;
+    }
+    RenderItem& copy = m_items.emplace_back(item);
+    copy.sceneSlot = static_cast<uint32>(slot);
+    copy.skinnedVertices = nullptr;
+    if (item.skinMatrices) {
+      m_skinMatrices.insert(m_skinMatrices.end(), item.skinMatrices,
+                            item.skinMatrices + item.mesh->getSkin().boneNodes.size());
+    }
+  }
+  // Pointed at only now, since the copies above may move the matrices.
+  SIZE_T firstSkinMatrix = 0;
+  for (RenderItem& item : m_items) {
+    if (item.skinMatrices) {
+      item.skinMatrices = m_skinMatrices.data() + firstSkinMatrix;
+      firstSkinMatrix += item.mesh->getSkin().boneNodes.size();
     }
   }
   m_lights.clear();

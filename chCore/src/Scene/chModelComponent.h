@@ -32,7 +32,9 @@ class ModelAsset;
  *
  * A whole model can also play an animation clip: update() moves the nodes the clip's
  * tracks name (matched by name when the clip is set) and the render items of their meshes.
- * The pose lives here, never in GameObjects, so bones stay out of the scene graph.
+ * The pose lives here, never in GameObjects, so bones stay out of the scene graph. Skinned
+ * meshes of a whole model give their render items the bone matrices of the pose, which the
+ * renderer uses to move the vertices, and bounds made from the boxes of their posed bones.
  */
 class CH_CORE_EXPORT ModelComponent : public Component
 {
@@ -211,6 +213,8 @@ class CH_CORE_EXPORT ModelComponent : public Component
     uint32 renderItemId = 0;
     // The model node that draws the mesh, or ALL for a part (its node is the GameObject).
     uint32 node = ALL;
+    // Skinned meshes of a whole model: their first matrix in m_skinMatrices, else ALL.
+    uint32 firstSkinMatrix = ALL;
   };
 
   /**
@@ -234,7 +238,15 @@ class CH_CORE_EXPORT ModelComponent : public Component
   refreshPartMatrices();
 
   /**
-   * Writes the world matrix and bounds of each render item from its part's local matrix.
+   * Rebuilds the skin matrices of the skinned parts from the current pose and gives their
+   * render items a new revision, so the renderer skins them again.
+   */
+  void
+  updateSkinMatrices();
+
+  /**
+   * Writes the world matrix and bounds of each render item from its part's local matrix;
+   * a skinned part takes the object's matrix and the bounds of its posed bones.
    */
   void
   updateRenderItems();
@@ -285,6 +297,9 @@ class CH_CORE_EXPORT ModelComponent : public Component
   // parent, and in the model's space.
   Vector<NodeTransform> m_localPose;
   Vector<Matrix4> m_poseMatrices;
+  // The skin matrices of every skinned part one after the other; their render items point
+  // here, so it is sized once when the items are added and never grows while they exist.
+  Vector<Matrix4> m_skinMatrices;
 };
 DECLARE_TYPE_TRAITS(ModelComponent)
 

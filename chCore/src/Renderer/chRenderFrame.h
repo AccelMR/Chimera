@@ -69,6 +69,16 @@ class CH_CORE_EXPORT RenderFrame
     return m_items;
   }
 
+  /**
+   * The same items, for the renderer to write RenderItem::skinnedVertices before the passes
+   * that draw them are built.
+   */
+  NODISCARD FORCEINLINE Span<RenderItem>
+  getWritableItems()
+  {
+    return m_items;
+  }
+
   NODISCARD FORCEINLINE Span<const LightItem>
   getLights() const
   {
@@ -111,6 +121,8 @@ class CH_CORE_EXPORT RenderFrame
   Camera m_camera;
   LinearColor m_clearColor = LinearColor::Black;
   Vector<RenderItem> m_items;
+  // The skin matrices of every skinned item one after the other.
+  Vector<Matrix4> m_skinMatrices;
   Vector<LightItem> m_lights;
   SkyLightItem m_skyLight;
   bool m_bHasSkyLight = false;

@@ -13,6 +13,7 @@
 
 #include <cstring>
 
+#include "chBox.h"
 #include "chGraphicsTypes.h"
 #include "chMatrix4.h"
 #include "chSphereBoxBounds.h"
@@ -66,6 +67,18 @@ struct CH_CORE_EXPORT MeshSkin
   Vector<Matrix4> inverseBindMatrices;
   // One per vertex.
   Vector<VertexSkin> vertices;
+};
+
+/**
+ * One bone of a skin that moves at least one vertex, with the box of those vertices in the
+ * bone's space, so the bounds of a posed mesh are the union of these boxes moved by their
+ * bones.
+ */
+struct SkinBoneBounds
+{
+  // Index into MeshSkin::boneNodes.
+  uint32 bone;
+  AABox box;
 };
 
 /**
@@ -264,6 +277,14 @@ class CH_CORE_EXPORT Mesh
   raycast(const Ray& localRay, float& outDistance) const;
 
   /**
+   * Same as raycast with the vertices moved by the skin first (one matrix per bone of the
+   * skin, see RenderItem::skinMatrices); the ray is in the space the matrices lead to.
+   * Skins every vertex on the CPU, so it is meant for a click.
+   */
+  NODISCARD bool
+  raycastSkinned(const Ray& ray, Span<const Matrix4> skinMatrices, float& outDistance) const;
+
+  /**
    * Copies every vertex position. False, with outPositions empty, when the mesh has no
    * Float3 positions.
    */
@@ -279,7 +300,8 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * GPU copy of the vertices, made on the first call after the data changes (the copy runs
-   * with the next frame submit). Main thread only. Null when the mesh has no vertices.
+   * with the next frame submit). Main thread only. Null when the mesh has no vertices. A
+   * skinned mesh's copy is also a storage buffer, which the skinning reads.
    */
   NODISCARD const IBuffer*
   getVertexBuffer() const;
@@ -302,14 +324,28 @@ class CH_CORE_EXPORT Mesh
   /**
    * The skin must have one VertexSkin per vertex, or be empty for a mesh without bones.
    */
-  FORCEINLINE void
-  setSkin(MeshSkin skin) { m_skin = std::move(skin); }
+  void
+  setSkin(MeshSkin skin);
 
   NODISCARD FORCEINLINE const MeshSkin&
   getSkin() const noexcept { return m_skin; }
 
   NODISCARD FORCEINLINE bool
   hasSkin() const noexcept { return !m_skin.isEmpty(); }
+
+  /**
+   * The bones of the skin that move a vertex, with their boxes, computed on the first call
+   * after the data changes. Empty without a skin.
+   */
+  NODISCARD const Vector<SkinBoneBounds>&
+  getSkinBoneBounds() const;
+
+  /**
+   * GPU copy of the skin's VertexSkins as a storage buffer, made like getVertexBuffer. Null
+   * without a skin.
+   */
+  NODISCARD const IBuffer*
+  getSkinBuffer() const;
 
  private:
   /**
@@ -320,9 +356,18 @@ class CH_CORE_EXPORT Mesh
   onDataChanged()
   {
     m_bBoundsDirty = true;
+    m_bSkinBoundsDirty = true;
     m_vertexBuffer.reset();
     m_indexBuffer.reset();
+    m_skinBuffer.reset();
   }
+
+  /**
+   * Nearest triangle hit, positionAt(index) giving each vertex's position.
+   */
+  template<typename PositionAt>
+  NODISCARD bool
+  raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistance) const;
 
   /**
    * The position of vertex 0, or null when the mesh has no Float3 positions.
@@ -349,6 +394,9 @@ class CH_CORE_EXPORT Mesh
   mutable SphereBoxBounds m_bounds{Vector3::ZERO, Vector3::ZERO, 0.0f};
   mutable SPtr<IBuffer> m_vertexBuffer;
   mutable SPtr<IBuffer> m_indexBuffer;
+  mutable SPtr<IBuffer> m_skinBuffer;
+  mutable Vector<SkinBoneBounds> m_skinBoneBounds;
   mutable bool m_bBoundsDirty = true;
+  mutable bool m_bSkinBoundsDirty = true;
 };
 } // namespace chEngineSDK

@@ -61,6 +61,10 @@ toDX12State(ResourceState state, bool isDepth)
   case ResourceState::Present:
     return {D3D12_BARRIER_SYNC_NONE, D3D12_BARRIER_ACCESS_NO_ACCESS,
             D3D12_BARRIER_LAYOUT_PRESENT};
+  case ResourceState::VertexInput:
+    return {D3D12_BARRIER_SYNC_INDEX_INPUT | D3D12_BARRIER_SYNC_VERTEX_SHADING,
+            D3D12_BARRIER_ACCESS_VERTEX_BUFFER | D3D12_BARRIER_ACCESS_INDEX_BUFFER,
+            D3D12_BARRIER_LAYOUT_UNDEFINED};
   case ResourceState::Undefined:
   default:
     return {};
@@ -277,6 +281,24 @@ DX12CommandList::barrier(Span<const TextureBarrier> textureBarriers)
     }
   }
   flush();
+}
+
+/*
+ */
+void
+DX12CommandList::memoryBarrier(ResourceState before, ResourceState after)
+{
+  m_stats.recordBarriers(1);
+  const DX12ResourceState source = toDX12State(before, false);
+  const DX12ResourceState destination = toDX12State(after, false);
+  const D3D12_GLOBAL_BARRIER barrier{.SyncBefore = source.sync,
+                                     .SyncAfter = destination.sync,
+                                     .AccessBefore = source.access,
+                                     .AccessAfter = destination.access};
+  const D3D12_BARRIER_GROUP group{.Type = D3D12_BARRIER_TYPE_GLOBAL,
+                                  .NumBarriers = 1,
+                                  .pGlobalBarriers = &barrier};
+  m_commandList->Barrier(1, &group);
 }
 
 /*

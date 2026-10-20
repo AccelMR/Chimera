@@ -20,6 +20,7 @@
 #include "chLogger.h"
 #include "chProfiler.h"
 #include "chShadowRenderer.h"
+#include "chSkinningPass.h"
 #include "chSkyPass.h"
 #include "chStringUtils.h"
 #include "chTonemapPass.h"
@@ -44,6 +45,7 @@ SceneRenderer::SceneRenderer()
     m_debugLinePass(new DebugLinePass()),
 #endif // USING(CH_DEBUG_DRAW)
     m_shadowRenderer(new ShadowRenderer()),
+    m_skinningPass(new SkinningPass()),
     m_imageBasedLighting(new ImageBasedLighting()),
     m_skyPass(new SkyPass()),
     m_tonemapPass(new TonemapPass())
@@ -82,6 +84,8 @@ RGTextureHandle
 SceneRenderer::addScenePasses(RGTextureHandle output)
 {
   CH_PROFILE_SCOPE("AddScenePasses");
+  // First, so every pass after it draws the skinned vertices.
+  m_skinningPass->addPass(m_graph, m_frame.getWritableItems());
   const Camera& camera = m_frame.getCamera();
   const Frustum& frustum = camera.getFrustum();
   {

@@ -279,7 +279,9 @@ enum class ResourceState : uint32
   UnorderedAccess,
   CopySource,
   CopyDestination,
-  Present
+  Present,
+  // Buffers read as vertex or index data. Never a texture state.
+  VertexInput
 };
 
 enum class CullMode : uint32

@@ -69,6 +69,10 @@ toVulkanState(ResourceState state, bool isDepth)
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL};
   case ResourceState::Present:
     return {VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+  case ResourceState::VertexInput:
+    return {VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
+            VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_2_INDEX_READ_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED};
   case ResourceState::Undefined:
   default:
     return {VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_UNDEFINED};
@@ -307,6 +311,32 @@ VulkanCommandList::barrier(Span<const TextureBarrier> textureBarriers)
     }
   }
   flush();
+}
+
+/*
+ */
+void
+VulkanCommandList::memoryBarrier(ResourceState before, ResourceState after)
+{
+  m_stats.recordBarriers(1);
+  const VulkanResourceState source = toVulkanState(before, false);
+  const VulkanResourceState destination = toVulkanState(after, false);
+  const VkMemoryBarrier2 memoryBarrier{.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                                       .pNext = nullptr,
+                                       .srcStageMask = source.stages,
+                                       .srcAccessMask = source.access,
+                                       .dstStageMask = destination.stages,
+                                       .dstAccessMask = destination.access};
+  const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                        .pNext = nullptr,
+                                        .dependencyFlags = 0,
+                                        .memoryBarrierCount = 1,
+                                        .pMemoryBarriers = &memoryBarrier,
+                                        .bufferMemoryBarrierCount = 0,
+                                        .pBufferMemoryBarriers = nullptr,
+                                        .imageMemoryBarrierCount = 0,
+                                        .pImageMemoryBarriers = nullptr};
+  vkCmdPipelineBarrier2(m_commandBuffer, &dependencyInfo);
 }
 
 /*

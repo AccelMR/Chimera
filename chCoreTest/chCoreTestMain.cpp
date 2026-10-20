@@ -1076,6 +1076,14 @@ class FakeCommandList : public ICommandList
   }
 
   void
+  memoryBarrier(ResourceState before, ResourceState after) override
+  {
+    CH_PARAMETER_UNUSED(before);
+    CH_PARAMETER_UNUSED(after);
+    m_stats.recordBarriers(1);
+  }
+
+  void
   bindPipeline(const IPipeline& pipeline) override
   {
     CH_PARAMETER_UNUSED(pipeline);
@@ -2460,6 +2468,115 @@ TEST_CASE("chCore - Model animation")
     Vector<chEngineSDK::UUID> references;
     read.collectReferences(references);
     REQUIRE(Algorithm::contains(references, clipAsset->getUUID()));
+  }
+}
+
+TEST_CASE("chCore - Skinned model")
+{
+  // Base > Arm (at x + 1), named like the test clip's tracks. One triangle on Base, skinned:
+  // its first two vertices follow Base, the third follows Arm.
+  const SPtr<Model> model = chMakeShared<Model>();
+  const SPtr<Mesh> mesh = createTriangleModel()->getMeshes()[0];
+  const uint32 baseNode = addTestNode(*model, "Base", ModelNode::NO_PARENT, Matrix4::IDENTITY,
+                                      {model->addMesh(mesh)});
+  const uint32 armNode =
+      addTestNode(*model, "Arm", baseNode, TranslationMatrix(Vector3(1.0f, 0.0f, 0.0f)), {});
+  MeshSkin skin;
+  skin.boneNodes = {baseNode, armNode};
+  skin.inverseBindMatrices = {Matrix4::IDENTITY,
+                              model->getNodeRestMatrix(armNode).getInverseAffine()};
+  const VertexSkin onBase{.bones = {0, 0, 0, 0}, .weights = {255, 0, 0, 0}};
+  const VertexSkin onArm{.bones = {1, 0, 0, 0}, .weights = {255, 0, 0, 0}};
+  skin.vertices = {onBase, onBase, onArm};
+  mesh->setSkin(std::move(skin));
+
+  SECTION("Each bone gets the box of its vertices in its own space")
+  {
+    const Vector<SkinBoneBounds>& boneBounds = mesh->getSkinBoneBounds();
+    REQUIRE(boneBounds.size() == 2);
+    REQUIRE(boneBounds[0].bone == 0);
+    REQUIRE(boneBounds[0].box.minPoint.nearEqual(Vector3(-1.0f, 0.0f, 0.0f)));
+    REQUIRE(boneBounds[0].box.maxPoint.nearEqual(Vector3(1.0f, 0.0f, 0.0f)));
+    REQUIRE(boneBounds[1].box.minPoint.nearEqual(Vector3(-1.0f, 2.0f, 0.0f)));
+  }
+
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Skinned");
+  ModelComponent& component =
+      gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
+  scene.updateTransforms();
+  const RenderItem& item = scene.getRenderItemSlots()[0];
+  REQUIRE(item.skinMatrices);
+
+  SECTION("At rest the skin leaves the vertices where they are")
+  {
+    REQUIRE(item.skinMatrices[0] == Matrix4::IDENTITY);
+    REQUIRE(item.skinMatrices[1].nearEqual(Matrix4::IDENTITY));
+    REQUIRE(item.worldMatrix == Matrix4::IDENTITY);
+  }
+
+  // At time 0 the clip lifts Base by z + 1 and puts Arm at Base's origin, so the third
+  // vertex moves from (0, 2, 0) to (-1, 2, 1).
+  component.setAnimation(createTestClipAsset(createTestClip()));
+  const uint64 posedRevision = item.skinRevision;
+  REQUIRE(item.skinMatrices[0].nearEqual(TranslationMatrix(Vector3(0.0f, 0.0f, 1.0f))));
+  REQUIRE(item.skinMatrices[1].nearEqual(TranslationMatrix(Vector3(-1.0f, 0.0f, 1.0f))));
+
+  SECTION("Bounds are the posed bone boxes")
+  {
+    const AABox box = item.worldBounds.getBox();
+    REQUIRE(box.minPoint.nearEqual(Vector3(-1.0f, 0.0f, 1.0f), 1e-5f));
+    REQUIRE(box.maxPoint.nearEqual(Vector3(1.0f, 2.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("Moving the object moves the item without skinning again")
+  {
+    gameObject->getTransform().setLocalPosition(Vector3(0.0f, 10.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(item.skinRevision == posedRevision);
+    REQUIRE(item.worldMatrix.nearEqual(TranslationMatrix(Vector3(0.0f, 10.0f, 0.0f))));
+    REQUIRE(item.worldBounds.getBox().minPoint.nearEqual(Vector3(-1.0f, 10.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("A new pose gives a new revision")
+  {
+    scene.update(1.0f);
+    REQUIRE(item.skinRevision != posedRevision);
+    component.setPlaying(false);
+    const uint64 pausedRevision = item.skinRevision;
+    scene.update(1.0f);
+    REQUIRE(item.skinRevision == pausedRevision);
+  }
+
+  SECTION("Picking hits the posed triangle")
+  {
+    // Inside the posed triangle, outside the one at rest.
+    const Ray ray(Vector3(-0.8f, 1.5f, 5.0f), Vector3(0.0f, 0.0f, -1.0f));
+    SceneRayHit hit;
+    REQUIRE(scene.raycast(ray, hit));
+    REQUIRE(Math::abs(hit.distance - 4.0f) < 1e-4f);
+    float distance = 0.0f;
+    REQUIRE_FALSE(mesh->raycast(ray, distance));
+  }
+
+  SECTION("The frame copies the skin matrices")
+  {
+    RenderFrame frame;
+    frame.extract(scene, createTestCamera(), LinearColor::Black);
+    const RenderItem& copy = frame.getItems()[0];
+    REQUIRE(copy.skinMatrices != item.skinMatrices);
+    REQUIRE(copy.skinMatrices[1] == item.skinMatrices[1]);
+    REQUIRE(copy.sceneSlot == 0);
+    REQUIRE(copy.skinnedVertices == nullptr);
+  }
+
+  SECTION("A part of a model is never skinned")
+  {
+    component.setModelPart(createTestModelAsset(model), baseNode, ModelComponent::ALL,
+                           Vector3::ZERO);
+    for (const RenderItem& slot : scene.getRenderItemSlots()) {
+      REQUIRE((!slot.mesh || !slot.skinMatrices));
+    }
   }
 }
 

@@ -32,6 +32,20 @@ struct RenderItem
   const Material* material = nullptr;
   // The object the item draws for, so a hit on the item (picking) finds it.
   GameObject* owner = nullptr;
+  // Meshes with a skin: one matrix per entry of the mesh's MeshSkin::boneNodes, taking a
+  // vertex from the mesh's space to the model's in the current pose; worldMatrix then only
+  // places the model. Null for meshes drawn as stored. The scene's items point into their
+  // component, the copies of a RenderFrame into the frame.
+  const Matrix4* skinMatrices = nullptr;
+  // Changes whenever skinMatrices change and is never reused, so the renderer skins the
+  // vertices again only then.
+  uint64 skinRevision = 0;
+  // Written by RenderFrame::extract on its copies: the item's slot in the scene, so the
+  // renderer can keep data per item across frames.
+  uint32 sceneSlot = 0;
+  // Written by the renderer on a frame's copies of skinned items: the vertices after
+  // skinning. A skinned item without them is not drawn.
+  const IBuffer* skinnedVertices = nullptr;
 };
 
 } // namespace chEngineSDK

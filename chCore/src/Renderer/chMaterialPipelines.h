@@ -62,7 +62,10 @@ class CH_CORE_EXPORT MaterialPipelines
         if (getVariant(material) != variant) {
           continue;
         }
-        const IBuffer* vertexBuffer = item->mesh->getVertexBuffer();
+        // A skinned item draws the vertices the skinning wrote, or nothing without them:
+        // the stored ones are in another space.
+        const IBuffer* vertexBuffer =
+            item->skinMatrices ? item->skinnedVertices : item->mesh->getVertexBuffer();
         const IBuffer* indexBuffer = item->mesh->getIndexBuffer();
         if (!vertexBuffer || !indexBuffer) {
           continue;

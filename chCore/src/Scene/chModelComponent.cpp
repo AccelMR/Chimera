@@ -61,6 +61,9 @@ static_assert(sizeof(AnimationFileData) == 24, "AnimationFileData must have no p
 constexpr uint32 kAnimationPlaying = 1u << 0;
 constexpr uint32 kAnimationLooping = 1u << 1;
 
+// The last revision given to a skinned render item. Main thread only, like the scene.
+uint64 g_skinRevision = 0;
+
 /*
  * Null when there is no such asset or it is of another type. Without an AssetManager
  * (tests) nothing is found.
@@ -429,6 +432,7 @@ ModelComponent::refreshPartMatrices()
       part.localMatrix = getNodeMatrix(part.node);
     }
   }
+  updateSkinMatrices();
   updateRenderItems();
 }
 
@@ -566,14 +570,58 @@ ModelComponent::onTransformChanged()
 /*
  */
 void
+ModelComponent::updateSkinMatrices()
+{
+  Scene& scene = *getOwner()->getScene();
+  for (const MeshPart& part : m_parts) {
+    if (part.firstSkinMatrix == ALL) {
+      continue;
+    }
+    // Row vectors: the bind pose takes the vertex into the bone's space first, then the
+    // bone's pose takes it into the model's.
+    const MeshSkin& skin = part.mesh->getSkin();
+    for (SIZE_T bone = 0; bone < skin.boneNodes.size(); ++bone) {
+      m_skinMatrices[part.firstSkinMatrix + bone] =
+          skin.inverseBindMatrices[bone] * getNodeMatrix(skin.boneNodes[bone]);
+    }
+    scene.getRenderItem(part.renderItemId).skinRevision = ++g_skinRevision;
+  }
+}
+
+/*
+ */
+void
 ModelComponent::updateRenderItems()
 {
   Scene& scene = *getOwner()->getScene();
   const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
   for (const MeshPart& part : m_parts) {
     RenderItem& item = scene.getRenderItem(part.renderItemId);
-    item.worldMatrix = part.localMatrix * ownerWorld;
-    item.worldBounds = part.mesh->getBounds().getTransformed(item.worldMatrix);
+    if (part.firstSkinMatrix == ALL) {
+      item.worldMatrix = part.localMatrix * ownerWorld;
+      item.worldBounds = part.mesh->getBounds().getTransformed(item.worldMatrix);
+      continue;
+    }
+
+    // The skinned vertices are already in the model's space.
+    item.worldMatrix = ownerWorld;
+    const MeshSkin& skin = part.mesh->getSkin();
+    bool bFirst = true;
+    AABox bounds(Vector3::ZERO, Vector3::ZERO);
+    for (const SkinBoneBounds& boneBounds : part.mesh->getSkinBoneBounds()) {
+      const AABox box = boneBounds.box.getTransformed(
+          getNodeMatrix(skin.boneNodes[boneBounds.bone]) * ownerWorld);
+      if (bFirst) {
+        bounds = box;
+        bFirst = false;
+      }
+      else {
+        bounds += box;
+      }
+    }
+    item.worldBounds = bFirst ? part.mesh->getBounds().getTransformed(part.localMatrix *
+                                                                      ownerWorld)
+                              : SphereBoxBounds(bounds);
   }
 }
 
@@ -586,26 +634,35 @@ ModelComponent::addRenderItems()
     return;
   }
 
-  Scene& scene = *getOwner()->getScene();
-  const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
+  // The parts first, so the skin matrices are sized before any render item points at them.
+  uint32 skinMatrixCount = 0;
   forEachDrawnMesh(
       *m_model, m_nodeIndex, m_meshIndex, m_pivot,
-      [this, &scene, &ownerWorld](const Mesh& mesh, const Matrix4& restMatrix, uint32 node) {
-        const Matrix4& localMatrix =
-            node != ALL && isAnimating() ? m_poseMatrices[node] : restMatrix;
-        // Row vectors: the mesh's place in the object applies first, then the object's.
-        const Matrix4 world = localMatrix * ownerWorld;
-        const RenderItem item{.worldMatrix = world,
-                              .worldBounds = mesh.getBounds().getTransformed(world),
-                              .mesh = &mesh,
-                              .material = getRenderMaterial(mesh.getMaterialSlot()),
-                              .owner = getOwner()};
-        const uint32 renderItemId = scene.addRenderItem(item);
-        m_parts.push_back({.localMatrix = localMatrix,
-                           .mesh = &mesh,
-                           .renderItemId = renderItemId,
-                           .node = node});
+      [this, &skinMatrixCount](const Mesh& mesh, const Matrix4& restMatrix, uint32 node) {
+        MeshPart& part = m_parts.emplace_back();
+        part.localMatrix = node != ALL && isAnimating() ? m_poseMatrices[node] : restMatrix;
+        part.mesh = &mesh;
+        part.node = node;
+        // Only a whole model has the node matrices the bones need.
+        if (node != ALL && mesh.hasSkin()) {
+          part.firstSkinMatrix = skinMatrixCount;
+          skinMatrixCount += static_cast<uint32>(mesh.getSkin().boneNodes.size());
+        }
       });
+  m_skinMatrices.resize(skinMatrixCount);
+
+  Scene& scene = *getOwner()->getScene();
+  for (MeshPart& part : m_parts) {
+    const RenderItem item{
+        .mesh = part.mesh,
+        .material = getRenderMaterial(part.mesh->getMaterialSlot()),
+        .owner = getOwner(),
+        .skinMatrices =
+            part.firstSkinMatrix == ALL ? nullptr : &m_skinMatrices[part.firstSkinMatrix]};
+    part.renderItemId = scene.addRenderItem(item);
+  }
+  updateSkinMatrices();
+  updateRenderItems();
 }
 
 /*
@@ -618,6 +675,7 @@ ModelComponent::removeRenderItems()
     scene.removeRenderItem(part.renderItemId);
   }
   m_parts.clear();
+  m_skinMatrices.clear();
 }
 
 } // namespace chEngineSDK

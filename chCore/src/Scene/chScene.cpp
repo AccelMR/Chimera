@@ -282,8 +282,17 @@ Scene::raycast(const Ray& ray, SceneRayHit& outHit) const
     const Ray localRay(toVector3(worldToLocal.transformPosition(ray.origin)),
                        localDirection);
 
+    // A skinned item's matrix only places the model; its triangles are where the pose put
+    // them.
     float localDistance = 0.0f;
-    if (!item.mesh->raycast(localRay, localDistance)) {
+    const bool bLocalHit =
+        item.skinMatrices
+            ? item.mesh->raycastSkinned(
+                  localRay,
+                  Span<const Matrix4>(item.skinMatrices, item.mesh->getSkin().boneNodes.size()),
+                  localDistance)
+            : item.mesh->raycast(localRay, localDistance);
+    if (!bLocalHit) {
       continue;
     }
     const Vector3 worldPoint =

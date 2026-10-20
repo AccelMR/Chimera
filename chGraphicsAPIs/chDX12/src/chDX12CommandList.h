@@ -54,6 +54,9 @@ class DX12CommandList : public ICommandList
   barrier(Span<const TextureBarrier> textureBarriers) override;
 
   void
+  memoryBarrier(ResourceState before, ResourceState after) override;
+
+  void
   bindPipeline(const IPipeline& pipeline) override;
 
   void
