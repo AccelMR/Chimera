@@ -50,6 +50,7 @@
 #include "chOutputLogUI.h"
 #include "chSceneGraphUI.h"
 #include "chInspectorUI.h"
+#include "chAssetInspectorUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -125,6 +126,7 @@ EditorApplication::destroyModules()
   }
 
   m_inspectorUI.reset();
+  AssetInspectorUI::shutDown();
   m_sceneGraphUI.reset();
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
@@ -492,6 +494,7 @@ EditorApplication::renderUI()
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
+  AssetInspectorUI::render();
   m_viewportTools->render(*EditorScene::getScene());
   // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());

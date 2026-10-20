@@ -24,6 +24,7 @@
 #include "chModelAsset.h"
 #include "chPrefabAsset.h"
 #include "chProfilerUI.h"
+#include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
 #include "chStringUtils.h"
@@ -365,6 +366,10 @@ MainMenuBarUI::renderMainMenuBar() {
   if (ImGui::BeginMenu("View")) {
     EditorTheme::renderSettings();
     ImGui::Separator(); //--------------------------------------------------------------
+    if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Asset Inspector", nullptr,
+                        AssetInspectorUI::isWindowVisible())) {
+      AssetInspectorUI::setWindowVisible(!AssetInspectorUI::isWindowVisible());
+    }
     if (ImGui::MenuItem(ICON_FA_CHART_LINE "  Profiler", nullptr,
                         ProfilerUI::isWindowVisible())) {
       ProfilerUI::setWindowVisible(!ProfilerUI::isWindowVisible());

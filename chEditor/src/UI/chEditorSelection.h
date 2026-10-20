@@ -62,8 +62,9 @@ class EditorSelection
   clear();
 
   /**
-   * An asset picked in the Content Browser, for the Inspector. Clears the objects; adding an
-   * object clears the asset.
+   * The asset picked in the Content Browser, which it highlights and acts on (rename,
+   * delete). Independent of the selected objects, so picking or dragging an asset keeps the
+   * Object Inspector on them.
    */
   static void
   setSelectedAsset(const SPtr<IAsset>& asset);

@@ -47,9 +47,6 @@ class ContentAssetUI
   renderDeleteConfirmationPopup();
 
   void
-  loadAsset(const SPtr<IAsset>& asset);
-
-  void
   renderAssetContextMenu(const SPtr<IAsset>& asset);
 
   void
@@ -106,9 +103,6 @@ class ContentAssetUI
 
   void
   renderAssetNameInGrid(const SPtr<IAsset>& asset);
-
-  void
-  renderAssetStateIndicator(const SPtr<IAsset>& asset);
 
   void
   renderListView();

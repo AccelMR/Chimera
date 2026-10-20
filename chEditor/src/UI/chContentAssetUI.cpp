@@ -18,6 +18,7 @@
 
 #include "chAlgorithm.h"
 #include "chAssetDragDrop.h"
+#include "chAssetInspectorUI.h"
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chImGuiRenderer.h"
@@ -70,43 +71,6 @@ pushTileColors()
                         ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
 }
 
-NODISCARD ImVec4
-getAssetStateColor(AssetState state) noexcept
-{
-  switch (state) {
-  case AssetState::Loaded:
-    return ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green
-  case AssetState::Loading:
-    return ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-  case AssetState::Unloaded:
-    return ImVec4(0.5f, 0.5f, 0.5f, 1.0f); // Gray
-  case AssetState::Unloading:
-    return ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
-  case AssetState::Failed:
-    return ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
-  default:
-    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
-  }
-}
-
-NODISCARD const ANSICHAR*
-getAssetStateString(AssetState state) noexcept
-{
-  switch (state) {
-  case AssetState::Loaded:
-    return "Loaded";
-  case AssetState::Loading:
-    return "Loading";
-  case AssetState::Unloaded:
-    return "Unloaded";
-  case AssetState::Unloading:
-    return "Unloading";
-  case AssetState::Failed:
-    return "Failed";
-  default:
-    return "Unknown";
-  }
-}
 
 // Long names are cut so they fit under a grid icon.
 using ShortName = ANSICHAR[13];
@@ -397,7 +361,7 @@ ContentAssetUI::renderGridView()
 void
 ContentAssetUI::renderListView()
 {
-  if (!ImGui::BeginTable("AssetTable", 4,
+  if (!ImGui::BeginTable("AssetTable", 3,
                          ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
                              ImGuiTableFlags_Borders)) {
     return;
@@ -431,7 +395,6 @@ ContentAssetUI::setupTableColumns()
   ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_WidthFixed, 40.0f);
   ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
   ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-  ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableHeadersRow();
 }
 
@@ -453,7 +416,6 @@ ContentAssetUI::renderGridAssetItem(const SPtr<IAsset>& asset, int32 column)
 
   ImGui::EndGroup();
 
-  renderAssetStateIndicator(asset);
   handleAssetContextMenu(asset);
   renderAssetTooltip(asset);
 
@@ -481,9 +443,6 @@ ContentAssetUI::renderListAssetItem(const SPtr<IAsset>& asset)
   ImGui::TableSetColumnIndex(2);
   ImGui::TextUnformatted(asset->getTypeName());
 
-  ImGui::TableSetColumnIndex(3);
-  const AssetState state = asset->getState();
-  ImGui::TextColored(getAssetStateColor(state), "%s", getAssetStateString(state));
 
   ImGui::PopID();
 }
@@ -571,33 +530,8 @@ ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
   AssetDragDrop::source(*asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-    // Scenes and prefabs open like files in a file browser; other assets have nothing to
-    // open.
-    if (asset->isTypeOf<SceneAsset>() || asset->isTypeOf<PrefabAsset>()) {
-      openAsset(asset);
-    }
-    else {
-      startInlineRename(asset);
-    }
+    openAsset(asset);
   }
-}
-
-/*
- */
-void
-ContentAssetUI::renderAssetStateIndicator(const SPtr<IAsset>& asset)
-{
-  const ImVec4 stateColor = getAssetStateColor(asset->getState());
-  const ImVec2 groupMin = ImGui::GetItemRectMin();
-  const ImVec2 groupMax = ImGui::GetItemRectMax();
-
-  // Scaled with the grid size, within limits so it is never too small or too big.
-  const float offset = Math::max(6.0f, Math::min(gridSize * 0.08f, 15.0f));
-  const float radius = Math::max(2.0f, Math::min(gridSize * 0.05f, 8.0f));
-
-  ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(groupMax.x - offset, groupMin.y + offset),
-                                              radius,
-                                              ImGui::ColorConvertFloat4ToU32(stateColor));
 }
 
 /*
@@ -649,7 +583,6 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
   ImGui::Text("Type: %s", asset->getTypeName());
   ImGui::Text("Type UUID: %s", asset->getAssetTypeId().toString().c_str());
   ImGui::Text("Created At: %s", createdAtStr);
-  ImGui::Text("State: %s", getAssetStateString(asset->getState()));
   ImGui::Text("Source: %s%s%s", editorData.sourceFile.toString().c_str(),
               editorData.sourcePart.empty() ? "" : " # ", editorData.sourcePart.c_str());
   ImGui::Text("Asset Path: %s", asset->getAssetPath());
@@ -727,6 +660,10 @@ ContentAssetUI::renderDeleteConfirmationPopup()
         }
 
         if (bRemovedCorrectly) {
+          AssetInspectorUI::close(*m_assetToDelete);
+          if (EditorSelection::getSelectedAsset() == m_assetToDelete) {
+            EditorSelection::setSelectedAsset(nullptr);
+          }
           m_assetThumbnails.erase(m_assetToDelete->getUUID());
           AssetManager::instance().removeAsset(m_assetToDelete->getUUID());
           refreshAssets();
@@ -756,16 +693,6 @@ ContentAssetUI::renderDeleteConfirmationPopup()
 /*
  */
 void
-ContentAssetUI::loadAsset(const SPtr<IAsset>& asset)
-{
-  if (!AssetManager::instance().syncLoadAsset(asset)) {
-    CH_LOG_ERROR(ContentAssetUILog, "Failed to load asset: {0}", asset->getName());
-  }
-}
-
-/*
- */
-void
 ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
 {
   if (!asset) {
@@ -785,17 +712,12 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
     }
     ImGui::Separator();
   }
-
-  if (ImGui::MenuItem(ICON_FA_DOWNLOAD "  Load")) {
-    loadAsset(asset);
+  else if (!asset->isTypeOf<SceneAsset>()) {
+    if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Inspect")) {
+      openAsset(asset);
+    }
+    ImGui::Separator();
   }
-
-  if (ImGui::MenuItem(ICON_FA_EJECT "  Unload", nullptr, false, asset->isLoaded())) {
-    CH_LOG_DEBUG(ContentAssetUILog, "Unloading asset: {0}", asset->getName());
-    AssetManager::instance().unloadAsset(asset->getUUID());
-  }
-
-  ImGui::Separator();
 
   if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename")) {
     startInlineRename(asset);
@@ -1199,6 +1121,9 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
   }
   else if (asset->isTypeOf<PrefabAsset>()) {
     EditorScene::requestEditPrefab(std::static_pointer_cast<PrefabAsset>(asset));
+  }
+  else {
+    AssetInspectorUI::open(asset);
   }
 }
 

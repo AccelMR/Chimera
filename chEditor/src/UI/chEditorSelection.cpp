@@ -106,7 +106,6 @@ EditorSelection::add(const SPtr<GameObject>& gameObject)
   removeFromList(state, *gameObject);
   state.objects.push_back(gameObject);
   state.lookup.insert(gameObject.get());
-  state.asset.reset();
 }
 
 /*
@@ -140,7 +139,6 @@ EditorSelection::clear()
 void
 EditorSelection::setSelectedAsset(const SPtr<IAsset>& asset)
 {
-  clear();
   getState().asset = asset;
 }
 
@@ -177,7 +175,6 @@ void
 EditorSelection::selectAll(const Scene& scene, const GameObject* root)
 {
   clear();
-  getState().asset.reset();
   addList(getState(), root ? root->getChildren() : scene.getRootGameObjects());
 }
 

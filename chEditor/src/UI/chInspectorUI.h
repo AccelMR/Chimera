@@ -14,18 +14,12 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
-class AnimationClip;
-class IAsset;
-class Material;
-class MaterialAsset;
 class ShapeComponent;
-class Skeleton;
 class SkyLightComponent;
-enum class MaterialTexture : uint32;
 
 /**
- * Editor window that shows and edits the transform and components of the selected
- * GameObject.
+ * Exists so the selected GameObject of the open scene can be seen and edited: its name,
+ * transform and components. Assets have their own window, the Asset Inspector.
  */
 class InspectorUI
 {
@@ -66,25 +60,6 @@ class InspectorUI
   void
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
 
-  void
-  renderAsset(const SPtr<IAsset>& asset);
-
-  void
-  renderAnimationClip(const AnimationClip& clip);
-
-  void
-  renderSkeleton(const Skeleton& skeleton);
-
-  void
-  renderBone(const Skeleton& skeleton, uint32 bone);
-
-  void
-  renderMaterial(const SPtr<MaterialAsset>& materialAsset);
-
-  // True when the texture changed, so the material needs saving.
-  NODISCARD bool
-  renderMaterialTexture(Material& material, MaterialTexture slot);
-
   // The rotation is edited as angles but stored as a quaternion, and converting back each
   // frame would make the angles jump (a yaw of 180 can come back as pitch and roll 180).
   // So the angles are kept while the same object stays selected.
@@ -98,11 +73,6 @@ class InspectorUI
   const GameObject* m_nameOwner = nullptr;
   ANSICHAR m_nameBuffer[256] = "";
   bool m_bEditingName = false;
-
-  // The children of each bone of the skeleton last shown, built when it changes, since the
-  // skeleton only stores parents.
-  const Skeleton* m_childrenOwner = nullptr;
-  Vector<Vector<uint32>> m_boneChildren;
 };
 
 } // namespace chEngineSDK
