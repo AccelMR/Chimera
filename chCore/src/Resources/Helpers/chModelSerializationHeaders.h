@@ -14,11 +14,12 @@
 namespace chEngineSDK {
 // Model header structure
 struct ModelHeader {
-  static constexpr uint32 VERSION = 1;
+  // Version 1 kept the nodes as a tree of matrices; it is no longer read.
+  static constexpr uint32 VERSION = 2;
 
   uint32 version;
   uint32 nodeCount;
-  uint32 uniqueMeshCount;
+  uint32 meshCount;
   uint32 materialSlotCount;
 };
 static_assert(sizeof(ModelHeader) == 16, "ModelHeader must have no padding");

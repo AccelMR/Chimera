@@ -39,6 +39,8 @@
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
+#include "chModelSerializer.h"
+#include "chModelSerializationHeaders.h"
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRay.h"
@@ -368,6 +370,16 @@ TEST_CASE("chCore - FormatUtils")
 
 namespace {
 
+uint32
+addTestNode(Model& model,
+            StringView name,
+            uint32 parent,
+            const Matrix4& localMatrix,
+            const Vector<uint32>& meshIndices)
+{
+  return model.addNode(name, parent, localMatrix, meshIndices);
+}
+
 // One triangle in front of the test camera when the object is at the origin.
 SPtr<Model>
 createTriangleModel()
@@ -383,7 +395,7 @@ createTriangleModel()
   mesh->setIndexData(Vector<uint16>{0, 1, 2});
 
   SPtr<Model> model = chMakeShared<Model>();
-  model->createNode("Root")->addMesh(mesh);
+  addTestNode(*model, "Root", ModelNode::NO_PARENT, Matrix4::IDENTITY, {model->addMesh(mesh)});
   return model;
 }
 
@@ -402,7 +414,7 @@ createTestModelAsset(const SPtr<Model>& model, StringView name = "SM_Test")
 TEST_CASE("chCore - Mesh bounds")
 {
   const SPtr<Model> model = createTriangleModel();
-  const SphereBoxBounds& bounds = model->getRootNodes()[0]->getMeshes()[0]->getBounds();
+  const SphereBoxBounds& bounds = model->getMeshes()[0]->getBounds();
   REQUIRE(bounds.center.nearEqual(Vector3(0.0f, 1.0f, 0.0f)));
   REQUIRE(bounds.boxExtent.nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
   // The farthest vertices from the center are (1, 0, 0) and (-1, 0, 0).
@@ -459,7 +471,7 @@ TEST_CASE("chCore - Scene render items")
   Vector<const RenderItem*> visible;
   scene.gatherRenderItems(camera.getFrustum(), visible);
   REQUIRE(visible.size() == 1);
-  REQUIRE(visible[0]->mesh == model->getRootNodes()[0]->getMeshes()[0].get());
+  REQUIRE(visible[0]->mesh == model->getMeshes()[0].get());
 
   SECTION("Items follow the object and are culled behind the camera")
   {
@@ -1543,36 +1555,13 @@ TEST_CASE("chCore - Asset file start")
     REQUIRE_FALSE(AssetFile::readInfo(other, info));
   }
 
-  SECTION("Format version 1 is still read, with its editor data")
+  SECTION("Format version 1 is rejected")
   {
-    // The 664-byte metadata block of version 1: two UUIDs, the creation time, then the type
-    // name (32), engine version (16), name (64), imported path (256) and folder (256).
-    Vector<uint8> legacy(AssetFile::LEGACY_METADATA_SIZE, 0);
-    const uint64 creationTime = 1234;
-    std::memcpy(legacy.data(), &uuid, sizeof(uuid));
-    std::memcpy(legacy.data() + 16, &assetType, sizeof(assetType));
-    std::memcpy(legacy.data() + 32, &creationTime, sizeof(creationTime));
-    std::memcpy(legacy.data() + 72, "0.1.0", 5);
-    std::memcpy(legacy.data() + 152, "C:/Art/Rock.gltf#Stone", 22);
-
-    MemoryDataStream other(1024);
+    MemoryDataStream other(64);
     const uint32 header[2] = {AssetFileHeader::MAGIC, 1};
     other.write(header, sizeof(header));
-    other.write(legacy.data(), legacy.size());
-    const uint32 noReferences = 0;
-    other.write(&noReferences, sizeof(noReferences));
     other.seek(0);
-
-    AssetFileInfo legacyInfo;
-    REQUIRE(AssetFile::readInfo(other, legacyInfo));
-    REQUIRE(legacyInfo.formatVersion == 1);
-    REQUIRE(legacyInfo.uuid == uuid);
-    REQUIRE(legacyInfo.assetType == assetType);
-    REQUIRE(legacyInfo.legacyCreationTime == creationTime);
-    REQUIRE(legacyInfo.legacyEngineVersion == "0.1.0");
-    REQUIRE(legacyInfo.legacyImportedPath == "C:/Art/Rock.gltf#Stone");
-    REQUIRE(AssetFile::readReferences(other, readReferences));
-    REQUIRE(readReferences.empty());
+    REQUIRE_FALSE(AssetFile::readInfo(other, info));
   }
 
   SECTION("Broken lengths are rejected")
@@ -1828,7 +1817,7 @@ TEST_CASE("chCore - Material")
 TEST_CASE("chCore - Model material slots")
 {
   const SPtr<Model> model = createTriangleModel();
-  const SPtr<Mesh>& mesh = model->getRootNodes()[0]->getMeshes()[0];
+  const SPtr<Mesh> mesh = model->getMeshes()[0];
   REQUIRE(mesh->getMaterialSlot() == 0);
 
   // A second mesh on another node uses slot 1.
@@ -1842,7 +1831,7 @@ TEST_CASE("chCore - Model material slots")
        Vector4(1.0f, 0.0f, 0.0f, 1.0f)}});
   secondMesh->setIndexData(Vector<uint16>{0, 1, 2});
   secondMesh->setMaterialSlot(1);
-  model->createNode("Sword", model->getRootNodes()[0])->addMesh(secondMesh);
+  addTestNode(*model, "Sword", 0, Matrix4::IDENTITY, {model->addMesh(secondMesh)});
 
   const SPtr<MaterialAsset> body = createTestMaterialAsset("M_Body");
   const SPtr<MaterialAsset> sword = createTestMaterialAsset("M_Sword");
@@ -1911,26 +1900,133 @@ TEST_CASE("chCore - Model material slots")
   }
 }
 
+namespace {
+Vector<uint8>
+readAllBytes(MemoryDataStream& stream)
+{
+  Vector<uint8> bytes(stream.size());
+  stream.seek(0);
+  REQUIRE(stream.read(bytes.data(), bytes.size()) == bytes.size());
+  stream.seek(0);
+  return bytes;
+}
+} // namespace
+
+TEST_CASE("chCore - Model serializer")
+{
+  // Root (moved and turned) > Child with both meshes; Shared is a second root that draws
+  // mesh 0 again.
+  const SPtr<Model> model = chMakeShared<Model>();
+  const SPtr<Mesh> triangle = createTriangleModel()->getMeshes()[0];
+  SPtr<Mesh> second = chMakeShared<Mesh>();
+  second->setVertexData(triangle->getVertexData<VertexStatic>());
+  second->setIndexData(Vector<uint32>{2, 1, 0});
+  second->setMaterialSlot(1);
+  const uint32 mesh0 = model->addMesh(triangle);
+  const uint32 mesh1 = model->addMesh(second);
+  const Quaternion turn(Vector3::UP, Degree(90.0f));
+  const uint32 root = model->addNode("Root", ModelNode::NO_PARENT, Vector3(1.0f, 2.0f, 3.0f),
+                                     turn, Vector3(2.0f, 2.0f, 2.0f), {});
+  addTestNode(*model, "Child", root, TranslationMatrix(Vector3(0.0f, 0.0f, 5.0f)),
+              {mesh0, mesh1});
+  addTestNode(*model, "Shared", ModelNode::NO_PARENT, Matrix4::IDENTITY, {mesh0});
+  const chEngineSDK::UUID bodyId = chEngineSDK::UUID::createRandom();
+  model->addMaterialSlot({.name = "Body", .materialId = bodyId, .material = nullptr});
+  model->addMaterialSlot({.name = "Empty", .materialId = chEngineSDK::UUID::null(),
+                          .material = nullptr});
+
+  REQUIRE(model->getNodeRestMatrix(1).nearEqual(
+      TranslationMatrix(Vector3(0.0f, 0.0f, 5.0f)) * model->getNodeRestMatrix(0)));
+
+  MemoryDataStream stream;
+  ModelSerializer::write(stream, *model);
+  const Vector<uint8> bytes = readAllBytes(stream);
+
+  SECTION("Everything comes back in the same order")
+  {
+    const SPtr<Model> read = ModelSerializer::read(stream);
+    REQUIRE(read);
+    REQUIRE(read->getNodeCount() == 3);
+    REQUIRE(read->getMeshCount() == 2);
+    for (uint32 i = 0; i < 3; ++i) {
+      const ModelNode& expected = model->getNodes()[i];
+      const ModelNode& actual = read->getNodes()[i];
+      REQUIRE(actual.name == expected.name);
+      REQUIRE(actual.parent == expected.parent);
+      REQUIRE(actual.position.nearEqual(expected.position));
+      REQUIRE(actual.rotation.isRotationEqual(expected.rotation));
+      REQUIRE(actual.scale.nearEqual(expected.scale));
+      REQUIRE(read->getNodeRestMatrix(i).nearEqual(model->getNodeRestMatrix(i)));
+      const Span<const uint32> expectedMeshes = model->getNodeMeshes(i);
+      const Span<const uint32> actualMeshes = read->getNodeMeshes(i);
+      REQUIRE(actualMeshes.size() == expectedMeshes.size());
+      for (SIZE_T j = 0; j < actualMeshes.size(); ++j) {
+        REQUIRE(actualMeshes[j] == expectedMeshes[j]);
+      }
+    }
+    for (uint32 i = 0; i < 2; ++i) {
+      const Mesh& expected = *model->getMeshes()[i];
+      const Mesh& actual = *read->getMeshes()[i];
+      REQUIRE(actual.getVertexData() == expected.getVertexData());
+      REQUIRE(actual.getIndexData() == expected.getIndexData());
+      REQUIRE(actual.getIndexType() == expected.getIndexType());
+      REQUIRE(actual.getIndexCount() == expected.getIndexCount());
+      REQUIRE(actual.getMaterialSlot() == expected.getMaterialSlot());
+      REQUIRE(actual.getVertexLayout().getVertexSize() == sizeof(VertexStatic));
+    }
+    REQUIRE(read->getMaterialSlots().size() == 2);
+    REQUIRE(read->getMaterialSlots()[0].name == "Body");
+    REQUIRE(read->getMaterialSlots()[0].materialId == bodyId);
+    REQUIRE(read->getMaterialSlots()[1].materialId.isNull());
+
+    // Saving what was read gives the same bytes.
+    MemoryDataStream again;
+    ModelSerializer::write(again, *read);
+    REQUIRE(readAllBytes(again) == bytes);
+  }
+
+  SECTION("A cut file is rejected")
+  {
+    for (const SIZE_T size : {SIZE_T(0), SIZE_T(10), bytes.size() / 2, bytes.size() - 1}) {
+      MemoryDataStream cut;
+      cut.write(bytes.data(), size);
+      cut.seek(0);
+      REQUIRE_FALSE(ModelSerializer::read(cut));
+    }
+  }
+
+  SECTION("A newer version is rejected")
+  {
+    Vector<uint8> newer = bytes;
+    const uint32 version = ModelHeader::VERSION + 1;
+    std::memcpy(newer.data(), &version, sizeof(version));
+    MemoryDataStream other;
+    other.write(newer.data(), newer.size());
+    other.seek(0);
+    REQUIRE_FALSE(ModelSerializer::read(other));
+  }
+}
+
 TEST_CASE("chCore - Model expand")
 {
   // Root (x + 10, one mesh) > Child (y + 5, two meshes) and Root > Empty > Leaf (z + 3).
   // Every mesh is the test triangle, centered at (0, 1, 0) in its node.
   const auto createMesh = [](uint32 slot) {
-    SPtr<Mesh> mesh = createTriangleModel()->getRootNodes()[0]->getMeshes()[0];
+    SPtr<Mesh> mesh = createTriangleModel()->getMeshes()[0];
     mesh->setMaterialSlot(slot);
     return mesh;
   };
   const SPtr<Model> model = chMakeShared<Model>();
-  ModelNode* rootNode =
-      model->createNode("Root", TranslationMatrix(Vector3(10.0f, 0.0f, 0.0f)));
-  rootNode->addMesh(createMesh(0));
-  ModelNode* childNode =
-      model->createNode("Child", TranslationMatrix(Vector3(0.0f, 5.0f, 0.0f)), rootNode);
-  childNode->addMesh(createMesh(0));
-  childNode->addMesh(createMesh(1));
-  ModelNode* emptyNode = model->createNode("Empty", rootNode);
-  model->createNode("Leaf", TranslationMatrix(Vector3(0.0f, 0.0f, 3.0f)), emptyNode)
-      ->addMesh(createMesh(1));
+  const uint32 rootNode =
+      addTestNode(*model, "Root", ModelNode::NO_PARENT,
+                  TranslationMatrix(Vector3(10.0f, 0.0f, 0.0f)), {model->addMesh(createMesh(0))});
+  const uint32 childMesh0 = model->addMesh(createMesh(0));
+  const uint32 childMesh1 = model->addMesh(createMesh(1));
+  addTestNode(*model, "Child", rootNode, TranslationMatrix(Vector3(0.0f, 5.0f, 0.0f)),
+              {childMesh0, childMesh1});
+  const uint32 emptyNode = addTestNode(*model, "Empty", rootNode, Matrix4::IDENTITY, {});
+  addTestNode(*model, "Leaf", emptyNode, TranslationMatrix(Vector3(0.0f, 0.0f, 3.0f)),
+              {model->addMesh(createMesh(1))});
 
   const SPtr<MaterialAsset> body = createTestMaterialAsset("M_Body");
   const SPtr<MaterialAsset> sword = createTestMaterialAsset("M_Sword");

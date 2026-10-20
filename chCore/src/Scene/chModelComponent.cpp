@@ -74,29 +74,29 @@ forEachDrawnMesh(const Model& model,
                  const Vector3& pivot,
                  Visitor&& visit)
 {
-  const Vector<ModelNode*>& nodes = model.getAllNodes();
+  const Vector<SPtr<Mesh>>& meshes = model.getMeshes();
   if (nodeIndex == ModelComponent::ALL) {
-    for (const ModelNode* node : nodes) {
-      for (const SPtr<Mesh>& mesh : node->getMeshes()) {
-        visit(*mesh, node->getGlobalTransform());
+    for (uint32 node = 0; node < model.getNodeCount(); ++node) {
+      for (const uint32 index : model.getNodeMeshes(node)) {
+        visit(*meshes[index], model.getNodeRestMatrix(node));
       }
     }
     return;
   }
-  if (nodeIndex >= nodes.size()) {
+  if (nodeIndex >= model.getNodeCount()) {
     return;
   }
 
   // The node's own transform went into the GameObject; only the pivot is left.
   const Matrix4 localMatrix = TranslationMatrix(-pivot);
-  const Vector<SPtr<Mesh>>& meshes = nodes[nodeIndex]->getMeshes();
+  const Span<const uint32> nodeMeshes = model.getNodeMeshes(nodeIndex);
   if (meshIndex == ModelComponent::ALL) {
-    for (const SPtr<Mesh>& mesh : meshes) {
-      visit(*mesh, localMatrix);
+    for (const uint32 index : nodeMeshes) {
+      visit(*meshes[index], localMatrix);
     }
   }
-  else if (meshIndex < meshes.size()) {
-    visit(*meshes[meshIndex], localMatrix);
+  else if (meshIndex < nodeMeshes.size()) {
+    visit(*meshes[nodeMeshes[meshIndex]], localMatrix);
   }
 }
 } // namespace
@@ -144,10 +144,6 @@ ModelComponent::setModelPart(const SPtr<ModelAsset>& modelAsset,
   m_nodeIndex = nodeIndex;
   m_meshIndex = meshIndex;
   m_pivot = pivot;
-  if (m_model) {
-    // The node matrices are read when the items are placed, so they must be current.
-    m_model->updateTransforms();
-  }
   rebuildUsedSlots();
 
   if (isRegistered()) {

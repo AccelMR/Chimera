@@ -4,278 +4,83 @@
  * @author AccelMR
  * @date 2025/04/18
  * @brief
- *  Implementation of the Model class with hierarchical tree structure.
+ *  Model made of a hierarchy of nodes that draw meshes.
  */
 /************************************************************************/
 #include "chModel.h"
 
-#include "chAlgorithm.h"
+#include "chMatrixHelpers.h"
 #include "chSphereBoxBounds.h"
-#include "chVector3.h"
 #include "chVector4.h"
-
-#include "chStringUtils.h"
 
 namespace chEngineSDK {
 
 /*
- * ModelNode constructor
  */
-ModelNode::ModelNode(const String& nodeName, Model* ownerModel, ModelNode* parent)
- : m_name(""),
-   m_parent(parent),
-   m_localTransform(Matrix4::IDENTITY),
-   m_globalTransform(Matrix4::IDENTITY),
-   m_model(ownerModel),
-   m_dirty(true) {
-    // Copy the node name safely
-    StringUtils::copyToBuffer(m_name, nodeName);
-   }
-
-/*
- * Add a child node
- */
-void
-ModelNode::addChild(ModelNode* child)
+uint32
+Model::addMesh(SPtr<Mesh> mesh)
 {
-  if (!child) {
-    return;
-  }
-  if (!Algorithm::contains(m_children, child)) {
-    m_children.push_back(child);
-    child->m_parent = this;
-    child->markDirty();
-  }
+  m_meshes.push_back(std::move(mesh));
+  return static_cast<uint32>(m_meshes.size() - 1);
 }
 
 /*
- * Remove a child node
  */
-void
-ModelNode::removeChild(ModelNode* child)
+uint32
+Model::addNode(StringView name,
+               uint32 parent,
+               const Vector3& position,
+               const Quaternion& rotation,
+               const Vector3& scale,
+               Span<const uint32> meshIndices)
 {
-  if (Algorithm::removeFirst(m_children, child)) {
-    child->m_parent = nullptr;
+  const uint32 index = static_cast<uint32>(m_nodes.size());
+  CH_ASSERT(parent == ModelNode::NO_PARENT || parent < index);
+  if (parent != ModelNode::NO_PARENT && parent >= index) {
+    parent = ModelNode::NO_PARENT;
   }
-}
 
-/*
- * Add a mesh to this node
- */
-void
-ModelNode::addMesh(SPtr<Mesh> mesh) {
-  if (mesh) {
-    m_meshes.push_back(mesh);
-
-    if (m_model) {
-      m_model->registerMeshForNode(mesh, this);
+  ModelNode& node = m_nodes.emplace_back();
+  node.name = String(name);
+  node.parent = parent;
+  node.position = position;
+  node.rotation = rotation;
+  node.scale = scale;
+  node.firstMesh = static_cast<uint32>(m_nodeMeshes.size());
+  for (const uint32 meshIndex : meshIndices) {
+    CH_ASSERT(meshIndex < m_meshes.size());
+    if (meshIndex < m_meshes.size()) {
+      m_nodeMeshes.push_back(meshIndex);
     }
   }
-}
-
-/*
- * Remove a mesh from this node
- */
-void
-ModelNode::removeMesh(SPtr<Mesh> mesh)
-{
-  if (Algorithm::removeFirst(m_meshes, mesh)) {
-    if (m_model) {
-      m_model->unregisterMeshForNode(mesh, this);
-    }
-  }
-}
-
-/*
- * Set the local transform matrix
- */
-void
-ModelNode::setLocalTransform(const Matrix4& transform) {
-  m_localTransform = transform;
-  markDirty();
-}
-
-/*
- * Update the global transform based on parent's global transform
- */
-void
-ModelNode::updateGlobalTransform() {
-  if (!m_dirty) {
-    return;
-  }
+  node.meshCount = static_cast<uint32>(m_nodeMeshes.size()) - node.firstMesh;
 
   // Row vectors: the node's own transform applies first, then its parent's.
-  if (m_parent) {
-    m_globalTransform = m_localTransform * m_parent->getGlobalTransform();
-  }
-  else if (m_model){
-    m_globalTransform = m_localTransform * m_model->getTransform();
-  }
-  else {
-    m_globalTransform = m_localTransform;
-  }
-
-  m_dirty = false;
+  const Matrix4 localMatrix = ScaleRotationTranslationMatrix(scale, rotation, position);
+  m_restMatrices.push_back(parent == ModelNode::NO_PARENT
+                               ? localMatrix
+                               : localMatrix * m_restMatrices[parent]);
+  return index;
 }
 
 /*
- * Find a child node by name
  */
-ModelNode*
-ModelNode::findChildByName(const String& name) {
-  for (ModelNode* child : m_children) {
-    if (child->getName() == name) {
-      return child;
-    }
-  }
-  return nullptr;
-}
-
-/*
- * Mark this node and all its children as dirty (needing transform update)
- */
-void
-ModelNode::markDirty() {
-  m_dirty = true;
-  for (ModelNode* child : m_children) {
-    child->markDirty();
-  }
-}
-
-/*
- * Model constructor
- */
-Model::Model() : m_globalTransform(Matrix4::IDENTITY) {}
-
-/*
- * Model destructor
- */
-Model::~Model() {
-  // Limpiar todos los nodos
-  for (ModelNode* node : m_allNodes) {
-    delete node;
-  }
-  m_allNodes.clear();
-  m_rootNodes.clear();
-  m_nodeMap.clear();
-  m_meshToNodesMap.clear();
-}
-
-/*
- * Create a node without a transform
- */
-ModelNode*
-Model::createNode(const String& name, ModelNode* parent) {
-  return createNode(name, Matrix4::IDENTITY, parent);
-}
-
-/*
- * Create a node with a transform
- */
-ModelNode*
-Model::createNode(const String& name, const Matrix4& localTransform, ModelNode* parent) {
-  ModelNode* node = new ModelNode(name, this, parent);
-  node->setLocalTransform(localTransform);
-
-  if (parent) {
-    parent->addChild(node);
-  }
-  else {
-    m_rootNodes.push_back(node);
-  }
-
-  addNodeToStructures(node);
-  return node;
-}
-
-/*
- * Find a node by name
- */
-ModelNode*
-Model::findNode(const String& name) const {
-  auto it = m_nodeMap.find(name);
-  if (it != m_nodeMap.end()) {
-    return it->second;
-  }
-  return nullptr;
-}
-
-/*
- * Update transforms for all dirty nodes
- */
-void
-Model::updateTransforms() {
-  // Primero actualizar los nodos raíz
-  for (ModelNode* root : m_rootNodes) {
-    updateNodeHierarchy(root);
-  }
-}
-
-/*
- * Update transform for a specific node
- */
-void
-Model::updateNodeTransform(ModelNode* node, const Matrix4& localTransform) {
-  if (node) {
-    node->setLocalTransform(localTransform);
-    updateNodeHierarchy(node);
-  }
-}
-
-/*
- * Update a node and its hierarchy
- */
-void
-Model::updateNodeHierarchy(ModelNode* node) {
-  if (node->isDirty()) {
-    node->updateGlobalTransform();
-
-    for (ModelNode* child : node->getChildren()) {
-      updateNodeHierarchy(child);
-    }
-  }
-}
-
-/*
- * Calculate bounds for the model
- */
-SphereBoxBounds
-Model::calculateBounds() const
+uint32
+Model::addNode(StringView name,
+               uint32 parent,
+               const Matrix4& localMatrix,
+               Span<const uint32> meshIndices)
 {
-  bool bFirst = true;
-  AABox bounds(Vector3::ZERO, Vector3::ZERO);
-  for (const ModelNode* node : m_allNodes) {
-    for (const SPtr<Mesh>& mesh : node->getMeshes()) {
-      const AABox meshBounds =
-          mesh->getBounds().getBox().getTransformed(node->getGlobalTransform());
-      if (bFirst) {
-        bounds = meshBounds;
-        bFirst = false;
-      }
-      else {
-        bounds += meshBounds;
-      }
-    }
+  Vector3 scale = Vector3::UNIT;
+  Quaternion rotation = Quaternion::IDENTITY;
+  Vector3 position = Vector3::ZERO;
+  if (!localMatrix.decompose(scale, rotation, position)) {
+    // A zero scale hides what the node draws, as the source matrix did.
+    scale = Vector3::ZERO;
+    const Vector4 origin = localMatrix.transformPosition(Vector3::ZERO);
+    position = Vector3(origin.x, origin.y, origin.z);
   }
-  return SphereBoxBounds(bounds);
-}
-
-/*
- * Set the global transform for the entire model
- */
-void
-Model::setTransform(const Matrix4& transform) {
-  m_globalTransform = transform;
-
-  // Marcar todos los nodos raíz como dirty para que se actualicen
-  for (ModelNode* root : m_rootNodes) {
-    root->markDirty();
-  }
-}
-
-void
-Model::registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node) {
-  m_meshToNodesMap[mesh].push_back(node);
+  return addNode(name, parent, position, rotation, scale, meshIndices);
 }
 
 /*
@@ -287,51 +92,37 @@ Model::addMaterialSlot(ModelMaterialSlot slot)
   return static_cast<uint32>(m_materialSlots.size() - 1);
 }
 
+/*
+ */
 void
-Model::unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node)
+Model::setSlotMaterial(uint32 slot, const SPtr<MaterialAsset>& material)
 {
-  auto& nodes = m_meshToNodesMap[mesh];
-  Algorithm::removeAll(nodes, node);
-
-  if (nodes.empty()) {
-    m_meshToNodesMap.erase(mesh);
+  if (slot < m_materialSlots.size()) {
+    m_materialSlots[slot].material = material;
   }
 }
 
 /*
- * Add a node to internal structures
  */
-void
-Model::addNodeToStructures(ModelNode* node) {
-  m_allNodes.push_back(node);
-
-  if (node->getName()[0] != '\0') {
-    m_nodeMap[node->getName()] = node;
-  }
-}
-
-/*
- * Remove a node from internal structures
- */
-void
-Model::removeNodeFromStructures(ModelNode* node)
+SphereBoxBounds
+Model::calculateBounds() const
 {
-  Algorithm::removeFirst(m_allNodes, node);
-
-  if (node->getName()[0] != '\0') {
-    m_nodeMap.erase(node->getName());
-  }
-
-  Algorithm::removeFirst(m_rootNodes, node);
-
-  for (const auto& mesh : node->getMeshes()) {
-    auto& nodes = m_meshToNodesMap[mesh];
-    Algorithm::removeAll(nodes, node);
-
-    if (nodes.empty()) {
-      m_meshToNodesMap.erase(mesh);
+  bool bFirst = true;
+  AABox bounds(Vector3::ZERO, Vector3::ZERO);
+  for (uint32 nodeIndex = 0; nodeIndex < m_nodes.size(); ++nodeIndex) {
+    for (const uint32 meshIndex : getNodeMeshes(nodeIndex)) {
+      const AABox meshBounds =
+          m_meshes[meshIndex]->getBounds().getBox().getTransformed(m_restMatrices[nodeIndex]);
+      if (bFirst) {
+        bounds = meshBounds;
+        bFirst = false;
+      }
+      else {
+        bounds += meshBounds;
+      }
     }
   }
+  return SphereBoxBounds(bounds);
 }
 
 } // namespace chEngineSDK

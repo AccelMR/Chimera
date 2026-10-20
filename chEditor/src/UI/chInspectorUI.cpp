@@ -338,7 +338,7 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
     ImGui::Text("Nodes: %u", model ? model->getNodeCount() : 0u);
   }
   else if (model && nodeIndex < model->getNodeCount()) {
-    const ANSICHAR* nodeName = model->getAllNodes()[nodeIndex]->getName();
+    const ANSICHAR* nodeName = model->getNodes()[nodeIndex].name.c_str();
     if (modelComponent.getMeshIndex() == ModelComponent::ALL) {
       ImGui::Text("Part: node %s", nodeName);
     }

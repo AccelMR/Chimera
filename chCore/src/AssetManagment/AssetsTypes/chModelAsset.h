@@ -2,9 +2,9 @@
 /**
  * @file chModelAsset.h
  * @author AccelMR
- * @date 2025/04/26
+ * @date 2025/07/14
  * @brief
- *  This file contains the ModelAsset class for managing model assets in the engine.
+ *  Asset that holds a Model.
  */
 /************************************************************************/
 #pragma once
@@ -15,40 +15,33 @@
 
 namespace chEngineSDK {
 class Model;
-class ModelNode;
-class Mesh;
-class VertexLayout;
-enum class IndexType : uint32;
 
+/**
+ * Exists to save and load a Model as an asset; the bytes of the model come from
+ * ModelSerializer, and the materials of its slots are loaded as references.
+ */
 class CH_CORE_EXPORT ModelAsset : public IAsset
 {
  public:
   ModelAsset() = delete;
   ModelAsset(const AssetMetadata& metadata) : IAsset(metadata) {}
   ModelAsset(const AssetMetadata& metadata, const SPtr<Model>& model)
-    : IAsset(metadata), m_model(model) {
+    : IAsset(metadata), m_model(model)
+  {
     CH_ASSERT(m_model && "Model cannot be null");
   }
 
   ~ModelAsset() = default;
 
-  NODISCARD FORCEINLINE SPtr<Model>
-  getModel() const {
-    return m_model;
-  }
+  NODISCARD FORCEINLINE const SPtr<Model>&
+  getModel() const { return m_model; }
 
  protected:
   bool
-  serialize(SPtr<DataStream>) override;
+  serialize(SPtr<DataStream> stream) override;
 
- /**
-  * Deserialize the model asset from a data stream
-  *
-  * @param stream Data stream to read from
-  * @return true if successful, false otherwise
-  */
   bool
-  deserialize(SPtr<DataStream>) override;
+  deserialize(SPtr<DataStream> stream) override;
 
   void
   clearAssetData() override;
@@ -56,42 +49,9 @@ class CH_CORE_EXPORT ModelAsset : public IAsset
   void
   collectReferences(Vector<UUID>& outReferences) const override;
 
-  bool
-  deserializeMaterialSlots(DataStream& stream, uint32 slotCount);
-
-  void
-  serializeNodeTree(SPtr<DataStream> stream);
-  void
-  serializeNode(SPtr<DataStream> stream, ModelNode* node,
-                const UnorderedMap<SPtr<Mesh>, uint32>& meshToIndexMap);
-  void
-  serializeUniqueMeshes(SPtr<DataStream> stream);
-  void
-  serializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh);
-  void
-  serializeVertexLayout(SPtr<DataStream> stream, const VertexLayout& layout);
-
-  // Deserialization helper methods
-  bool
-  deserializeNodeTree(SPtr<DataStream> stream, const Vector<SPtr<Mesh>>& uniqueMeshes);
-  bool
-  deserializeNode(SPtr<DataStream> stream, ModelNode* parent,
-                  const Vector<SPtr<Mesh>>& uniqueMeshes);
-  bool
-  deserializeUniqueMeshes(SPtr<DataStream> stream, Vector<SPtr<Mesh>>& uniqueMeshes,
-                          uint32 expectedMeshCount);
-  bool
-  deserializeMesh(SPtr<DataStream> stream, SPtr<Mesh> mesh);
-  bool
-  deserializeVertexLayout(SPtr<DataStream> stream, VertexLayout& layout,
-                          uint32 expectedAttributeCount);
-
-  void
-  setMeshIndexDataRaw(SPtr<Mesh> mesh, const Vector<uint8>& data, uint32 indexCount,
-                      IndexType indexType);
-
-  SPtr<Model> m_model; ///< The model data associated with this asset
-}; // class ModelAsset
+ private:
+  SPtr<Model> m_model;
+};
 DECLARE_ASSET_TYPE(ModelAsset);
 
 } // namespace chEngineSDK

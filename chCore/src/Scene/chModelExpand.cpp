@@ -72,41 +72,28 @@ addPart(const ExpandSource& source,
 }
 
 /*
- * Nodes without meshes become empty objects, so the hierarchy below them stays.
- */
-void
-addNodeObject(Scene& scene,
-              const ExpandSource& source,
-              const UnorderedMap<const ModelNode*, uint32>& nodeIndices,
-              const ModelNode& node,
-              GameObject& parent)
-{
-  const SPtr<GameObject> gameObject = scene.createGameObject(node.getName(), &parent);
-  // A root node's global transform also holds the model's own transform.
-  setLocalTransform(*gameObject, node.getParent() ? node.getLocalTransform()
-                                                  : node.getGlobalTransform());
-  if (!node.getMeshes().empty()) {
-    addPart(source, *gameObject, nodeIndices.at(&node), ModelComponent::ALL, Vector3::ZERO);
-  }
-  for (const ModelNode* child : node.getChildren()) {
-    addNodeObject(scene, source, nodeIndices, *child, *gameObject);
-  }
-}
-
-/*
+ * Parents come before their children in the model, so each node's object can be made
+ * under its parent's in one pass. Nodes without meshes become empty objects, so the
+ * hierarchy below them stays.
  */
 void
 expandPerNode(Scene& scene, const ExpandSource& source, GameObject& root)
 {
-  const Vector<ModelNode*>& nodes = source.model->getAllNodes();
-  UnorderedMap<const ModelNode*, uint32> nodeIndices;
-  nodeIndices.reserve(nodes.size());
-  for (SIZE_T index = 0; index < nodes.size(); ++index) {
-    nodeIndices.emplace(nodes[index], static_cast<uint32>(index));
-  }
+  const Vector<ModelNode>& nodes = source.model->getNodes();
+  Vector<GameObject*> objects(nodes.size(), nullptr);
+  for (uint32 nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
+    const ModelNode& node = nodes[nodeIndex];
+    GameObject* parent = node.parent == ModelNode::NO_PARENT ? &root : objects[node.parent];
+    const SPtr<GameObject> gameObject = scene.createGameObject(node.name, parent);
+    objects[nodeIndex] = gameObject.get();
 
-  for (const ModelNode* node : source.model->getRootNodes()) {
-    addNodeObject(scene, source, nodeIndices, *node, root);
+    Transform& transform = gameObject->getTransform();
+    transform.setLocalPosition(node.position);
+    transform.setLocalRotation(node.rotation);
+    transform.setLocalScale(node.scale);
+    if (node.meshCount > 0) {
+      addPart(source, *gameObject, nodeIndex, ModelComponent::ALL, Vector3::ZERO);
+    }
   }
 }
 
@@ -118,15 +105,16 @@ expandPerNode(Scene& scene, const ExpandSource& source, GameObject& root)
 void
 expandPerMesh(Scene& scene, const ExpandSource& source, GameObject& root)
 {
-  const Vector<ModelNode*>& nodes = source.model->getAllNodes();
+  const Vector<ModelNode>& nodes = source.model->getNodes();
+  const Vector<SPtr<Mesh>>& modelMeshes = source.model->getMeshes();
   const Vector<ModelMaterialSlot>& slots = source.model->getMaterialSlots();
-  for (SIZE_T nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
-    const ModelNode& node = *nodes[nodeIndex];
-    const Vector<SPtr<Mesh>>& meshes = node.getMeshes();
+  for (uint32 nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
+    const ModelNode& node = nodes[nodeIndex];
+    const Span<const uint32> meshes = source.model->getNodeMeshes(nodeIndex);
     for (SIZE_T meshIndex = 0; meshIndex < meshes.size(); ++meshIndex) {
-      const Mesh& mesh = *meshes[meshIndex];
+      const Mesh& mesh = *modelMeshes[meshes[meshIndex]];
       // A node with several meshes repeats its name, so the material tells them apart.
-      String name(node.getName());
+      String name(node.name);
       const uint32 slot = mesh.getMaterialSlot();
       if (meshes.size() > 1) {
         name = slot < slots.size() && !slots[slot].name.empty()
@@ -136,8 +124,9 @@ expandPerMesh(Scene& scene, const ExpandSource& source, GameObject& root)
 
       const Vector3 pivot = mesh.getBounds().center;
       const SPtr<GameObject> gameObject = scene.createGameObject(name, &root);
-      setLocalTransform(*gameObject, TranslationMatrix(pivot) * node.getGlobalTransform());
-      addPart(source, *gameObject, static_cast<uint32>(nodeIndex),
+      setLocalTransform(*gameObject,
+                        TranslationMatrix(pivot) * source.model->getNodeRestMatrix(nodeIndex));
+      addPart(source, *gameObject, nodeIndex,
               static_cast<uint32>(meshIndex), pivot);
     }
   }
@@ -159,7 +148,6 @@ ModelExpand::expand(Scene& scene, GameObject& gameObject, ModelExpandMode mode)
                       .model = whole->getModel(),
                       .overrides = {},
                       .bEnabled = true};
-  source.model->updateTransforms();
   source.overrides.resize(source.model->getMaterialSlots().size());
   for (const uint32 slot : whole->getUsedMaterialSlots()) {
     source.overrides[slot] = whole->getMaterialOverride(slot);

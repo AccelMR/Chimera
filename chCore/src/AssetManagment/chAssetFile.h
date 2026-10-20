@@ -23,9 +23,8 @@ struct AssetFileHeader
 {
   static constexpr uint32 MAGIC = 0x53414843; // "CHAS" as the bytes appear in the file
   // Version 1 also stored the name, the folder and the editor data, which now come from
-  // where the file is and from its .meta file.
+  // where the file is and from its .meta file; it is no longer read.
   static constexpr uint32 FORMAT_VERSION = 2;
-  static constexpr uint32 OLDEST_READABLE_VERSION = 1;
 
   uint32 magic = MAGIC;
   uint32 formatVersion = FORMAT_VERSION;
@@ -40,12 +39,6 @@ struct AssetFileInfo
   UUID uuid = UUID::null();
   UUID assetType = UUID::null();
   uint32 formatVersion = AssetFileHeader::FORMAT_VERSION;
-
-  // Only filled from files of format version 1, which kept the editor data inside, so the
-  // editor can move it into a .meta file.
-  uint64 legacyCreationTime = 0;
-  String legacyEngineVersion;
-  String legacyImportedPath;
 };
 
 /**
@@ -86,8 +79,6 @@ class CH_CORE_EXPORT AssetFile
 
   // Above any real asset; only a broken file asks for more.
   static constexpr uint32 MAX_REFERENCES = 65536;
-  // The metadata block of format version 1, which readInfo skips over.
-  static constexpr SIZE_T LEGACY_METADATA_SIZE = 664;
 };
 
 } // namespace chEngineSDK

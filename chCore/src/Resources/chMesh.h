@@ -89,10 +89,26 @@ class CH_CORE_EXPORT Mesh
   NODISCARD FORCEINLINE const Vector<uint8>&
   getVertexData() const { return m_vertexData; }
 
+  /**
+   * Raw vertices in the current vertex layout.
+   */
   FORCEINLINE void
-  setVertexData(const Vector<uint8>& data, uint32 vertexCount) {
-    m_vertexData = data;
+  setVertexData(Vector<uint8> data, uint32 vertexCount)
+  {
+    m_vertexData = std::move(data);
     m_vertexCount = vertexCount;
+    onDataChanged();
+  }
+
+  /**
+   * Raw indices of the given type.
+   */
+  FORCEINLINE void
+  setIndexData(Vector<uint8> data, uint32 indexCount, IndexType indexType)
+  {
+    m_indexData = std::move(data);
+    m_indexCount = indexCount;
+    m_indexType = indexType;
     onDataChanged();
   }
 

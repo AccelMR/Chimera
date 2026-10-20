@@ -12,7 +12,6 @@
 
 #include "chAssetManager.h"
 
-#include <chrono>
 
 #include "chAssetFile.h"
 #include "chConfigFile.h"
@@ -372,27 +371,6 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
   if (metaFile.load(AssetMeta::getPath(file))) {
     AssetMeta::read(metaFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
     asset->readEditorValues(metaFile);
-  }
-  else if (info.formatVersion == 1) {
-    // Files of format version 1 kept this data inside; it moves to the .meta file, and the
-    // asset file itself loses it the next time it is saved.
-    AssetEditorData& editorData = asset->m_editorData;
-    const auto legacyTime =
-        std::chrono::system_clock::time_point(std::chrono::system_clock::duration(
-            static_cast<std::chrono::system_clock::rep>(info.legacyCreationTime)));
-    editorData.creationTime = static_cast<uint64>(
-        std::chrono::duration_cast<std::chrono::seconds>(legacyTime.time_since_epoch())
-            .count());
-    editorData.engineVersion = info.legacyEngineVersion;
-    // Parts of a file were stored as "<file>#<part>".
-    const SIZE_T partStart = info.legacyImportedPath.find('#');
-    editorData.sourceFile = Path(info.legacyImportedPath.substr(0, partStart));
-    if (partStart != String::npos) {
-      editorData.sourcePart = info.legacyImportedPath.substr(partStart + 1);
-    }
-    if (AssetMeta::save(file, editorData)) {
-      CH_LOG_INFO(AssetSystem, "Wrote the .meta file of {0} from its old format", file);
-    }
   }
 #endif // USING(CH_EDITOR)
 

@@ -121,7 +121,7 @@ makePartMesh(const Mesh& source, Vector<uint8> vertexData, uint32 vertexCount,
              const Vector<uint32>& indices)
 {
   SPtr<Mesh> part = chMakeShared<Mesh>();
-  part->setVertexData(vertexData, vertexCount);
+  part->setVertexData(std::move(vertexData), vertexCount);
   part->setVertexLayout(source.getVertexLayout());
   part->setMaterialSlot(source.getMaterialSlot());
   if (vertexCount > std::numeric_limits<uint16>::max()) {

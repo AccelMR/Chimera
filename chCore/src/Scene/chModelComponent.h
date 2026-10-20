@@ -36,7 +36,7 @@ class CH_CORE_EXPORT ModelComponent : public Component
   explicit ModelComponent(const SPtr<ModelAsset>& modelAsset);
 
   /**
-   * Draws one node (an index of Model::getAllNodes) and one of its meshes, or all of them
+   * Draws one node (an index of Model::getNodes) and one of its meshes, or all of them
    * with ALL. The object stands at pivot, a point in the node's space, so the meshes are
    * drawn moved back by it.
    */

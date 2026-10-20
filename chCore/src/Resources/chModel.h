@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2025/04/18
  * @brief
- *  Model class with a hierarchical tree structure of nodes.
+ *  Model made of a hierarchy of nodes that draw meshes.
  */
 /************************************************************************/
 #pragma once
@@ -12,14 +12,11 @@
 #include "chMatrix4.h"
 #include "chMesh.h"
 #include "chPrerequisitesCore.h"
+#include "chQuaternion.h"
 #include "chUUID.h"
+#include "chVector3.h"
 
 namespace chEngineSDK {
-
-/**
- * Forward declaration of Model class
- */
-class Model;
 class MaterialAsset;
 
 /**
@@ -34,157 +31,59 @@ struct ModelMaterialSlot
 };
 
 /**
- * Structure representing a node in the model hierarchy
+ * One node of a Model: its place in the hierarchy, its rest transform relative to its
+ * parent and the range of meshes it draws.
  */
-class CH_CORE_EXPORT ModelNode
+struct ModelNode
 {
- public:
-  // Constructors/Destructor
-  ModelNode(const String& nodeName, Model* ownerModel, ModelNode* parent = nullptr);
-  ~ModelNode() = default;
+  static constexpr uint32 NO_PARENT = 0xFFFFFFFFu;
 
-  // Getters
-  NODISCARD FORCEINLINE const ANSICHAR*
-  getName() const { return m_name; }
-
-  NODISCARD FORCEINLINE ModelNode*
-  getParent() const { return m_parent; }
-
-  NODISCARD FORCEINLINE const Vector<ModelNode*>&
-  getChildren() const { return m_children; }
-
-  NODISCARD FORCEINLINE const Vector<SPtr<Mesh>>&
-  getMeshes() const { return m_meshes; }
-
-  NODISCARD FORCEINLINE const Matrix4&
-  getLocalTransform() const { return m_localTransform; }
-
-  NODISCARD FORCEINLINE const Matrix4&
-  getGlobalTransform() const { return m_globalTransform; }
-
-  NODISCARD FORCEINLINE Model*
-  getModel() const { return m_model; }
-
-  NODISCARD FORCEINLINE bool
-  isDirty() const { return m_dirty; }
-
-  // Operations
-  void
-  addChild(ModelNode* child);
-
-  void
-  removeChild(ModelNode* child);
-
-  void
-  addMesh(SPtr<Mesh> mesh);
-
-  void
-  removeMesh(SPtr<Mesh> mesh);
-
-  void
-  setLocalTransform(const Matrix4& transform);
-
-  void
-  updateGlobalTransform();
-
-  // Find operations
-  ModelNode*
-  findChildByName(const String& name);
-
-  // Mark this node and all children as needing transform update
-  void
-  markDirty();
-
- private:
-  ANSICHAR m_name[64]; ///< Node name
-  ModelNode* m_parent;
-  Vector<ModelNode*> m_children;
-  Vector<SPtr<Mesh>> m_meshes;
-
-  Matrix4 m_localTransform;
-  Matrix4 m_globalTransform;
-
-  Model* m_model;
-  bool m_dirty;
+  String name;
+  // Lower than the node's own index, so a parent always comes before its children.
+  uint32 parent = NO_PARENT;
+  Vector3 position = Vector3::ZERO;
+  Quaternion rotation = Quaternion::IDENTITY;
+  Vector3 scale = Vector3::UNIT;
+  // Range in Model::getNodeMeshes.
+  uint32 firstMesh = 0;
+  uint32 meshCount = 0;
 };
 
 /**
- * Class that represents a 3D model composed of a hierarchy of nodes with meshes.
+ * Exists to hold what a source file describes, read only once built, so every object that
+ * draws it shares one copy. Nodes are a flat array with parents before children, which lets
+ * the transforms of the whole hierarchy be computed in one pass; meshes are a separate
+ * array, so nodes can share them.
  */
 class CH_CORE_EXPORT Model
 {
  public:
   /**
-   * Default constructor
+   * Returns the index of the mesh in getMeshes.
    */
-  Model();
+  uint32
+  addMesh(SPtr<Mesh> mesh);
 
   /**
-   * Destructor
+   * The parent must be NO_PARENT or a node added before; meshIndices are indices of
+   * getMeshes. Returns the index of the node.
    */
-  ~Model();
+  uint32
+  addNode(StringView name,
+          uint32 parent,
+          const Vector3& position,
+          const Quaternion& rotation,
+          const Vector3& scale,
+          Span<const uint32> meshIndices);
 
   /**
-   * Create a new node in the model
-   *
-   * @param name Name of the node
-   * @param parent Parent node (nullptr for root nodes)
-   * @return Pointer to the created node
+   * Same as above with the local transform as a matrix, split into its parts. Shear is lost.
    */
-  ModelNode*
-  createNode(const String& name, ModelNode* parent = nullptr);
-
-  /**
-   * Create a new node in the model with a local transform
-   *
-   * @param name Name of the node
-   * @param localTransform Local transformation matrix
-   * @param parent Parent node (nullptr for root nodes)
-   * @return Pointer to the created node
-   */
-  ModelNode*
-  createNode(const String& name, const Matrix4& localTransform, ModelNode* parent = nullptr);
-
-  /**
-   * Find a node by name
-   *
-   * @param name Name of the node to find
-   * @return Pointer to the node, or nullptr if not found
-   */
-  ModelNode*
-  findNode(const String& name) const;
-
-  /**
-   * Get the root nodes of the model
-   *
-   * @return Vector of root nodes
-   */
-  NODISCARD FORCEINLINE const Vector<ModelNode*>&
-  getRootNodes() const { return m_rootNodes; }
-
-  /**
-   * Get all nodes in the model
-   *
-   * @return Vector of all nodes
-   */
-  NODISCARD FORCEINLINE const Vector<ModelNode*>&
-  getAllNodes() const { return m_allNodes; }
-
-  /**
-   * Get the number of nodes in the model
-   *
-   * @return Number of nodes
-   */
-  NODISCARD FORCEINLINE uint32
-  getNodeCount() const { return static_cast<uint32>(m_allNodes.size()); }
-
-  /**
-   * Get all meshes used in the model
-   *
-   * @return Map of meshes and their nodes
-   */
-  NODISCARD FORCEINLINE const UnorderedMap<SPtr<Mesh>, Vector<ModelNode*>>&
-  getMeshToNodesMap() const { return m_meshToNodesMap; }
+  uint32
+  addNode(StringView name,
+          uint32 parent,
+          const Matrix4& localMatrix,
+          Span<const uint32> meshIndices);
 
   /**
    * Returns the index of the new slot.
@@ -192,104 +91,57 @@ class CH_CORE_EXPORT Model
   uint32
   addMaterialSlot(ModelMaterialSlot slot);
 
+  /**
+   * Sets the loaded asset of a slot whose UUID is already known.
+   */
+  void
+  setSlotMaterial(uint32 slot, const SPtr<MaterialAsset>& material);
+
+  NODISCARD FORCEINLINE const Vector<ModelNode>&
+  getNodes() const noexcept { return m_nodes; }
+
+  NODISCARD FORCEINLINE uint32
+  getNodeCount() const noexcept { return static_cast<uint32>(m_nodes.size()); }
+
+  NODISCARD FORCEINLINE const Vector<SPtr<Mesh>>&
+  getMeshes() const noexcept { return m_meshes; }
+
+  NODISCARD FORCEINLINE uint32
+  getMeshCount() const noexcept { return static_cast<uint32>(m_meshes.size()); }
+
+  /**
+   * Indices into getMeshes of the meshes the node draws.
+   */
+  NODISCARD FORCEINLINE Span<const uint32>
+  getNodeMeshes(uint32 nodeIndex) const
+  {
+    const ModelNode& node = m_nodes[nodeIndex];
+    return Span<const uint32>(m_nodeMeshes).subspan(node.firstMesh, node.meshCount);
+  }
+
+  /**
+   * The node's rest transform in the model's space.
+   */
+  NODISCARD FORCEINLINE const Matrix4&
+  getNodeRestMatrix(uint32 nodeIndex) const { return m_restMatrices[nodeIndex]; }
+
   NODISCARD FORCEINLINE const Vector<ModelMaterialSlot>&
-  getMaterialSlots() const { return m_materialSlots; }
+  getMaterialSlots() const noexcept { return m_materialSlots; }
 
   /**
-   * Update transforms for all nodes that need updating
+   * Bounds of every mesh of every node, in the model's space, in the rest pose.
    */
-  void
-  updateTransforms();
-
-  /**
-   * Update transform for a specific node
-   *
-   * @param node Node to update
-   * @param localTransform New local transform
-   */
-  void
-  updateNodeTransform(ModelNode* node, const Matrix4& localTransform);
-
-  /**
-   * Calculate the bounds of the model combining all mesh bounds
-   *
-   * @return SphereBoxBounds containing all meshes
-   */
-  SphereBoxBounds
+  NODISCARD SphereBoxBounds
   calculateBounds() const;
 
-  /**
-   * Set the global transform matrix for the model
-   *
-   * @param transform The global transform matrix
-   */
-  void
-  setTransform(const Matrix4& transform);
-
-  /**
-   * Get the global transform matrix for the model
-   *
-   * @return The global transform matrix
-   */
-  const Matrix4&
-  getTransform() const { return m_globalTransform; }
-
-  /**
-   * Get the number of meshes in the model
-   *
-   * @return Number of meshes
-   */
-  void
-  registerMeshForNode(SPtr<Mesh> mesh, ModelNode* node);
-
-  /**
-   * Unregister a mesh from a node
-   *
-   * @param mesh Mesh to unregister
-   * @param node Node to unregister the mesh from
-   */
-  void
-  unregisterMeshForNode(SPtr<Mesh> mesh, ModelNode* node);
-
  private:
-  /**
-   * Add a node to the model's internal structures
-   */
-  void
-  addNodeToStructures(ModelNode* node);
-
-  /**
-   * Remove a node from the model's internal structures
-   */
-  void
-  removeNodeFromStructures(ModelNode* node);
-
- private:
-  /*
-    * Update the transform of a node and its hierarchy
-    *
-    * @param node Node to update
-  */
-  void
-  updateNodeHierarchy(ModelNode* node);
-
- private:
-  // Root structure
-  Vector<ModelNode*> m_rootNodes;
-
-  // All nodes for easy iteration
-  Vector<ModelNode*> m_allNodes;
-
-  // Map for quick node lookups
-  UnorderedMap<String, ModelNode*> m_nodeMap;
-
-  // Map to track which nodes contain each mesh
-  UnorderedMap<SPtr<Mesh>, Vector<ModelNode*>> m_meshToNodesMap;
-
+  Vector<ModelNode> m_nodes;
+  // One per node.
+  Vector<Matrix4> m_restMatrices;
+  // Every node's mesh indices one after the other; each node keeps its range.
+  Vector<uint32> m_nodeMeshes;
+  Vector<SPtr<Mesh>> m_meshes;
   Vector<ModelMaterialSlot> m_materialSlots;
-
-  // Global transform for the entire model
-  Matrix4 m_globalTransform;
 };
 
 } // namespace chEngineSDK

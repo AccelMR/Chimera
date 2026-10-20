@@ -213,29 +213,25 @@ processMesh(const aiMesh& mesh)
 }
 
 /*
+ * Nodes are added before their children, the order the asset keeps, so the node indices
+ * saved in scenes stay valid.
  */
 static void
 processNode(const aiNode& node,
-            const Vector<Vector<SPtr<Mesh>>>& meshes,
+            const Vector<Vector<uint32>>& meshIndices,
             Model& model,
-            ModelNode* parentNode)
+            uint32 parentNode)
 {
-  const Matrix4 nodeLocalTransform = convertAssimpMatrix(node.mTransformation);
-  ModelNode* modelNode = model.createNode(node.mName.C_Str(), nodeLocalTransform, parentNode);
-
-  CH_ASSERT(parentNode == nullptr ||
-            Algorithm::contains(parentNode->getChildren(), modelNode));
-
+  Vector<uint32> nodeMeshes;
   for (uint32 i = 0; i < node.mNumMeshes; i++) {
-    for (const SPtr<Mesh>& mesh : meshes[node.mMeshes[i]]) {
-      if (mesh) {
-        modelNode->addMesh(mesh);
-      }
-    }
+    const Vector<uint32>& indices = meshIndices[node.mMeshes[i]];
+    nodeMeshes.insert(nodeMeshes.end(), indices.begin(), indices.end());
   }
+  const uint32 modelNode = model.addNode(node.mName.C_Str(), parentNode,
+                                         convertAssimpMatrix(node.mTransformation), nodeMeshes);
 
   for (uint32 i = 0; i < node.mNumChildren; i++) {
-    processNode(*node.mChildren[i], meshes, model, modelNode);
+    processNode(*node.mChildren[i], meshIndices, model, modelNode);
   }
 }
 
@@ -689,7 +685,7 @@ MeshImportTask::readSource(ImportProgress& progress)
   findMaterialTextures();
   m_model = chMakeShared<Model>();
   // Converted once per assimp mesh, so nodes that share one share the Meshes too.
-  Vector<Vector<SPtr<Mesh>>> meshes(m_scene->mNumMeshes);
+  Vector<Vector<uint32>> meshIndices(m_scene->mNumMeshes);
   for (uint32 i = 0; i < m_scene->mNumMeshes; ++i) {
     if (progress.isCancelled()) {
       return false;
@@ -698,11 +694,16 @@ MeshImportTask::readSource(ImportProgress& progress)
                                                           static_cast<float>(i) /
                                                           static_cast<float>(m_scene->mNumMeshes));
     SPtr<Mesh> mesh = processMesh(*m_scene->mMeshes[i]);
-    meshes[i] =
+    if (!mesh) {
+      continue;
+    }
+    const Vector<SPtr<Mesh>> parts =
         m_settings.splitParts ? MeshSplit::splitParts(mesh) : Vector<SPtr<Mesh>>{mesh};
+    for (const SPtr<Mesh>& part : parts) {
+      meshIndices[i].push_back(m_model->addMesh(part));
+    }
   }
-  processNode(*m_scene->mRootNode, meshes, *m_model, nullptr);
-  m_model->updateTransforms();
+  processNode(*m_scene->mRootNode, meshIndices, *m_model, ModelNode::NO_PARENT);
 
   // Every texture is read here, although a material reused from an earlier import of the
   // same file does not need its own: which ones are reused is only known on the main thread.
