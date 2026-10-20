@@ -18,6 +18,7 @@
 
 namespace chEngineSDK {
 class MaterialAsset;
+class Skeleton;
 class SkeletonAsset;
 
 /**
@@ -110,6 +111,14 @@ class CH_CORE_EXPORT Model
 
   void
   setNodeBone(uint32 nodeIndex, uint32 bone);
+
+  /**
+   * Makes a skeleton from the joint nodes: the joints, every node between them and the
+   * lowest node above all of them, so the nodes over the skeleton (Armature, an axis fix)
+   * stay plain nodes. Sets the bone of each of those nodes. Null without joints.
+   */
+  NODISCARD SPtr<Skeleton>
+  buildSkeleton(Span<const uint32> jointNodes);
 
   NODISCARD FORCEINLINE bool
   hasSkeleton() const noexcept { return !m_skeletonId.isNull(); }

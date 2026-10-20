@@ -42,6 +42,9 @@ struct ImportSettings
   bool srgb = true;
   bool generateMips = true;
 
+  // Models: false imports only the animations of the file, matched with a skeleton of the
+  // project. A file without meshes is always imported that way.
+  bool importModel = true;
   // Models: how the model becomes GameObjects when it is dropped in a scene.
   ModelExpandMode expandMode = ModelExpandMode::Single;
   // Models: each mesh is cut into the pieces that do not touch, so props merged into one

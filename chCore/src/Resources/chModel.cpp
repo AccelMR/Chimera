@@ -10,6 +10,7 @@
 #include "chModel.h"
 
 #include "chMatrixHelpers.h"
+#include "chSkeleton.h"
 #include "chSphereBoxBounds.h"
 #include "chVector4.h"
 
@@ -119,6 +120,90 @@ Model::setNodeBone(uint32 nodeIndex, uint32 bone)
   if (nodeIndex < m_nodes.size()) {
     m_nodes[nodeIndex].bone = bone;
   }
+}
+
+/*
+ */
+SPtr<Skeleton>
+Model::buildSkeleton(Span<const uint32> jointNodes)
+{
+  Vector<uint8> isJoint(m_nodes.size(), 0);
+  bool bAnyJoint = false;
+  for (const uint32 node : jointNodes) {
+    if (node < m_nodes.size()) {
+      isJoint[node] = 1;
+      bAnyJoint = true;
+    }
+  }
+  if (!bAnyJoint) {
+    return nullptr;
+  }
+
+  Vector<uint32> depths(m_nodes.size(), 0);
+  for (SIZE_T i = 0; i < m_nodes.size(); ++i) {
+    depths[i] = m_nodes[i].parent == ModelNode::NO_PARENT ? 0 : depths[m_nodes[i].parent] + 1;
+  }
+
+  // NO_PARENT when the joints are under different roots: then every node above them is a
+  // bone.
+  uint32 common = ModelNode::NO_PARENT;
+  bool bFirst = true;
+  for (uint32 joint = 0; joint < m_nodes.size(); ++joint) {
+    if (!isJoint[joint]) {
+      continue;
+    }
+    if (bFirst) {
+      common = joint;
+      bFirst = false;
+      continue;
+    }
+    uint32 a = common;
+    uint32 b = joint;
+    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[a] > depths[b]) {
+      a = m_nodes[a].parent;
+    }
+    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[b] > depths[a]) {
+      b = m_nodes[b].parent;
+    }
+    while (a != b) {
+      a = a == ModelNode::NO_PARENT ? a : m_nodes[a].parent;
+      b = b == ModelNode::NO_PARENT ? b : m_nodes[b].parent;
+    }
+    common = a;
+  }
+
+  Vector<uint8> isBone(m_nodes.size(), 0);
+  for (uint32 joint = 0; joint < m_nodes.size(); ++joint) {
+    if (!isJoint[joint]) {
+      continue;
+    }
+    for (uint32 node = joint; node != ModelNode::NO_PARENT && !isBone[node];
+         node = m_nodes[node].parent) {
+      isBone[node] = 1;
+      if (node == common) {
+        break;
+      }
+    }
+  }
+
+  SPtr<Skeleton> skeleton = chMakeShared<Skeleton>();
+  for (uint32 node = 0; node < m_nodes.size(); ++node) {
+    ModelNode& source = m_nodes[node];
+    if (!isBone[node]) {
+      source.bone = ModelNode::NO_BONE;
+      continue;
+    }
+    const uint32 parent = source.parent;
+    const uint32 parentBone = parent != ModelNode::NO_PARENT && isBone[parent]
+                                  ? m_nodes[parent].bone
+                                  : SkeletonBone::NO_PARENT;
+    source.bone = skeleton->addBone({.name = source.name,
+                                     .parent = parentBone,
+                                     .position = source.position,
+                                     .rotation = source.rotation,
+                                     .scale = source.scale});
+  }
+  return skeleton;
 }
 
 /*

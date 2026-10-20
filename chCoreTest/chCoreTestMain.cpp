@@ -1593,6 +1593,7 @@ TEST_CASE("chCore - Asset meta file")
   settings.expandMode = ModelExpandMode::PerMesh;
   settings.splitParts = true;
   settings.autoAlphaMask = false;
+  settings.importModel = false;
   const AssetEditorData data{.creationTime = 1760000000,
                              .engineVersion = "1.2.3",
                              .sourceFile = project.join(Path("../Art/Sponza.gltf")),
@@ -1619,6 +1620,7 @@ TEST_CASE("chCore - Asset meta file")
   REQUIRE(read.importSettings.expandMode == ModelExpandMode::PerMesh);
   REQUIRE(read.importSettings.splitParts);
   REQUIRE_FALSE(read.importSettings.autoAlphaMask);
+  REQUIRE_FALSE(read.importSettings.importModel);
 
   SECTION("Missing and broken values keep the defaults")
   {
@@ -2094,6 +2096,73 @@ TEST_CASE("chCore - Mesh skin weights")
       REQUIRE(vertex.weights[0] == 255);
       REQUIRE(vertex.weights[1] == 0);
     }
+  }
+}
+
+TEST_CASE("chCore - Model skeleton from joints")
+{
+  // Scene > Armature > Hips > Spine > Head, Hips > Leg, Scene > Prop, and a second root.
+  Model model;
+  const auto add = [&model](StringView name, uint32 parent) {
+    return model.addNode(name, parent, Vector3::ZERO, Quaternion::IDENTITY, Vector3::UNIT,
+                         Span<const uint32>());
+  };
+  const uint32 scene = add("Scene", ModelNode::NO_PARENT);
+  const uint32 armature = add("Armature", scene);
+  const uint32 hips = add("Hips", armature);
+  const uint32 spine = add("Spine", hips);
+  const uint32 head = add("Head", spine);
+  const uint32 leg = add("Leg", hips);
+  const uint32 prop = add("Prop", scene);
+  const uint32 other = add("Other", ModelNode::NO_PARENT);
+  const Vector<ModelNode>& nodes = model.getNodes();
+
+  SECTION("Nodes above the lowest common one stay plain nodes")
+  {
+    const uint32 joints[] = {spine, leg};
+    const SPtr<Skeleton> skeleton = model.buildSkeleton(joints);
+    REQUIRE(skeleton);
+    REQUIRE(skeleton->getBoneCount() == 3);
+    REQUIRE(nodes[scene].bone == ModelNode::NO_BONE);
+    REQUIRE(nodes[armature].bone == ModelNode::NO_BONE);
+    REQUIRE(nodes[head].bone == ModelNode::NO_BONE);
+    REQUIRE(skeleton->getBones()[nodes[hips].bone].name == "Hips");
+    REQUIRE(skeleton->getBones()[nodes[hips].bone].parent == SkeletonBone::NO_PARENT);
+    REQUIRE(skeleton->getBones()[nodes[spine].bone].parent == nodes[hips].bone);
+    REQUIRE(skeleton->getBones()[nodes[leg].bone].parent == nodes[hips].bone);
+
+    // Built again, the nodes that are no longer bones lose their bone.
+    const uint32 headOnly[] = {head};
+    const SPtr<Skeleton> single = model.buildSkeleton(headOnly);
+    REQUIRE(single->getBoneCount() == 1);
+    REQUIRE(nodes[head].bone == 0);
+    REQUIRE(nodes[hips].bone == ModelNode::NO_BONE);
+  }
+
+  SECTION("Joints in other branches reach their common node")
+  {
+    const uint32 joints[] = {head, prop};
+    const SPtr<Skeleton> skeleton = model.buildSkeleton(joints);
+    REQUIRE(skeleton->getBoneCount() == 6);
+    REQUIRE(nodes[scene].bone == 0);
+    REQUIRE(nodes[leg].bone == ModelNode::NO_BONE);
+    REQUIRE(skeleton->getBones()[nodes[prop].bone].parent == nodes[scene].bone);
+  }
+
+  SECTION("Joints under different roots make every node above them a bone")
+  {
+    const uint32 joints[] = {head, other};
+    const SPtr<Skeleton> skeleton = model.buildSkeleton(joints);
+    REQUIRE(skeleton->getBoneCount() == 6);
+    REQUIRE(skeleton->getBones()[nodes[scene].bone].parent == SkeletonBone::NO_PARENT);
+    REQUIRE(skeleton->getBones()[nodes[other].bone].parent == SkeletonBone::NO_PARENT);
+  }
+
+  SECTION("No joints, no skeleton")
+  {
+    REQUIRE_FALSE(model.buildSkeleton(Span<const uint32>()));
+    const uint32 outside[] = {99};
+    REQUIRE_FALSE(model.buildSkeleton(outside));
   }
 }
 

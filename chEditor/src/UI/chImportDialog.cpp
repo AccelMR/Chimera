@@ -125,7 +125,9 @@ renderSkeletonOption(ImportSettings& settings)
   ImGui::SetItemTooltip("For models with bones. Auto reuses the skeleton an earlier import "
                         "of this file made, or any skeleton every bone of the file fits, so "
                         "they share animations; else a new one is made. A chosen skeleton "
-                        "that does not fit also makes a new one.");
+                        "that does not fit also makes a new one. Animations imported without "
+                        "their model never make one: they take the chosen skeleton or, with "
+                        "Auto or New, any that fits, else none.");
 }
 
 /*
@@ -134,6 +136,12 @@ void
 renderModelOptions(ImportSettings& settings)
 {
   ImGui::SeparatorText("Model");
+  ImGui::Checkbox("Import model", &settings.importModel);
+  ImGui::SetItemTooltip("Off imports only the animations of the file, for animation files "
+                        "made for a character already imported. Files without meshes are "
+                        "always imported that way.");
+
+  ImGui::BeginDisabled(!settings.importModel);
   int32 expandMode = static_cast<int32>(settings.expandMode);
   if (ImGui::Combo("Place as", &expandMode, kExpandModeLabels,
                    static_cast<int32>(std::size(kExpandModeLabels)))) {
@@ -150,13 +158,17 @@ renderModelOptions(ImportSettings& settings)
   ImGui::Checkbox("Mask materials by texture alpha", &settings.autoAlphaMask);
   ImGui::SetItemTooltip("Materials the file gives no alpha mode become masked when their "
                         "base color texture has transparent pixels.");
+  ImGui::EndDisabled();
 
   renderSkeletonOption(settings);
 
+  // Without the model the animations are all that is imported.
+  ImGui::BeginDisabled(!settings.importModel);
   ImGui::Checkbox("Import animations", &settings.importAnimations);
+  ImGui::EndDisabled();
   ImGui::SetItemTooltip("Each animation of the file becomes an animation clip asset next to "
                         "the model.");
-  ImGui::BeginDisabled(!settings.importAnimations);
+  ImGui::BeginDisabled(settings.importModel && !settings.importAnimations);
   if (ImGui::DragFloat("Sample rate", &settings.animationSampleRate, 1.0f, 1.0f, 240.0f,
                        "%.0f keys/s", ImGuiSliderFlags_AlwaysClamp)) {
     settings.animationSampleRate = Math::max(settings.animationSampleRate, 1.0f);

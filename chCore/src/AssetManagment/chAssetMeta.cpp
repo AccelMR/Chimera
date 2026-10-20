@@ -87,6 +87,7 @@ AssetMeta::write(const AssetEditorData& data, const Path& baseFolder, ConfigFile
   const ImportSettings& settings = data.importSettings;
   outFile.setValue(kImportSection, "SRGB", boolText(settings.srgb));
   outFile.setValue(kImportSection, "GenerateMips", boolText(settings.generateMips));
+  outFile.setValue(kImportSection, "ImportModel", boolText(settings.importModel));
   outFile.setValue(kImportSection, "ExpandMode", getExpandModeName(settings.expandMode));
   outFile.setValue(kImportSection, "SplitParts", boolText(settings.splitParts));
   outFile.setValue(kImportSection, "AutoAlphaMask", boolText(settings.autoAlphaMask));
@@ -133,6 +134,7 @@ AssetMeta::read(const ConfigFile& file, const Path& baseFolder, AssetEditorData&
   ImportSettings& settings = outData.importSettings;
   readBool(file, "SRGB", settings.srgb);
   readBool(file, "GenerateMips", settings.generateMips);
+  readBool(file, "ImportModel", settings.importModel);
   readBool(file, "SplitParts", settings.splitParts);
   readBool(file, "AutoAlphaMask", settings.autoAlphaMask);
   readBool(file, "ImportAnimations", settings.importAnimations);

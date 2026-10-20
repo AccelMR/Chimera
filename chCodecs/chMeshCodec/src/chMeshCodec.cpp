@@ -293,93 +293,22 @@ readSkinWeights(const aiMesh& mesh)
 }
 
 /*
- * The bones are every node a skin uses plus the nodes between them and the lowest node
- * above all of them, so the nodes over the skeleton (Armature, an axis fix) stay plain
- * nodes of the model. Sets the bone of each node. Null when no mesh has a skin.
+ * The skeleton of the given joints (see Model::buildSkeleton), with a warning for bone names
+ * that repeat, because animations find bones by name.
  */
 static SPtr<Skeleton>
-buildSkeleton(Model& model)
+buildSkeleton(Model& model, Span<const uint32> jointNodes)
 {
-  const Vector<ModelNode>& nodes = model.getNodes();
-  Vector<uint8> isJoint(nodes.size(), 0);
-  bool bAnyJoint = false;
-  for (const SPtr<Mesh>& mesh : model.getMeshes()) {
-    for (const uint32 node : mesh->getSkin().boneNodes) {
-      isJoint[node] = 1;
-      bAnyJoint = true;
-    }
-  }
-  if (!bAnyJoint) {
+  SPtr<Skeleton> skeleton = model.buildSkeleton(jointNodes);
+  if (!skeleton) {
     return nullptr;
   }
-
-  Vector<uint32> depths(nodes.size(), 0);
-  for (SIZE_T i = 0; i < nodes.size(); ++i) {
-    depths[i] = nodes[i].parent == ModelNode::NO_PARENT ? 0 : depths[nodes[i].parent] + 1;
-  }
-
-  // NO_PARENT when the joints are under different roots: then every node above them is a
-  // bone.
-  uint32 common = ModelNode::NO_PARENT;
-  bool bFirst = true;
-  for (uint32 joint = 0; joint < nodes.size(); ++joint) {
-    if (!isJoint[joint]) {
-      continue;
-    }
-    if (bFirst) {
-      common = joint;
-      bFirst = false;
-      continue;
-    }
-    uint32 a = common;
-    uint32 b = joint;
-    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[a] > depths[b]) {
-      a = nodes[a].parent;
-    }
-    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[b] > depths[a]) {
-      b = nodes[b].parent;
-    }
-    while (a != b) {
-      a = a == ModelNode::NO_PARENT ? a : nodes[a].parent;
-      b = b == ModelNode::NO_PARENT ? b : nodes[b].parent;
-    }
-    common = a;
-  }
-
-  Vector<uint8> isBone(nodes.size(), 0);
-  for (uint32 joint = 0; joint < nodes.size(); ++joint) {
-    if (!isJoint[joint]) {
-      continue;
-    }
-    for (uint32 node = joint; node != ModelNode::NO_PARENT && !isBone[node];
-         node = nodes[node].parent) {
-      isBone[node] = 1;
-      if (node == common) {
-        break;
-      }
-    }
-  }
-
-  SPtr<Skeleton> skeleton = chMakeShared<Skeleton>();
-  for (uint32 node = 0; node < nodes.size(); ++node) {
-    if (!isBone[node]) {
-      continue;
-    }
-    const ModelNode& source = nodes[node];
-    if (skeleton->findBone(source.name) != Skeleton::NO_BONE) {
+  const Vector<SkeletonBone>& bones = skeleton->getBones();
+  for (uint32 bone = 0; bone < bones.size(); ++bone) {
+    if (skeleton->findBone(bones[bone].name) != bone) {
       CH_LOG_WARNING(MeshSystem, "Two bones are named {0}; animations will find only one",
-                     source.name);
+                     bones[bone].name);
     }
-    const uint32 parent = source.parent;
-    const uint32 parentBone = parent != ModelNode::NO_PARENT && isBone[parent]
-                                  ? nodes[parent].bone
-                                  : SkeletonBone::NO_PARENT;
-    const uint32 bone = skeleton->addBone({.name = source.name,
-                                           .parent = parentBone,
-                                           .position = source.position,
-                                           .rotation = source.rotation,
-                                           .scale = source.scale});
-    model.setNodeBone(node, bone);
   }
   return skeleton;
 }
@@ -777,10 +706,22 @@ class MeshImportTask final : public IImportTask
   createMaterial(uint32 index, const Path& folder);
 
   NODISCARD bool
-  assignSkeleton(const Path& folder);
+  readAnimationsOnly();
 
   void
-  createAnimationClips(const Path& folder);
+  readClips();
+
+  NODISCARD SPtr<SkeletonAsset>
+  fitSkeleton(const SPtr<IAsset>& asset, Vector<uint32>& outBoneMap) const;
+
+  NODISCARD bool
+  assignSkeleton(const Path& folder);
+
+  NODISCARD UUID
+  findAnimationSkeleton() const;
+
+  SPtr<IAsset>
+  createAnimationClips(const Path& folder, const UUID& skeletonId);
 
   static constexpr int32 NO_TEXTURE = -1;
   // The source part of the skeleton a model file makes, so a later import finds it.
@@ -797,6 +738,8 @@ class MeshImportTask final : public IImportTask
   // materials are read on the main thread and embedded images point into it.
   Assimp::Importer m_importer;
   const aiScene* m_scene = nullptr;
+  // Only the animations become assets; the model keeps the nodes, to find the skeleton.
+  bool m_bAnimationsOnly = false;
   SPtr<Model> m_model;
   // Built from the file; createAssets swaps it for a compatible one of the project.
   SPtr<Skeleton> m_skeleton;
@@ -959,6 +902,10 @@ MeshImportTask::readSource(ImportProgress& progress)
   // A skin indexes its bones with 8 bits.
   m_importer.SetPropertyInteger(AI_CONFIG_PP_SBBC_MAX_BONES,
                                 static_cast<int32>(MeshSkin::MAX_BONES));
+  // Pivots would add helper nodes (Bone_$AssimpFbx$_Rotation...) whose names and hierarchy
+  // depend on how each file was exported, so an animation file could not match the
+  // skeleton of its character.
+  m_importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
   m_scene = m_importer.ReadFile(m_filePath.toString(),
                                 aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs |
                                     aiProcess_MakeLeftHanded | aiProcess_FlipWindingOrder |
@@ -967,9 +914,17 @@ MeshImportTask::readSource(ImportProgress& progress)
   if (progress.isCancelled()) {
     return false;
   }
-  if (!m_scene || m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_scene->mRootNode) {
+  // Assimp marks a scene without meshes as incomplete, which is fine for animation files.
+  if (!m_scene || !m_scene->mRootNode ||
+      (m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE &&
+       (m_scene->mNumMeshes != 0 || m_scene->mNumAnimations == 0))) {
     CH_LOG_ERROR(MeshSystem, "Assimp error: {0}", m_importer.GetErrorString());
     return false;
+  }
+
+  m_bAnimationsOnly = !m_settings.importModel || m_scene->mNumMeshes == 0;
+  if (m_bAnimationsOnly) {
+    return readAnimationsOnly();
   }
 
   progress.set("Converting meshes", AssimpProgress::READ_SHARE);
@@ -1023,20 +978,15 @@ MeshImportTask::readSource(ImportProgress& progress)
     }
     m_model->getMeshes()[meshIndices[meshIndex][0]]->setSkin(std::move(skin));
   }
-  m_skeleton = buildSkeleton(*m_model);
+  Vector<uint32> joints;
+  for (const SPtr<Mesh>& mesh : m_model->getMeshes()) {
+    const Vector<uint32>& boneNodes = mesh->getSkin().boneNodes;
+    joints.insert(joints.end(), boneNodes.begin(), boneNodes.end());
+  }
+  m_skeleton = buildSkeleton(*m_model, joints);
 
   if (m_settings.importAnimations) {
-    for (uint32 i = 0; i < m_scene->mNumAnimations; ++i) {
-      const aiAnimation& animation = *m_scene->mAnimations[i];
-      String name = animation.mName.C_Str();
-      if (name.empty()) {
-        ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
-        name = "Animation";
-        name += StringUtils::toChars(numberBuffer, i);
-      }
-      m_clips.emplace_back(std::move(name),
-                           readAnimation(*m_scene, animation, m_settings.animationSampleRate));
-    }
+    readClips();
   }
 
   // Every texture is read here, although a material reused from an earlier import of the
@@ -1052,6 +1002,57 @@ MeshImportTask::readSource(ImportProgress& progress)
     m_textures[i].bRead = readTexture(m_textures[i], progress);
   }
   return !progress.isCancelled();
+}
+
+/*
+ * The skeleton is made of the nodes the animations move, since there is no skin to say
+ * which nodes are bones.
+ */
+bool
+MeshImportTask::readAnimationsOnly()
+{
+  if (m_scene->mNumAnimations == 0) {
+    CH_LOG_ERROR(MeshSystem, "{0} has no animations to import", m_filePath);
+    return false;
+  }
+
+  m_model = chMakeShared<Model>();
+  const Vector<Vector<uint32>> noMeshes(m_scene->mNumMeshes);
+  UnorderedMap<const aiNode*, uint32> nodeIndices;
+  processNode(*m_scene->mRootNode, noMeshes, *m_model, ModelNode::NO_PARENT, nodeIndices);
+
+  Vector<uint32> joints;
+  for (uint32 i = 0; i < m_scene->mNumAnimations; ++i) {
+    const aiAnimation& animation = *m_scene->mAnimations[i];
+    for (uint32 c = 0; c < animation.mNumChannels; ++c) {
+      const aiNode* node = m_scene->mRootNode->FindNode(animation.mChannels[c]->mNodeName);
+      const auto found = node ? nodeIndices.find(node) : nodeIndices.end();
+      if (found != nodeIndices.end()) {
+        joints.push_back(found->second);
+      }
+    }
+  }
+  m_skeleton = buildSkeleton(*m_model, joints);
+  readClips();
+  return true;
+}
+
+/*
+ */
+void
+MeshImportTask::readClips()
+{
+  for (uint32 i = 0; i < m_scene->mNumAnimations; ++i) {
+    const aiAnimation& animation = *m_scene->mAnimations[i];
+    String name = animation.mName.C_Str();
+    if (name.empty()) {
+      ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+      name = "Animation";
+      name += StringUtils::toChars(numberBuffer, i);
+    }
+    m_clips.emplace_back(std::move(name),
+                         readAnimation(*m_scene, animation, m_settings.animationSampleRate));
+  }
 }
 
 /*
@@ -1139,6 +1140,23 @@ MeshImportTask::createMaterial(uint32 index, const Path& folder)
 }
 
 /*
+ * The asset as a skeleton every bone of the file's skeleton fits, else null.
+ */
+SPtr<SkeletonAsset>
+MeshImportTask::fitSkeleton(const SPtr<IAsset>& asset, Vector<uint32>& outBoneMap) const
+{
+  if (!asset || !asset->isTypeOf<SkeletonAsset>() ||
+      (!asset->isLoaded() && !AssetManager::instance().syncLoadAsset(asset))) {
+    return nullptr;
+  }
+  SPtr<SkeletonAsset> skeleton = asset->as<SkeletonAsset>();
+  return skeleton && skeleton->getSkeleton() &&
+                 skeleton->getSkeleton()->mapBones(*m_skeleton, outBoneMap)
+             ? skeleton
+             : nullptr;
+}
+
+/*
  * Picks the skeleton the import settings ask for, else makes one from the file. A skeleton
  * of the project is used only when every bone of the file fits it; the model's node bones
  * then point at its indices.
@@ -1148,16 +1166,8 @@ MeshImportTask::assignSkeleton(const Path& folder)
 {
   AssetManager& assetManager = AssetManager::instance();
   Vector<uint32> boneMap;
-  const auto fits = [this, &assetManager, &boneMap](const SPtr<IAsset>& asset) {
-    if (!asset || !asset->isTypeOf<SkeletonAsset>() ||
-        (!asset->isLoaded() && !assetManager.syncLoadAsset(asset))) {
-      return SPtr<SkeletonAsset>();
-    }
-    SPtr<SkeletonAsset> skeleton = asset->as<SkeletonAsset>();
-    return skeleton && skeleton->getSkeleton() &&
-                   skeleton->getSkeleton()->mapBones(*m_skeleton, boneMap)
-               ? skeleton
-               : SPtr<SkeletonAsset>();
+  const auto fits = [this, &boneMap](const SPtr<IAsset>& asset) {
+    return fitSkeleton(asset, boneMap);
   };
 
   SPtr<SkeletonAsset> chosen;
@@ -1206,6 +1216,12 @@ MeshImportTask::assignSkeleton(const Path& folder)
 SPtr<IAsset>
 MeshImportTask::createAssets(const Path& assetFolder)
 {
+  // Animation files usually hold one animation each, so they go straight into the folder
+  // instead of a folder per file.
+  if (m_bAnimationsOnly) {
+    return createAnimationClips(assetFolder, findAnimationSkeleton());
+  }
+
   const Path modelFolder = makeUniqueFolder(assetFolder, m_assetName);
   if (!FileSystem::createDirectories(modelFolder)) {
     CH_LOG_ERROR(MeshSystem, "Failed to create the folder {0}", modelFolder);
@@ -1226,18 +1242,63 @@ MeshImportTask::createAssets(const Path& assetFolder)
     CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", m_assetName);
     return nullptr;
   }
-  createAnimationClips(modelFolder);
+  createAnimationClips(modelFolder, m_model->getSkeletonId());
   return modelAsset;
 }
 
 /*
+ * A skeleton of the project the animations fit, never a new one: a skeleton without a mesh
+ * has nothing to show. Null when none fits; the clips still find their nodes by name.
  */
-void
-MeshImportTask::createAnimationClips(const Path& folder)
+UUID
+MeshImportTask::findAnimationSkeleton() const
 {
+  if (!m_skeleton) {
+    CH_LOG_WARNING(MeshSystem, "The animations of {0} move no node of the file",
+                   m_assetName);
+    return UUID::null();
+  }
+
+  AssetManager& assetManager = AssetManager::instance();
+  Vector<uint32> boneMap;
+  SPtr<SkeletonAsset> chosen;
+  if (m_settings.skeletonMode == ImportSkeletonMode::Existing) {
+    chosen = fitSkeleton(assetManager.getAsset(m_settings.skeleton), boneMap);
+  }
+  else {
+    for (const SPtr<IAsset>& asset : assetManager.getAllAssets()) {
+      if ((chosen = fitSkeleton(asset, boneMap))) {
+        break;
+      }
+    }
+  }
+
+  if (!chosen) {
+    CH_LOG_WARNING(MeshSystem,
+                   "No skeleton of the project fits the animations of {0}; they are "
+                   "imported without one",
+                   m_assetName);
+    return UUID::null();
+  }
+  CH_LOG_INFO(MeshSystem, "The animations of {0} use the skeleton {1}", m_assetName,
+              chosen->getName());
+  return chosen->getUUID();
+}
+
+/*
+ * Returns the first clip made.
+ */
+SPtr<IAsset>
+MeshImportTask::createAnimationClips(const Path& folder, const UUID& skeletonId)
+{
+  // A file of animations only is usually one animation, often with a generic name
+  // ("mixamo.com"), so the file name alone names it.
+  const bool bNameByFile = m_bAnimationsOnly && m_clips.size() == 1;
+  SPtr<IAsset> first;
   for (auto& [name, clip] : m_clips) {
-    clip->setSkeletonId(m_model->getSkeletonId());
-    const String assetName = makeFileSafeName("A_" + m_assetName + "_" + name);
+    clip->setSkeletonId(skeletonId);
+    const String assetName =
+        makeFileSafeName(bNameByFile ? "A_" + m_assetName : "A_" + m_assetName + "_" + name);
     const AssetMetadata metadata =
         IAssetCodec::makeMetadata<AnimationClipAsset>(assetName, folder);
     const SPtr<AnimationClipAsset> clipAsset =
@@ -1250,7 +1311,11 @@ MeshImportTask::createAnimationClips(const Path& folder)
     }
     CH_LOG_INFO(MeshSystem, "Imported animation {0}: {1} tracks, {2} s", assetName,
                 clip->getTracks().size(), clip->getDuration());
+    if (!first) {
+      first = clipAsset;
+    }
   }
+  return first;
 }
 } // namespace MeshManagerHelpers
 
