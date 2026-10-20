@@ -83,9 +83,13 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
   getScene(const UUID& uuid) const;
 
   /**
-   * Update all scenes
-   *
-   * @param deltaTime Time elapsed since the last update
+   * Runs the fixed step of the active scene.
+   */
+  void
+  fixedUpdate(float deltaTime);
+
+  /**
+   * Runs the per frame update of the active scene.
    */
   void
   update(float deltaTime);

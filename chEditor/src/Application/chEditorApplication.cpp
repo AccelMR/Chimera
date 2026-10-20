@@ -161,18 +161,17 @@ EditorApplication::destroyModules()
 /*
  */
 void
-EditorApplication::update(const float deltaTime)
+EditorApplication::fixedUpdate(const float deltaTime)
 {
-  SceneManager::instance().update(deltaTime);
+  SceneManager::instance().fixedUpdate(deltaTime);
 }
 
 /*
  */
 void
-EditorApplication::onRender(ICommandList& commandList,
-                            const ISwapChain& swapChain,
-                            float deltaTime)
+EditorApplication::update(const float deltaTime)
 {
+  const ISwapChain& swapChain = *getSwapChain();
   const uint32 width = swapChain.getWidth();
   const uint32 height = swapChain.getHeight();
   if (width != m_viewportWidth || height != m_viewportHeight) {
@@ -181,7 +180,8 @@ EditorApplication::onRender(ICommandList& commandList,
     m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
   }
 
-  if (UIHelpers::bRenderImGui) {
+  // A minimized window draws nothing, so no UI frame is built for it either.
+  if (UIHelpers::bRenderImGui && !getDisplaySurface()->isMinimized()) {
     CH_PROFILE_SCOPE("BuildUI");
     renderUI();
   }
@@ -207,31 +207,45 @@ EditorApplication::onRender(ICommandList& commandList,
     onCameraFlightChanged(m_editorCamera->isFlying());
   }
 
-  // After the UI, which may have moved or added objects.
+  {
+    CH_PROFILE_SCOPE("SceneUpdate");
+    SceneManager::instance().update(deltaTime);
+  }
+
+  // After the UI and the scene update, which may have moved or added objects.
   {
     CH_PROFILE_SCOPE("UpdateTransforms");
     scene.updateTransforms();
   }
 
   // Like the grid, the editor's lines hide with the rest of the UI.
+  m_bFrameHasUI = UIHelpers::bRenderImGui;
   m_editorLines.clear();
-  if (UIHelpers::bRenderImGui) {
+  if (m_bFrameHasUI) {
     ViewportTools::addSelectionBounds(scene, m_editorLines);
     ViewportTools::addSelectionSkeletons(m_editorLines);
   }
 
+  m_sceneRenderer->extract(scene, m_editorCamera->getCamera(), UIHelpers::rendererColor,
+                           &m_editorLines);
+}
+
+/*
+ */
+void
+EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapChain)
+{
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
                           swapChain.getCurrentTextureView(), ResourceState::Undefined,
                           ResourceState::Present);
-  const RGTextureHandle sceneDepth =
-      m_sceneRenderer->addScenePasses(scene, m_editorCamera->getCamera(), backBuffer,
-                                      UIHelpers::rendererColor, &m_editorLines);
+  const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(backBuffer);
 
   // F11 hides the grid with the rest of the editor, so the image looks like the game.
-  if (UIHelpers::bRenderImGui) {
-    m_viewportGrid->addPass(graph, m_editorCamera->getCamera(), backBuffer, sceneDepth);
+  if (m_bFrameHasUI) {
+    m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), backBuffer,
+                            sceneDepth);
     graph.addPass("EditorUI")
         .writeColor(backBuffer, LoadOp::Load)
         .setExecute([this, format = swapChain.getFormat()](RenderPassContext& context) {
@@ -242,7 +256,7 @@ EditorApplication::onRender(ICommandList& commandList,
 
   m_sceneRenderer->execute(commandList);
 
-  if (UIHelpers::bRenderImGui) {
+  if (m_bFrameHasUI) {
     CH_PROFILE_SCOPE("FloatingWindows");
     m_imguiRenderer->renderFloatingWindows(commandList);
   }

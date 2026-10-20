@@ -10,6 +10,9 @@
 #include <cstring>
 #include <limits>
 
+#include "chAlgorithm.h"
+#include "chAnimationClip.h"
+#include "chAnimationClipAsset.h"
 #include "chBox.h"
 #include "chCamera.h"
 #include "chCapsule.h"
@@ -45,6 +48,7 @@
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRay.h"
+#include "chRenderFrame.h"
 #include "chRenderGraph.h"
 #include "chRenderSettings.h"
 #include "chRotator.h"
@@ -2178,6 +2182,218 @@ TEST_CASE("chCore - Skeleton")
   }
 }
 
+namespace {
+// Three keys, one per second: "Arm" moves along x and turns 90 degrees around Z between the
+// first two keys; "Base" never changes.
+SPtr<AnimationClip>
+createTestClip()
+{
+  SPtr<AnimationClip> clip = chMakeShared<AnimationClip>(1.0f, 3);
+  const Vector<Vector3> armPositions{Vector3(0.0f, 0.0f, 0.0f), Vector3(2.0f, 0.0f, 0.0f),
+                                     Vector3(4.0f, 0.0f, 0.0f)};
+  const Quaternion turned(Vector3::UP, Degree(90.0f));
+  const Vector<Quaternion> armRotations{Quaternion::IDENTITY, turned, turned};
+  const Vector<Vector3> units(3, Vector3::UNIT);
+  static_cast<void>(clip->addTrack("Arm", armPositions, armRotations, units));
+  const Vector<Vector3> basePositions(3, Vector3(0.0f, 0.0f, 1.0f));
+  const Vector<Quaternion> baseRotations(3, Quaternion::IDENTITY);
+  static_cast<void>(clip->addTrack("Base", basePositions, baseRotations, units));
+  return clip;
+}
+
+SPtr<AnimationClipAsset>
+createTestClipAsset(const SPtr<AnimationClip>& clip)
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<AnimationClipAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, "A_Test");
+  return chMakeShared<AnimationClipAsset>(metadata, clip);
+}
+} // namespace
+
+TEST_CASE("chCore - Animation clip")
+{
+  const SPtr<AnimationClip> clip = createTestClip();
+  REQUIRE(clip->getDuration() == 2.0f);
+  REQUIRE(clip->getTracks().size() == 2);
+  // Channels that never change keep one key.
+  const AnimationTrack& arm = clip->getTracks()[0];
+  const AnimationTrack& base = clip->getTracks()[1];
+  REQUIRE(arm.positionCount == 3);
+  REQUIRE(arm.rotationCount == 3);
+  REQUIRE(arm.scaleCount == 1);
+  REQUIRE(base.positionCount == 1);
+  REQUIRE(base.rotationCount == 1);
+
+  Vector<NodeTransform> pose(3);
+  const Vector<uint32> targets{2, 0};
+
+  SECTION("Keys are blended at times between them")
+  {
+    clip->sample(0.5f, targets, pose);
+    REQUIRE(pose[2].position.nearEqual(Vector3(1.0f, 0.0f, 0.0f)));
+    REQUIRE(pose[2].rotation.isRotationEqual(Quaternion(Vector3::UP, Degree(45.0f)), 1e-6f));
+    REQUIRE(pose[0].position.nearEqual(Vector3(0.0f, 0.0f, 1.0f)));
+    // A node no track moves is left alone.
+    REQUIRE(pose[1].position == Vector3::ZERO);
+  }
+
+  SECTION("Times outside the clip hold its ends")
+  {
+    clip->sample(-1.0f, targets, pose);
+    REQUIRE(pose[2].position.nearEqual(Vector3::ZERO));
+    clip->sample(10.0f, targets, pose);
+    REQUIRE(pose[2].position.nearEqual(Vector3(4.0f, 0.0f, 0.0f)));
+  }
+
+  SECTION("Tracks without a target are skipped")
+  {
+    const Vector<uint32> onlyBase{AnimationClip::NO_TARGET, 1};
+    clip->sample(1.0f, onlyBase, pose);
+    REQUIRE(pose[2].position == Vector3::ZERO);
+    REQUIRE(pose[1].position.nearEqual(Vector3(0.0f, 0.0f, 1.0f)));
+  }
+
+  SECTION("Rotation keys stay on one side, so blends take the short way")
+  {
+    AnimationClip flipped(1.0f, 2);
+    const Quaternion turned(Vector3::UP, Degree(20.0f));
+    const Vector<Vector3> positions(2, Vector3::ZERO);
+    const Vector<Vector3> scales(2, Vector3::UNIT);
+    const Vector<Quaternion> rotations{Quaternion::IDENTITY, turned * -1.0f};
+    static_cast<void>(flipped.addTrack("Node", positions, rotations, scales));
+    const Vector<uint32> target{0};
+    flipped.sample(0.5f, target, pose);
+    REQUIRE(pose[0].rotation.isRotationEqual(Quaternion(Vector3::UP, Degree(10.0f)), 1e-6f));
+  }
+
+  SECTION("Save and read")
+  {
+    clip->setSkeletonId(chEngineSDK::UUID::createRandom());
+    MemoryDataStream stream;
+    clip->serialize(stream);
+    const Vector<uint8> bytes = readAllBytes(stream);
+    const SPtr<AnimationClip> read = AnimationClip::deserialize(stream);
+    REQUIRE(read);
+    REQUIRE(read->getSkeletonId() == clip->getSkeletonId());
+    REQUIRE(read->getFrameCount() == 3);
+    REQUIRE(read->getSampleRate() == 1.0f);
+    REQUIRE(read->getTracks()[1].nodeName == "Base");
+    read->sample(0.5f, targets, pose);
+    REQUIRE(pose[2].position.nearEqual(Vector3(1.0f, 0.0f, 0.0f)));
+
+    for (const SIZE_T size : {SIZE_T(0), SIZE_T(10), bytes.size() - 1}) {
+      MemoryDataStream cut;
+      cut.write(bytes.data(), size);
+      cut.seek(0);
+      REQUIRE_FALSE(AnimationClip::deserialize(cut));
+    }
+  }
+}
+
+TEST_CASE("chCore - Model animation")
+{
+  // Base (one mesh) > Arm (one mesh, at x + 1); the clip moves Arm and holds Base at z + 1.
+  const SPtr<Model> model = chMakeShared<Model>();
+  const uint32 baseNode = addTestNode(*model, "Base", ModelNode::NO_PARENT, Matrix4::IDENTITY,
+                                      {model->addMesh(createTriangleModel()->getMeshes()[0])});
+  const uint32 armNode =
+      addTestNode(*model, "Arm", baseNode, TranslationMatrix(Vector3(1.0f, 0.0f, 0.0f)),
+                  {model->addMesh(createTriangleModel()->getMeshes()[0])});
+
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Animated");
+  ModelComponent& component =
+      gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
+  scene.updateTransforms();
+  REQUIRE_FALSE(component.isAnimating());
+  REQUIRE(component.getNodeMatrix(armNode) == model->getNodeRestMatrix(armNode));
+
+  const auto armItemCenter = [&scene]() {
+    // The arm's item is the second one the component added.
+    return scene.getRenderItemSlots()[1].worldBounds.center;
+  };
+  REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+
+  const SPtr<AnimationClipAsset> clipAsset = createTestClipAsset(createTestClip());
+  component.setAnimation(clipAsset);
+  REQUIRE(component.isAnimating());
+  REQUIRE(component.isPlaying());
+  // At time 0 the arm stands at the clip's first key, under the base lifted by the clip.
+  REQUIRE(armItemCenter().nearEqual(Vector3(0.0f, 1.0f, 1.0f)));
+
+  SECTION("Update moves the nodes and their render items")
+  {
+    scene.update(1.0f);
+    REQUIRE(component.getAnimationTime() == 1.0f);
+    // Arm at x + 2, turned 90 degrees: the triangle's (0, 1, 0) center goes to (-1, 0, 0).
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 0.0f, 1.0f), 1e-5f));
+    gameObject->getTransform().setLocalPosition(Vector3(0.0f, 10.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 10.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("Looping wraps the time; without it the clip stops at its end")
+  {
+    scene.update(2.5f);
+    REQUIRE(Math::abs(component.getAnimationTime() - 0.5f) < 1e-5f);
+    component.setLooping(false);
+    scene.update(5.0f);
+    REQUIRE(component.getAnimationTime() == 2.0f);
+    REQUIRE_FALSE(component.isPlaying());
+    component.setPlaying(true);
+    REQUIRE(component.getAnimationTime() == 0.0f);
+  }
+
+  SECTION("Paused clips only follow the time they are given")
+  {
+    component.setPlaying(false);
+    scene.update(1.0f);
+    REQUIRE(component.getAnimationTime() == 0.0f);
+    component.setAnimationTime(1.0f);
+    scene.update(0.0f);
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 0.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("Clearing the clip goes back to the rest pose")
+  {
+    scene.update(1.0f);
+    component.setAnimation(nullptr);
+    REQUIRE_FALSE(component.isAnimating());
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("A clip whose tracks name no node moves nothing")
+  {
+    SPtr<AnimationClip> other = chMakeShared<AnimationClip>(1.0f, 1);
+    static_cast<void>(other->addTrack("Missing", Vector<Vector3>{Vector3::UNIT},
+                                      Vector<Quaternion>{Quaternion::IDENTITY},
+                                      Vector<Vector3>{Vector3::UNIT}));
+    component.setAnimation(createTestClipAsset(other));
+    REQUIRE_FALSE(component.isAnimating());
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("The clip and how it plays are saved")
+  {
+    component.setLooping(false);
+    component.setPlaybackSpeed(-0.5f);
+    MemoryDataStream stream;
+    component.serialize(stream);
+    stream.seek(0);
+    // Without an AssetManager the clip is not found, but its id is kept.
+    ModelComponent read;
+    REQUIRE(read.deserialize(stream));
+    REQUIRE_FALSE(read.isLooping());
+    REQUIRE(read.isPlaying());
+    REQUIRE(read.getPlaybackSpeed() == -0.5f);
+    Vector<chEngineSDK::UUID> references;
+    read.collectReferences(references);
+    REQUIRE(Algorithm::contains(references, clipAsset->getUUID()));
+  }
+}
+
 TEST_CASE("chCore - Model expand")
 {
   // Root (x + 10, one mesh) > Child (y + 5, two meshes) and Root > Empty > Leaf (z + 3).
@@ -3086,6 +3302,60 @@ checkGeneratedMesh(const Mesh& mesh, const ShapeDesc& desc)
 }
 } // namespace
 
+TEST_CASE("chCore - Render frame")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<Model> model = createTriangleModel();
+  const SPtr<GameObject> first = scene.createGameObject("First");
+  first->addComponent<ModelComponent>(createTestModelAsset(model));
+  const SPtr<GameObject> second = scene.createGameObject("Second");
+  second->addComponent<ModelComponent>(createTestModelAsset(model));
+  const SPtr<GameObject> sun = scene.createGameObject("Sun");
+  sun->addComponent<DirectionalLightComponent>();
+  const SPtr<GameObject> sky = scene.createGameObject("Sky");
+  SkyLightComponent& skyLight = sky->addComponent<SkyLightComponent>();
+  skyLight.setIntensity(2.0f);
+  scene.updateTransforms();
+
+  // A free slot in the middle of the scene's items.
+  scene.destroyGameObject(*first);
+  REQUIRE(scene.getRenderItemSlots().size() == 2);
+
+  const Camera camera = createTestCamera();
+  const LinearColor clearColor(0.1f, 0.2f, 0.3f, 1.0f);
+  RenderFrame frame;
+  frame.extract(scene, camera, clearColor);
+  REQUIRE(frame.getItems().size() == 1);
+  REQUIRE(frame.getItems()[0].owner == second.get());
+  REQUIRE(frame.getLights().size() == 1);
+  REQUIRE(frame.getSkyLight() != nullptr);
+  REQUIRE(frame.getSkyLight()->intensity == 2.0f);
+  REQUIRE(frame.getClearColor().b == 0.3f);
+  REQUIRE(frame.getCamera().getPosition() == camera.getPosition());
+
+  Vector<const RenderItem*> visibleItems;
+  frame.gatherItems(frame.getCamera().getFrustum(), visibleItems);
+  REQUIRE(visibleItems.size() == 1);
+  REQUIRE(visibleItems[0] == &frame.getItems()[0]);
+  Vector<const LightItem*> visibleLights;
+  frame.gatherLights(frame.getCamera().getFrustum(), visibleLights);
+  REQUIRE(visibleLights.size() == 1);
+
+  SECTION("Changes to the scene wait for the next extract")
+  {
+    second->getTransform().setLocalPosition(Vector3(-20.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    sky->removeComponent(skyLight);
+    REQUIRE(frame.getItems()[0].worldBounds.center.nearEqual(Vector3(0.0f, 1.0f, 0.0f)));
+    REQUIRE(frame.getSkyLight() != nullptr);
+
+    frame.extract(scene, camera, clearColor);
+    frame.gatherItems(frame.getCamera().getFrustum(), visibleItems);
+    REQUIRE(visibleItems.empty());
+    REQUIRE(frame.getSkyLight() == nullptr);
+  }
+}
+
 TEST_CASE("chCore - Mesh generator")
 {
   SECTION("Every shape faces out with a correct tangent frame")
@@ -3370,6 +3640,36 @@ TEST_CASE("chCore - Debug draw")
     REQUIRE(scene.getDebugDraw().getLineCount() == 1);
     scene.update(0.016f);
     REQUIRE(scene.getDebugDraw().getLineCount() == 0);
+  }
+
+  SECTION("Lines of the fixed step last until the next fixed step")
+  {
+    Scene scene("Test", chEngineSDK::UUID::createRandom());
+    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+    scene.update(0.016f);
+    REQUIRE(scene.getFixedDebugDraw().getLineCount() == 1);
+    scene.fixedUpdate(0.016f);
+    REQUIRE(scene.getFixedDebugDraw().getLineCount() == 0);
+  }
+
+  SECTION("A render frame copies every list")
+  {
+    Scene scene("Test", chEngineSDK::UUID::createRandom());
+    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::RIGHT, LinearColor::Red);
+    DebugDraw extraLines;
+    extraLines.axes(Matrix4::IDENTITY, 1.0f);
+    RenderFrame frame;
+    frame.extract(scene, createTestCamera(), LinearColor::Black, &extraLines);
+    scene.update(0.016f);
+    const Span<const DebugDraw* const> lists = frame.getDebugLines();
+    REQUIRE(lists.size() == 3);
+    REQUIRE(lists[0]->getLineCount() == 1);
+    REQUIRE(lists[1]->getLineCount() == 1);
+    REQUIRE(lists[2]->getLineCount() == 3);
+    frame.extract(scene, createTestCamera(), LinearColor::Black);
+    REQUIRE(lists[0]->getLineCount() == 0);
+    REQUIRE(lists[2]->getLineCount() == 0);
   }
 }
 #else

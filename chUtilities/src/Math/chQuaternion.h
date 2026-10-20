@@ -65,6 +65,24 @@ class Quaternion
   NODISCARD CH_UTILITY_EXPORT Rotator
   toRotator() const noexcept;
 
+  /**
+   * Turns from a to b along the shortest arc at constant speed; alpha 0 gives a, 1 gives b.
+   * Both must be unit length.
+   */
+  NODISCARD static CH_UTILITY_EXPORT Quaternion
+  slerp(const Quaternion& a, const Quaternion& b, float alpha) noexcept;
+
+  /**
+   * Blends a and b along the shortest arc and normalizes the result: the same path as
+   * slerp, but not at constant speed. Much cheaper, and the speed error is small when a and
+   * b are close, as neighbouring animation keys are. Both must be unit length.
+   */
+  NODISCARD static FORCEINLINE Quaternion
+  nlerp(const Quaternion& a, const Quaternion& b, float alpha) noexcept;
+
+  NODISCARD FORCEINLINE constexpr float
+  dot(const Quaternion& other) const noexcept;
+
   NODISCARD FORCEINLINE constexpr float
   squaredLength() const noexcept;
 
@@ -179,6 +197,14 @@ inline constexpr Quaternion Quaternion::IDENTITY{0.0f, 0.0f, 0.0f, 1.0f};
 /*
  */
 FORCEINLINE constexpr float
+Quaternion::dot(const Quaternion& other) const noexcept
+{
+  return x * other.x + y * other.y + z * other.z + w * other.w;
+}
+
+/*
+ */
+FORCEINLINE constexpr float
 Quaternion::squaredLength() const noexcept
 {
   return x * x + y * y + z * z + w * w;
@@ -215,6 +241,21 @@ Quaternion::getNormalized(float tolerance) const noexcept
     return IDENTITY;
   }
   return *this * Math::invSqrt(squareLength);
+}
+
+/*
+ */
+FORCEINLINE Quaternion
+Quaternion::nlerp(const Quaternion& a, const Quaternion& b, float alpha) noexcept
+{
+  // q and -q are the same rotation; the one on a's side gives the short way round.
+  const float bScale = a.dot(b) < 0.0f ? -alpha : alpha;
+  const float aScale = 1.0f - alpha;
+  return Quaternion(a.x * aScale + b.x * bScale,
+                    a.y * aScale + b.y * bScale,
+                    a.z * aScale + b.z * bScale,
+                    a.w * aScale + b.w * bScale)
+      .getNormalized();
 }
 
 /*

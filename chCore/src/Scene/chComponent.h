@@ -33,6 +33,17 @@ class CH_CORE_EXPORT Component
   Component&
   operator=(const Component&) = delete;
 
+  /**
+   * Runs at the fixed rate of the application, zero or more times per frame (physics and
+   * logic that must not depend on the frame rate).
+   */
+  virtual void
+  fixedUpdate(float deltaTime);
+
+  /**
+   * Runs once per frame with the real frame time, before the world matrices are rebuilt
+   * (animation and anything that must look smooth).
+   */
   virtual void
   update(float deltaTime);
 

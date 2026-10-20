@@ -141,10 +141,10 @@ BaseApplication::run() {
     // Update the accumulator
     accumulator += deltaTime;
     while (accumulator >= fixedTimeStamp) {
-      // Update the application logic
-      update(static_cast<float>(fixedTimeStamp));
+      fixedUpdate(static_cast<float>(fixedTimeStamp));
       accumulator -= fixedTimeStamp;
     }
+    update(static_cast<float>(deltaTime));
   }
 }
 

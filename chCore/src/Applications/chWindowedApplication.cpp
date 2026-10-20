@@ -94,15 +94,22 @@ WindowedApplication::run() {
     }
 
     {
-      CH_PROFILE_SCOPE("Update");
+      CH_PROFILE_SCOPE("FixedUpdate");
       accumulator += deltaTime;
       while (accumulator >= fixedTimeStamp) {
-        update(static_cast<float>(fixedTimeStamp));
+        fixedUpdate(static_cast<float>(fixedTimeStamp));
         accumulator -= fixedTimeStamp;
       }
     }
+    {
+      CH_PROFILE_SCOPE("Update");
+      update(static_cast<float>(deltaTime));
+    }
+    if (!m_running) {
+      break;
+    }
 
-    render(static_cast<float>(deltaTime));
+    render();
     Profiler::endFrame();
   }
 }
@@ -290,7 +297,7 @@ WindowedApplication::destroyRenderer()
 /*
  */
 void
-WindowedApplication::render(const float deltaTime)
+WindowedApplication::render()
 {
   // The surface of a minimized window is 0x0, so there is nothing to draw on and the swap
   // chain cannot be recreated. Sleeping keeps the loop from spinning until it is restored.
@@ -326,7 +333,7 @@ WindowedApplication::render(const float deltaTime)
 
   {
     CH_PROFILE_SCOPE("OnRender");
-    onRender(*commandList, swapChain, deltaTime);
+    onRender(*commandList, swapChain);
   }
 
   SwapChainStatus presentStatus = SwapChainStatus::Failed;

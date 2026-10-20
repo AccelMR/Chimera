@@ -51,10 +51,13 @@ class EditorApplication : public WindowedApplication
   destroyModules() override;
 
   virtual void
+  fixedUpdate(const float deltaTime) override;
+
+  virtual void
   update(const float deltaTime) override;
 
   virtual void
-  onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) override;
+  onRender(ICommandList& commandList, const ISwapChain& swapChain) override;
 
   virtual void
   onPostPresent() override;
@@ -107,6 +110,9 @@ class EditorApplication : public WindowedApplication
   // Lines of the editor (selection bounds), filled again every frame; kept so it does not
   // allocate.
   DebugDraw m_editorLines;
+  // Whether the frame the update decided draws the editor UI (F11 hides it), so drawing
+  // does not read the toggle.
+  bool m_bFrameHasUI = true;
   // The title the window was made with, before the scene name.
   String m_windowTitle;
   uint32 m_titleRevision = ~0u;

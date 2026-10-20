@@ -119,7 +119,7 @@ class CH_CORE_EXPORT ShadowRenderer
    * next call; it is empty when shadows are off or no light casts them.
    */
   NODISCARD Span<const ShadowView>
-  addPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
+  addPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view);
 
   /**
    * Adds a pass that shows the maps the last addPasses drew over all of output: the
@@ -250,15 +250,15 @@ class CH_CORE_EXPORT ShadowRenderer
 
   void
   addDirectionalPasses(RenderGraph& graph,
-                       const Scene& scene,
+                       const RenderFrame& frame,
                        const RenderView& view,
                        const LightItem& light);
 
   void
-  addSpotPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
+  addSpotPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view);
 
   void
-  addPointPasses(RenderGraph& graph, const Scene& scene, const RenderView& view);
+  addPointPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view);
 
   /**
    * Draws the casters into one tile of the atlas being rendered.

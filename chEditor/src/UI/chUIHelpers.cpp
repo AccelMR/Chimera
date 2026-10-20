@@ -20,6 +20,7 @@
 #include "chPrefabAsset.h"
 #include "chSceneAsset.h"
 #include "chSkeletonAsset.h"
+#include "chAnimationClipAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -83,6 +84,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<SkeletonAsset>()) {
     return {AssetType::Skeleton, ICON_FA_BONE};
+  }
+  if (asset->isTypeOf<AnimationClipAsset>()) {
+    return {AssetType::Animation, ICON_FA_RUNNING};
   }
   return {AssetType::Unknown, ICON_FA_FILE};
 }

@@ -26,7 +26,7 @@
 #include "chProfiler.h"
 #include "chRenderItem.h"
 #include "chRenderSettings.h"
-#include "chScene.h"
+#include "chRenderFrame.h"
 #include "chShapeOverlap.h"
 #include "chVector4.h"
 
@@ -196,7 +196,7 @@ ShadowRenderer::~ShadowRenderer() = default;
 /*
  */
 Span<const ShadowView>
-ShadowRenderer::addPasses(RenderGraph& graph, const Scene& scene, const RenderView& view)
+ShadowRenderer::addPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view)
 {
   CH_PROFILE_SCOPE("ShadowSetup");
   m_shadowViews.clear();
@@ -211,12 +211,12 @@ ShadowRenderer::addPasses(RenderGraph& graph, const Scene& scene, const RenderVi
 
   for (const LightItem* light : view.lights) {
     if (light->type == LightType::Directional && light->bCastShadows) {
-      addDirectionalPasses(graph, scene, view, *light);
+      addDirectionalPasses(graph, frame, view, *light);
       break;
     }
   }
-  addSpotPasses(graph, scene, view);
-  addPointPasses(graph, scene, view);
+  addSpotPasses(graph, frame, view);
+  addPointPasses(graph, frame, view);
   return m_shadowViews;
 }
 
@@ -224,7 +224,7 @@ ShadowRenderer::addPasses(RenderGraph& graph, const Scene& scene, const RenderVi
  */
 void
 ShadowRenderer::addDirectionalPasses(RenderGraph& graph,
-                                     const Scene& scene,
+                                     const RenderFrame& frame,
                                      const RenderView& view,
                                      const LightItem& light)
 {
@@ -279,7 +279,7 @@ ShadowRenderer::addDirectionalPasses(RenderGraph& graph,
         bLast ? splitDepth : splitDepth - blend * (splitDepth - cascadeStart);
     const DirectionalShadowProjection projection = computeDirectionalProjection(
         camera, light.direction, fitStart, splitDepth, tileSize);
-    scene.gatherRenderItems(projection.casterFrustum, m_cascadeCasters[i]);
+    frame.gatherItems(projection.casterFrustum, m_cascadeCasters[i]);
 
     ShadowCascade& cascade = shadow.cascades[i];
     cascade.viewProjection = projection.viewProjection;
@@ -309,7 +309,7 @@ ShadowRenderer::addDirectionalPasses(RenderGraph& graph,
 /*
  */
 void
-ShadowRenderer::addSpotPasses(RenderGraph& graph, const Scene& scene, const RenderView& view)
+ShadowRenderer::addSpotPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view)
 {
   const uint32 maxLights = static_cast<uint32>(Math::clamp(
       g_cvarSpotShadowMaxLights.get(), 0, static_cast<int32>(MAX_SPOT_SHADOWS)));
@@ -355,7 +355,7 @@ ShadowRenderer::addSpotPasses(RenderGraph& graph, const Scene& scene, const Rend
     const LocalShadowCandidate& candidate = m_spotCandidates[i];
     const SpotShadowProjection projection =
         computeSpotProjection(*candidate.light, nearPlane, tileSize);
-    scene.gatherRenderItems(projection.casterFrustum, m_spotCasters[i]);
+    frame.gatherItems(projection.casterFrustum, m_spotCasters[i]);
     m_spotNearRatios[i] = projection.nearPlane / Math::max(candidate.light->range, 1e-3f);
 
     ShadowView& shadow = m_shadowViews.emplace_back();
@@ -396,7 +396,7 @@ ShadowRenderer::addSpotPasses(RenderGraph& graph, const Scene& scene, const Rend
 /*
  */
 void
-ShadowRenderer::addPointPasses(RenderGraph& graph, const Scene& scene, const RenderView& view)
+ShadowRenderer::addPointPasses(RenderGraph& graph, const RenderFrame& frame, const RenderView& view)
 {
   constexpr uint32 kFaceCount = PointShadowProjection::FACE_COUNT;
 
@@ -439,12 +439,12 @@ ShadowRenderer::addPointPasses(RenderGraph& graph, const Scene& scene, const Ren
     m_pointFaceViewProjections[i] = projection.faceViewProjections;
     m_pointNearRatios[i] = projection.nearPlane / Math::max(light.range, 1e-3f);
 
-    // The scene is walked once per light, with the box around its range; each face only
-    // tests what is inside it.
+    // The frame's items are walked once per light, with the box around its range; each face
+    // only tests what is inside it.
     const float range = Math::max(light.range, 1e-3f);
     const Frustum rangeBox(TranslationMatrix(-light.position) *
                            OrthographicMatrix(range, range, -range, range));
-    scene.gatherRenderItems(rangeBox, m_pointRangeCasters);
+    frame.gatherItems(rangeBox, m_pointRangeCasters);
     for (uint32 face = 0; face < kFaceCount; ++face) {
       Vector<const RenderItem*>& faceCasters = m_pointFaceCasters[i * kFaceCount + face];
       faceCasters.clear();

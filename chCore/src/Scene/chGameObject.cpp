@@ -34,6 +34,21 @@ GameObject::~GameObject()
 /*
  */
 void
+GameObject::fixedUpdate(float deltaTime)
+{
+  for (const UniquePtr<Component>& component : m_components) {
+    if (component->isEnabled()) {
+      component->fixedUpdate(deltaTime);
+    }
+  }
+  for (const SPtr<GameObject>& child : m_children) {
+    child->fixedUpdate(deltaTime);
+  }
+}
+
+/*
+ */
+void
 GameObject::update(float deltaTime)
 {
   for (const UniquePtr<Component>& component : m_components) {

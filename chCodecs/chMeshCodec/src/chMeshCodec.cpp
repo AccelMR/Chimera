@@ -15,6 +15,8 @@
 #if USING(CH_CODECS)
 
 #include "chAlgorithm.h"
+#include "chAnimationClip.h"
+#include "chAnimationClipAsset.h"
 #include "chAssetCodecManager.h"
 #include "chAssetManager.h"
 #include "chFileSystem.h"
@@ -383,6 +385,131 @@ buildSkeleton(Model& model)
 }
 
 /*
+ * The value of a channel at time (in ticks): the two keys around it blended, the first or
+ * last key outside them, fallback when the channel has no keys.
+ */
+template<typename Key, typename Value, typename Blend>
+static Value
+sampleKeys(const Key* keys, uint32 count, double time, const Value& fallback, Blend&& blend)
+{
+  if (count == 0) {
+    return fallback;
+  }
+  if (count == 1 || time <= keys[0].mTime) {
+    return keys[0].mValue;
+  }
+  if (time >= keys[count - 1].mTime) {
+    return keys[count - 1].mValue;
+  }
+  // The first key after time; keys are sorted by time.
+  uint32 low = 1;
+  uint32 high = count - 1;
+  while (low < high) {
+    const uint32 middle = (low + high) / 2;
+    if (keys[middle].mTime <= time) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+  const Key& previous = keys[low - 1];
+  const Key& next = keys[low];
+  const double span = next.mTime - previous.mTime;
+  const float alpha = span > 0.0 ? static_cast<float>((time - previous.mTime) / span) : 0.0f;
+  return blend(previous.mValue, next.mValue, alpha);
+}
+
+/*
+ * One animation of the file with its keys taken at a fixed rate. Each sample goes through
+ * the same conversion as the node matrices (convertAssimpMatrix, then split), so an
+ * animated node at rest matches the model's node exactly.
+ */
+static SPtr<AnimationClip>
+readAnimation(const aiScene& scene, const aiAnimation& animation, float requestedRate)
+{
+  // Assimp leaves the rate at 0 when the file has none; 25 is its own default.
+  const double ticksPerSecond =
+      animation.mTicksPerSecond > 0.0 ? animation.mTicksPerSecond : 25.0;
+  const double duration = Math::max(animation.mDuration, 0.0) / ticksPerSecond;
+  const uint32 frameCount =
+      static_cast<uint32>(duration * static_cast<double>(requestedRate) + 0.5) + 1;
+  // The rate is adjusted so the last key lands on the end of the animation.
+  const float sampleRate = frameCount > 1
+                               ? static_cast<float>(static_cast<double>(frameCount - 1) /
+                                                    duration)
+                               : requestedRate;
+  SPtr<AnimationClip> clip = chMakeShared<AnimationClip>(sampleRate, frameCount);
+
+  const auto blendVector = [](const aiVector3D& from, const aiVector3D& to, float alpha) {
+    return from + (to - from) * alpha;
+  };
+  const auto blendRotation = [](const aiQuaternion& from,
+                                const aiQuaternion& to,
+                                float alpha) {
+    aiQuaternion result;
+    aiQuaternion::Interpolate(result, from, to, alpha);
+    return result.Normalize();
+  };
+
+  Vector<Vector3> positions(frameCount);
+  Vector<Quaternion> rotations(frameCount);
+  Vector<Vector3> scales(frameCount);
+  for (uint32 c = 0; c < animation.mNumChannels; ++c) {
+    const aiNodeAnim& channel = *animation.mChannels[c];
+    // A channel without keys keeps the node's own value.
+    aiVector3D restScale(1.0f, 1.0f, 1.0f);
+    aiQuaternion restRotation;
+    aiVector3D restPosition;
+    if (const aiNode* node = scene.mRootNode->FindNode(channel.mNodeName)) {
+      node->mTransformation.Decompose(restScale, restRotation, restPosition);
+    }
+
+    for (uint32 frame = 0; frame < frameCount; ++frame) {
+      const double seconds = frameCount > 1 ? duration * frame / (frameCount - 1) : 0.0;
+      const double time = seconds * ticksPerSecond;
+      const aiVector3D position = sampleKeys(channel.mPositionKeys, channel.mNumPositionKeys,
+                                             time, restPosition, blendVector);
+      const aiQuaternion rotation = sampleKeys(
+          channel.mRotationKeys, channel.mNumRotationKeys, time, restRotation, blendRotation);
+      const aiVector3D scale = sampleKeys(channel.mScalingKeys, channel.mNumScalingKeys, time,
+                                          restScale, blendVector);
+
+      const Matrix4 local = convertAssimpMatrix(aiMatrix4x4(scale, rotation, position));
+      if (!local.decompose(scales[frame], rotations[frame], positions[frame])) {
+        // A zero scale hides the node, as Model::addNode keeps it.
+        scales[frame] = Vector3::ZERO;
+        rotations[frame] = Quaternion::IDENTITY;
+        const Vector4 origin = local.transformPosition(Vector3::ZERO);
+        positions[frame] = Vector3(origin.x, origin.y, origin.z);
+      }
+    }
+    static_cast<void>(clip->addTrack(channel.mNodeName.C_Str(), positions, rotations, scales));
+  }
+  return clip;
+}
+
+/*
+ * The name with every character a file name may not hold turned into '_', so names from
+ * the file ("Armature|Run", "Body:Skin") can name asset files.
+ */
+static String
+makeFileSafeName(StringView name)
+{
+  String safe(name);
+  for (ANSICHAR& character : safe) {
+    const bool bAllowed = (character >= 'a' && character <= 'z') ||
+                          (character >= 'A' && character <= 'Z') ||
+                          (character >= '0' && character <= '9') || character == '_' ||
+                          character == '-' || character == '.' || character == ' ';
+    if (!bAllowed) {
+      character = '_';
+    }
+  }
+  return safe;
+}
+
+/*
  * A folder under parent named after the model; "_1", "_2"... when it is taken.
  */
 static Path
@@ -652,6 +779,9 @@ class MeshImportTask final : public IImportTask
   NODISCARD bool
   assignSkeleton(const Path& folder);
 
+  void
+  createAnimationClips(const Path& folder);
+
   static constexpr int32 NO_TEXTURE = -1;
   // The source part of the skeleton a model file makes, so a later import finds it.
   static constexpr StringView kSkeletonPart = "Skeleton";
@@ -670,6 +800,8 @@ class MeshImportTask final : public IImportTask
   SPtr<Model> m_model;
   // Built from the file; createAssets swaps it for a compatible one of the project.
   SPtr<Skeleton> m_skeleton;
+  // One per animation of the file, with the name the file gives it.
+  Vector<Pair<String, SPtr<AnimationClip>>> m_clips;
   Vector<TextureSource> m_textures;
   // Per material, the index into m_textures of each MaterialTexture, or NO_TEXTURE.
   Vector<Array<int32, TEXTURE_KINDS>> m_materialTextures;
@@ -893,6 +1025,20 @@ MeshImportTask::readSource(ImportProgress& progress)
   }
   m_skeleton = buildSkeleton(*m_model);
 
+  if (m_settings.importAnimations) {
+    for (uint32 i = 0; i < m_scene->mNumAnimations; ++i) {
+      const aiAnimation& animation = *m_scene->mAnimations[i];
+      String name = animation.mName.C_Str();
+      if (name.empty()) {
+        ANSICHAR numberBuffer[StringUtils::MAX_INTEGER_CHARS];
+        name = "Animation";
+        name += StringUtils::toChars(numberBuffer, i);
+      }
+      m_clips.emplace_back(std::move(name),
+                           readAnimation(*m_scene, animation, m_settings.animationSampleRate));
+    }
+  }
+
   // Every texture is read here, although a material reused from an earlier import of the
   // same file does not need its own: which ones are reused is only known on the main thread.
   constexpr float kTexturesStart = AssimpProgress::READ_SHARE + AssimpProgress::MESH_SHARE;
@@ -969,7 +1115,7 @@ MeshImportTask::createMaterial(uint32 index, const Path& folder)
   }
 
   const AssetMetadata metadata =
-      IAssetCodec::makeMetadata<MaterialAsset>("M_" + slot.name, folder);
+      IAssetCodec::makeMetadata<MaterialAsset>(makeFileSafeName("M_" + slot.name), folder);
   SPtr<MaterialAsset> materialAsset = chMakeShared<MaterialAsset>(metadata);
   Material& material = materialAsset->getMaterial();
   const Array<int32, TEXTURE_KINDS>& textures = m_materialTextures[index];
@@ -1080,7 +1226,31 @@ MeshImportTask::createAssets(const Path& assetFolder)
     CH_LOG_ERROR(MeshSystem, "Failed to save model asset: {0}", m_assetName);
     return nullptr;
   }
+  createAnimationClips(modelFolder);
   return modelAsset;
+}
+
+/*
+ */
+void
+MeshImportTask::createAnimationClips(const Path& folder)
+{
+  for (auto& [name, clip] : m_clips) {
+    clip->setSkeletonId(m_model->getSkeletonId());
+    const String assetName = makeFileSafeName("A_" + m_assetName + "_" + name);
+    const AssetMetadata metadata =
+        IAssetCodec::makeMetadata<AnimationClipAsset>(assetName, folder);
+    const SPtr<AnimationClipAsset> clipAsset =
+        chMakeShared<AnimationClipAsset>(metadata, clip);
+    // The prefix keeps the part apart from a material with the same name.
+    if (!IAssetCodec::saveAndRegister(clipAsset, m_sourceFile, "Animation/" + name,
+                                      m_settings)) {
+      CH_LOG_ERROR(MeshSystem, "Failed to save animation clip asset: {0}", assetName);
+      continue;
+    }
+    CH_LOG_INFO(MeshSystem, "Imported animation {0}: {1} tracks, {2} s", assetName,
+                clip->getTracks().size(), clip->getDuration());
+  }
 }
 } // namespace MeshManagerHelpers
 

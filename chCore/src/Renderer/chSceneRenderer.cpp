@@ -19,7 +19,6 @@
 #include "chLightItem.h"
 #include "chLogger.h"
 #include "chProfiler.h"
-#include "chScene.h"
 #include "chShadowRenderer.h"
 #include "chSkyPass.h"
 #include "chStringUtils.h"
@@ -56,6 +55,18 @@ SceneRenderer::~SceneRenderer() = default;
 
 /*
  */
+void
+SceneRenderer::extract(const Scene& scene,
+                       const Camera& camera,
+                       const LinearColor& clearColor,
+                       const DebugDraw* extraLines)
+{
+  CH_PROFILE_SCOPE("ExtractRenderFrame");
+  m_frame.extract(scene, camera, clearColor, extraLines);
+}
+
+/*
+ */
 RenderGraph&
 SceneRenderer::beginFrame()
 {
@@ -68,35 +79,29 @@ SceneRenderer::beginFrame()
 /*
  */
 RGTextureHandle
-SceneRenderer::addScenePasses(const Scene& scene,
-                              const Camera& camera,
-                              RGTextureHandle output,
-                              const LinearColor& clearColor,
-                              const DebugDraw* extraLines)
+SceneRenderer::addScenePasses(RGTextureHandle output)
 {
   CH_PROFILE_SCOPE("AddScenePasses");
+  const Camera& camera = m_frame.getCamera();
   const Frustum& frustum = camera.getFrustum();
   {
     CH_PROFILE_SCOPE("Gather");
-    scene.gatherRenderItems(frustum, m_visibleItems);
-    scene.gatherLights(frustum, m_visibleLights);
+    m_frame.gatherItems(frustum, m_visibleItems);
+    m_frame.gatherLights(frustum, m_visibleLights);
     filterLightTypes();
   }
   const RenderView view{.camera = camera,
                         .items = m_visibleItems,
                         .lights = m_visibleLights,
-                        .clearColor = clearColor,
+                        .clearColor = m_frame.getClearColor(),
                         .bShowShadowCascades = m_viewMode == ViewMode::ShadowCascades};
 
-  const RGTextureHandle depth = addViewModePasses(scene, view, output);
+  const RGTextureHandle depth = addViewModePasses(view, output);
 #if USING(CH_DEBUG_DRAW)
   // The shadow map view shows textures, not the scene, so lines would not match it.
   if (g_cvarDebugLines.get() && m_viewMode != ViewMode::ShadowMaps) {
-    const DebugDraw* lists[] = {&scene.getDebugDraw(), extraLines};
-    m_debugLinePass->addPass(m_graph, camera, lists, output, depth);
+    m_debugLinePass->addPass(m_graph, camera, m_frame.getDebugLines(), output, depth);
   }
-#else
-  CH_PARAMETER_UNUSED(extraLines);
 #endif // USING(CH_DEBUG_DRAW)
   return depth;
 }
@@ -104,16 +109,14 @@ SceneRenderer::addScenePasses(const Scene& scene,
 /*
  */
 RGTextureHandle
-SceneRenderer::addViewModePasses(const Scene& scene,
-                                 const RenderView& view,
-                                 RGTextureHandle output)
+SceneRenderer::addViewModePasses(const RenderView& view, RGTextureHandle output)
 {
   switch (m_viewMode) {
     case ViewMode::Lit:
     case ViewMode::ShadowCascades:
-      return addLitPasses(scene, view, output);
+      return addLitPasses(view, output);
     case ViewMode::LitWireframe: {
-      const RGTextureHandle depth = addLitPasses(scene, view, output);
+      const RGTextureHandle depth = addLitPasses(view, output);
       if (depth.isValid()) {
         m_debugRenderPath->addWireframeOverlay(m_graph, view, output, depth);
       }
@@ -135,7 +138,7 @@ SceneRenderer::addViewModePasses(const Scene& scene,
       return m_deferredRenderPath->addGBufferViewPasses(m_graph, view, output, m_viewMode);
     case ViewMode::ShadowMaps:
       // The views are only needed by lit paths; the debug pass reads the atlases.
-      static_cast<void>(m_shadowRenderer->addPasses(m_graph, scene, view));
+      static_cast<void>(m_shadowRenderer->addPasses(m_graph, m_frame, view));
       m_shadowRenderer->addDebugPass(m_graph, output);
       return {};
     case ViewMode::COUNT:
@@ -170,14 +173,14 @@ SceneRenderer::execute(ICommandList& commandList)
 /*
  */
 RGTextureHandle
-SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output)
+SceneRenderer::addLitPasses(const RenderView& view, RGTextureHandle output)
 {
   const RenderView litView{.camera = view.camera,
                            .items = view.items,
                            .lights = view.lights,
-                           .shadows = m_shadowRenderer->addPasses(m_graph, scene, view),
+                           .shadows = m_shadowRenderer->addPasses(m_graph, m_frame, view),
                            .ibl = m_imageBasedLighting->addPasses(
-                               m_graph, scene.getActiveSkyLight()),
+                               m_graph, m_frame.getSkyLight()),
                            .clearColor = view.clearColor,
                            .bShowShadowCascades = view.bShowShadowCascades};
   const RGTextureDesc outputDesc = m_graph.getTextureDesc(output);
@@ -185,7 +188,7 @@ SceneRenderer::addLitPasses(const Scene& scene, const RenderView& view, RGTextur
       "SceneColor",
       {.format = kSceneColorFormat, .width = outputDesc.width, .height = outputDesc.height});
   const RGTextureHandle depth = m_renderPath->addPasses(m_graph, litView, sceneColor);
-  m_skyPass->addPass(m_graph, view.camera, scene.getActiveSkyLight(), sceneColor, depth);
+  m_skyPass->addPass(m_graph, view.camera, m_frame.getSkyLight(), sceneColor, depth);
   m_tonemapPass->addPass(m_graph, sceneColor, output);
   return depth;
 }

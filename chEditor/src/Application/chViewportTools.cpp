@@ -881,14 +881,14 @@ ViewportTools::addSelectionSkeletons(DebugDraw& outLines)
       if (nodes[node].bone == ModelNode::NO_BONE) {
         continue;
       }
-      const Matrix4 world = model.getNodeRestMatrix(node) * ownerWorld;
+      const Matrix4 world = component->getNodeMatrix(node) * ownerWorld;
       const Vector4 joint = world.transformPosition(Vector3::ZERO);
       const Vector3 jointPosition(joint.x, joint.y, joint.z);
       float axesSize = 0.02f;
       const uint32 parent = nodes[node].parent;
       if (parent != ModelNode::NO_PARENT && nodes[parent].bone != ModelNode::NO_BONE) {
         const Vector4 parentJoint =
-            (model.getNodeRestMatrix(parent) * ownerWorld).transformPosition(Vector3::ZERO);
+            (component->getNodeMatrix(parent) * ownerWorld).transformPosition(Vector3::ZERO);
         const Vector3 parentPosition(parentJoint.x, parentJoint.y, parentJoint.z);
         outLines.line(parentPosition, jointPosition, LinearColor::Cyan, DebugDepth::OnTop);
         // The axes follow the length of the bone, so they read at any model scale.

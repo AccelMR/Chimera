@@ -15,7 +15,7 @@
 #include "chMesh.h"
 #include "chRay.h"
 #include "chRayCast.h"
-#include "chShapeOverlap.h"
+#include "chRenderCulling.h"
 
 namespace chEngineSDK {
 
@@ -187,6 +187,17 @@ Scene::setParent(GameObject& gameObject, GameObject* newParent)
 /*
  */
 void
+Scene::fixedUpdate(float deltaTime)
+{
+  m_fixedDebugDraw.clear();
+  for (const SPtr<GameObject>& root : m_rootGameObjects) {
+    root->fixedUpdate(deltaTime);
+  }
+}
+
+/*
+ */
+void
 Scene::update(float deltaTime)
 {
   m_debugDraw.clear();
@@ -240,12 +251,7 @@ Scene::removeRenderItem(uint32 id)
 void
 Scene::gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outItems) const
 {
-  outItems.clear();
-  for (const RenderItem& item : m_renderItems) {
-    if (item.mesh && ShapeOverlap::frustumBounds(frustum, item.worldBounds)) {
-      outItems.push_back(&item);
-    }
-  }
+  RenderCulling::gatherItems(m_renderItems, frustum, outItems);
 }
 
 /*
@@ -328,18 +334,7 @@ Scene::removeLight(uint32 id)
 void
 Scene::gatherLights(const Frustum& frustum, Vector<const LightItem*>& outLights) const
 {
-  outLights.clear();
-  for (const LightItem& light : m_lights) {
-    if (!light.bInUse) {
-      continue;
-    }
-    // A spot is tested with the sphere of its range too: a cone test would save little for
-    // what it costs.
-    if (light.type == LightType::Directional ||
-        ShapeOverlap::frustumSphere(frustum, Sphere(light.position, light.range))) {
-      outLights.push_back(&light);
-    }
-  }
+  RenderCulling::gatherLights(m_lights, frustum, outLights);
 }
 
 /*

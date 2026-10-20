@@ -12,6 +12,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
+class AnimationClipAsset;
 class MaterialAsset;
 class ModelAsset;
 class PrefabAsset;
@@ -56,6 +57,12 @@ class AssetDragDrop
    */
   NODISCARD static SPtr<PrefabAsset>
   acceptPrefab();
+
+  /**
+   * Same as acceptModel, for animation clips.
+   */
+  NODISCARD static SPtr<AnimationClipAsset>
+  acceptAnimation();
 
   /**
    * Makes the last ImGui item a drag source for gameObject, an object of the open scene. When

@@ -42,6 +42,34 @@ Quaternion::Quaternion(const Vector3& axis, const Degree& angle) noexcept
 
 /*
  */
+Quaternion
+Quaternion::slerp(const Quaternion& a, const Quaternion& b, float alpha) noexcept
+{
+  float cosAngle = a.dot(b);
+  float bSign = 1.0f;
+  if (cosAngle < 0.0f) {
+    cosAngle = -cosAngle;
+    bSign = -1.0f;
+  }
+
+  // Nearly the same rotation: sin(angle) goes to zero, and a straight blend is exact enough.
+  constexpr float kLinearThreshold = 0.9995f;
+  if (cosAngle > kLinearThreshold) {
+    return nlerp(a, b, alpha);
+  }
+
+  const float angle = Math::acos(cosAngle).valueRadian();
+  const float invSinAngle = 1.0f / Math::sin(Radian(angle));
+  const float aScale = Math::sin(Radian((1.0f - alpha) * angle)) * invSinAngle;
+  const float bScale = Math::sin(Radian(alpha * angle)) * invSinAngle * bSign;
+  return Quaternion(a.x * aScale + b.x * bScale,
+                    a.y * aScale + b.y * bScale,
+                    a.z * aScale + b.z * bScale,
+                    a.w * aScale + b.w * bScale);
+}
+
+/*
+ */
 Quaternion::Quaternion(const Rotator& rotator) noexcept
 {
   float sp, cp, sy, cy, sr, cr;

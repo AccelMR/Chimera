@@ -64,6 +64,9 @@ class CH_CORE_EXPORT GameObject : public Object
   getComponents() const { return m_components; }
 
   void
+  fixedUpdate(float deltaTime);
+
+  void
   update(float deltaTime);
 
   NODISCARD FORCEINLINE Transform&

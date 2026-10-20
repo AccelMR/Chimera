@@ -52,6 +52,10 @@ struct ImportSettings
   bool autoAlphaMask = true;
   ImportSkeletonMode skeletonMode = ImportSkeletonMode::Auto;
   UUID skeleton = UUID::null();
+  // Models: each animation of the file becomes an AnimationClip asset, its keys taken
+  // animationSampleRate times per second.
+  bool importAnimations = true;
+  float animationSampleRate = 30.0f;
 };
 
 } // namespace chEngineSDK

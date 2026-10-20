@@ -10,6 +10,8 @@
 
 #include "chInspectorUI.h"
 
+#include "chAnimationClip.h"
+#include "chAnimationClipAsset.h"
 #include "chAssetDragDrop.h"
 #include "chEditorScene.h"
 #include "chAssetManager.h"
@@ -364,6 +366,10 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
     }
   }
 
+  if (modelComponent.isWholeModel()) {
+    renderAnimation(modelComponent);
+  }
+
   const Vector<uint32>& usedSlots = modelComponent.getUsedMaterialSlots();
   if (usedSlots.empty() ||
       !ImGui::TreeNodeEx(ICON_FA_PALETTE "  Materials###Materials",
@@ -631,6 +637,103 @@ InspectorUI::renderSkyLightComponent(SkyLightComponent& skyLight)
 /*
  */
 void
+InspectorUI::renderAnimation(ModelComponent& modelComponent)
+{
+  if (!ImGui::TreeNodeEx(ICON_FA_FILM "  Animation###Animation",
+                         ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+
+  GameObject& gameObject = *modelComponent.getOwner();
+  const SPtr<AnimationClipAsset>& clipAsset = modelComponent.getAnimationAsset();
+  ImGui::Button(clipAsset ? clipAsset->getName() : "None (drop an animation)",
+                ImVec2(-FLT_MIN, 0.0f));
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<AnimationClipAsset> dropped = AssetDragDrop::acceptAnimation()) {
+      EditorScene::recordChange(gameObject, "Set Animation");
+      modelComponent.setAnimation(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  const SPtr<AnimationClip>& clip = modelComponent.getAnimation();
+  if (!clip) {
+    ImGui::TreePop();
+    return;
+  }
+  if (ImGui::SmallButton("Clear")) {
+    EditorScene::recordChange(gameObject, "Clear Animation");
+    modelComponent.setAnimation(nullptr);
+    ImGui::TreePop();
+    return;
+  }
+  if (!modelComponent.isAnimating()) {
+    ImGui::TextDisabled("No node of this model has the name of a track.");
+  }
+
+  // Playing, looping and speed are saved with the scene, so each change is an undo step;
+  // the time is not saved, so moving it is no edit.
+  const bool bPlaying = modelComponent.isPlaying();
+  if (ImGui::Button(bPlaying ? ICON_FA_PAUSE "  Pause###PlayPause"
+                             : ICON_FA_PLAY "  Play###PlayPause")) {
+    EditorScene::recordChange(gameObject, bPlaying ? "Pause Animation" : "Play Animation");
+    modelComponent.setPlaying(!bPlaying);
+  }
+  ImGui::SameLine();
+  bool bLooping = modelComponent.isLooping();
+  if (ImGui::Checkbox("Loop", &bLooping)) {
+    EditorScene::recordChange(gameObject, "Edit Loop");
+    modelComponent.setLooping(bLooping);
+  }
+
+  float speed = modelComponent.getPlaybackSpeed();
+  if (ImGui::DragFloat("Speed", &speed, 0.01f, -10.0f, 10.0f, "%.2fx",
+                       ImGuiSliderFlags_AlwaysClamp)) {
+    EditorScene::recordChange(gameObject, "Edit Speed");
+    modelComponent.setPlaybackSpeed(speed);
+  }
+
+  float time = modelComponent.getAnimationTime();
+  if (ImGui::SliderFloat("Time", &time, 0.0f, clip->getDuration(), "%.2f s")) {
+    modelComponent.setAnimationTime(time);
+  }
+  ImGui::TreePop();
+}
+
+/*
+ */
+void
+InspectorUI::renderAnimationClip(const AnimationClip& clip)
+{
+  ImGui::Text("Duration: %.2f s", clip.getDuration());
+  ImGui::Text("Keys: %u, %.1f per second", clip.getFrameCount(), clip.getSampleRate());
+  if (!clip.getSkeletonId().isNull()) {
+    const SPtr<IAsset> skeleton = AssetManager::instance().getAsset(clip.getSkeletonId());
+    ImGui::Text(ICON_FA_BONE "  Skeleton: %s", skeleton ? skeleton->getName() : "(missing)");
+  }
+
+  const Vector<AnimationTrack>& tracks = clip.getTracks();
+  if (!ImGui::TreeNodeEx("##tracks", ImGuiTreeNodeFlags_DefaultOpen, "Tracks (%u)",
+                         static_cast<uint32>(tracks.size()))) {
+    return;
+  }
+  ImGui::TextDisabled("Moving channels: P position, R rotation, S scale");
+  ImGuiListClipper clipper;
+  clipper.Begin(static_cast<int32>(tracks.size()));
+  while (clipper.Step()) {
+    for (int32 i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+      const AnimationTrack& track = tracks[static_cast<SIZE_T>(i)];
+      ImGui::Text("%s%s%s  %s", track.positionCount > 1 ? "P" : "-",
+                  track.rotationCount > 1 ? "R" : "-", track.scaleCount > 1 ? "S" : "-",
+                  track.nodeName.c_str());
+    }
+  }
+  ImGui::TreePop();
+}
+
+/*
+ */
+void
 InspectorUI::renderMaterialSlot(ModelComponent& modelComponent, uint32 slot)
 {
   const ModelMaterialSlot& modelSlot = modelComponent.getModel()->getMaterialSlots()[slot];
@@ -792,11 +895,22 @@ InspectorUI::renderAsset(const SPtr<IAsset>& asset)
   ImGui::TextDisabled("%s - %s", asset->getTypeName(), asset->getAssetPath());
   ImGui::Separator();
 
-  if (!asset->isTypeOf<SkeletonAsset>()) {
+  const bool bSkeleton = asset->isTypeOf<SkeletonAsset>();
+  const bool bAnimation = asset->isTypeOf<AnimationClipAsset>();
+  if (!bSkeleton && !bAnimation) {
     return;
   }
   if (asset->getState() == AssetState::Unloaded) {
     AssetManager::instance().syncLoadAsset(asset);
+  }
+  if (bAnimation) {
+    const SPtr<AnimationClipAsset> clipAsset = asset->as<AnimationClipAsset>();
+    if (!clipAsset || !clipAsset->getClip()) {
+      ImGui::TextDisabled("The animation could not be loaded.");
+      return;
+    }
+    renderAnimationClip(*clipAsset->getClip());
+    return;
   }
   const SPtr<SkeletonAsset> skeletonAsset = asset->as<SkeletonAsset>();
   if (!skeletonAsset || !skeletonAsset->getSkeleton()) {

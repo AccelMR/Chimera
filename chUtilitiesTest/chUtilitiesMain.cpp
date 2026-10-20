@@ -1083,6 +1083,51 @@ TEST_CASE("chUtilities - Quaternion") {
  *                            Shapes
  */
 /***********************************************************************/
+TEST_CASE("chUtilities - Quaternion interpolation")
+{
+  const Quaternion start = Quaternion::IDENTITY;
+  const Quaternion end(Vector3::UP, Degree(120.0f));
+
+  SECTION("Slerp turns at constant speed")
+  {
+    REQUIRE(Quaternion::slerp(start, end, 0.0f).isRotationEqual(start, 1e-6f));
+    REQUIRE(Quaternion::slerp(start, end, 1.0f).isRotationEqual(end, 1e-6f));
+    for (const float alpha : {0.25f, 0.5f, 0.75f}) {
+      const Quaternion expected(Vector3::UP, Degree(120.0f * alpha));
+      const Quaternion result = Quaternion::slerp(start, end, alpha);
+      REQUIRE(result.isRotationEqual(expected, 1e-6f));
+      REQUIRE(Math::abs(result.length() - 1.0f) < 1e-5f);
+    }
+  }
+
+  SECTION("Both take the short way when the keys have opposite signs")
+  {
+    const Quaternion negatedEnd = end * -1.0f;
+    const Quaternion expected(Vector3::UP, Degree(60.0f));
+    REQUIRE(Quaternion::slerp(start, negatedEnd, 0.5f).isRotationEqual(expected, 1e-6f));
+    REQUIRE(Quaternion::nlerp(start, negatedEnd, 0.5f).isRotationEqual(expected, 1e-6f));
+  }
+
+  SECTION("Nlerp follows the same path, close to slerp for near keys")
+  {
+    // Halfway the two agree exactly; elsewhere nlerp is off by a little.
+    REQUIRE(Quaternion::nlerp(start, end, 0.5f)
+                .isRotationEqual(Quaternion::slerp(start, end, 0.5f), 1e-6f));
+    const Quaternion nearEnd(Vector3::UP, Degree(12.0f));
+    const Quaternion nlerped = Quaternion::nlerp(start, nearEnd, 0.3f);
+    REQUIRE(Math::abs(nlerped.length() - 1.0f) < 1e-5f);
+    const Vector3 expected =
+        Quaternion(Vector3::UP, Degree(3.6f)).rotateVector(Vector3::FORWARD);
+    REQUIRE(nlerped.rotateVector(Vector3::FORWARD).nearEqual(expected, 1e-3f));
+  }
+
+  SECTION("Almost equal keys do not divide by zero")
+  {
+    const Quaternion almost(Vector3::UP, Degree(0.01f));
+    REQUIRE_FALSE(Quaternion::slerp(start, almost, 0.5f).containsNaN());
+  }
+}
+
 TEST_CASE("chUtilities - AABox") {
   REQUIRE(sizeof(AABox) == 12 * 2);
 

@@ -13,6 +13,7 @@
 #include "chAssetCodec.h"
 #include "chEnginePaths.h"
 #include "chLogger.h"
+#include "chMath.h"
 #include "chAssetManager.h"
 #include "chModelAsset.h"
 #include "chSkeletonAsset.h"
@@ -151,6 +152,19 @@ renderModelOptions(ImportSettings& settings)
                         "base color texture has transparent pixels.");
 
   renderSkeletonOption(settings);
+
+  ImGui::Checkbox("Import animations", &settings.importAnimations);
+  ImGui::SetItemTooltip("Each animation of the file becomes an animation clip asset next to "
+                        "the model.");
+  ImGui::BeginDisabled(!settings.importAnimations);
+  if (ImGui::DragFloat("Sample rate", &settings.animationSampleRate, 1.0f, 1.0f, 240.0f,
+                       "%.0f keys/s", ImGuiSliderFlags_AlwaysClamp)) {
+    settings.animationSampleRate = Math::max(settings.animationSampleRate, 1.0f);
+  }
+  ImGui::SetItemTooltip("Keys are taken this many times per second, so finding the keys "
+                        "around a time costs nothing while playing. More keys follow fast "
+                        "motion closer and take more memory.");
+  ImGui::EndDisabled();
 }
 
 /*

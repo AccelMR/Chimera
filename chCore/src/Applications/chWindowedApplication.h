@@ -80,10 +80,11 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   /**
    * Draws the frame into the current image of the swap chain. The image starts with
    * undefined contents (state Undefined) and must be left in the Present state; importing
-   * it into a render graph with those two states does both.
+   * it into a render graph with those two states does both. It only draws what update()
+   * decided (a RenderFrame), so it can move to a render thread later.
    */
   virtual void
-  onRender(ICommandList& commandList, const ISwapChain& swapChain, float deltaTime) = 0;
+  onRender(ICommandList& commandList, const ISwapChain& swapChain) = 0;
 
   /**
    * Runs after the frame was submitted and the main swap chain presented; other swap chains
@@ -107,7 +108,7 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
 
  private:
   void
-  render(const float deltaTime);
+  render();
 
   void
   resize(uint32 width, uint32 height);

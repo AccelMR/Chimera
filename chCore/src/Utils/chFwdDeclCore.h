@@ -49,6 +49,7 @@ class GameObject;
 class ModelComponent;
 struct LightItem;
 struct RenderItem;
+class RenderFrame;
 class Transform;
 
 } // namespace chEngineSDK

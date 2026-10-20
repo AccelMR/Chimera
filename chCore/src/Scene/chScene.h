@@ -94,7 +94,15 @@ class CH_CORE_EXPORT Scene : public Object
   setParent(GameObject& gameObject, GameObject* newParent);
 
   /**
-   * Updates the components of every object.
+   * Runs the fixed step of the components of every object; the application calls it zero or
+   * more times per frame at a fixed rate.
+   */
+  void
+  fixedUpdate(float deltaTime);
+
+  /**
+   * Runs the per frame update of the components of every object, once per frame before
+   * updateTransforms.
    */
   void
   update(float deltaTime);
@@ -127,6 +135,9 @@ class CH_CORE_EXPORT Scene : public Object
    */
   NODISCARD FORCEINLINE Span<const RenderItem>
   getRenderItemSlots() const { return m_renderItems; }
+
+  NODISCARD FORCEINLINE Span<const LightItem>
+  getLightSlots() const { return m_lights; }
 
   /**
    * Replaces the contents of outItems with the items whose bounds touch the frustum. The
@@ -187,14 +198,23 @@ class CH_CORE_EXPORT Scene : public Object
   getActiveSkyLight() const;
 
   /**
-   * Lines the scene's components draw. Cleared when update() starts, so lines drawn during
-   * an update show on every frame until the next one.
+   * Lines the scene's components draw in update(). Cleared when update() starts.
    */
   NODISCARD FORCEINLINE DebugDraw&
   getDebugDraw() { return m_debugDraw; }
 
   NODISCARD FORCEINLINE const DebugDraw&
   getDebugDraw() const { return m_debugDraw; }
+
+  /**
+   * Lines the scene's components draw in fixedUpdate(). Cleared when fixedUpdate() starts,
+   * so they show on every frame until the next fixed step, also on frames without one.
+   */
+  NODISCARD FORCEINLINE DebugDraw&
+  getFixedDebugDraw() { return m_fixedDebugDraw; }
+
+  NODISCARD FORCEINLINE const DebugDraw&
+  getFixedDebugDraw() const { return m_fixedDebugDraw; }
 
  private:
   Vector<SPtr<GameObject>> m_rootGameObjects;
@@ -208,6 +228,7 @@ class CH_CORE_EXPORT Scene : public Object
   Vector<uint32> m_freeSkyLights;
   uint32 m_nextSkyLightOrder = 0;
   DebugDraw m_debugDraw;
+  DebugDraw m_fixedDebugDraw;
 };
 
 } // namespace chEngineSDK

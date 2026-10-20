@@ -94,6 +94,18 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   virtual void
   onPostInitialize() {}
 
+  /**
+   * Runs at a fixed rate, zero or more times per frame, for physics and logic that must not
+   * depend on the frame rate.
+   */
+  virtual void
+  fixedUpdate(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }
+
+  /**
+   * Runs once per frame, after the fixed steps and before the frame is drawn, with the real
+   * frame time: gameplay, animation and UI. It ends with everything the frame will draw
+   * already decided, so drawing never reads or changes the game state.
+   */
   virtual void
   update(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }
 

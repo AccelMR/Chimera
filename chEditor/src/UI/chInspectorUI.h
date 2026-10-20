@@ -14,6 +14,7 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
+class AnimationClip;
 class IAsset;
 class Material;
 class MaterialAsset;
@@ -60,10 +61,16 @@ class InspectorUI
   renderSkyLightComponent(SkyLightComponent& skyLight);
 
   void
+  renderAnimation(ModelComponent& modelComponent);
+
+  void
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
 
   void
   renderAsset(const SPtr<IAsset>& asset);
+
+  void
+  renderAnimationClip(const AnimationClip& clip);
 
   void
   renderSkeleton(const Skeleton& skeleton);

@@ -10,10 +10,12 @@
 #include "chModelComponent.h"
 
 #include "chAlgorithm.h"
+#include "chAnimationClipAsset.h"
 #include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chGameObject.h"
 #include "chMaterialAsset.h"
+#include "chMath.h"
 #include "chMatrixHelpers.h"
 #include "chModel.h"
 #include "chModelAsset.h"
@@ -47,6 +49,18 @@ struct MaterialOverrideFileData
 static_assert(sizeof(MaterialOverrideFileData) == 20,
               "MaterialOverrideFileData must have no padding");
 
+// Version 2: after the overrides.
+struct AnimationFileData
+{
+  UUID clip;
+  float playbackSpeed;
+  uint32 flags;
+};
+static_assert(sizeof(AnimationFileData) == 24, "AnimationFileData must have no padding");
+
+constexpr uint32 kAnimationPlaying = 1u << 0;
+constexpr uint32 kAnimationLooping = 1u << 1;
+
 /*
  * Null when there is no such asset or it is of another type. Without an AssetManager
  * (tests) nothing is found.
@@ -63,8 +77,9 @@ findAsset(const UUID& id)
 }
 
 /*
- * Calls visit(mesh, localMatrix) for every mesh the part draws, localMatrix being where the
- * mesh sits relative to the GameObject. An index past the end draws nothing.
+ * Calls visit(mesh, localMatrix, node) for every mesh the part draws, localMatrix being where
+ * the mesh sits relative to the GameObject in the rest pose and node the model node that
+ * draws it (ALL for a part). An index past the end draws nothing.
  */
 template<typename Visitor>
 void
@@ -78,7 +93,7 @@ forEachDrawnMesh(const Model& model,
   if (nodeIndex == ModelComponent::ALL) {
     for (uint32 node = 0; node < model.getNodeCount(); ++node) {
       for (const uint32 index : model.getNodeMeshes(node)) {
-        visit(*meshes[index], model.getNodeRestMatrix(node));
+        visit(*meshes[index], model.getNodeRestMatrix(node), node);
       }
     }
     return;
@@ -92,11 +107,11 @@ forEachDrawnMesh(const Model& model,
   const Span<const uint32> nodeMeshes = model.getNodeMeshes(nodeIndex);
   if (meshIndex == ModelComponent::ALL) {
     for (const uint32 index : nodeMeshes) {
-      visit(*meshes[index], localMatrix);
+      visit(*meshes[index], localMatrix, ModelComponent::ALL);
     }
   }
   else if (meshIndex < nodeMeshes.size()) {
-    visit(*meshes[nodeMeshes[meshIndex]], localMatrix);
+    visit(*meshes[nodeMeshes[meshIndex]], localMatrix, ModelComponent::ALL);
   }
 }
 } // namespace
@@ -145,6 +160,7 @@ ModelComponent::setModelPart(const SPtr<ModelAsset>& modelAsset,
   m_meshIndex = meshIndex;
   m_pivot = pivot;
   rebuildUsedSlots();
+  bindAnimation();
 
   if (isRegistered()) {
     addRenderItems();
@@ -164,7 +180,7 @@ ModelComponent::rebuildUsedSlots()
 
   const SIZE_T slotCount = m_model->getMaterialSlots().size();
   forEachDrawnMesh(*m_model, m_nodeIndex, m_meshIndex, m_pivot,
-                   [this, slotCount](const Mesh& mesh, const Matrix4&) {
+                   [this, slotCount](const Mesh& mesh, const Matrix4&, uint32) {
                      const uint32 slot = mesh.getMaterialSlot();
                      if (slot < slotCount && !Algorithm::contains(m_usedSlots, slot)) {
                        m_usedSlots.push_back(slot);
@@ -263,6 +279,162 @@ ModelComponent::getWorldBounds(AABox& outBounds) const
 /*
  */
 void
+ModelComponent::setAnimation(const SPtr<AnimationClipAsset>& clip)
+{
+  m_animationAsset = clip;
+  m_animation = clip ? clip->getClip() : nullptr;
+  m_animationAssetId = clip ? clip->getUUID() : UUID::null();
+  m_animationTime = 0.0f;
+  bindAnimation();
+  // Also when the new clip moves nothing: the parts go back to the rest pose.
+  refreshPartMatrices();
+}
+
+/*
+ */
+void
+ModelComponent::setPlaying(bool bPlaying)
+{
+  if (bPlaying && !m_bPlaying && !m_bLooping && m_animation) {
+    const float duration = m_animation->getDuration();
+    if (m_playbackSpeed >= 0.0f && m_animationTime >= duration) {
+      setAnimationTime(0.0f);
+    }
+    else if (m_playbackSpeed < 0.0f && m_animationTime <= 0.0f) {
+      setAnimationTime(duration);
+    }
+  }
+  m_bPlaying = bPlaying;
+}
+
+/*
+ */
+void
+ModelComponent::setAnimationTime(float time)
+{
+  m_animationTime = m_animation ? Math::clamp(time, 0.0f, m_animation->getDuration()) : 0.0f;
+  m_bPoseDirty = true;
+}
+
+/*
+ */
+const Matrix4&
+ModelComponent::getNodeMatrix(uint32 nodeIndex) const
+{
+  return isAnimating() ? m_poseMatrices[nodeIndex] : m_model->getNodeRestMatrix(nodeIndex);
+}
+
+/*
+ */
+void
+ModelComponent::update(float deltaTime)
+{
+  if (!isAnimating()) {
+    return;
+  }
+
+  if (m_bPlaying && m_playbackSpeed != 0.0f) {
+    const float duration = m_animation->getDuration();
+    float time = m_animationTime + deltaTime * m_playbackSpeed;
+    if (m_bLooping && duration > 0.0f) {
+      time -= Math::floor(time / duration) * duration;
+    }
+    else if (time >= duration || time <= 0.0f) {
+      time = Math::clamp(time, 0.0f, duration);
+      m_bPlaying = false;
+    }
+    m_animationTime = time;
+    m_bPoseDirty = true;
+  }
+
+  if (m_bPoseDirty) {
+    m_bPoseDirty = false;
+    computePose();
+    refreshPartMatrices();
+  }
+}
+
+/*
+ */
+void
+ModelComponent::bindAnimation()
+{
+  m_trackNodes.clear();
+  m_localPose.clear();
+  m_poseMatrices.clear();
+  m_bPoseDirty = false;
+  if (!m_model || !m_animation || !isWholeModel()) {
+    return;
+  }
+
+  // Once per clip change, so a walk over the nodes per track is fine.
+  const Vector<ModelNode>& nodes = m_model->getNodes();
+  bool bAnyNode = false;
+  m_trackNodes.reserve(m_animation->getTracks().size());
+  for (const AnimationTrack& track : m_animation->getTracks()) {
+    uint32 target = AnimationClip::NO_TARGET;
+    for (uint32 i = 0; i < nodes.size(); ++i) {
+      if (nodes[i].name == track.nodeName) {
+        target = i;
+        break;
+      }
+    }
+    m_trackNodes.push_back(target);
+    bAnyNode = bAnyNode || target != AnimationClip::NO_TARGET;
+  }
+  if (!bAnyNode) {
+    m_trackNodes.clear();
+    return;
+  }
+
+  // Nodes no track moves keep their rest transform for good.
+  m_localPose.resize(nodes.size());
+  for (SIZE_T i = 0; i < nodes.size(); ++i) {
+    m_localPose[i] = {
+        .position = nodes[i].position, .rotation = nodes[i].rotation, .scale = nodes[i].scale};
+  }
+  m_poseMatrices.resize(nodes.size());
+  computePose();
+}
+
+/*
+ */
+void
+ModelComponent::computePose()
+{
+  m_animation->sample(m_animationTime, m_trackNodes, m_localPose);
+  const Vector<ModelNode>& nodes = m_model->getNodes();
+  // Parents come first, so each parent's matrix is ready when its children need it.
+  for (SIZE_T i = 0; i < nodes.size(); ++i) {
+    const NodeTransform& local = m_localPose[i];
+    const Matrix4 localMatrix =
+        ScaleRotationTranslationMatrix(local.scale, local.rotation, local.position);
+    m_poseMatrices[i] = nodes[i].parent == ModelNode::NO_PARENT
+                            ? localMatrix
+                            : localMatrix * m_poseMatrices[nodes[i].parent];
+  }
+}
+
+/*
+ */
+void
+ModelComponent::refreshPartMatrices()
+{
+  // Parts only exist while registered.
+  if (m_parts.empty()) {
+    return;
+  }
+  for (MeshPart& part : m_parts) {
+    if (part.node != ALL) {
+      part.localMatrix = getNodeMatrix(part.node);
+    }
+  }
+  updateRenderItems();
+}
+
+/*
+ */
+void
 ModelComponent::serialize(DataStream& stream) const
 {
   uint32 overrideCount = 0;
@@ -285,6 +457,12 @@ ModelComponent::serialize(DataStream& stream) const
       stream.write(&materialOverride, sizeof(materialOverride));
     }
   }
+
+  const AnimationFileData animation{
+      .clip = m_animationAssetId,
+      .playbackSpeed = m_playbackSpeed,
+      .flags = (m_bPlaying ? kAnimationPlaying : 0u) | (m_bLooping ? kAnimationLooping : 0u)};
+  stream.write(&animation, sizeof(animation));
 }
 
 /*
@@ -322,6 +500,24 @@ ModelComponent::deserialize(DataStream& stream)
                      materialOverride.material);
     }
   }
+
+  if (version < 2) {
+    return true;
+  }
+  AnimationFileData animation;
+  if (stream.read(&animation, sizeof(animation)) != sizeof(animation)) {
+    return false;
+  }
+  const SPtr<AnimationClipAsset> clip = findAsset<AnimationClipAsset>(animation.clip);
+  setAnimation(clip);
+  m_animationAssetId = animation.clip;
+  m_playbackSpeed = animation.playbackSpeed;
+  m_bPlaying = (animation.flags & kAnimationPlaying) != 0;
+  m_bLooping = (animation.flags & kAnimationLooping) != 0;
+  if (!clip && !animation.clip.isNull()) {
+    CH_LOG_WARNING(SceneManagerLog, "A model component lost its animation {0}.",
+                   animation.clip);
+  }
   return true;
 }
 
@@ -337,6 +533,9 @@ ModelComponent::collectReferences(Vector<UUID>& outReferences) const
     if (material) {
       outReferences.push_back(material->getUUID());
     }
+  }
+  if (!m_animationAssetId.isNull()) {
+    outReferences.push_back(m_animationAssetId);
   }
 }
 
@@ -361,6 +560,14 @@ ModelComponent::onUnregister()
 void
 ModelComponent::onTransformChanged()
 {
+  updateRenderItems();
+}
+
+/*
+ */
+void
+ModelComponent::updateRenderItems()
+{
   Scene& scene = *getOwner()->getScene();
   const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
   for (const MeshPart& part : m_parts) {
@@ -383,7 +590,9 @@ ModelComponent::addRenderItems()
   const Matrix4& ownerWorld = getOwner()->getTransform().getWorldMatrix();
   forEachDrawnMesh(
       *m_model, m_nodeIndex, m_meshIndex, m_pivot,
-      [this, &scene, &ownerWorld](const Mesh& mesh, const Matrix4& localMatrix) {
+      [this, &scene, &ownerWorld](const Mesh& mesh, const Matrix4& restMatrix, uint32 node) {
+        const Matrix4& localMatrix =
+            node != ALL && isAnimating() ? m_poseMatrices[node] : restMatrix;
         // Row vectors: the mesh's place in the object applies first, then the object's.
         const Matrix4 world = localMatrix * ownerWorld;
         const RenderItem item{.worldMatrix = world,
@@ -392,8 +601,10 @@ ModelComponent::addRenderItems()
                               .material = getRenderMaterial(mesh.getMaterialSlot()),
                               .owner = getOwner()};
         const uint32 renderItemId = scene.addRenderItem(item);
-        m_parts.push_back(
-            {.localMatrix = localMatrix, .mesh = &mesh, .renderItemId = renderItemId});
+        m_parts.push_back({.localMatrix = localMatrix,
+                           .mesh = &mesh,
+                           .renderItemId = renderItemId,
+                           .node = node});
       });
 }
 

@@ -126,7 +126,17 @@ SceneManager::setActiveScene(WeakPtr<Scene> scene){
 }
 
 /*
-*/
+ */
+void
+SceneManager::fixedUpdate(float deltaTime)
+{
+  if (SPtr<Scene> scene = m_activeScene.lock()) {
+    scene->fixedUpdate(deltaTime);
+  }
+}
+
+/*
+ */
 void
 SceneManager::update(float deltaTime)
 {

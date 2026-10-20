@@ -12,13 +12,13 @@
 
 #include "chGpuProfiler.h"
 #include "chIRenderPath.h"
+#include "chRenderFrame.h"
 #include "chRenderGraph.h"
 #include "chRenderSettings.h"
 #include "chTransientTexturePool.h"
 
 namespace chEngineSDK {
 
-class DebugDraw;
 class DebugLinePass;
 class DebugRenderPath;
 class DeferredRenderPath;
@@ -47,6 +47,8 @@ struct RenderFrameStats
  * light's image behind it) into an HDR scene color that a tonemap pass takes to the output;
  * the debug views write the output directly. A frame is beginFrame(), imports and
  * addScenePasses() (plus any passes of the application, the editor UI), then execute().
+ * The scene passes draw what extract() copied at the end of the update, never the Scene,
+ * so the scene can change while the frame is built.
  * What the scene passes show follows the Renderer.ViewMode console variable, and the path
  * of the Lit modes follows Renderer.Path, both read once per frame.
  *
@@ -65,26 +67,40 @@ class CH_CORE_EXPORT SceneRenderer
   operator=(const SceneRenderer&) = delete;
 
   /**
+   * Copies what the scene passes of the next frame draw: the scene as it is now, seen by
+   * camera, plus the application's lines (extraLines, may be null). Call it at the end of
+   * the update, after Scene::updateTransforms.
+   */
+  void
+  extract(const Scene& scene,
+          const Camera& camera,
+          const LinearColor& clearColor,
+          const DebugDraw* extraLines = nullptr);
+
+  /**
+   * What the last extract() copied.
+   */
+  NODISCARD FORCEINLINE const RenderFrame&
+  getFrame() const
+  {
+    return m_frame;
+  }
+
+  /**
    * Forgets the last frame's graph and returns it empty.
    */
   NODISCARD RenderGraph&
   beginFrame();
 
   /**
-   * Adds the passes that draw what the camera sees of the scene into output, then the
-   * scene's debug lines and those of extraLines (the application's, may be null).
-   * Scene::updateTransforms must have run this frame, and the camera must stay alive until
-   * execute().
+   * Adds the passes that draw what the camera of the extracted frame sees into output, then
+   * the frame's debug lines.
    *
    * @return the scene depth, for passes the application adds after; invalid in view modes
    *         without one.
    */
   RGTextureHandle
-  addScenePasses(const Scene& scene,
-                 const Camera& camera,
-                 RGTextureHandle output,
-                 const LinearColor& clearColor,
-                 const DebugDraw* extraLines = nullptr);
+  addScenePasses(RGTextureHandle output);
 
   NODISCARD FORCEINLINE ViewMode
   getViewMode() const
@@ -115,14 +131,14 @@ class CH_CORE_EXPORT SceneRenderer
    * What the view mode draws; returns the scene depth like addScenePasses.
    */
   RGTextureHandle
-  addViewModePasses(const Scene& scene, const RenderView& view, RGTextureHandle output);
+  addViewModePasses(const RenderView& view, RGTextureHandle output);
 
   /**
    * The shadow maps, the active render path into an HDR scene color, then the tonemap into
    * output.
    */
   RGTextureHandle
-  addLitPasses(const Scene& scene, const RenderView& view, RGTextureHandle output);
+  addLitPasses(const RenderView& view, RGTextureHandle output);
 
   /**
    * Drops the visible lights of the types the Renderer.*Lights settings turn off.
@@ -133,6 +149,8 @@ class CH_CORE_EXPORT SceneRenderer
   void
   updateSettings();
 
+  // Written by extract() in the update, read while the next frame is built.
+  RenderFrame m_frame;
   RenderGraph m_graph;
   TransientTexturePool m_texturePool;
   UniquePtr<ForwardRenderPath> m_forwardRenderPath;

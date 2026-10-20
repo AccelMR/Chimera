@@ -16,6 +16,14 @@ namespace chEngineSDK {
 /*
  */
 void
+Component::fixedUpdate(float deltaTime)
+{
+  CH_PARAMETER_UNUSED(deltaTime);
+}
+
+/*
+ */
+void
 Component::update(float deltaTime)
 {
   CH_PARAMETER_UNUSED(deltaTime);

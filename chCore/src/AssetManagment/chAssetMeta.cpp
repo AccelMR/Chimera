@@ -90,6 +90,10 @@ AssetMeta::write(const AssetEditorData& data, const Path& baseFolder, ConfigFile
   outFile.setValue(kImportSection, "ExpandMode", getExpandModeName(settings.expandMode));
   outFile.setValue(kImportSection, "SplitParts", boolText(settings.splitParts));
   outFile.setValue(kImportSection, "AutoAlphaMask", boolText(settings.autoAlphaMask));
+  outFile.setValue(kImportSection, "ImportAnimations", boolText(settings.importAnimations));
+  ANSICHAR floatBuffer[StringUtils::MAX_FLOAT_CHARS];
+  outFile.setValue(kImportSection, "AnimationSampleRate",
+                   StringUtils::toChars(floatBuffer, settings.animationSampleRate));
   if (settings.skeletonMode == ImportSkeletonMode::Existing && !settings.skeleton.isNull()) {
     outFile.setValue(kImportSection, "Skeleton", settings.skeleton.toString());
   }
@@ -131,6 +135,15 @@ AssetMeta::read(const ConfigFile& file, const Path& baseFolder, AssetEditorData&
   readBool(file, "GenerateMips", settings.generateMips);
   readBool(file, "SplitParts", settings.splitParts);
   readBool(file, "AutoAlphaMask", settings.autoAlphaMask);
+  readBool(file, "ImportAnimations", settings.importAnimations);
+  if (const String* text = file.getValue(kImportSection, "AnimationSampleRate")) {
+    float value = 0.0f;
+    const ANSICHAR* const end = text->data() + text->size();
+    const std::from_chars_result result = std::from_chars(text->data(), end, value);
+    if (result.ec == std::errc() && result.ptr == end && value >= 1.0f) {
+      settings.animationSampleRate = value;
+    }
+  }
   if (const String* text = file.getValue(kImportSection, "ExpandMode")) {
     for (uint32 i = 0; i < std::size(kExpandModeNames); ++i) {
       if (StringUtils::equalsIgnoreCase(*text, kExpandModeNames[i])) {
