@@ -12,7 +12,6 @@
 #include "chAssetFile.h"
 #include "chFileStream.h"
 #include "chLogger.h"
-#include "chMatrixHelpers.h"
 #include "chModel.h"
 
 #include "chModelSerializationHeaders.h"
@@ -36,34 +35,33 @@ struct NodeFileData
   float rotation[4];
   float scale[3];
   uint32 meshCount;
+  uint32 bone;
 };
-static_assert(sizeof(NodeFileData) == 48, "NodeFileData must have no padding");
-
-template<typename T>
-NODISCARD bool
-readValue(DataStream& stream, T& outValue)
-{
-  return stream.read(&outValue, sizeof(T)) == sizeof(T);
-}
+static_assert(sizeof(NodeFileData) == 52, "NodeFileData must have no padding");
 
 /*
- * Bytes left to read, so a stored size can be checked before anything is allocated for it.
+ * Checks the size against the bytes left before allocating, so a broken count cannot ask
+ * for gigabytes.
  */
-NODISCARD SIZE_T
-getBytesLeft(const DataStream& stream)
-{
-  const SIZE_T position = stream.tell();
-  return stream.size() > position ? stream.size() - position : 0;
-}
-
+template<typename T>
 NODISCARD bool
-readBytes(DataStream& stream, SIZE_T size, Vector<uint8>& outBytes)
+readArray(DataStream& stream, uint32 count, Vector<T>& outValues)
 {
-  if (size > getBytesLeft(stream)) {
+  const SIZE_T size = static_cast<SIZE_T>(count) * sizeof(T);
+  if (size > AssetFile::getBytesLeft(stream)) {
     return false;
   }
-  outBytes.resize(size);
-  return size == 0 || stream.read(outBytes.data(), size) == size;
+  outValues.resize(count);
+  return AssetFile::readBytes(stream, outValues.data(), size);
+}
+
+template<typename T>
+void
+writeArray(DataStream& stream, const Vector<T>& values)
+{
+  if (!values.empty()) {
+    stream.write(values.data(), values.size() * sizeof(T));
+  }
 }
 
 NODISCARD bool
@@ -75,7 +73,7 @@ readMaterialSlots(DataStream& stream, uint32 slotCount, Model& model)
   for (uint32 i = 0; i < slotCount; ++i) {
     ModelMaterialSlot slot;
     if (!AssetFile::readString(stream, slot.name, kMaxNameLength) ||
-        !readValue(stream, slot.materialId)) {
+        !AssetFile::readValue(stream, slot.materialId)) {
       return false;
     }
     model.addMaterialSlot(std::move(slot));
@@ -84,30 +82,10 @@ readMaterialSlots(DataStream& stream, uint32 slotCount, Model& model)
 }
 
 NODISCARD bool
-readMeshIndices(DataStream& stream, uint32 meshCount, uint32 modelMeshCount,
-                Vector<uint32>& outIndices)
-{
-  if (meshCount > kMaxMeshes || meshCount * sizeof(uint32) > getBytesLeft(stream)) {
-    return false;
-  }
-  outIndices.resize(meshCount);
-  if (meshCount > 0 &&
-      stream.read(outIndices.data(), meshCount * sizeof(uint32)) != meshCount * sizeof(uint32)) {
-    return false;
-  }
-  for (const uint32 index : outIndices) {
-    if (index >= modelMeshCount) {
-      return false;
-    }
-  }
-  return true;
-}
-
-NODISCARD bool
 readVertexLayout(DataStream& stream, VertexLayout& outLayout)
 {
   uint32 attributeCount = 0;
-  if (!readValue(stream, attributeCount) || attributeCount > kMaxAttributes) {
+  if (!AssetFile::readValue(stream, attributeCount) || attributeCount > kMaxAttributes) {
     return false;
   }
   for (uint32 i = 0; i < attributeCount; ++i) {
@@ -116,9 +94,9 @@ readVertexLayout(DataStream& stream, VertexLayout& outLayout)
     uint32 offset = 0;
     uint32 binding = 0;
     ANSICHAR semanticName[16];
-    if (!readValue(stream, type) || !readValue(stream, format) ||
-        !readValue(stream, offset) || !readValue(stream, binding) ||
-        !readValue(stream, semanticName) ||
+    if (!AssetFile::readValue(stream, type) || !AssetFile::readValue(stream, format) ||
+        !AssetFile::readValue(stream, offset) || !AssetFile::readValue(stream, binding) ||
+        !AssetFile::readValue(stream, semanticName) ||
         type >= static_cast<uint32>(VertexAttributeType::COUNT) ||
         format >= static_cast<uint32>(VertexFormat::COUNT) || binding >= kMaxBindings) {
       return false;
@@ -138,17 +116,17 @@ readVertexLayout(DataStream& stream, VertexLayout& outLayout)
   // The strides and the vertex size follow from the attributes; they are stored only so
   // the file can be read without the engine.
   uint32 bindingCount = 0;
-  if (!readValue(stream, bindingCount) || bindingCount > kMaxBindings) {
+  if (!AssetFile::readValue(stream, bindingCount) || bindingCount > kMaxBindings) {
     return false;
   }
   for (uint32 i = 0; i < bindingCount; ++i) {
     uint32 stride = 0;
-    if (!readValue(stream, stride)) {
+    if (!AssetFile::readValue(stream, stride)) {
       return false;
     }
   }
   uint32 vertexSize = 0;
-  return readValue(stream, vertexSize);
+  return AssetFile::readValue(stream, vertexSize);
 }
 
 void
@@ -172,6 +150,23 @@ writeVertexLayout(DataStream& stream, const VertexLayout& layout)
   stream << layout.getVertexSize();
 }
 
+NODISCARD bool
+readSkin(DataStream& stream, uint32 boneCount, uint32 vertexCount, MeshSkin& outSkin)
+{
+  if (boneCount > MeshSkin::MAX_BONES || !readArray(stream, boneCount, outSkin.boneNodes) ||
+      !readArray(stream, boneCount, outSkin.inverseBindMatrices) ||
+      !readArray(stream, vertexCount, outSkin.vertices)) {
+    return false;
+  }
+  for (const VertexSkin& vertex : outSkin.vertices) {
+    for (uint32 i = 0; i < MeshSkin::MAX_INFLUENCES; ++i) {
+      if (vertex.weights[i] > 0 && vertex.bones[i] >= boneCount) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 } // namespace
 
 /*
@@ -190,6 +185,7 @@ ModelSerializer::write(DataStream& stream, const Model& model)
     AssetFile::writeString(stream, slot.name);
     stream << slot.materialId;
   }
+  stream << model.getSkeletonId();
 
   for (const SPtr<Mesh>& mesh : model.getMeshes()) {
     writeMesh(stream, *mesh);
@@ -203,7 +199,8 @@ ModelSerializer::write(DataStream& stream, const Model& model)
         .position = {node.position.x, node.position.y, node.position.z},
         .rotation = {node.rotation.x, node.rotation.y, node.rotation.z, node.rotation.w},
         .scale = {node.scale.x, node.scale.y, node.scale.z},
-        .meshCount = node.meshCount};
+        .meshCount = node.meshCount,
+        .bone = node.bone};
     AssetFile::writeString(stream, node.name);
     stream << data;
     const Span<const uint32> meshIndices = model.getNodeMeshes(nodeIndex);
@@ -219,7 +216,7 @@ SPtr<Model>
 ModelSerializer::read(DataStream& stream)
 {
   ModelHeader header;
-  if (!readValue(stream, header)) {
+  if (!AssetFile::readValue(stream, header)) {
     return nullptr;
   }
   if (header.version != ModelHeader::VERSION) {
@@ -232,13 +229,23 @@ ModelSerializer::read(DataStream& stream)
   }
 
   SPtr<Model> model = chMakeShared<Model>();
-  if (!readMaterialSlots(stream, header.materialSlotCount, *model)) {
+  UUID skeletonId = UUID::null();
+  if (!readMaterialSlots(stream, header.materialSlotCount, *model) ||
+      !AssetFile::readValue(stream, skeletonId)) {
     return nullptr;
   }
+  model->setSkeleton(skeletonId, nullptr);
+
   for (uint32 i = 0; i < header.meshCount; ++i) {
     SPtr<Mesh> mesh = readMesh(stream);
     if (!mesh) {
       return nullptr;
+    }
+    // The nodes come later, so the bones of a skin are checked against their count.
+    for (const uint32 boneNode : mesh->getSkin().boneNodes) {
+      if (boneNode >= header.nodeCount) {
+        return nullptr;
+      }
     }
     model->addMesh(std::move(mesh));
   }
@@ -247,15 +254,22 @@ ModelSerializer::read(DataStream& stream)
   Vector<uint32> meshIndices;
   for (uint32 nodeIndex = 0; nodeIndex < header.nodeCount; ++nodeIndex) {
     NodeFileData data;
-    if (!AssetFile::readString(stream, name, kMaxNameLength) || !readValue(stream, data) ||
+    if (!AssetFile::readString(stream, name, kMaxNameLength) ||
+        !AssetFile::readValue(stream, data) ||
         (data.parent != ModelNode::NO_PARENT && data.parent >= nodeIndex) ||
-        !readMeshIndices(stream, data.meshCount, header.meshCount, meshIndices)) {
+        !readArray(stream, data.meshCount, meshIndices)) {
       return nullptr;
+    }
+    for (const uint32 meshIndex : meshIndices) {
+      if (meshIndex >= header.meshCount) {
+        return nullptr;
+      }
     }
     model->addNode(
         name, data.parent, Vector3(data.position[0], data.position[1], data.position[2]),
         Quaternion(data.rotation[0], data.rotation[1], data.rotation[2], data.rotation[3]),
         Vector3(data.scale[0], data.scale[1], data.scale[2]), meshIndices);
+    model->setNodeBone(nodeIndex, data.bone);
   }
   return model;
 }
@@ -266,6 +280,7 @@ void
 ModelSerializer::writeMesh(DataStream& stream, const Mesh& mesh)
 {
   const VertexLayout& layout = mesh.getVertexLayout();
+  const MeshSkin& skin = mesh.getSkin();
   const MeshHeader header{
       .version = MeshHeader::VERSION,
       .vertexCount = mesh.getVertexCount(),
@@ -275,14 +290,16 @@ ModelSerializer::writeMesh(DataStream& stream, const Mesh& mesh)
       .attributeCount = static_cast<uint32>(layout.getAttributes().size()),
       .indexType = mesh.getIndexType(),
       .vertexStride = layout.getVertexSize(),
-      .materialSlot = mesh.getMaterialSlot()};
+      .materialSlot = mesh.getMaterialSlot(),
+      .skinBoneCount = static_cast<uint32>(skin.boneNodes.size())};
   stream << header;
   writeVertexLayout(stream, layout);
-  if (header.vertexDataSize > 0) {
-    stream.write(mesh.getVertexData().data(), header.vertexDataSize);
-  }
-  if (header.indexDataSize > 0) {
-    stream.write(mesh.getIndexData().data(), header.indexDataSize);
+  writeArray(stream, mesh.getVertexData());
+  writeArray(stream, mesh.getIndexData());
+  if (header.skinBoneCount > 0) {
+    writeArray(stream, skin.boneNodes);
+    writeArray(stream, skin.inverseBindMatrices);
+    writeArray(stream, skin.vertices);
   }
 }
 
@@ -292,7 +309,7 @@ SPtr<Mesh>
 ModelSerializer::readMesh(DataStream& stream)
 {
   MeshHeader header;
-  if (!readValue(stream, header)) {
+  if (!AssetFile::readValue(stream, header)) {
     return nullptr;
   }
   if (header.version != MeshHeader::VERSION) {
@@ -319,8 +336,11 @@ ModelSerializer::readMesh(DataStream& stream)
 
   Vector<uint8> vertexData;
   Vector<uint8> indexData;
-  if (!readBytes(stream, header.vertexDataSize, vertexData) ||
-      !readBytes(stream, header.indexDataSize, indexData)) {
+  MeshSkin skin;
+  if (!readArray(stream, header.vertexDataSize, vertexData) ||
+      !readArray(stream, header.indexDataSize, indexData) ||
+      (header.skinBoneCount > 0 &&
+       !readSkin(stream, header.skinBoneCount, header.vertexCount, skin))) {
     return nullptr;
   }
 
@@ -329,6 +349,7 @@ ModelSerializer::readMesh(DataStream& stream)
   mesh->setVertexData(std::move(vertexData), header.vertexCount);
   mesh->setIndexData(std::move(indexData), header.indexCount, header.indexType);
   mesh->setMaterialSlot(header.materialSlot);
+  mesh->setSkin(std::move(skin));
   return mesh;
 }
 

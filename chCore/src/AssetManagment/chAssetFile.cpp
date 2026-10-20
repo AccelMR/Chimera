@@ -112,4 +112,21 @@ AssetFile::readString(DataStream& stream, String& outText, uint32 maxLength)
   return length == 0 || stream.read(outText.data(), length) == length;
 }
 
+/*
+ */
+bool
+AssetFile::readBytes(DataStream& stream, void* outData, SIZE_T size)
+{
+  return size == 0 || stream.read(outData, size) == size;
+}
+
+/*
+ */
+SIZE_T
+AssetFile::getBytesLeft(const DataStream& stream)
+{
+  const SIZE_T position = stream.tell();
+  return stream.size() > position ? stream.size() - position : 0;
+}
+
 } // namespace chEngineSDK

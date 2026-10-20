@@ -382,6 +382,10 @@ MainMenuBarUI::renderMainMenuBar() {
                         ViewportTools::areBoundsVisible())) {
       ViewportTools::setBoundsVisible(!ViewportTools::areBoundsVisible());
     }
+    if (ImGui::MenuItem(ICON_FA_BONE "  Selection Skeleton", nullptr,
+                        ViewportTools::areSkeletonsVisible())) {
+      ViewportTools::setSkeletonsVisible(!ViewportTools::areSkeletonsVisible());
+    }
     bool bDebugLines = g_cvarDebugLines.get();
     if (ImGui::MenuItem(ICON_FA_DRAW_POLYGON "  Debug Lines", nullptr, &bDebugLines)) {
       g_cvarDebugLines.set(bDebugLines, ConsoleVariableSource::Console);

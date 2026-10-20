@@ -77,6 +77,25 @@ class CH_CORE_EXPORT AssetFile
   NODISCARD static bool
   readString(DataStream& stream, String& outText, uint32 maxLength);
 
+  /**
+   * Reads exactly size bytes; false when the data ends first.
+   */
+  NODISCARD static bool
+  readBytes(DataStream& stream, void* outData, SIZE_T size);
+
+  template<typename T>
+  NODISCARD static bool
+  readValue(DataStream& stream, T& outValue)
+  {
+    return readBytes(stream, &outValue, sizeof(T));
+  }
+
+  /**
+   * Bytes left to read, so a stored size can be checked before anything is allocated for it.
+   */
+  NODISCARD static SIZE_T
+  getBytesLeft(const DataStream& stream);
+
   // Above any real asset; only a broken file asks for more.
   static constexpr uint32 MAX_REFERENCES = 65536;
 };

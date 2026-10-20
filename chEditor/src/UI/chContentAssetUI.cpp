@@ -507,6 +507,14 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
     ImGui::Button("##asset", buttonSize);
   }
   AssetDragDrop::source(*asset);
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+    EditorSelection::setSelectedAsset(asset);
+  }
+  if (EditorSelection::getSelectedAsset() == asset) {
+    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                        ImGui::GetColorU32(ImGuiCol_HeaderActive),
+                                        ImGui::GetStyle().FrameRounding, 0, 2.0f);
+  }
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     openAsset(asset);
   }
@@ -556,7 +564,10 @@ ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset)
 void
 ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
 {
-  ImGui::Selectable(asset->getName(), false, ImGuiSelectableFlags_SpanAllColumns);
+  if (ImGui::Selectable(asset->getName(), EditorSelection::getSelectedAsset() == asset,
+                        ImGuiSelectableFlags_SpanAllColumns)) {
+    EditorSelection::setSelectedAsset(asset);
+  }
   AssetDragDrop::source(*asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {

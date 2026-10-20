@@ -19,6 +19,7 @@
 #include "chTextureAsset.h"
 #include "chPrefabAsset.h"
 #include "chSceneAsset.h"
+#include "chSkeletonAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -79,6 +80,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<SceneAsset>()) {
     return {AssetType::Scene, ICON_FA_MAP};
+  }
+  if (asset->isTypeOf<SkeletonAsset>()) {
+    return {AssetType::Skeleton, ICON_FA_BONE};
   }
   return {AssetType::Unknown, ICON_FA_FILE};
 }

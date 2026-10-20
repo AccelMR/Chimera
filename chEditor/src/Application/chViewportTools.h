@@ -71,6 +71,23 @@ class ViewportTools
   static void
   setBoundsVisible(bool bVisible);
 
+  /**
+   * With Editor.ShowSkeleton on, adds the bones of the models with a skeleton among the
+   * selected objects and their children: a line from each bone to its parent and the axes
+   * of each joint. Walks the selected subtrees, so it costs nothing while the setting is off.
+   */
+  static void
+  addSelectionSkeletons(DebugDraw& outLines);
+
+  NODISCARD static bool
+  areSkeletonsVisible();
+
+  /**
+   * Also saves the choice in /Saved/Config/Editor.ini.
+   */
+  static void
+  setSkeletonsVisible(bool bVisible);
+
  private:
   enum class Operation : uint32
   {

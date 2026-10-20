@@ -26,9 +26,13 @@
 #include "chQuaternion.h"
 #include "chRotator.h"
 #include "chShapeComponent.h"
+#include "chSkeleton.h"
+#include "chSkeletonAsset.h"
 #include "chSkyLightComponent.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
+#include "chUIHelpers.h"
+#include "chViewportTools.h"
 
 #include "chMath.h"
 
@@ -162,6 +166,9 @@ InspectorUI::renderInspectorUI()
   const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
   if (!selected) {
     m_rotationOwner = nullptr;
+    if (const SPtr<IAsset>& asset = EditorSelection::getSelectedAsset()) {
+      renderAsset(asset);
+    }
     ImGui::End();
     return;
   }
@@ -336,6 +343,16 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
   const uint32 nodeIndex = modelComponent.getNodeIndex();
   if (modelComponent.isWholeModel()) {
     ImGui::Text("Nodes: %u", model ? model->getNodeCount() : 0u);
+  }
+  if (model && model->hasSkeleton()) {
+    const SPtr<SkeletonAsset>& skeleton = model->getSkeleton();
+    ImGui::Text(ICON_FA_BONE "  Skeleton: %s", skeleton ? skeleton->getName() : "(missing)");
+#if USING(CH_DEBUG_DRAW)
+    bool bShowSkeleton = ViewportTools::areSkeletonsVisible();
+    if (ImGui::Checkbox("Show Skeleton", &bShowSkeleton)) {
+      ViewportTools::setSkeletonsVisible(bShowSkeleton);
+    }
+#endif // USING(CH_DEBUG_DRAW)
   }
   else if (model && nodeIndex < model->getNodeCount()) {
     const ANSICHAR* nodeName = model->getNodes()[nodeIndex].name.c_str();
@@ -762,4 +779,90 @@ InspectorUI::renderMaterialTexture(Material& material, MaterialTexture slot)
   return bDroppedTexture || bDroppedOnText || bClearedTexture;
 }
 
+
+/*
+ * What the Content Browser selected. Assets load on first view, so the Inspector can show
+ * what they hold.
+ */
+void
+InspectorUI::renderAsset(const SPtr<IAsset>& asset)
+{
+  const chUIHelpers::AssetIcon icon = chUIHelpers::UIHelpers::getIconFromAssetType(asset);
+  ImGui::Text("%s  %s", icon.icon, asset->getName());
+  ImGui::TextDisabled("%s - %s", asset->getTypeName(), asset->getAssetPath());
+  ImGui::Separator();
+
+  if (!asset->isTypeOf<SkeletonAsset>()) {
+    return;
+  }
+  if (asset->getState() == AssetState::Unloaded) {
+    AssetManager::instance().syncLoadAsset(asset);
+  }
+  const SPtr<SkeletonAsset> skeletonAsset = asset->as<SkeletonAsset>();
+  if (!skeletonAsset || !skeletonAsset->getSkeleton()) {
+    ImGui::TextDisabled("The skeleton could not be loaded.");
+    return;
+  }
+  renderSkeleton(*skeletonAsset->getSkeleton());
+}
+
+/*
+ */
+void
+InspectorUI::renderSkeleton(const Skeleton& skeleton)
+{
+  const Vector<SkeletonBone>& bones = skeleton.getBones();
+  if (m_childrenOwner != &skeleton || m_boneChildren.size() != bones.size()) {
+    m_childrenOwner = &skeleton;
+    m_boneChildren.assign(bones.size(), {});
+    for (uint32 bone = 0; bone < bones.size(); ++bone) {
+      if (bones[bone].parent != SkeletonBone::NO_PARENT) {
+        m_boneChildren[bones[bone].parent].push_back(bone);
+      }
+    }
+  }
+
+  ImGui::Text(ICON_FA_BONE "  %u bones", skeleton.getBoneCount());
+  if (!ImGui::TreeNodeEx(ICON_FA_SITEMAP "  Bones###Bones", ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+  for (uint32 bone = 0; bone < bones.size(); ++bone) {
+    if (bones[bone].parent == SkeletonBone::NO_PARENT) {
+      renderBone(skeleton, bone);
+    }
+  }
+  ImGui::TreePop();
+}
+
+/*
+ */
+void
+InspectorUI::renderBone(const Skeleton& skeleton, uint32 bone)
+{
+  const SkeletonBone& data = skeleton.getBones()[bone];
+  const Vector<uint32>& children = m_boneChildren[bone];
+  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth;
+  if (children.empty()) {
+    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+  }
+  const bool bOpen =
+      ImGui::TreeNodeEx(static_cast<const void*>(&data), flags, "%s", data.name.c_str());
+  if (ImGui::BeginItemTooltip()) {
+    const Rotator rotator = data.rotation.toRotator();
+    ImGui::Text("Index %u", bone);
+    ImGui::Text("Position %.3f, %.3f, %.3f", data.position.x, data.position.y,
+                data.position.z);
+    ImGui::Text("Rotation %.1f, %.1f, %.1f (roll, pitch, yaw)", rotator.roll.valueDegree(),
+                rotator.pitch.valueDegree(), rotator.yaw.valueDegree());
+    ImGui::Text("Scale %.3f, %.3f, %.3f", data.scale.x, data.scale.y, data.scale.z);
+    ImGui::EndTooltip();
+  }
+  if (!bOpen || children.empty()) {
+    return;
+  }
+  for (const uint32 child : children) {
+    renderBone(skeleton, child);
+  }
+  ImGui::TreePop();
+}
 } // namespace chEngineSDK

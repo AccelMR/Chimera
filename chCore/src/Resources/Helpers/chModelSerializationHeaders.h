@@ -37,6 +37,8 @@ struct MeshHeader {
   IndexType indexType;
   uint32 vertexStride;
   uint32 materialSlot;
+  // 0 for a mesh without a skin.
+  uint32 skinBoneCount;
 };
-static_assert(sizeof(MeshHeader) == 36, "MeshHeader must have no padding");
+static_assert(sizeof(MeshHeader) == 40, "MeshHeader must have no padding");
 } // namespace chEngineSDK

@@ -8,6 +8,7 @@
 /************************************************************************/
 #include <cstddef>
 #include <cstring>
+#include <limits>
 
 #include "chBox.h"
 #include "chCamera.h"
@@ -51,6 +52,7 @@
 #include "chSceneHistory.h"
 #include "chShadowRenderer.h"
 #include "chShapeComponent.h"
+#include "chSkeleton.h"
 #include "chShapeOverlap.h"
 #include "chSphere.h"
 #include "chOrientedBox.h"
@@ -1922,6 +1924,14 @@ TEST_CASE("chCore - Model serializer")
   second->setVertexData(triangle->getVertexData<VertexStatic>());
   second->setIndexData(Vector<uint32>{2, 1, 0});
   second->setMaterialSlot(1);
+  // The second mesh follows Root and Child.
+  MeshSkin skin;
+  skin.boneNodes = {0, 1};
+  skin.inverseBindMatrices = {Matrix4::IDENTITY, TranslationMatrix(Vector3(0.0f, 0.0f, -5.0f))};
+  skin.vertices = {MeshSkin::packVertex(Vector<BoneInfluence>{{0, 1.0f}}),
+                   MeshSkin::packVertex(Vector<BoneInfluence>{{0, 0.5f}, {1, 0.5f}}),
+                   MeshSkin::packVertex(Vector<BoneInfluence>{{1, 1.0f}})};
+  second->setSkin(skin);
   const uint32 mesh0 = model->addMesh(triangle);
   const uint32 mesh1 = model->addMesh(second);
   const Quaternion turn(Vector3::UP, Degree(90.0f));
@@ -1934,6 +1944,10 @@ TEST_CASE("chCore - Model serializer")
   model->addMaterialSlot({.name = "Body", .materialId = bodyId, .material = nullptr});
   model->addMaterialSlot({.name = "Empty", .materialId = chEngineSDK::UUID::null(),
                           .material = nullptr});
+  const chEngineSDK::UUID skeletonId = chEngineSDK::UUID::createRandom();
+  model->setSkeleton(skeletonId, nullptr);
+  model->setNodeBone(0, 0);
+  model->setNodeBone(1, 1);
 
   REQUIRE(model->getNodeRestMatrix(1).nearEqual(
       TranslationMatrix(Vector3(0.0f, 0.0f, 5.0f)) * model->getNodeRestMatrix(0)));
@@ -1978,6 +1992,17 @@ TEST_CASE("chCore - Model serializer")
     REQUIRE(read->getMaterialSlots()[0].name == "Body");
     REQUIRE(read->getMaterialSlots()[0].materialId == bodyId);
     REQUIRE(read->getMaterialSlots()[1].materialId.isNull());
+    REQUIRE(read->getSkeletonId() == skeletonId);
+    REQUIRE(read->getNodes()[0].bone == 0);
+    REQUIRE(read->getNodes()[1].bone == 1);
+    REQUIRE(read->getNodes()[2].bone == ModelNode::NO_BONE);
+    REQUIRE_FALSE(read->getMeshes()[0]->hasSkin());
+    const MeshSkin& readSkin = read->getMeshes()[1]->getSkin();
+    REQUIRE(readSkin.boneNodes == skin.boneNodes);
+    REQUIRE(readSkin.inverseBindMatrices[1].nearEqual(skin.inverseBindMatrices[1]));
+    REQUIRE(readSkin.vertices.size() == 3);
+    REQUIRE(readSkin.vertices[1].bones[1] == skin.vertices[1].bones[1]);
+    REQUIRE(readSkin.vertices[1].weights[1] == skin.vertices[1].weights[1]);
 
     // Saving what was read gives the same bytes.
     MemoryDataStream again;
@@ -1995,6 +2020,17 @@ TEST_CASE("chCore - Model serializer")
     }
   }
 
+  SECTION("A skin bone past the nodes is rejected")
+  {
+    MeshSkin broken = skin;
+    broken.boneNodes[1] = 7;
+    second->setSkin(broken);
+    MemoryDataStream other;
+    ModelSerializer::write(other, *model);
+    other.seek(0);
+    REQUIRE_FALSE(ModelSerializer::read(other));
+  }
+
   SECTION("A newer version is rejected")
   {
     Vector<uint8> newer = bytes;
@@ -2004,6 +2040,141 @@ TEST_CASE("chCore - Model serializer")
     other.write(newer.data(), newer.size());
     other.seek(0);
     REQUIRE_FALSE(ModelSerializer::read(other));
+  }
+}
+
+TEST_CASE("chCore - Mesh skin weights")
+{
+  SECTION("Weights are scaled to 255 and sorted, strongest first")
+  {
+    const VertexSkin vertex =
+        MeshSkin::packVertex(Vector<BoneInfluence>{{3, 0.25f}, {7, 0.75f}});
+    REQUIRE(vertex.bones[0] == 7);
+    REQUIRE(vertex.bones[1] == 3);
+    REQUIRE(vertex.weights[0] == 191);
+    REQUIRE(vertex.weights[1] == 64);
+    REQUIRE(vertex.weights[2] == 0);
+    REQUIRE(vertex.weights[3] == 0);
+  }
+
+  SECTION("Only the four strongest stay, and the sum is still 255")
+  {
+    const VertexSkin vertex = MeshSkin::packVertex(Vector<BoneInfluence>{
+        {0, 0.1f}, {1, 0.3f}, {2, 0.05f}, {3, 0.2f}, {4, 0.25f}, {5, 0.1f}});
+    REQUIRE(vertex.bones[0] == 1);
+    REQUIRE(vertex.bones[1] == 4);
+    REQUIRE(vertex.bones[2] == 3);
+    REQUIRE((vertex.bones[3] == 0 || vertex.bones[3] == 5));
+    uint32 sum = 0;
+    for (const uint8 weight : vertex.weights) {
+      sum += weight;
+    }
+    REQUIRE(sum == 255);
+  }
+
+  SECTION("Three equal thirds round to 255")
+  {
+    const VertexSkin vertex =
+        MeshSkin::packVertex(Vector<BoneInfluence>{{0, 1.0f}, {1, 1.0f}, {2, 1.0f}});
+    REQUIRE(vertex.weights[0] + vertex.weights[1] + vertex.weights[2] == 255);
+  }
+
+  SECTION("No weight, zero or NaN gives the first bone everything")
+  {
+    const float notANumber = std::numeric_limits<float>::quiet_NaN();
+    for (const VertexSkin& vertex : {MeshSkin::packVertex({}),
+                                     MeshSkin::packVertex(Vector<BoneInfluence>{{4, 0.0f}}),
+                                     MeshSkin::packVertex(
+                                         Vector<BoneInfluence>{{4, notANumber}})}) {
+      REQUIRE(vertex.bones[0] == 0);
+      REQUIRE(vertex.weights[0] == 255);
+      REQUIRE(vertex.weights[1] == 0);
+    }
+  }
+}
+
+TEST_CASE("chCore - Skeleton")
+{
+  // Hips > Spine > Head, and Hips > Leg.
+  Skeleton skeleton;
+  const uint32 hips = skeleton.addBone({.name = "Hips",
+                                        .parent = SkeletonBone::NO_PARENT,
+                                        .position = Vector3(0.0f, 0.0f, 1.0f),
+                                        .rotation = Quaternion::IDENTITY,
+                                        .scale = Vector3::UNIT});
+  const uint32 spine = skeleton.addBone({.name = "Spine", .parent = hips});
+  skeleton.addBone({.name = "Head", .parent = spine});
+  skeleton.addBone({.name = "Leg",
+                    .parent = hips,
+                    .position = Vector3::ZERO,
+                    .rotation = Quaternion(Vector3::RIGHT, Degree(30.0f)),
+                    .scale = Vector3::UNIT});
+  REQUIRE(skeleton.getBoneCount() == 4);
+  REQUIRE(skeleton.findBone("Head") == 2);
+  REQUIRE(skeleton.findBone("Tail") == Skeleton::NO_BONE);
+
+  Vector<uint32> boneMap;
+  SECTION("A skeleton fits itself")
+  {
+    REQUIRE(skeleton.mapBones(skeleton, boneMap));
+    REQUIRE(boneMap == Vector<uint32>{0, 1, 2, 3});
+  }
+
+  SECTION("Fewer bones in another order fit")
+  {
+    Skeleton part;
+    const uint32 partHips = part.addBone({.name = "Hips"});
+    part.addBone({.name = "Leg", .parent = partHips});
+    part.addBone({.name = "Spine", .parent = partHips});
+    REQUIRE(skeleton.mapBones(part, boneMap));
+    REQUIRE(boneMap == Vector<uint32>{0, 3, 1});
+  }
+
+  SECTION("A root may hang from a bone the other skeleton lacks")
+  {
+    Skeleton head;
+    head.addBone({.name = "Head"});
+    REQUIRE(skeleton.mapBones(head, boneMap));
+    REQUIRE(boneMap == Vector<uint32>{2});
+  }
+
+  SECTION("A missing bone or another parent does not fit")
+  {
+    Skeleton other;
+    other.addBone({.name = "Hips"});
+    other.addBone({.name = "Tail", .parent = 0});
+    REQUIRE_FALSE(skeleton.mapBones(other, boneMap));
+
+    Skeleton moved;
+    moved.addBone({.name = "Spine"});
+    moved.addBone({.name = "Leg", .parent = 0});
+    REQUIRE_FALSE(skeleton.mapBones(moved, boneMap));
+  }
+
+  SECTION("Save and read")
+  {
+    MemoryDataStream stream;
+    skeleton.serialize(stream);
+    const Vector<uint8> bytes = readAllBytes(stream);
+    const SPtr<Skeleton> read = Skeleton::deserialize(stream);
+    REQUIRE(read);
+    REQUIRE(read->getBoneCount() == 4);
+    for (uint32 i = 0; i < 4; ++i) {
+      const SkeletonBone& expected = skeleton.getBones()[i];
+      const SkeletonBone& actual = read->getBones()[i];
+      REQUIRE(actual.name == expected.name);
+      REQUIRE(actual.parent == expected.parent);
+      REQUIRE(actual.position.nearEqual(expected.position));
+      REQUIRE(actual.rotation.isRotationEqual(expected.rotation));
+      REQUIRE(actual.scale.nearEqual(expected.scale));
+    }
+
+    for (const SIZE_T size : {SIZE_T(0), SIZE_T(6), bytes.size() - 1}) {
+      MemoryDataStream cut;
+      cut.write(bytes.data(), size);
+      cut.seek(0);
+      REQUIRE_FALSE(Skeleton::deserialize(cut));
+    }
   }
 }
 

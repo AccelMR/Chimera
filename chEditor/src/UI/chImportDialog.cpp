@@ -13,7 +13,9 @@
 #include "chAssetCodec.h"
 #include "chEnginePaths.h"
 #include "chLogger.h"
+#include "chAssetManager.h"
 #include "chModelAsset.h"
+#include "chSkeletonAsset.h"
 #include "chSTDThreading.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
@@ -35,6 +37,8 @@ CH_LOG_DECLARE_STATIC(ImportDialogLog, All);
 namespace {
 constexpr const ANSICHAR* kPopupName = "Import###ImportDialog";
 
+constexpr const ANSICHAR* kSkeletonAuto = "Auto (reuse a compatible one)";
+constexpr const ANSICHAR* kSkeletonCreateNew = "Create new";
 // Indexed by ModelExpandMode.
 constexpr const ANSICHAR* kExpandModeLabels[] = {"Whole model", "One object per node",
                                                  "One object per mesh"};
@@ -81,6 +85,49 @@ getState()
 }
 
 /*
+ * Only models with bones read it. The project's skeletons are listed only while the combo
+ * is open.
+ */
+void
+renderSkeletonOption(ImportSettings& settings)
+{
+  SPtr<IAsset> existing;
+  if (settings.skeletonMode == ImportSkeletonMode::Existing) {
+    existing = AssetManager::instance().getAsset(settings.skeleton);
+  }
+  const ANSICHAR* preview = settings.skeletonMode == ImportSkeletonMode::CreateNew
+                                ? kSkeletonCreateNew
+                            : existing ? existing->getName()
+                                       : kSkeletonAuto;
+  if (ImGui::BeginCombo("Skeleton", preview)) {
+    if (ImGui::Selectable(kSkeletonAuto, settings.skeletonMode == ImportSkeletonMode::Auto)) {
+      settings.skeletonMode = ImportSkeletonMode::Auto;
+    }
+    if (ImGui::Selectable(kSkeletonCreateNew,
+                          settings.skeletonMode == ImportSkeletonMode::CreateNew)) {
+      settings.skeletonMode = ImportSkeletonMode::CreateNew;
+    }
+    for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
+      if (!asset->isTypeOf<SkeletonAsset>()) {
+        continue;
+      }
+      ImGui::PushID(asset.get());
+      if (ImGui::Selectable(asset->getName(), asset == existing)) {
+        settings.skeletonMode = ImportSkeletonMode::Existing;
+        settings.skeleton = asset->getUUID();
+      }
+      ImGui::SetItemTooltip("%s", asset->getAssetPath());
+      ImGui::PopID();
+    }
+    ImGui::EndCombo();
+  }
+  ImGui::SetItemTooltip("For models with bones. Auto reuses the skeleton an earlier import "
+                        "of this file made, or any skeleton every bone of the file fits, so "
+                        "they share animations; else a new one is made. A chosen skeleton "
+                        "that does not fit also makes a new one.");
+}
+
+/*
  */
 void
 renderModelOptions(ImportSettings& settings)
@@ -102,6 +149,8 @@ renderModelOptions(ImportSettings& settings)
   ImGui::Checkbox("Mask materials by texture alpha", &settings.autoAlphaMask);
   ImGui::SetItemTooltip("Materials the file gives no alpha mode become masked when their "
                         "base color texture has transparent pixels.");
+
+  renderSkeletonOption(settings);
 }
 
 /*

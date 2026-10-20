@@ -139,8 +139,9 @@ bool
 ModelExpand::expand(Scene& scene, GameObject& gameObject, ModelExpandMode mode)
 {
   ModelComponent* whole = gameObject.getComponent<ModelComponent>();
+  // Bones belong to the model as a whole, so a model with a skeleton is never split.
   if (mode == ModelExpandMode::Single || !whole || !whole->isWholeModel() ||
-      !whole->getModel()) {
+      !whole->getModel() || whole->getModel()->hasSkeleton()) {
     return false;
   }
 

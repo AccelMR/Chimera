@@ -46,6 +46,20 @@ class CH_UTILITY_EXPORT UUID  {
   NODISCARD FORCEINLINE SIZE_T
   getHash() const noexcept { return Hash<uuids::uuid>{}(m_uuid); }
 
+  /**
+   * Reads the text toString writes. False, leaving outUuid as it was, for any other text.
+   */
+  NODISCARD static bool
+  fromString(StringView text, UUID& outUuid)
+  {
+    const std::optional<uuids::uuid> parsed = uuids::uuid::from_string(text);
+    if (!parsed) {
+      return false;
+    }
+    outUuid = UUID(*parsed);
+    return true;
+  }
+
   NODISCARD static UUID
   createRandom();
 

@@ -27,6 +27,7 @@
 #include "chModelAsset.h"
 #include "chTextureAsset.h"
 #include "chSceneAsset.h"
+#include "chSkeletonAsset.h"
 
 
 namespace chEngineSDK {
@@ -49,6 +50,7 @@ AssetManager::initialize() {
   m_assetRegister->registerAssetCreator<MaterialAsset>();
   m_assetRegister->registerAssetCreator<PrefabAsset>();
   m_assetRegister->registerAssetCreator<SceneAsset>();
+  m_assetRegister->registerAssetCreator<SkeletonAsset>();
 }
 
 /*

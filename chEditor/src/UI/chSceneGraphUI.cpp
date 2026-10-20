@@ -22,6 +22,7 @@
 #include "chSkyLightComponent.h"
 #include "chMath.h"
 #include "chModelAsset.h"
+#include "chModel.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
 #include "chPrefabAsset.h"
@@ -515,6 +516,7 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   }
   const ModelComponent* model = gameObject->getComponent<ModelComponent>();
   if (!bLocked && model && model->isWholeModel() && model->getModel() &&
+      !model->getModel()->hasSkeleton() &&
       ImGui::BeginMenu(ICON_FA_OBJECT_UNGROUP "  Expand Model")) {
     if (ImGui::MenuItem(ICON_FA_SITEMAP "  By Node")) {
       m_pendingExpand = gameObject;

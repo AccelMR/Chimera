@@ -104,6 +104,25 @@ Model::setSlotMaterial(uint32 slot, const SPtr<MaterialAsset>& material)
 
 /*
  */
+void
+Model::setSkeleton(const UUID& skeletonId, const SPtr<SkeletonAsset>& skeleton)
+{
+  m_skeletonId = skeletonId;
+  m_skeleton = skeleton;
+}
+
+/*
+ */
+void
+Model::setNodeBone(uint32 nodeIndex, uint32 bone)
+{
+  if (nodeIndex < m_nodes.size()) {
+    m_nodes[nodeIndex].bone = bone;
+  }
+}
+
+/*
+ */
 SphereBoxBounds
 Model::calculateBounds() const
 {

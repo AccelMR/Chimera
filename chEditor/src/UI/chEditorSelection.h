@@ -11,6 +11,7 @@
 
 #include "chPrerequisitesCore.h"
 #include "chGameObject.h"
+#include "chIAsset.h"
 
 namespace chEngineSDK {
 
@@ -18,7 +19,8 @@ namespace chEngineSDK {
  * Exists so every editor window agrees on what is selected: a list of GameObjects of the open
  * scene and, among them, the active one (the last selected), which the Inspector shows and
  * the gizmo stands on. Operations on several objects (delete, duplicate, move) act on the
- * top-level ones, since a selected parent already brings its children.
+ * top-level ones, since a selected parent already brings its children. An asset picked in the
+ * Content Browser takes the place of the objects, so the Inspector shows one or the other.
  */
 class EditorSelection
 {
@@ -58,6 +60,19 @@ class EditorSelection
 
   static void
   clear();
+
+  /**
+   * An asset picked in the Content Browser, for the Inspector. Clears the objects; adding an
+   * object clears the asset.
+   */
+  static void
+  setSelectedAsset(const SPtr<IAsset>& asset);
+
+  /**
+   * Null when no asset is selected.
+   */
+  NODISCARD static const SPtr<IAsset>&
+  getSelectedAsset();
 
   /**
    * Replaces the contents of outObjects with the selected objects that have no selected

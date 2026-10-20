@@ -12,10 +12,63 @@
 
 #include "chIBuffer.h"
 #include "chIGraphicsAPI.h"
+#include "chMath.h"
 #include "chRay.h"
 #include "chRayCast.h"
 
 namespace chEngineSDK {
+
+/*
+ */
+VertexSkin
+MeshSkin::packVertex(Span<const BoneInfluence> influences)
+{
+  // Strongest first, kept by insertion into a small array.
+  BoneInfluence strongest[MAX_INFLUENCES] = {};
+  uint32 count = 0;
+  for (const BoneInfluence& influence : influences) {
+    // Also skips NaN.
+    if (!(influence.weight > 0.0f)) {
+      continue;
+    }
+    uint32 position = count;
+    while (position > 0 && strongest[position - 1].weight < influence.weight) {
+      if (position < MAX_INFLUENCES) {
+        strongest[position] = strongest[position - 1];
+      }
+      --position;
+    }
+    if (position < MAX_INFLUENCES) {
+      strongest[position] = influence;
+      count = Math::min(count + 1, MAX_INFLUENCES);
+    }
+  }
+
+  VertexSkin vertex{.bones = {0, 0, 0, 0}, .weights = {255, 0, 0, 0}};
+  float total = 0.0f;
+  for (uint32 i = 0; i < count; ++i) {
+    total += strongest[i].weight;
+  }
+  if (count == 0 || !(total > 0.0f) || !Math::isFinite(total)) {
+    return vertex;
+  }
+
+  int32 sum = 0;
+  int32 weights[MAX_INFLUENCES] = {};
+  for (uint32 i = 0; i < count; ++i) {
+    CH_ASSERT(strongest[i].bone < MAX_BONES);
+    vertex.bones[i] = static_cast<uint8>(strongest[i].bone);
+    weights[i] = static_cast<int32>(strongest[i].weight / total * 255.0f + 0.5f);
+    sum += weights[i];
+  }
+  // The strongest weight is at least a quarter of 255, so the few units of rounding never
+  // take it below zero.
+  weights[0] += 255 - sum;
+  for (uint32 i = 0; i < MAX_INFLUENCES; ++i) {
+    vertex.weights[i] = static_cast<uint8>(weights[i]);
+  }
+  return vertex;
+}
 
 /*
  */

@@ -217,6 +217,7 @@ EditorApplication::onRender(ICommandList& commandList,
   m_editorLines.clear();
   if (UIHelpers::bRenderImGui) {
     ViewportTools::addSelectionBounds(scene, m_editorLines);
+    ViewportTools::addSelectionSkeletons(m_editorLines);
   }
 
   RenderGraph& graph = m_sceneRenderer->beginFrame();

@@ -19,6 +19,8 @@ struct SelectionState
   Vector<SPtr<GameObject>> objects;
   // The Scene Graph asks for every row each frame, so a lookup must not walk the list.
   UnorderedSet<const GameObject*> lookup;
+  // Picked in the Content Browser; selecting objects clears it, and the reverse.
+  SPtr<IAsset> asset;
 };
 
 SelectionState&
@@ -104,6 +106,7 @@ EditorSelection::add(const SPtr<GameObject>& gameObject)
   removeFromList(state, *gameObject);
   state.objects.push_back(gameObject);
   state.lookup.insert(gameObject.get());
+  state.asset.reset();
 }
 
 /*
@@ -135,6 +138,23 @@ EditorSelection::clear()
 /*
  */
 void
+EditorSelection::setSelectedAsset(const SPtr<IAsset>& asset)
+{
+  clear();
+  getState().asset = asset;
+}
+
+/*
+ */
+const SPtr<IAsset>&
+EditorSelection::getSelectedAsset()
+{
+  return getState().asset;
+}
+
+/*
+ */
+void
 EditorSelection::getTopLevel(Vector<SPtr<GameObject>>& outObjects)
 {
   outObjects.clear();
@@ -157,6 +177,7 @@ void
 EditorSelection::selectAll(const Scene& scene, const GameObject* root)
 {
   clear();
+  getState().asset.reset();
   addList(getState(), root ? root->getChildren() : scene.getRootGameObjects());
 }
 

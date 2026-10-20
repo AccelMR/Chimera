@@ -14,10 +14,60 @@
 #include <cstring>
 
 #include "chGraphicsTypes.h"
+#include "chMatrix4.h"
 #include "chSphereBoxBounds.h"
 #include "chVertexLayout.h"
 
 namespace chEngineSDK {
+/**
+ * The bones that move one vertex, at most four. Weights are out of 255 and add up to 255;
+ * unused entries have weight 0.
+ */
+struct VertexSkin
+{
+  // Indices into MeshSkin::boneNodes.
+  uint8 bones[4];
+  uint8 weights[4];
+};
+static_assert(sizeof(VertexSkin) == 8, "VertexSkin must have no padding");
+
+/**
+ * One bone that pulls a vertex, before it is packed into a VertexSkin.
+ */
+struct BoneInfluence
+{
+  uint32 bone;
+  float weight;
+};
+
+/**
+ * What a skinned mesh needs to follow the bones of its model, kept apart from the vertices
+ * so meshes without bones pay nothing and the vertex layout stays the same for every mesh.
+ */
+struct CH_CORE_EXPORT MeshSkin
+{
+  /**
+   * Keeps the four strongest influences, scales them to add up to 255 and gives the
+   * rounding error to the strongest one. No influence, or only zero weights, gives bone 0
+   * with the whole weight.
+   */
+  NODISCARD static VertexSkin
+  packVertex(Span<const BoneInfluence> influences);
+
+  NODISCARD FORCEINLINE bool
+  isEmpty() const noexcept { return boneNodes.empty(); }
+
+  static constexpr uint32 MAX_BONES = 256;
+  static constexpr uint32 MAX_INFLUENCES = 4;
+
+  // The Model node of each bone the vertices name.
+  Vector<uint32> boneNodes;
+  // Per bone: from the mesh's space to the bone's space in the bind pose.
+  Vector<Matrix4> inverseBindMatrices;
+  // One per vertex.
+  Vector<VertexSkin> vertices;
+};
+
 /**
  * Class to store mesh data.
  * This is a simple data structure without much functionality.
@@ -249,6 +299,18 @@ class CH_CORE_EXPORT Mesh
   NODISCARD FORCEINLINE uint32
   getMaterialSlot() const noexcept { return m_materialSlot; }
 
+  /**
+   * The skin must have one VertexSkin per vertex, or be empty for a mesh without bones.
+   */
+  FORCEINLINE void
+  setSkin(MeshSkin skin) { m_skin = std::move(skin); }
+
+  NODISCARD FORCEINLINE const MeshSkin&
+  getSkin() const noexcept { return m_skin; }
+
+  NODISCARD FORCEINLINE bool
+  hasSkin() const noexcept { return !m_skin.isEmpty(); }
+
  private:
   /**
    * Old GPU buffers go through the deferred deletion, so frames in flight can still use
@@ -281,6 +343,7 @@ class CH_CORE_EXPORT Mesh
   IndexType m_indexType = IndexType::UInt16;
   VertexLayout m_vertexLayout;
   uint32 m_materialSlot = 0;
+  MeshSkin m_skin;
 
   // Caches built on first use from the data above.
   mutable SphereBoxBounds m_bounds{Vector3::ZERO, Vector3::ZERO, 0.0f};

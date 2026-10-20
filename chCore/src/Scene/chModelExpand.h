@@ -36,7 +36,8 @@ class CH_CORE_EXPORT ModelExpand
  public:
   /**
    * False, with nothing changed, when the object has no ModelComponent drawing a whole
-   * model or the mode is Single. Material overrides and the visible flag go to the parts.
+   * model, the model has a skeleton or the mode is Single. Material overrides and the
+   * visible flag go to the parts.
    */
   static bool
   expand(Scene& scene, GameObject& gameObject, ModelExpandMode mode);

@@ -25,6 +25,8 @@
 #include "chMesh.h"
 #include "chMeshSplit.h"
 #include "chModelAsset.h"
+#include "chSkeleton.h"
+#include "chSkeletonAsset.h"
 #include "chTextureAsset.h"
 #include "chTextureMips.h"
 
@@ -213,14 +215,15 @@ processMesh(const aiMesh& mesh)
 }
 
 /*
- * Nodes are added before their children, the order the asset keeps, so the node indices
- * saved in scenes stay valid.
+ * Nodes are added before their children, the order the asset keeps. Each node's index is
+ * kept by its assimp node, so bones can find theirs.
  */
 static void
 processNode(const aiNode& node,
             const Vector<Vector<uint32>>& meshIndices,
             Model& model,
-            uint32 parentNode)
+            uint32 parentNode,
+            UnorderedMap<const aiNode*, uint32>& outNodeIndices)
 {
   Vector<uint32> nodeMeshes;
   for (uint32 i = 0; i < node.mNumMeshes; i++) {
@@ -229,10 +232,154 @@ processNode(const aiNode& node,
   }
   const uint32 modelNode = model.addNode(node.mName.C_Str(), parentNode,
                                          convertAssimpMatrix(node.mTransformation), nodeMeshes);
+  outNodeIndices.emplace(&node, modelNode);
 
   for (uint32 i = 0; i < node.mNumChildren; i++) {
-    processNode(*node.mChildren[i], meshIndices, model, modelNode);
+    processNode(*node.mChildren[i], meshIndices, model, modelNode, outNodeIndices);
   }
+}
+
+/*
+ * The weights and inverse bind matrices of a mesh with bones. The bones' nodes are filled
+ * once the node tree is read.
+ */
+static MeshSkin
+readSkinWeights(const aiMesh& mesh)
+{
+  // LimitBoneWeights leaves at most four per vertex; more room keeps the strongest anyway
+  // if a file gets past it.
+  constexpr uint32 kSlots = 8;
+  Vector<BoneInfluence> influences(static_cast<SIZE_T>(mesh.mNumVertices) * kSlots,
+                                   BoneInfluence{.bone = 0, .weight = 0.0f});
+  Vector<uint8> counts(mesh.mNumVertices, 0);
+
+  MeshSkin skin;
+  skin.inverseBindMatrices.reserve(mesh.mNumBones);
+  for (uint32 boneIndex = 0; boneIndex < mesh.mNumBones; ++boneIndex) {
+    const aiBone& bone = *mesh.mBones[boneIndex];
+    skin.inverseBindMatrices.push_back(convertAssimpMatrix(bone.mOffsetMatrix));
+    for (uint32 i = 0; i < bone.mNumWeights; ++i) {
+      const aiVertexWeight& weight = bone.mWeights[i];
+      if (weight.mVertexId >= mesh.mNumVertices) {
+        continue;
+      }
+      BoneInfluence* slots = &influences[static_cast<SIZE_T>(weight.mVertexId) * kSlots];
+      uint8& count = counts[weight.mVertexId];
+      const BoneInfluence influence{.bone = boneIndex, .weight = weight.mWeight};
+      if (count < kSlots) {
+        slots[count++] = influence;
+        continue;
+      }
+      BoneInfluence* weakest = slots;
+      for (uint32 slot = 1; slot < kSlots; ++slot) {
+        if (slots[slot].weight < weakest->weight) {
+          weakest = &slots[slot];
+        }
+      }
+      if (weakest->weight < influence.weight) {
+        *weakest = influence;
+      }
+    }
+  }
+
+  skin.vertices.resize(mesh.mNumVertices);
+  for (uint32 vertex = 0; vertex < mesh.mNumVertices; ++vertex) {
+    skin.vertices[vertex] = MeshSkin::packVertex(Span<const BoneInfluence>(
+        &influences[static_cast<SIZE_T>(vertex) * kSlots], counts[vertex]));
+  }
+  return skin;
+}
+
+/*
+ * The bones are every node a skin uses plus the nodes between them and the lowest node
+ * above all of them, so the nodes over the skeleton (Armature, an axis fix) stay plain
+ * nodes of the model. Sets the bone of each node. Null when no mesh has a skin.
+ */
+static SPtr<Skeleton>
+buildSkeleton(Model& model)
+{
+  const Vector<ModelNode>& nodes = model.getNodes();
+  Vector<uint8> isJoint(nodes.size(), 0);
+  bool bAnyJoint = false;
+  for (const SPtr<Mesh>& mesh : model.getMeshes()) {
+    for (const uint32 node : mesh->getSkin().boneNodes) {
+      isJoint[node] = 1;
+      bAnyJoint = true;
+    }
+  }
+  if (!bAnyJoint) {
+    return nullptr;
+  }
+
+  Vector<uint32> depths(nodes.size(), 0);
+  for (SIZE_T i = 0; i < nodes.size(); ++i) {
+    depths[i] = nodes[i].parent == ModelNode::NO_PARENT ? 0 : depths[nodes[i].parent] + 1;
+  }
+
+  // NO_PARENT when the joints are under different roots: then every node above them is a
+  // bone.
+  uint32 common = ModelNode::NO_PARENT;
+  bool bFirst = true;
+  for (uint32 joint = 0; joint < nodes.size(); ++joint) {
+    if (!isJoint[joint]) {
+      continue;
+    }
+    if (bFirst) {
+      common = joint;
+      bFirst = false;
+      continue;
+    }
+    uint32 a = common;
+    uint32 b = joint;
+    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[a] > depths[b]) {
+      a = nodes[a].parent;
+    }
+    while (a != ModelNode::NO_PARENT && b != ModelNode::NO_PARENT && depths[b] > depths[a]) {
+      b = nodes[b].parent;
+    }
+    while (a != b) {
+      a = a == ModelNode::NO_PARENT ? a : nodes[a].parent;
+      b = b == ModelNode::NO_PARENT ? b : nodes[b].parent;
+    }
+    common = a;
+  }
+
+  Vector<uint8> isBone(nodes.size(), 0);
+  for (uint32 joint = 0; joint < nodes.size(); ++joint) {
+    if (!isJoint[joint]) {
+      continue;
+    }
+    for (uint32 node = joint; node != ModelNode::NO_PARENT && !isBone[node];
+         node = nodes[node].parent) {
+      isBone[node] = 1;
+      if (node == common) {
+        break;
+      }
+    }
+  }
+
+  SPtr<Skeleton> skeleton = chMakeShared<Skeleton>();
+  for (uint32 node = 0; node < nodes.size(); ++node) {
+    if (!isBone[node]) {
+      continue;
+    }
+    const ModelNode& source = nodes[node];
+    if (skeleton->findBone(source.name) != Skeleton::NO_BONE) {
+      CH_LOG_WARNING(MeshSystem, "Two bones are named {0}; animations will find only one",
+                     source.name);
+    }
+    const uint32 parent = source.parent;
+    const uint32 parentBone = parent != ModelNode::NO_PARENT && isBone[parent]
+                                  ? nodes[parent].bone
+                                  : SkeletonBone::NO_PARENT;
+    const uint32 bone = skeleton->addBone({.name = source.name,
+                                           .parent = parentBone,
+                                           .position = source.position,
+                                           .rotation = source.rotation,
+                                           .scale = source.scale});
+    model.setNodeBone(node, bone);
+  }
+  return skeleton;
 }
 
 /*
@@ -502,7 +649,12 @@ class MeshImportTask final : public IImportTask
   NODISCARD ModelMaterialSlot
   createMaterial(uint32 index, const Path& folder);
 
+  NODISCARD bool
+  assignSkeleton(const Path& folder);
+
   static constexpr int32 NO_TEXTURE = -1;
+  // The source part of the skeleton a model file makes, so a later import finds it.
+  static constexpr StringView kSkeletonPart = "Skeleton";
   static constexpr SIZE_T TEXTURE_KINDS = static_cast<SIZE_T>(MaterialTexture::COUNT);
 
   Path m_filePath;
@@ -516,6 +668,8 @@ class MeshImportTask final : public IImportTask
   Assimp::Importer m_importer;
   const aiScene* m_scene = nullptr;
   SPtr<Model> m_model;
+  // Built from the file; createAssets swaps it for a compatible one of the project.
+  SPtr<Skeleton> m_skeleton;
   Vector<TextureSource> m_textures;
   // Per material, the index into m_textures of each MaterialTexture, or NO_TEXTURE.
   Vector<Array<int32, TEXTURE_KINDS>> m_materialTextures;
@@ -543,8 +697,8 @@ MeshImportTask::addTextureSource(const aiString& reference, const ImportSettings
 void
 MeshImportTask::findMaterialTextures()
 {
-  constexpr ImportSettings kColorSettings{.srgb = true};
-  constexpr ImportSettings kDataSettings{.srgb = false};
+  const ImportSettings kColorSettings{.srgb = true};
+  const ImportSettings kDataSettings{.srgb = false};
   constexpr aiTextureType kBaseColorTypes[] = {aiTextureType_BASE_COLOR,
                                                aiTextureType_DIFFUSE};
   constexpr aiTextureType kNormalTypes[] = {aiTextureType_NORMALS,
@@ -670,9 +824,14 @@ MeshImportTask::readSource(ImportProgress& progress)
 
   // The importer deletes its progress handler.
   m_importer.SetProgressHandler(new AssimpProgress(progress));
+  // A skin indexes its bones with 8 bits.
+  m_importer.SetPropertyInteger(AI_CONFIG_PP_SBBC_MAX_BONES,
+                                static_cast<int32>(MeshSkin::MAX_BONES));
   m_scene = m_importer.ReadFile(m_filePath.toString(),
                                 aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs |
-                                    aiProcess_MakeLeftHanded | aiProcess_FlipWindingOrder);
+                                    aiProcess_MakeLeftHanded | aiProcess_FlipWindingOrder |
+                                    aiProcess_SplitByBoneCount |
+                                    aiProcess_PopulateArmatureData);
   if (progress.isCancelled()) {
     return false;
   }
@@ -686,6 +845,7 @@ MeshImportTask::readSource(ImportProgress& progress)
   m_model = chMakeShared<Model>();
   // Converted once per assimp mesh, so nodes that share one share the Meshes too.
   Vector<Vector<uint32>> meshIndices(m_scene->mNumMeshes);
+  Vector<uint32> skinnedMeshes;
   for (uint32 i = 0; i < m_scene->mNumMeshes; ++i) {
     if (progress.isCancelled()) {
       return false;
@@ -697,13 +857,41 @@ MeshImportTask::readSource(ImportProgress& progress)
     if (!mesh) {
       continue;
     }
-    const Vector<SPtr<Mesh>> parts =
-        m_settings.splitParts ? MeshSplit::splitParts(mesh) : Vector<SPtr<Mesh>>{mesh};
+    // A skinned mesh stays whole: its pieces would all follow the same bones anyway.
+    const bool bSkinned = m_scene->mMeshes[i]->HasBones();
+    const Vector<SPtr<Mesh>> parts = m_settings.splitParts && !bSkinned
+                                         ? MeshSplit::splitParts(mesh)
+                                         : Vector<SPtr<Mesh>>{mesh};
     for (const SPtr<Mesh>& part : parts) {
       meshIndices[i].push_back(m_model->addMesh(part));
     }
+    if (bSkinned) {
+      skinnedMeshes.push_back(i);
+    }
   }
-  processNode(*m_scene->mRootNode, meshIndices, *m_model, ModelNode::NO_PARENT);
+  UnorderedMap<const aiNode*, uint32> nodeIndices;
+  processNode(*m_scene->mRootNode, meshIndices, *m_model, ModelNode::NO_PARENT, nodeIndices);
+
+  // Bones name nodes, which only have indices once the tree is read.
+  for (const uint32 meshIndex : skinnedMeshes) {
+    const aiMesh& source = *m_scene->mMeshes[meshIndex];
+    MeshSkin skin = readSkinWeights(source);
+    skin.boneNodes.reserve(source.mNumBones);
+    for (uint32 i = 0; i < source.mNumBones; ++i) {
+      const aiBone& bone = *source.mBones[i];
+      const aiNode* node = bone.mNode ? bone.mNode : m_scene->mRootNode->FindNode(bone.mName);
+      const auto found = node ? nodeIndices.find(node) : nodeIndices.end();
+      if (found == nodeIndices.end()) {
+        CH_LOG_WARNING(MeshSystem, "Bone {0} of mesh {1} has no node; the mesh stays rigid",
+                       bone.mName.C_Str(), source.mName.C_Str());
+        skin = MeshSkin();
+        break;
+      }
+      skin.boneNodes.push_back(found->second);
+    }
+    m_model->getMeshes()[meshIndices[meshIndex][0]]->setSkin(std::move(skin));
+  }
+  m_skeleton = buildSkeleton(*m_model);
 
   // Every texture is read here, although a material reused from an earlier import of the
   // same file does not need its own: which ones are reused is only known on the main thread.
@@ -805,6 +993,69 @@ MeshImportTask::createMaterial(uint32 index, const Path& folder)
 }
 
 /*
+ * Picks the skeleton the import settings ask for, else makes one from the file. A skeleton
+ * of the project is used only when every bone of the file fits it; the model's node bones
+ * then point at its indices.
+ */
+bool
+MeshImportTask::assignSkeleton(const Path& folder)
+{
+  AssetManager& assetManager = AssetManager::instance();
+  Vector<uint32> boneMap;
+  const auto fits = [this, &assetManager, &boneMap](const SPtr<IAsset>& asset) {
+    if (!asset || !asset->isTypeOf<SkeletonAsset>() ||
+        (!asset->isLoaded() && !assetManager.syncLoadAsset(asset))) {
+      return SPtr<SkeletonAsset>();
+    }
+    SPtr<SkeletonAsset> skeleton = asset->as<SkeletonAsset>();
+    return skeleton && skeleton->getSkeleton() &&
+                   skeleton->getSkeleton()->mapBones(*m_skeleton, boneMap)
+               ? skeleton
+               : SPtr<SkeletonAsset>();
+  };
+
+  SPtr<SkeletonAsset> chosen;
+  if (m_settings.skeletonMode == ImportSkeletonMode::Existing) {
+    chosen = fits(assetManager.getAsset(m_settings.skeleton));
+    if (!chosen) {
+      CH_LOG_WARNING(MeshSystem, "The chosen skeleton does not fit {0}; a new one is made",
+                     m_assetName);
+    }
+  }
+  else if (m_settings.skeletonMode == ImportSkeletonMode::Auto) {
+    // The skeleton an earlier import of this file made comes first.
+    chosen = fits(assetManager.findAssetBySource(m_sourceFile, kSkeletonPart));
+    if (!chosen) {
+      for (const SPtr<IAsset>& asset : assetManager.getAllAssets()) {
+        if ((chosen = fits(asset))) {
+          break;
+        }
+      }
+    }
+  }
+
+  if (chosen) {
+    for (uint32 node = 0; node < m_model->getNodeCount(); ++node) {
+      const uint32 bone = m_model->getNodes()[node].bone;
+      if (bone != ModelNode::NO_BONE) {
+        m_model->setNodeBone(node, boneMap[bone]);
+      }
+    }
+    CH_LOG_INFO(MeshSystem, "{0} uses the skeleton {1}", m_assetName, chosen->getName());
+  }
+  else {
+    const AssetMetadata metadata =
+        IAssetCodec::makeMetadata<SkeletonAsset>("SK_" + m_assetName, folder);
+    chosen = chMakeShared<SkeletonAsset>(metadata, m_skeleton);
+    if (!IAssetCodec::saveAndRegister(chosen, m_sourceFile, kSkeletonPart, m_settings)) {
+      CH_LOG_ERROR(MeshSystem, "Failed to save skeleton asset: SK_{0}", m_assetName);
+      return false;
+    }
+  }
+  m_model->setSkeleton(chosen->getUUID(), chosen);
+  return true;
+}
+/*
  */
 SPtr<IAsset>
 MeshImportTask::createAssets(const Path& assetFolder)
@@ -817,6 +1068,9 @@ MeshImportTask::createAssets(const Path& assetFolder)
 
   for (uint32 i = 0; i < m_scene->mNumMaterials; ++i) {
     m_model->addMaterialSlot(createMaterial(i, modelFolder));
+  }
+  if (m_skeleton && !assignSkeleton(modelFolder)) {
+    return nullptr;
   }
 
   const AssetMetadata metadata =

@@ -18,6 +18,7 @@
 
 namespace chEngineSDK {
 class MaterialAsset;
+class SkeletonAsset;
 
 /**
  * One material the meshes of a model can use; each Mesh stores the index of its slot.
@@ -32,11 +33,12 @@ struct ModelMaterialSlot
 
 /**
  * One node of a Model: its place in the hierarchy, its rest transform relative to its
- * parent and the range of meshes it draws.
+ * parent, the range of meshes it draws and the bone it is, if any.
  */
 struct ModelNode
 {
   static constexpr uint32 NO_PARENT = 0xFFFFFFFFu;
+  static constexpr uint32 NO_BONE = 0xFFFFFFFFu;
 
   String name;
   // Lower than the node's own index, so a parent always comes before its children.
@@ -47,6 +49,8 @@ struct ModelNode
   // Range in Model::getNodeMeshes.
   uint32 firstMesh = 0;
   uint32 meshCount = 0;
+  // The bone of the model's skeleton this node is, or NO_BONE.
+  uint32 bone = NO_BONE;
 };
 
 /**
@@ -97,6 +101,28 @@ class CH_CORE_EXPORT Model
   void
   setSlotMaterial(uint32 slot, const SPtr<MaterialAsset>& material);
 
+  /**
+   * The skeleton whose bones the nodes name with setNodeBone. The UUID is kept even when
+   * the asset is missing, so saving the model again does not lose it.
+   */
+  void
+  setSkeleton(const UUID& skeletonId, const SPtr<SkeletonAsset>& skeleton);
+
+  void
+  setNodeBone(uint32 nodeIndex, uint32 bone);
+
+  NODISCARD FORCEINLINE bool
+  hasSkeleton() const noexcept { return !m_skeletonId.isNull(); }
+
+  NODISCARD FORCEINLINE const UUID&
+  getSkeletonId() const noexcept { return m_skeletonId; }
+
+  /**
+   * Null when the model has no skeleton or its asset is missing.
+   */
+  NODISCARD FORCEINLINE const SPtr<SkeletonAsset>&
+  getSkeleton() const noexcept { return m_skeleton; }
+
   NODISCARD FORCEINLINE const Vector<ModelNode>&
   getNodes() const noexcept { return m_nodes; }
 
@@ -142,6 +168,8 @@ class CH_CORE_EXPORT Model
   Vector<uint32> m_nodeMeshes;
   Vector<SPtr<Mesh>> m_meshes;
   Vector<ModelMaterialSlot> m_materialSlots;
+  UUID m_skeletonId = UUID::null();
+  SPtr<SkeletonAsset> m_skeleton;
 };
 
 } // namespace chEngineSDK

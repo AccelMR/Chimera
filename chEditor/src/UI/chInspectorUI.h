@@ -14,9 +14,11 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
+class IAsset;
 class Material;
 class MaterialAsset;
 class ShapeComponent;
+class Skeleton;
 class SkyLightComponent;
 enum class MaterialTexture : uint32;
 
@@ -61,6 +63,15 @@ class InspectorUI
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
 
   void
+  renderAsset(const SPtr<IAsset>& asset);
+
+  void
+  renderSkeleton(const Skeleton& skeleton);
+
+  void
+  renderBone(const Skeleton& skeleton, uint32 bone);
+
+  void
   renderMaterial(const SPtr<MaterialAsset>& materialAsset);
 
   // True when the texture changed, so the material needs saving.
@@ -80,6 +91,11 @@ class InspectorUI
   const GameObject* m_nameOwner = nullptr;
   ANSICHAR m_nameBuffer[256] = "";
   bool m_bEditingName = false;
+
+  // The children of each bone of the skeleton last shown, built when it changes, since the
+  // skeleton only stores parents.
+  const Skeleton* m_childrenOwner = nullptr;
+  Vector<Vector<uint32>> m_boneChildren;
 };
 
 } // namespace chEngineSDK
