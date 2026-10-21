@@ -122,9 +122,11 @@ WindowedApplication::initialize() {
   initializeModules();
 
   loadGraphicsAPI();
+  // The plugin is loaded by now, so the title can say which API draws.
   initializeDisplay(
       {.name = g_cvarApplicationName.get(),
-       .title = g_cvarWindowTitle.get(),
+       .title = StringUtils::format("{0} - {1}", g_cvarWindowTitle.get(),
+                                    IGraphicsAPI::instance().getAPIName()),
        .width = static_cast<uint32>(Math::max(1, g_cvarWindowWidth.get())),
        .height = static_cast<uint32>(Math::max(1, g_cvarWindowHeight.get())),
        .resizable = true,
@@ -308,6 +310,12 @@ WindowedApplication::render()
 
   IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
   ISwapChain& swapChain = *m_swapChain;
+  // Graphics.VSync may change at run time (menu, console); outside the frame, because an
+  // API may make the swap chain again for it.
+  if (swapChain.isVSync() != g_cvarVSync.get()) {
+    swapChain.setVSync(g_cvarVSync.get());
+    CH_LOG_INFO(WindowedApp, "VSync {0}.", swapChain.isVSync() ? "on" : "off");
+  }
 
   CH_PROFILE_SCOPE("Render");
   ICommandList* commandList = nullptr;

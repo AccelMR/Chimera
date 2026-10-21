@@ -60,6 +60,16 @@ class ISwapChain
   virtual void
   resize(uint32 width, uint32 height) = 0;
 
+  /**
+   * Call outside a frame: an API that fixes it when the swap chain is made waits for the GPU
+   * and makes the swap chain again.
+   */
+  virtual void
+  setVSync(bool bVSync) = 0;
+
+  NODISCARD virtual bool
+  isVSync() const = 0;
+
   NODISCARD virtual const ITexture&
   getCurrentTexture() const = 0;
 

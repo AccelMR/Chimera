@@ -18,6 +18,7 @@
 #include "chEditorSelection.h"
 #include "chEditorTheme.h"
 #include "chEnginePaths.h"
+#include "chGraphicsSettings.h"
 #include "chImportDialog.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
@@ -356,6 +357,12 @@ MainMenuBarUI::renderMainMenuBar() {
       ImGui::EndMenu();
     }
     ImGui::Separator(); //--------------------------------------------------------------
+
+    bool bVSync = g_cvarVSync.get();
+    if (ImGui::MenuItem(ICON_FA_TV "  VSync", nullptr, &bVSync)) {
+      g_cvarVSync.set(bVSync, ConsoleVariableSource::Console);
+    }
+    ImGui::SetItemTooltip("%s", g_cvarVSync.getHelp().c_str());
 
     // The scene renderer reads the color every frame.
     ImGui::ColorEdit4(ICON_FA_FILL_DRIP "  Renderer Color",

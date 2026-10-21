@@ -40,6 +40,19 @@ class DX12SwapChain : public ISwapChain
   void
   resize(uint32 width, uint32 height) override;
 
+  // The sync interval is chosen at every present, so nothing is made again.
+  void
+  setVSync(bool bVSync) override
+  {
+    m_vsync = bVSync;
+  }
+
+  NODISCARD bool
+  isVSync() const override
+  {
+    return m_vsync;
+  }
+
   NODISCARD const ITexture&
   getCurrentTexture() const override
   {

@@ -39,6 +39,12 @@ class DX12API : public IGraphicsAPI
     return m_adapterName;
   }
 
+  NODISCARD StringView
+  getAPIName() const override
+  {
+    return "DX12";
+  }
+
   NODISCARD uint64
   getPlatformWindowFlags() const override
   {

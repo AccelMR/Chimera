@@ -43,6 +43,9 @@ class CH_CORE_EXPORT IGraphicsAPI : public Module<IGraphicsAPI> {
   NODISCARD virtual String
   getAdapterName() const = 0;
 
+  NODISCARD virtual StringView
+  getAPIName() const = 0;
+
   /**
    * Flags of the platform window layer (SDL_WindowFlags with SDL3) that every window this
    * API draws to needs. Read before initialize, because the main window is made first.

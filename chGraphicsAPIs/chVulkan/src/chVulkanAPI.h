@@ -38,6 +38,12 @@ class VulkanAPI : public IGraphicsAPI {
   NODISCARD String
   getAdapterName() const override;
 
+  NODISCARD StringView
+  getAPIName() const override
+  {
+    return "Vulkan";
+  }
+
   NODISCARD uint64
   getPlatformWindowFlags() const override;
 

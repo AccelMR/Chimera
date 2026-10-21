@@ -47,6 +47,15 @@ class VulkanSwapChain : public ISwapChain
   void
   resize(uint32 width, uint32 height) override;
 
+  void
+  setVSync(bool bVSync) override;
+
+  NODISCARD bool
+  isVSync() const override
+  {
+    return m_vsync;
+  }
+
   NODISCARD const ITexture&
   getCurrentTexture() const override
   {
@@ -120,6 +129,8 @@ class VulkanSwapChain : public ISwapChain
   uint32 m_presentFamilyQueueIndex = UINT32_MAX;
   VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
   bool m_vsync = false;
+  // Presents left in FIFO before a swap chain made without vsync switches to its own mode.
+  uint32 m_fifoWarmUpPresents = 0;
   VkFormat m_colorFormat = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR m_colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
   uint32 m_width = 0;
