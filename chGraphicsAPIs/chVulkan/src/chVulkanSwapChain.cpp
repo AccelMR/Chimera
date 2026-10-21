@@ -33,7 +33,11 @@ toSwapChainStatus(VkResult result, StringView action)
 // the same mode does not fix it. So there a swap chain without vsync starts in FIFO for this
 // many presents, then is made again in its own mode.
 constexpr uint32 kFifoWarmUpPresents = 30;
+
+#if USING(CH_PLATFORM_WIN32)
 constexpr uint32 kNvidiaVendorId = 0x10DE;
+#endif // USING(CH_PLATFORM_WIN32)
+
 
 NODISCARD bool
 needsFifoWarmUp(VkPhysicalDevice physicalDevice)
