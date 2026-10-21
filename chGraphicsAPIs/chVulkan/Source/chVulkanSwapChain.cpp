@@ -27,30 +27,6 @@ toSwapChainStatus(VkResult result, StringView action)
       return SwapChainStatus::Failed;
   }
 }
-
-// NVIDIA on Windows shows a swap chain made without vsync when the window opens with uneven
-// pacing, and keeps doing so until it is made again after presenting in FIFO; a resize in
-// the same mode does not fix it. So there a swap chain without vsync starts in FIFO for this
-// many presents, then is made again in its own mode.
-constexpr uint32 kFifoWarmUpPresents = 30;
-
-#if USING(CH_PLATFORM_WIN32)
-constexpr uint32 kNvidiaVendorId = 0x10DE;
-#endif // USING(CH_PLATFORM_WIN32)
-
-
-NODISCARD bool
-needsFifoWarmUp(VkPhysicalDevice physicalDevice)
-{
-#if USING(CH_PLATFORM_WIN32)
-  VkPhysicalDeviceProperties properties;
-  vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-  return properties.vendorID == kNvidiaVendorId;
-#else
-  CH_PARAMETER_UNUSED(physicalDevice);
-  return false;
-#endif // USING(CH_PLATFORM_WIN32)
-}
 } // namespace
 
 /*
@@ -80,9 +56,6 @@ VulkanSwapChain::VulkanSwapChain(VkInstance instance,
     m_acquireSemaphores[i] = createSemaphore(name.c_str());
   }
 
-  if (!desc.vsync && needsFifoWarmUp(m_physicalDevice)) {
-    m_fifoWarmUpPresents = kFifoWarmUpPresents;
-  }
   create(desc.width, desc.height, desc.vsync);
 }
 
@@ -138,14 +111,7 @@ VulkanSwapChain::present()
   // decides when to rebuild them.
   const VkResult result = vkQueuePresentKHR(g_vulkanAPI().getGraphicsQueueHandle(),
                                             &presentInfo);
-  const SwapChainStatus status = toSwapChainStatus(result, "present");
-
-  // After the present, so no frame is recording; a minimized window keeps FIFO until its
-  // next resize.
-  if (m_fifoWarmUpPresents > 0 && --m_fifoWarmUpPresents == 0) {
-    resize(m_width, m_height);
-  }
-  return status;
+  return toSwapChainStatus(result, "present");
 }
 
 /*
@@ -190,14 +156,15 @@ VulkanSwapChain::create(uint32 width, uint32 height, bool vsync)
                                                      presentModes.data()));
 
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-  if (!vsync && m_fifoWarmUpPresents == 0) {
-    // Prefer MAILBOX (triple buffering) if it is available
-    if (Algorithm::contains(presentModes, VK_PRESENT_MODE_MAILBOX_KHR)) {
-      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    }
-    else if (Algorithm::contains(presentModes, VK_PRESENT_MODE_IMMEDIATE_KHR)) {
-      // Fallback to IMMEDIATE (no VSync)
+  if (!vsync) {
+    // IMMEDIATE first, as DX12 presents without vsync (interval 0, tearing allowed). NVIDIA on
+    // Windows has no real windowed MAILBOX: it paces it like FIFO when the swap chain is made
+    // again after one in FIFO, and unevenly otherwise.
+    if (Algorithm::contains(presentModes, VK_PRESENT_MODE_IMMEDIATE_KHR)) {
       presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    }
+    else if (Algorithm::contains(presentModes, VK_PRESENT_MODE_MAILBOX_KHR)) {
+      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     }
   }
 
