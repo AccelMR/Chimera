@@ -22,10 +22,9 @@
 #include "chAnimationClipAsset.h"
 #include "chAnimationPreviewUI.h"
 #include "chAssetManager.h"
+#include "chAssetThumbnails.h"
 #include "chLogger.h"
-#include "chImGuiRenderer.h"
 #include "chImportDialog.h"
-#include "chITexture.h"
 #include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chEnginePaths.h"
@@ -36,7 +35,6 @@
 #include "chPrefabAsset.h"
 #include "chMaterialAsset.h"
 #include "chSceneAsset.h"
-#include "chTextureAsset.h"
 
 #include "imgui.h"
 
@@ -224,6 +222,15 @@ ContentAssetUI::renderViewModeControls()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100.0f);
     ImGui::SliderFloat("Size", &gridSize, 50.0f, 300.0f, "%.0f");
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(ICON_FA_COG "##ThumbnailSettings")) {
+    ImGui::OpenPopup("ThumbnailSettings");
+  }
+  ImGui::SetItemTooltip("Thumbnail settings");
+  if (ImGui::BeginPopup("ThumbnailSettings")) {
+    AssetThumbnails::renderSettings();
+    ImGui::EndPopup();
   }
 
   ImGui::Separator();
@@ -433,7 +440,14 @@ ContentAssetUI::renderListAssetItem(const SPtr<IAsset>& asset)
   ImGui::PushID(asset.get());
 
   ImGui::TableSetColumnIndex(0);
-  ImGui::TextUnformatted(UIHelpers::getIconFromAssetType(asset).icon);
+  const uint64 thumbnail = AssetThumbnails::get(asset);
+  if (thumbnail != 0) {
+    const float side = ImGui::GetTextLineHeight();
+    ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(side, side));
+  }
+  else {
+    ImGui::TextUnformatted(UIHelpers::getIconFromAssetType(asset).icon);
+  }
 
   ImGui::TableSetColumnIndex(1);
   if (!renderInlineRename(asset)) {
@@ -459,7 +473,7 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
 
   pushTileColors();
 
-  const uint64 thumbnail = assetIcon.type == AssetType::Texture ? getThumbnail(asset) : 0;
+  const uint64 thumbnail = AssetThumbnails::get(asset);
 
   if (thumbnail != 0) {
     ImGui::ImageButton("##asset", static_cast<ImTextureID>(thumbnail), buttonSize);
@@ -482,12 +496,23 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
 
   ImGui::PopStyleColor(3);
 
+  // Over a thumbnail the type icon goes small in a corner, so it does not hide the picture.
   const ImVec2 buttonMin = ImGui::GetItemRectMin();
+  ImDrawList* drawList = ImGui::GetWindowDrawList();
+  if (thumbnail != 0) {
+    const float iconSize = ImGui::GetFontSize();
+    const ImVec2 padding = ImGui::GetStyle().FramePadding;
+    const ImVec2 iconPos(buttonMin.x + padding.x * 2.0f, buttonMin.y + padding.y * 2.0f);
+    drawList->AddText(ImGui::GetFont(), iconSize, ImVec2(iconPos.x + 1.0f, iconPos.y + 1.0f),
+                      IM_COL32(0, 0, 0, 200), assetIcon.icon);
+    drawList->AddText(ImGui::GetFont(), iconSize, iconPos, IM_COL32(255, 255, 255, 230),
+                      assetIcon.icon);
+    return;
+  }
   const ImVec2 iconPos =
       ImVec2(buttonMin.x + (gridSize - 32) * 0.5f, buttonMin.y + (gridSize - 32) * 0.5f - 10);
-
-  ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 32.0f, iconPos,
-                                      IM_COL32(255, 255, 255, 255), assetIcon.icon);
+  drawList->AddText(ImGui::GetFont(), 32.0f, iconPos, IM_COL32(255, 255, 255, 255),
+                    assetIcon.icon);
 }
 
 /*
@@ -593,47 +618,6 @@ ContentAssetUI::renderAssetTooltip(const SPtr<IAsset>& asset)
 
 /*
  */
-uint64
-ContentAssetUI::getThumbnail(const SPtr<IAsset>& asset)
-{
-  const UUID& uuid = asset->getUUID();
-  auto it = m_assetThumbnails.find(uuid);
-  if (it != m_assetThumbnails.end()) {
-    return it->second.second;
-  }
-
-  // Stored even when it fails, so a broken texture is not loaded again every frame.
-  Pair<SPtr<ITexture>, uint64>& thumbnail = m_assetThumbnails[uuid];
-
-  SPtr<TextureAsset> textureAsset = std::static_pointer_cast<TextureAsset>(asset);
-
-  // The texture is unloaded again afterwards only if it was loaded here.
-  const bool loadedHere = textureAsset->isUnloaded();
-  if (loadedHere && !AssetManager::instance().syncLoadAsset(textureAsset)) {
-    CH_LOG_ERROR(ContentAssetUILog, "Failed to load texture asset: {0}", asset->getName());
-    return 0;
-  }
-
-  SPtr<ITexture> texture = textureAsset->getTexture();
-  const uint64 textureId =
-      texture ? ImGuiRenderer::getTextureId(*texture) : 0;
-  if (textureId != 0) {
-    // Keeping the texture keeps the thumbnail valid after the asset is unloaded below.
-    thumbnail = {std::move(texture), textureId};
-  }
-  else {
-    CH_LOG_ERROR(ContentAssetUILog, "Failed to create the thumbnail of {0}.",
-                 asset->getName());
-  }
-
-  if (loadedHere) {
-    AssetManager::instance().unloadAsset(asset);
-  }
-  return thumbnail.second;
-}
-
-/*
- */
 void
 ContentAssetUI::renderDeleteConfirmationPopup()
 {
@@ -667,7 +651,7 @@ ContentAssetUI::renderDeleteConfirmationPopup()
           if (EditorSelection::getSelectedAsset() == m_assetToDelete) {
             EditorSelection::setSelectedAsset(nullptr);
           }
-          m_assetThumbnails.erase(m_assetToDelete->getUUID());
+          AssetThumbnails::forget(*m_assetToDelete);
           AssetManager::instance().removeAsset(m_assetToDelete->getUUID());
           refreshAssets();
           CH_LOG_DEBUG(ContentAssetUILog, "Deleted asset: {0}", m_assetToDelete->getName());
@@ -724,6 +708,11 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
       AnimationPreviewUI::open(asset);
     }
     ImGui::Separator();
+  }
+
+  if (AssetThumbnails::canHaveThumbnail(*asset) &&
+      ImGui::MenuItem(ICON_FA_SYNC_ALT "  Regenerate Thumbnail")) {
+    AssetThumbnails::regenerate(*asset);
   }
 
   if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename")) {
@@ -1174,6 +1163,11 @@ ContentAssetUI::renderEmptyAreaContextMenu()
   if (ImGui::MenuItem(ICON_FA_SYNC_ALT "  Refresh")) {
     refreshAssets();
     CH_LOG_INFO(ContentAssetUILog, "Refreshed asset list.");
+  }
+  if (ImGui::MenuItem(ICON_FA_IMAGES "  Regenerate Thumbnails")) {
+    for (const uint32 index : m_visibleAssets) {
+      AssetThumbnails::regenerate(*m_assets[index]);
+    }
   }
 
   ImGui::Separator();

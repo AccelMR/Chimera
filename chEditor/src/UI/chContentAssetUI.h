@@ -185,13 +185,6 @@ class ContentAssetUI
   NODISCARD const Vector<uint32>&
   getVisibleSubfolders() const;
 
-  /**
-   * Thumbnail of a texture asset, created the first time it is needed. Returns 0 if
-   * it could not be created; that is only tried once.
-   */
-  NODISCARD uint64
-  getThumbnail(const SPtr<IAsset>& asset);
-
  private:
   static constexpr uint32 INVALID_FOLDER = ~0u;
 
@@ -219,10 +212,6 @@ class ContentAssetUI
 
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
-
-  // A texture whose thumbnail failed keeps an empty entry, so it is not tried again.
-  UnorderedMap<UUID, Pair<SPtr<ITexture>, uint64>> m_assetThumbnails;
-
 
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;

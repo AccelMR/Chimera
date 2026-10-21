@@ -10,6 +10,7 @@
 
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
+#include "chAssetThumbnails.h"
 #include "chITexture.h"
 #include "chImGuiRenderer.h"
 #include "chLogger.h"
@@ -177,9 +178,13 @@ MaterialEditorUI::render(const SPtr<MaterialAsset>& materialAsset)
     ImGui::PopID();
   }
 
-  if (bSave && !AssetManager::instance().saveAsset(materialAsset)) {
+  if (!bSave) {
+    return;
+  }
+  if (!AssetManager::instance().saveAsset(materialAsset)) {
     CH_LOG_ERROR(MaterialEditorLog, "Failed to save material {0}", materialAsset->getName());
   }
+  AssetThumbnails::regenerate(*materialAsset);
 }
 
 } // namespace chEngineSDK

@@ -11,6 +11,7 @@
 
 #include "chAlgorithm.h"
 #include "chAssetManager.h"
+#include "chAssetThumbnails.h"
 #include "chCamera.h"
 #include "chConsoleVariable.h"
 #include "chEditorCamera.h"
@@ -251,6 +252,7 @@ savePrefab(EditorSceneState& state)
   }
   state.history.markSaved();
   setDirty(state, false);
+  AssetThumbnails::regenerate(prefab);
   CH_LOG_INFO(EditorSceneLog, "Saved prefab {0}.", prefab.getName());
   return true;
 }

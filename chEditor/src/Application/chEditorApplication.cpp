@@ -52,6 +52,7 @@
 #include "chInspectorUI.h"
 #include "chAssetInspectorUI.h"
 #include "chAnimationPreviewUI.h"
+#include "chAssetThumbnails.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -129,6 +130,7 @@ EditorApplication::destroyModules()
   m_inspectorUI.reset();
   AssetInspectorUI::shutDown();
   AnimationPreviewUI::shutDown();
+  AssetThumbnails::shutDown();
   m_sceneGraphUI.reset();
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
@@ -233,6 +235,7 @@ EditorApplication::update(const float deltaTime)
   m_sceneRenderer->extract(scene, m_editorCamera->getCamera(), UIHelpers::rendererColor,
                            &m_editorLines);
   AnimationPreviewUI::update(deltaTime);
+  AssetThumbnails::update();
 }
 
 /*
@@ -240,8 +243,9 @@ EditorApplication::update(const float deltaTime)
 void
 EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapChain)
 {
-  // First, so its texture is drawn before the UI pass shows it.
+  // First, so their textures are drawn before the UI pass shows them.
   AnimationPreviewUI::recordFrame(commandList);
+  AssetThumbnails::recordFrame(commandList);
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),

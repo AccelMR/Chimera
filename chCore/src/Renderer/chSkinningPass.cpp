@@ -124,7 +124,9 @@ SkinningPass::findOrCreateVertices(const RenderItem& item)
   }
 
   SkinnedVertices& vertices = m_vertices[item.sceneSlot];
-  if (vertices.mesh == &mesh && vertices.buffer) {
+  // A freed mesh's address can come back as another mesh, so the size is checked too.
+  if (vertices.mesh == &mesh && vertices.buffer &&
+      vertices.buffer->getSize() == mesh.getVertexDataSize()) {
     return &vertices;
   }
   vertices.mesh = &mesh;
