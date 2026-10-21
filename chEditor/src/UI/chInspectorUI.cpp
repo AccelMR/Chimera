@@ -12,6 +12,7 @@
 
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationTimelineUI.h"
 #include "chAssetDragDrop.h"
 #include "chEditorScene.h"
 #include "chAssetManager.h"
@@ -617,32 +618,7 @@ InspectorUI::renderAnimation(ModelComponent& modelComponent)
     ImGui::TextDisabled("No node of this model has the name of a track.");
   }
 
-  // Playing, looping and speed are saved with the scene, so each change is an undo step;
-  // the time is not saved, so moving it is no edit.
-  const bool bPlaying = modelComponent.isPlaying();
-  if (ImGui::Button(bPlaying ? ICON_FA_PAUSE "  Pause###PlayPause"
-                             : ICON_FA_PLAY "  Play###PlayPause")) {
-    EditorScene::recordChange(gameObject, bPlaying ? "Pause Animation" : "Play Animation");
-    modelComponent.setPlaying(!bPlaying);
-  }
-  ImGui::SameLine();
-  bool bLooping = modelComponent.isLooping();
-  if (ImGui::Checkbox("Loop", &bLooping)) {
-    EditorScene::recordChange(gameObject, "Edit Loop");
-    modelComponent.setLooping(bLooping);
-  }
-
-  float speed = modelComponent.getPlaybackSpeed();
-  if (ImGui::DragFloat("Speed", &speed, 0.01f, -10.0f, 10.0f, "%.2fx",
-                       ImGuiSliderFlags_AlwaysClamp)) {
-    EditorScene::recordChange(gameObject, "Edit Speed");
-    modelComponent.setPlaybackSpeed(speed);
-  }
-
-  float time = modelComponent.getAnimationTime();
-  if (ImGui::SliderFloat("Time", &time, 0.0f, clip->getDuration(), "%.2f s")) {
-    modelComponent.setAnimationTime(time);
-  }
+  AnimationTimelineUI::render(modelComponent, true);
   ImGui::TreePop();
 }
 

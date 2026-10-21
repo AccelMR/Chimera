@@ -42,6 +42,18 @@ struct RenderFrameStats
 };
 
 /**
+ * How a SceneRenderer differs from the one that draws the main view.
+ */
+struct SceneRendererDesc
+{
+  // Only one renderer may time its passes: every GpuProfiler writes the frame's timestamps
+  // from index 0.
+  bool bProfileGpu = true;
+  // Drawn instead of what Renderer.ViewMode names, for views that always show one mode.
+  Optional<ViewMode> viewMode;
+};
+
+/**
  * Exists so an application only says where the frame goes and what it draws on top: it
  * owns the frame's render graph, the textures the graph makes, and the render path that
  * draws a scene. Lit view modes draw the shadow maps first, then the scene (with the sky
@@ -53,12 +65,15 @@ struct RenderFrameStats
  * What the scene passes show follows the Renderer.ViewMode console variable, and the path
  * of the Lit modes follows Renderer.Path, both read once per frame.
  *
+ * Several renderers can draw in one frame (the editor's asset previews), each with its own
+ * graph, textures and GPU buffers.
+ *
  * Needs a started IGraphicsAPI and must be destroyed before it shuts down.
  */
 class CH_CORE_EXPORT SceneRenderer
 {
  public:
-  SceneRenderer();
+  explicit SceneRenderer(const SceneRendererDesc& desc = {});
 
   ~SceneRenderer();
 
@@ -150,6 +165,7 @@ class CH_CORE_EXPORT SceneRenderer
   void
   updateSettings();
 
+  SceneRendererDesc m_desc;
   // Written by extract() in the update, read while the next frame is built.
   RenderFrame m_frame;
   RenderGraph m_graph;

@@ -211,7 +211,6 @@ IAsset::unload() {
   m_state = AssetState::Unloading;
   // clear the asset data
   clearAssetData();
-  m_referencedAssets.clear();
 
   m_state = AssetState::Unloaded;
   return true;

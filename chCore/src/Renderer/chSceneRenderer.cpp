@@ -36,8 +36,9 @@ constexpr Format kSceneColorFormat = Format::R16G16B16A16_SFLOAT;
 
 /*
  */
-SceneRenderer::SceneRenderer()
-  : m_forwardRenderPath(new ForwardRenderPath()),
+SceneRenderer::SceneRenderer(const SceneRendererDesc& desc)
+  : m_desc(desc),
+    m_forwardRenderPath(new ForwardRenderPath()),
     m_deferredRenderPath(new DeferredRenderPath()),
     m_renderPath(m_deferredRenderPath.get()),
     m_debugRenderPath(new DebugRenderPath()),
@@ -74,7 +75,9 @@ SceneRenderer::beginFrame()
 {
   updateSettings();
   m_graph.reset();
-  m_gpuProfiler.beginFrame();
+  if (m_desc.bProfileGpu) {
+    m_gpuProfiler.beginFrame();
+  }
   return m_graph;
 }
 
@@ -164,9 +167,14 @@ SceneRenderer::execute(ICommandList& commandList)
   CH_PROFILE_SCOPE("ExecuteGraph");
 #if USING(CH_PROFILER)
   const CommandListStats statsBefore = commandList.getStats();
-  const uint32 gpuScope = m_gpuProfiler.beginScope(commandList, "RenderGraph");
-  m_graph.execute(commandList, m_texturePool, &m_gpuProfiler);
-  m_gpuProfiler.endScope(commandList, gpuScope);
+  if (m_desc.bProfileGpu) {
+    const uint32 gpuScope = m_gpuProfiler.beginScope(commandList, "RenderGraph");
+    m_graph.execute(commandList, m_texturePool, &m_gpuProfiler);
+    m_gpuProfiler.endScope(commandList, gpuScope);
+  }
+  else {
+    m_graph.execute(commandList, m_texturePool);
+  }
   m_frameCommandStats = commandList.getStats() - statsBefore;
 #else
   m_graph.execute(commandList, m_texturePool);
@@ -242,7 +250,10 @@ SceneRenderer::updateSettings()
   }
 
   const String& viewModeText = g_cvarViewMode.get();
-  if (viewModeText != m_viewModeText) {
+  if (m_desc.viewMode) {
+    m_viewMode = *m_desc.viewMode;
+  }
+  else if (viewModeText != m_viewModeText) {
     m_viewModeText = viewModeText;
     const Optional<ViewMode> mode = RenderSettingsUtils::viewModeFromName(viewModeText);
     if (!mode) {

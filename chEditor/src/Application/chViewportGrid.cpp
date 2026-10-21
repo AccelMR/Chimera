@@ -140,7 +140,7 @@ ViewportGrid::addPass(RenderGraph& graph,
                       RGTextureHandle output,
                       RGTextureHandle depth)
 {
-  if (!g_cvarGrid.get() || !depth.isValid()) {
+  if (!depth.isValid()) {
     return;
   }
   updatePipeline(graph.getTextureDesc(output).format);

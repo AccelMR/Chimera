@@ -19,6 +19,8 @@
 #include "chAlgorithm.h"
 #include "chAssetDragDrop.h"
 #include "chAssetInspectorUI.h"
+#include "chAnimationClipAsset.h"
+#include "chAnimationPreviewUI.h"
 #include "chAssetManager.h"
 #include "chLogger.h"
 #include "chImGuiRenderer.h"
@@ -661,6 +663,7 @@ ContentAssetUI::renderDeleteConfirmationPopup()
 
         if (bRemovedCorrectly) {
           AssetInspectorUI::close(*m_assetToDelete);
+          AnimationPreviewUI::close(*m_assetToDelete);
           if (EditorSelection::getSelectedAsset() == m_assetToDelete) {
             EditorSelection::setSelectedAsset(nullptr);
           }
@@ -715,6 +718,10 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
   else if (!asset->isTypeOf<SceneAsset>()) {
     if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Inspect")) {
       openAsset(asset);
+    }
+    if (AnimationPreviewUI::canOpen(*asset) &&
+        ImGui::MenuItem(ICON_FA_RUNNING "  Animation Preview")) {
+      AnimationPreviewUI::open(asset);
     }
     ImGui::Separator();
   }
@@ -1124,6 +1131,10 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
   }
   else {
     AssetInspectorUI::open(asset);
+    // A clip is watched more than read, so it also starts playing.
+    if (asset->isTypeOf<AnimationClipAsset>()) {
+      AnimationPreviewUI::open(asset);
+    }
   }
 }
 

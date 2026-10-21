@@ -11,6 +11,7 @@
 #include "chAlgorithm.h"
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationPreviewUI.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chConsoleVariable.h"
@@ -27,7 +28,6 @@
 #include "chRotator.h"
 #include "chSkeleton.h"
 #include "chSkeletonAsset.h"
-#include "chStringUtils.h"
 #include "chTextureAsset.h"
 #include "chUIHelpers.h"
 
@@ -262,24 +262,8 @@ prepare(InspectorState& state)
     state.modelTriangles += mesh->getIndexCount() / 3;
   }
   // Clips made for the model's skeleton, or for a model without one the clips next to it.
-  for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
-    if (!asset->isTypeOf<AnimationClipAsset>()) {
-      continue;
-    }
-    if (model.hasSkeleton()) {
-      if (!asset->isLoaded() && !AssetManager::instance().syncLoadAsset(asset)) {
-        continue;
-      }
-      const SPtr<AnimationClipAsset> clip = asset->as<AnimationClipAsset>();
-      if (clip && clip->getClip() &&
-          clip->getClip()->getSkeletonId() == model.getSkeletonId()) {
-        state.modelClips.push_back(asset);
-      }
-    }
-    else if (StringUtils::equals(asset->getAssetPath(), modelAsset->getAssetPath())) {
-      state.modelClips.push_back(asset);
-    }
-  }
+  AnimationPreviewUI::findClips(model.getSkeletonId(), modelAsset->getAssetPath(),
+                                state.modelClips);
 }
 
 /*
@@ -295,6 +279,10 @@ renderAsset(const SPtr<IAsset>& asset)
   if (!asset->isLoaded()) {
     ImGui::TextDisabled("The asset could not be loaded.");
     return;
+  }
+  if (AnimationPreviewUI::canOpen(*asset) &&
+      ImGui::Button(ICON_FA_RUNNING "  Open in Animation Preview")) {
+    AnimationPreviewUI::open(asset);
   }
   if (const SPtr<ModelAsset> model = asset->as<ModelAsset>()) {
     if (model->getModel()) {

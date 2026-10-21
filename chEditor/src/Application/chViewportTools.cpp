@@ -868,38 +868,10 @@ ViewportTools::addSelectionSkeletons(DebugDraw& outLines)
     return;
   }
 
-  const auto addSkeleton = [&outLines](const GameObject& gameObject) {
-    const ModelComponent* component = gameObject.getComponent<ModelComponent>();
-    if (!component || !component->isRegistered() || !component->getModel() ||
-        !component->getModel()->hasSkeleton()) {
-      return;
+  const auto addTree = [&outLines](const GameObject& gameObject, const auto& self) -> void {
+    if (const ModelComponent* component = gameObject.getComponent<ModelComponent>()) {
+      addSkeleton(*component, outLines);
     }
-    const Model& model = *component->getModel();
-    const Matrix4& ownerWorld = gameObject.getTransform().getWorldMatrix();
-    const Vector<ModelNode>& nodes = model.getNodes();
-    for (uint32 node = 0; node < nodes.size(); ++node) {
-      if (nodes[node].bone == ModelNode::NO_BONE) {
-        continue;
-      }
-      const Matrix4 world = component->getNodeMatrix(node) * ownerWorld;
-      const Vector4 joint = world.transformPosition(Vector3::ZERO);
-      const Vector3 jointPosition(joint.x, joint.y, joint.z);
-      float axesSize = 0.02f;
-      const uint32 parent = nodes[node].parent;
-      if (parent != ModelNode::NO_PARENT && nodes[parent].bone != ModelNode::NO_BONE) {
-        const Vector4 parentJoint =
-            (component->getNodeMatrix(parent) * ownerWorld).transformPosition(Vector3::ZERO);
-        const Vector3 parentPosition(parentJoint.x, parentJoint.y, parentJoint.z);
-        outLines.line(parentPosition, jointPosition, LinearColor::Cyan, DebugDepth::OnTop);
-        // The axes follow the length of the bone, so they read at any model scale.
-        axesSize = Math::max(axesSize, (jointPosition - parentPosition).magnitude() * 0.2f);
-      }
-      outLines.axes(world, axesSize, DebugDepth::OnTop);
-    }
-  };
-
-  const auto addTree = [&addSkeleton](const GameObject& gameObject, const auto& self) -> void {
-    addSkeleton(gameObject);
     for (const SPtr<GameObject>& child : gameObject.getChildren()) {
       self(*child, self);
     }
@@ -916,6 +888,44 @@ ViewportTools::addSelectionSkeletons(DebugDraw& outLines)
     }
   }
 #else
+  CH_PARAMETER_UNUSED(outLines);
+#endif // USING(CH_DEBUG_DRAW)
+}
+
+/*
+ */
+void
+ViewportTools::addSkeleton(const ModelComponent& component, DebugDraw& outLines)
+{
+#if USING(CH_DEBUG_DRAW)
+  if (!component.isRegistered() || !component.getModel() ||
+      !component.getModel()->hasSkeleton()) {
+    return;
+  }
+  const Model& model = *component.getModel();
+  const Matrix4& ownerWorld = component.getOwner()->getTransform().getWorldMatrix();
+  const Vector<ModelNode>& nodes = model.getNodes();
+  for (uint32 node = 0; node < nodes.size(); ++node) {
+    if (nodes[node].bone == ModelNode::NO_BONE) {
+      continue;
+    }
+    const Matrix4 world = component.getNodeMatrix(node) * ownerWorld;
+    const Vector4 joint = world.transformPosition(Vector3::ZERO);
+    const Vector3 jointPosition(joint.x, joint.y, joint.z);
+    float axesSize = 0.02f;
+    const uint32 parent = nodes[node].parent;
+    if (parent != ModelNode::NO_PARENT && nodes[parent].bone != ModelNode::NO_BONE) {
+      const Vector4 parentJoint =
+          (component.getNodeMatrix(parent) * ownerWorld).transformPosition(Vector3::ZERO);
+      const Vector3 parentPosition(parentJoint.x, parentJoint.y, parentJoint.z);
+      outLines.line(parentPosition, jointPosition, LinearColor::Cyan, DebugDepth::OnTop);
+      // The axes follow the length of the bone, so they read at any model scale.
+      axesSize = Math::max(axesSize, (jointPosition - parentPosition).magnitude() * 0.2f);
+    }
+    outLines.axes(world, axesSize, DebugDepth::OnTop);
+  }
+#else
+  CH_PARAMETER_UNUSED(component);
   CH_PARAMETER_UNUSED(outLines);
 #endif // USING(CH_DEBUG_DRAW)
 }

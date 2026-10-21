@@ -34,8 +34,9 @@ class ViewportGrid
   ~ViewportGrid();
 
   /**
-   * Adds nothing when the grid is off or there is no scene depth (view modes without one).
-   * The camera is read now, so it need not outlive the frame.
+   * Adds nothing when there is no scene depth (view modes without one); whether the grid
+   * is shown is up to the caller (isVisible() for the main viewport). The camera is read
+   * now, so it need not outlive the frame.
    */
   void
   addPass(RenderGraph& graph,

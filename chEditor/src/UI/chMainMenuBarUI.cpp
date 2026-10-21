@@ -24,6 +24,7 @@
 #include "chModelAsset.h"
 #include "chPrefabAsset.h"
 #include "chProfilerUI.h"
+#include "chAnimationPreviewUI.h"
 #include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
@@ -369,6 +370,10 @@ MainMenuBarUI::renderMainMenuBar() {
     if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Asset Inspector", nullptr,
                         AssetInspectorUI::isWindowVisible())) {
       AssetInspectorUI::setWindowVisible(!AssetInspectorUI::isWindowVisible());
+    }
+    if (ImGui::MenuItem(ICON_FA_RUNNING "  Animation Preview", nullptr,
+                        AnimationPreviewUI::isWindowVisible())) {
+      AnimationPreviewUI::setWindowVisible(!AnimationPreviewUI::isWindowVisible());
     }
     if (ImGui::MenuItem(ICON_FA_CHART_LINE "  Profiler", nullptr,
                         ProfilerUI::isWindowVisible())) {

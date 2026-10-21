@@ -132,7 +132,9 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 #endif // USING(CH_EDITOR)
 
   /**
-   * The assets this one points to, as saved in its file. They are loaded before it.
+   * The assets this one points to, as saved in its file. They are loaded before it. Read
+   * when the file is first found and kept while unloaded, so what uses an asset can be
+   * found without loading anything.
    */
   NODISCARD FORCEINLINE const Vector<UUID>&
   getReferencedAssets() const { return m_referencedAssets; }

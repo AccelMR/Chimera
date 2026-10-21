@@ -332,7 +332,9 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
   }
 
   AssetFileInfo info;
-  const bool bReadInfo = AssetFile::readInfo(*stream, info);
+  Vector<UUID> references;
+  const bool bReadInfo =
+      AssetFile::readInfo(*stream, info) && AssetFile::readReferences(*stream, references);
   stream->close();
   if (!bReadInfo) {
     return nullptr;
@@ -369,6 +371,7 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
     return nullptr;
   }
   SPtr<IAsset> asset = creator(metadata);
+  asset->m_referencedAssets = std::move(references);
 
 #if USING(CH_EDITOR)
   ConfigFile metaFile;

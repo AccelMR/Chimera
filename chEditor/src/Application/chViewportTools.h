@@ -15,6 +15,7 @@ namespace chEngineSDK {
 class Camera;
 class DebugDraw;
 class EditorCamera;
+class ModelComponent;
 class Scene;
 struct LightItem;
 
@@ -78,6 +79,13 @@ class ViewportTools
    */
   static void
   addSelectionSkeletons(DebugDraw& outLines);
+
+  /**
+   * The bones of one model in its current pose, drawn the same way; nothing for a model
+   * without a skeleton.
+   */
+  static void
+  addSkeleton(const ModelComponent& component, DebugDraw& outLines);
 
   NODISCARD static bool
   areSkeletonsVisible();

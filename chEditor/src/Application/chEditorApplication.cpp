@@ -51,6 +51,7 @@
 #include "chSceneGraphUI.h"
 #include "chInspectorUI.h"
 #include "chAssetInspectorUI.h"
+#include "chAnimationPreviewUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -127,6 +128,7 @@ EditorApplication::destroyModules()
 
   m_inspectorUI.reset();
   AssetInspectorUI::shutDown();
+  AnimationPreviewUI::shutDown();
   m_sceneGraphUI.reset();
   m_outputLogUI.reset();
   m_mainMenuBar.reset();
@@ -230,6 +232,7 @@ EditorApplication::update(const float deltaTime)
 
   m_sceneRenderer->extract(scene, m_editorCamera->getCamera(), UIHelpers::rendererColor,
                            &m_editorLines);
+  AnimationPreviewUI::update(deltaTime);
 }
 
 /*
@@ -237,6 +240,8 @@ EditorApplication::update(const float deltaTime)
 void
 EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapChain)
 {
+  // First, so its texture is drawn before the UI pass shows it.
+  AnimationPreviewUI::recordFrame(commandList);
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
@@ -246,8 +251,10 @@ EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapCha
 
   // F11 hides the grid with the rest of the editor, so the image looks like the game.
   if (m_bFrameHasUI) {
-    m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), backBuffer,
-                            sceneDepth);
+    if (ViewportGrid::isVisible()) {
+      m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), backBuffer,
+                              sceneDepth);
+    }
     graph.addPass("EditorUI")
         .writeColor(backBuffer, LoadOp::Load)
         .setExecute([this, format = swapChain.getFormat()](RenderPassContext& context) {
@@ -495,6 +502,7 @@ EditorApplication::renderUI()
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   AssetInspectorUI::render();
+  AnimationPreviewUI::render();
   m_viewportTools->render(*EditorScene::getScene());
   // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
