@@ -236,14 +236,10 @@ enum class PrimitiveTopology {
 };
 
 enum class ShaderStage : uint32 {
-  Vertex = 0x01,
-  Fragment = 0x02,
-  Compute = 0x04,
-  Geometry = 0x08,
-  TessControl = 0x10,
-  TessEvaluation = 0x20,
+  Vertex,
+  Fragment,
+  Compute
 };
-CH_FLAGS(ShaderStage);
 
 enum class BufferUsage : uint16 {
   VertexBuffer = 0x01,
