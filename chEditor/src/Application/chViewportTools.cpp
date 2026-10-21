@@ -825,8 +825,8 @@ ViewportTools::addSelectionBounds(const Scene& scene, DebugDraw& outLines)
     if (item.mesh == nullptr || !isInSelection(item.owner)) {
       continue;
     }
-    outLines.box(item.worldBounds.getBox(), LinearColor::Yellow);
-    outLines.box(item.mesh->getBounds().getBox(), item.worldMatrix, LinearColor::Orange);
+    outLines.box(item.worldBounds.getBox(), LinearColor::YELLOW);
+    outLines.box(item.mesh->getBounds().getBox(), item.worldMatrix, LinearColor::ORANGE);
   }
 #else
   // Nothing would be drawn, so the render items are not walked.
@@ -913,7 +913,7 @@ ViewportTools::addSkeleton(const ModelComponent& component, DebugDraw& outLines)
       const Vector4 parentJoint =
           (component.getNodeMatrix(parent) * ownerWorld).transformPosition(Vector3::ZERO);
       const Vector3 parentPosition(parentJoint.x, parentJoint.y, parentJoint.z);
-      outLines.line(parentPosition, jointPosition, LinearColor::Cyan, DebugDepth::OnTop);
+      outLines.line(parentPosition, jointPosition, LinearColor::CYAN, DebugDepth::OnTop);
       // The axes follow the length of the bone, so they read at any model scale.
       axesSize = Math::max(axesSize, (jointPosition - parentPosition).magnitude() * 0.2f);
     }

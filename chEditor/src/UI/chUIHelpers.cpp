@@ -49,7 +49,7 @@ ConsoleVariable<bool> g_cvarFloatingWindows("Editor.FloatingWindows",
 bool UIHelpers::bShowDemoWindow = false;
 bool UIHelpers::bRenderImGui = true;
 bool UIHelpers::bResetLayout = false;
-LinearColor UIHelpers::rendererColor = LinearColor::Black;
+LinearColor UIHelpers::rendererColor = LinearColor::BLACK;
 
 /*
  */

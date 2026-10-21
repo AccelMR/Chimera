@@ -366,7 +366,7 @@ MainMenuBarUI::renderMainMenuBar() {
 
     // The scene renderer reads the color every frame.
     ImGui::ColorEdit4(ICON_FA_FILL_DRIP "  Renderer Color",
-                      UIHelpers::rendererColor.toFloatPtr(), ImGuiColorEditFlags_NoInputs);
+                      UIHelpers::rendererColor.getData(), ImGuiColorEditFlags_NoInputs);
 
     ImGui::EndMenu();
   }

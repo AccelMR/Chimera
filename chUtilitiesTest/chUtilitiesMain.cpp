@@ -24,6 +24,7 @@
 #include "chFrustum.h"
 #include "chHash.h"
 #include "chLinearAllocator.h"
+#include "chLinearColor.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -600,6 +601,49 @@ TEST_CASE("chUtilities - Vector4") {
   REQUIRE(compound == Vector4(0.0f, 1.0f, 2.0f, 3.0f));
   compound *= 2.0f;
   REQUIRE(compound == Vector4(0.0f, 2.0f, 4.0f, 6.0f));
+}
+
+/************************************************************************/
+/*
+ * LinearColor.
+ */
+/************************************************************************/
+TEST_CASE("chUtilities - LinearColor") {
+  static_assert(LinearColor::WHITE * 0.5f == LinearColor(0.5f, 0.5f, 0.5f, 0.5f));
+  static_assert(LinearColor::BLACK.a == 1.0f && LinearColor::TRANSPARENT_BLACK.a == 0.0f);
+
+  const LinearColor zeroed{};
+  REQUIRE(zeroed == LinearColor(0.0f, 0.0f, 0.0f, 0.0f));
+  REQUIRE(LinearColor(0.25f, 0.5f, 0.75f) == LinearColor(0.25f, 0.5f, 0.75f, 1.0f));
+
+  const LinearColor color(0.25f, 0.5f, 0.75f, 0.5f);
+  REQUIRE(color + LinearColor::WHITE == LinearColor(1.25f, 1.5f, 1.75f, 1.5f));
+  REQUIRE(color - color == LinearColor::TRANSPARENT_BLACK);
+  REQUIRE(color * LinearColor::RED == LinearColor(0.25f, 0.0f, 0.0f, 0.5f));
+  REQUIRE(color * 2.0f == LinearColor(0.5f, 1.0f, 1.5f, 1.0f));
+
+  LinearColor compound = color;
+  compound += LinearColor::WHITE;
+  compound -= LinearColor::WHITE;
+  REQUIRE(compound == color);
+  compound *= LinearColor::GREEN;
+  REQUIRE(compound == LinearColor(0.0f, 0.5f, 0.0f, 0.5f));
+  compound *= 0.5f;
+  REQUIRE(compound == LinearColor(0.0f, 0.25f, 0.0f, 0.25f));
+
+  REQUIRE(color.equals(LinearColor(0.25f, 0.5f, 0.75f, 0.5f + 1.0e-5f)));
+  REQUIRE_FALSE(color.equals(LinearColor(0.25f, 0.5f, 0.75f, 0.51f)));
+
+  REQUIRE(LinearColor::lerp(LinearColor::BLACK, LinearColor::WHITE, 0.0f) ==
+          LinearColor::BLACK);
+  REQUIRE(LinearColor::lerp(LinearColor::BLACK, LinearColor::WHITE, 1.0f) ==
+          LinearColor::WHITE);
+  REQUIRE(LinearColor::lerp(LinearColor::RED, LinearColor::BLUE, 0.5f) ==
+          LinearColor(0.5f, 0.0f, 0.5f, 1.0f));
+
+  LinearColor edited = LinearColor::BLACK;
+  edited.getData()[1] = 1.0f;
+  REQUIRE(edited == LinearColor::GREEN);
 }
 
 /************************************************************************/

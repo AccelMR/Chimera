@@ -109,7 +109,7 @@ class CH_CORE_EXPORT RenderPassBuilder
   RenderPassBuilder&
   writeColor(RGTextureHandle texture,
              LoadOp loadOp = LoadOp::Clear,
-             const LinearColor& clearColor = LinearColor::Black);
+             const LinearColor& clearColor = LinearColor::BLACK);
 
   RenderPassBuilder&
   writeDepth(RGTextureHandle texture, LoadOp loadOp = LoadOp::Clear, float clearDepth = 1.0f);
@@ -326,7 +326,7 @@ class CH_CORE_EXPORT RenderGraph
     LoadOp loadOp = LoadOp::Load;
     // Chosen by compile().
     StoreOp storeOp = StoreOp::Store;
-    LinearColor clearColor = LinearColor::Black;
+    LinearColor clearColor = LinearColor::BLACK;
     float clearDepth = 1.0f;
   };
 

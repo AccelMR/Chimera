@@ -2562,7 +2562,7 @@ TEST_CASE("chCore - Skinned model")
   SECTION("The frame copies the skin matrices")
   {
     RenderFrame frame;
-    frame.extract(scene, createTestCamera(), LinearColor::Black);
+    frame.extract(scene, createTestCamera(), LinearColor::BLACK);
     const RenderItem& copy = frame.getItems()[0];
     REQUIRE(copy.skinMatrices != item.skinMatrices);
     REQUIRE(copy.skinMatrices[1] == item.skinMatrices[1]);
@@ -3756,15 +3756,15 @@ TEST_CASE("chCore - Debug draw")
   SECTION("Each shape adds its lines")
   {
     debugDraw.box(AABox(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f)),
-                  LinearColor::Red);
+                  LinearColor::RED);
     REQUIRE(debugDraw.getLineCount() == 12);
-    debugDraw.circle(Vector3::ZERO, Vector3::UP, 1.0f, LinearColor::Red, DebugDepth::Tested,
+    debugDraw.circle(Vector3::ZERO, Vector3::UP, 1.0f, LinearColor::RED, DebugDepth::Tested,
                      16);
     REQUIRE(debugDraw.getLineCount() == 28);
-    debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::Red, DebugDepth::Tested, 8);
+    debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::RED, DebugDepth::Tested, 8);
     REQUIRE(debugDraw.getLineCount() == 52);
     // Two circles, four side lines and four half circles.
-    debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::Red,
+    debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::RED,
                       DebugDepth::Tested, 8);
     REQUIRE(debugDraw.getLineCount() == 52 + 16 + 4 + 16);
     debugDraw.axes(Matrix4::IDENTITY, 1.0f);
@@ -3790,7 +3790,7 @@ TEST_CASE("chCore - Debug draw")
   {
     debugDraw.orientedBox(OrientedBox(Vector3(0.0f, 0.0f, 5.0f), Vector3(2.0f, 1.0f, 1.0f),
                                       Quaternion(Rotator(0.0f, 90.0f, 0.0f))),
-                          LinearColor::Green);
+                          LinearColor::GREEN);
     REQUIRE(debugDraw.getLineCount() == 12);
     for (const DebugLineVertex& vertex : debugDraw.getVertices(DebugDepth::Tested)) {
       REQUIRE(Math::abs(Math::abs(vertex.position.x) - 1.0f) < 1e-4f);
@@ -3802,7 +3802,7 @@ TEST_CASE("chCore - Debug draw")
   SECTION("A frustum joins the corners of what the camera sees")
   {
     const Camera camera(Vector3::ZERO, Vector3::FORWARD, 1280.0f, 720.0f);
-    debugDraw.frustum(camera.getViewProjectionMatrix(), LinearColor::White);
+    debugDraw.frustum(camera.getViewProjectionMatrix(), LinearColor::WHITE);
     REQUIRE(debugDraw.getLineCount() == 12);
     for (const DebugLineVertex& vertex : debugDraw.getVertices(DebugDepth::Tested)) {
       // In front of the camera, between its near and far planes.
@@ -3814,7 +3814,7 @@ TEST_CASE("chCore - Debug draw")
   SECTION("Lines past the limit are dropped")
   {
     g_cvarDebugLinesMax.set(10, ConsoleVariableSource::Console);
-    debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::Red);
+    debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::RED);
     REQUIRE(debugDraw.getLineCount() == 10);
     g_cvarDebugLinesMax.set(g_cvarDebugLinesMax.getDefault(), ConsoleVariableSource::Console);
   }
@@ -3822,7 +3822,7 @@ TEST_CASE("chCore - Debug draw")
   SECTION("A scene forgets its lines when it updates")
   {
     Scene scene("Test", chEngineSDK::UUID::createRandom());
-    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::RED);
     REQUIRE(scene.getDebugDraw().getLineCount() == 1);
     scene.update(0.016f);
     REQUIRE(scene.getDebugDraw().getLineCount() == 0);
@@ -3831,7 +3831,7 @@ TEST_CASE("chCore - Debug draw")
   SECTION("Lines of the fixed step last until the next fixed step")
   {
     Scene scene("Test", chEngineSDK::UUID::createRandom());
-    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
+    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::RED);
     scene.update(0.016f);
     REQUIRE(scene.getFixedDebugDraw().getLineCount() == 1);
     scene.fixedUpdate(0.016f);
@@ -3841,19 +3841,19 @@ TEST_CASE("chCore - Debug draw")
   SECTION("A render frame copies every list")
   {
     Scene scene("Test", chEngineSDK::UUID::createRandom());
-    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
-    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::RIGHT, LinearColor::Red);
+    scene.getDebugDraw().line(Vector3::ZERO, Vector3::UP, LinearColor::RED);
+    scene.getFixedDebugDraw().line(Vector3::ZERO, Vector3::RIGHT, LinearColor::RED);
     DebugDraw extraLines;
     extraLines.axes(Matrix4::IDENTITY, 1.0f);
     RenderFrame frame;
-    frame.extract(scene, createTestCamera(), LinearColor::Black, &extraLines);
+    frame.extract(scene, createTestCamera(), LinearColor::BLACK, &extraLines);
     scene.update(0.016f);
     const Span<const DebugDraw* const> lists = frame.getDebugLines();
     REQUIRE(lists.size() == 3);
     REQUIRE(lists[0]->getLineCount() == 1);
     REQUIRE(lists[1]->getLineCount() == 1);
     REQUIRE(lists[2]->getLineCount() == 3);
-    frame.extract(scene, createTestCamera(), LinearColor::Black);
+    frame.extract(scene, createTestCamera(), LinearColor::BLACK);
     REQUIRE(lists[0]->getLineCount() == 0);
     REQUIRE(lists[2]->getLineCount() == 0);
   }
@@ -3863,11 +3863,11 @@ TEST_CASE("chCore - Debug draw")
 {
   // Built without the debug lines: every call compiles and keeps nothing.
   DebugDraw debugDraw;
-  debugDraw.line(Vector3::ZERO, Vector3::UP, LinearColor::Red);
-  debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::Red, DebugDepth::OnTop);
-  debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::Red);
-  debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::Red);
-  debugDraw.frustum(Matrix4::IDENTITY, LinearColor::Red);
+  debugDraw.line(Vector3::ZERO, Vector3::UP, LinearColor::RED);
+  debugDraw.box(AABox(Vector3::ZERO, Vector3::UNIT), LinearColor::RED, DebugDepth::OnTop);
+  debugDraw.sphere(Sphere(Vector3::ZERO, 1.0f), LinearColor::RED);
+  debugDraw.capsule(Capsule(Vector3::ZERO, Vector3::UP, 0.5f), LinearColor::RED);
+  debugDraw.frustum(Matrix4::IDENTITY, LinearColor::RED);
   debugDraw.axes(Matrix4::IDENTITY, 1.0f);
   REQUIRE(debugDraw.getLineCount() == 0);
   REQUIRE(debugDraw.getVertices(DebugDepth::Tested).empty());

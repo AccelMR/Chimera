@@ -219,8 +219,8 @@ DebugDraw::axes(const Matrix4& transform, float size, DebugDepth depth)
 {
   const Vector3 origin = toVector3(transform.transformPosition(Vector3::ZERO));
   const Vector3 worldAxes[] = {Vector3::FORWARD, Vector3::RIGHT, Vector3::UP};
-  const uint32 colors[] = {packColor(LinearColor::Red), packColor(LinearColor::Green),
-                           packColor(LinearColor::Blue)};
+  const uint32 colors[] = {packColor(LinearColor::RED), packColor(LinearColor::GREEN),
+                           packColor(LinearColor::BLUE)};
   for (uint32 i = 0; i < 3; ++i) {
     const Vector3 direction = toVector3(transform.transformVector(worldAxes[i]));
     const Vector3 unitDirection = direction.getNormalized();

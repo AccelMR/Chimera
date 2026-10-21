@@ -335,7 +335,7 @@ struct SamplerCreateInfo {
   CompareOp compareOp = CompareOp::AlwaysOp;
   float minLod = 0.0f;
   float maxLod = 1000.0f;
-  LinearColor borderColor = LinearColor::Black;
+  LinearColor borderColor = LinearColor::BLACK;
 };
 
 struct TextureCreateInfo {
@@ -438,7 +438,7 @@ struct ColorAttachment {
   const ITextureView* view = nullptr;
   LoadOp loadOp = LoadOp::Clear;
   StoreOp storeOp = StoreOp::Store;
-  LinearColor clearColor = LinearColor::Black;
+  LinearColor clearColor = LinearColor::BLACK;
 };
 
 struct DepthAttachment {

@@ -48,9 +48,7 @@ class Logger;
 class HEvent;
 
 class LinearColor;
-class Color;
 
-class BMPImage;
 
 class DataStream;
 class MemoryDataStream;

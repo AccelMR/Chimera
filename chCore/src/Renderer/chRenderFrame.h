@@ -119,7 +119,7 @@ class CH_CORE_EXPORT RenderFrame
 
  private:
   Camera m_camera;
-  LinearColor m_clearColor = LinearColor::Black;
+  LinearColor m_clearColor = LinearColor::BLACK;
   Vector<RenderItem> m_items;
   // The skin matrices of every skinned item one after the other.
   Vector<Matrix4> m_skinMatrices;

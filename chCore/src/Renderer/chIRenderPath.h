@@ -103,7 +103,7 @@ struct RenderView
   // The sky light's image based lighting; without an environment the paths use the constant
   // ambient.
   ImageBasedLightingView ibl{};
-  LinearColor clearColor = LinearColor::Black;
+  LinearColor clearColor = LinearColor::BLACK;
   // Tints the lit image by the shadow cascade each pixel reads.
   bool bShowShadowCascades = false;
 };
