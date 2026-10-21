@@ -367,6 +367,10 @@ MainMenuBarUI::renderMainMenuBar() {
   if (ImGui::BeginMenu("View")) {
     EditorTheme::renderSettings();
     ImGui::Separator(); //--------------------------------------------------------------
+    if (ImGui::MenuItem(ICON_FA_COLUMNS "  Reset Layout")) {
+      UIHelpers::bResetLayout = true;
+    }
+    ImGui::SetItemTooltip("Docks every panel in its default place around the viewport");
     if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Asset Inspector", nullptr,
                         AssetInspectorUI::isWindowVisible())) {
       AssetInspectorUI::setWindowVisible(!AssetInspectorUI::isWindowVisible());
@@ -383,6 +387,11 @@ MainMenuBarUI::renderMainMenuBar() {
                         ProfilerUI::isOverlayVisible())) {
       ProfilerUI::setOverlayVisible(!ProfilerUI::isOverlayVisible());
     }
+    if (ImGui::MenuItem(ICON_FA_TACHOMETER_ALT "  FPS with F11", nullptr,
+                        ProfilerUI::isFullscreenFpsVisible())) {
+      ProfilerUI::setFullscreenFpsVisible(!ProfilerUI::isFullscreenFpsVisible());
+    }
+    ImGui::SetItemTooltip("Shows the frames per second while F11 hides the editor");
     if (ImGui::BeginMenu(ICON_FA_TH "  Grid")) {
       ViewportGrid::renderSettings();
       ImGui::EndMenu();

@@ -23,6 +23,8 @@
 #include "chICommandList.h"
 #include "chIGraphicsAPI.h"
 #include "chISwapChain.h"
+#include "chITexture.h"
+#include "chITextureView.h"
 #include "chImGuiRenderer.h"
 #include "chLightComponent.h"
 #include "chLogger.h"
@@ -60,6 +62,9 @@
 #endif // USING(CH_CODECS)
 
 #include "imgui.h"
+#include "imgui_internal.h"
+
+#include "../../Content/Fonts/IconsFontAwsome5.h"
 
 #if USING(CH_DISPLAY_SDL3)
 #include "imgui_impl_sdl3.h"
@@ -76,6 +81,12 @@ namespace {
 // A drop meets the ground at most this many look at distances away; farther is too close
 // to the horizon to place anything usefully.
 constexpr float kMaxDropDistanceScale = 10.0f;
+// Parts of the main window the default layout gives the side panels and the bottom one.
+constexpr float kLayoutLeftFraction = 0.18f;
+constexpr float kLayoutRightFraction = 0.25f;
+constexpr float kLayoutBottomFraction = 0.3f;
+// A texture needs some pixels even while its panel is squeezed to nothing.
+constexpr uint32 kMinViewportSize = 16;
 } // namespace
 
 
@@ -142,6 +153,8 @@ EditorApplication::destroyModules()
     m_editorCamera.reset();
   }
   m_viewportGrid.reset();
+  m_viewportTargetView.reset();
+  m_viewportTarget.reset();
   m_sceneRenderer.reset();
   EditorSelection::setSelectedGameObject(nullptr);
   EditorScene::shutDown();
@@ -177,19 +190,35 @@ EditorApplication::fixedUpdate(const float deltaTime)
 void
 EditorApplication::update(const float deltaTime)
 {
+  // A minimized window draws nothing, so no UI frame is built for it either.
+  m_bViewportDrawn = false;
+  m_bViewportHovered = false;
+  m_bFrameHasFps = false;
+  if (UIHelpers::bRenderImGui && !getDisplaySurface()->isMinimized()) {
+    CH_PROFILE_SCOPE("BuildUI");
+    renderUI();
+  }
+  else if (ProfilerUI::isFullscreenFpsVisible() && !getDisplaySurface()->isMinimized()) {
+    // F11 hides every window; a frame with only the counter keeps the cost of the UI out of
+    // what it measures.
+    UIHelpers::newFrame();
+    ProfilerUI::renderFullscreenFps();
+    ImGui::Render();
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+      ImGui::UpdatePlatformWindows();
+    }
+    m_bFrameHasFps = true;
+  }
+
+  // With the UI the scene fills the viewport panel, without it (F11) the whole window.
   const ISwapChain& swapChain = *getSwapChain();
-  const uint32 width = swapChain.getWidth();
-  const uint32 height = swapChain.getHeight();
+  const bool bPanel = UIHelpers::bRenderImGui && m_bViewportDrawn;
+  const uint32 width = bPanel ? m_viewportTarget->getWidth() : swapChain.getWidth();
+  const uint32 height = bPanel ? m_viewportTarget->getHeight() : swapChain.getHeight();
   if (width != m_viewportWidth || height != m_viewportHeight) {
     m_viewportWidth = width;
     m_viewportHeight = height;
     m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
-  }
-
-  // A minimized window draws nothing, so no UI frame is built for it either.
-  if (UIHelpers::bRenderImGui && !getDisplaySurface()->isMinimized()) {
-    CH_PROFILE_SCOPE("BuildUI");
-    renderUI();
   }
   ImportDialog::update();
   // A drag or a text field still going on keeps its changes in one undo step.
@@ -201,12 +230,11 @@ EditorApplication::update(const float deltaTime)
   updateWindowTitle();
   Scene& scene = *EditorScene::getScene();
 
-  // The scene draws under the UI, so a flight only starts where no ImGui window wants the
-  // mouse. The keyboard is not checked: a panel keeps the keyboard focus after any click,
-  // and the camera only reads keys while flying.
-  const ImGuiIO& io = ImGui::GetIO();
+  // A flight only starts with the mouse over the scene image. The keyboard is not checked: a
+  // panel keeps the keyboard focus after any click, and the camera only reads keys while
+  // flying.
   m_editorCamera->setFocused(!UIHelpers::bRenderImGui ||
-                             (!io.WantCaptureMouse && !m_viewportTools->isUsingMouse()));
+                             (m_bViewportHovered && !m_viewportTools->isUsingMouse()));
   const bool bWasFlying = m_editorCamera->isFlying();
   m_editorCamera->update(deltaTime);
   if (m_editorCamera->isFlying() != bWasFlying) {
@@ -226,6 +254,7 @@ EditorApplication::update(const float deltaTime)
 
   // Like the grid, the editor's lines hide with the rest of the UI.
   m_bFrameHasUI = UIHelpers::bRenderImGui;
+  m_bFrameDrawsViewport = bPanel;
   m_editorLines.clear();
   if (m_bFrameHasUI) {
     ViewportTools::addSelectionBounds(scene, m_editorLines);
@@ -251,28 +280,51 @@ EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapCha
       graph.importTexture("BackBuffer", swapChain.getCurrentTexture(),
                           swapChain.getCurrentTextureView(), ResourceState::Undefined,
                           ResourceState::Present);
-  const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(backBuffer);
 
-  // F11 hides the grid with the rest of the editor, so the image looks like the game.
-  if (m_bFrameHasUI) {
+  // F11 hides the editor, grid included, and the scene fills the window like the game.
+  if (!m_bFrameHasUI) {
+    m_sceneRenderer->addScenePasses(backBuffer);
+    if (m_bFrameHasFps) {
+      addImGuiPass(graph, backBuffer, LoadOp::Load, swapChain.getFormat());
+    }
+    m_sceneRenderer->execute(commandList);
+    return;
+  }
+
+  // Behind another tab the panel shows no scene, so none is drawn.
+  if (m_bFrameDrawsViewport) {
+    const RGTextureHandle sceneImage =
+        graph.importTexture("Viewport", *m_viewportTarget, *m_viewportTargetView,
+                            ResourceState::Undefined, ResourceState::ShaderRead);
+    const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(sceneImage);
     if (ViewportGrid::isVisible()) {
-      m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), backBuffer,
+      m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), sceneImage,
                               sceneDepth);
     }
-    graph.addPass("EditorUI")
-        .writeColor(backBuffer, LoadOp::Load)
-        .setExecute([this, format = swapChain.getFormat()](RenderPassContext& context) {
-          m_imguiRenderer->render(context.getCommandList(), *ImGui::GetDrawData(), format,
-                                  context.getWidth(), context.getHeight());
-        });
   }
+  // The dockspace covers the whole window, so nothing of the clear shows.
+  addImGuiPass(graph, backBuffer, LoadOp::Clear, swapChain.getFormat());
 
   m_sceneRenderer->execute(commandList);
 
-  if (m_bFrameHasUI) {
-    CH_PROFILE_SCOPE("FloatingWindows");
-    m_imguiRenderer->renderFloatingWindows(commandList);
-  }
+  CH_PROFILE_SCOPE("FloatingWindows");
+  m_imguiRenderer->renderFloatingWindows(commandList);
+}
+
+/*
+ */
+void
+EditorApplication::addImGuiPass(RenderGraph& graph,
+                                RGTextureHandle backBuffer,
+                                LoadOp loadOp,
+                                Format format)
+{
+  graph.addPass("EditorUI")
+      .writeColor(backBuffer, loadOp)
+      .setExecute([this, format](RenderPassContext& context) {
+        m_imguiRenderer->render(context.getCommandList(), *ImGui::GetDrawData(), format,
+                                context.getWidth(), context.getHeight());
+      });
 }
 
 /*
@@ -500,19 +552,19 @@ EditorApplication::renderUI()
   UIHelpers::newFrame();
   m_viewportTools->beginFrame();
 
+  // The menu bar first, so the dockspace takes the space under it.
   m_mainMenuBar->renderMainMenuBar();
+  renderDockSpace();
+  renderViewportPanel();
   m_contentAssetUI->renderContentAssetUI();
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
   AssetInspectorUI::render();
   AnimationPreviewUI::render();
-  m_viewportTools->render(*EditorScene::getScene());
-  // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
-  renderViewportDropTarget();
 
   ImGui::Render();
   // Opens, closes and resizes the windows outside the main one before they are drawn.
@@ -537,45 +589,116 @@ EditorApplication::onCameraFlightChanged(bool bFlying)
 /*
  */
 void
-EditorApplication::renderViewportDropTarget()
+EditorApplication::renderDockSpace()
 {
-  // The scene has no window of its own, so a window covers it, but only while something is
-  // dragged: at other times it would take the mouse from the camera.
-  if (!ImGui::GetDragDropPayload()) {
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImGuiID dockSpaceId = ImGui::GetID("EditorDockSpace");
+  // imgui.ini is read by the first NewFrame, so a saved layout is already known here.
+  if (UIHelpers::bResetLayout || !ImGui::DockBuilderGetNode(dockSpaceId)) {
+    UIHelpers::bResetLayout = false;
+    ImGui::DockBuilderRemoveNode(dockSpaceId);
+    ImGui::DockBuilderAddNode(dockSpaceId, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockSpaceId, viewport->WorkSize);
+
+    ImGuiID center = dockSpaceId;
+    const ImGuiID left =
+        ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, kLayoutLeftFraction, nullptr, &center);
+    const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right,
+                                                      kLayoutRightFraction, nullptr, &center);
+    const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,
+                                                       kLayoutBottomFraction, nullptr, &center);
+    // Names hash only from ###, so the ids find the panels whatever their titles say.
+    ImGui::DockBuilderDockWindow("###Viewport", center);
+    ImGui::DockBuilderDockWindow("###SceneGraph", left);
+    ImGui::DockBuilderDockWindow("###Inspector", right);
+    ImGui::DockBuilderDockWindow("###AssetInspector", right);
+    ImGui::DockBuilderDockWindow("###AnimationPreview", right);
+    ImGui::DockBuilderDockWindow("###ContentBrowser", bottom);
+    ImGui::DockBuilderDockWindow("###OutputLog", bottom);
+    ImGui::DockBuilderDockWindow("###Profiler", bottom);
+    ImGui::DockBuilderFinish(dockSpaceId);
+  }
+  ImGui::DockSpaceOverViewport(dockSpaceId, viewport);
+}
+
+/*
+ */
+void
+EditorApplication::renderViewportPanel()
+{
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  // The wheel moves the camera, not the panel; there is no close button, the scene is always
+  // there.
+  const bool bOpen = ImGui::Begin(ICON_FA_DESKTOP "  Viewport###Viewport", nullptr,
+                                  ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoScrollWithMouse |
+                                      ImGuiWindowFlags_NoCollapse);
+  ImGui::PopStyleVar();
+  if (!bOpen) {
+    ImGui::End();
     return;
   }
 
-  // Behind every other window, so dropping on a panel still goes to the panel.
-  constexpr ImGuiWindowFlags kFlags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
-      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
-      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-      ImGuiWindowFlags_NoDocking;
+  const ImVec2 min = ImGui::GetCursorScreenPos();
+  const ImVec2 available = ImGui::GetContentRegionAvail();
+  const ImVec2 size(Math::max(available.x, 1.0f), Math::max(available.y, 1.0f));
+  // Takes the clicks, so a floating panel does not move when the scene is dragged.
+  ImGui::InvisibleButton("##Scene", size,
+                         ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
+                             ImGuiButtonFlags_MouseButtonMiddle);
+  m_bViewportHovered = ImGui::IsItemHovered();
+  m_viewportArea = {.x = min.x, .y = min.y, .width = size.x, .height = size.y};
 
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize(viewport->WorkSize);
-  ImGui::SetNextWindowViewport(viewport->ID);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-  if (ImGui::Begin("##SceneDropTarget", nullptr, kFlags)) {
-    const ImVec2 available = ImGui::GetContentRegionAvail();
-    ImGui::InvisibleButton("##drop", ImVec2(Math::max(available.x, 1.0f),
-                                            Math::max(available.y, 1.0f)));
-    if (ImGui::BeginDragDropTarget()) {
-      GameObject* parent = EditorScene::getDefaultParent();
-      Scene& scene = *EditorScene::getScene();
-      if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
-        placeAtMouse(AssetDragDrop::createModelObject(scene, model, parent));
-      }
-      if (const SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
-        placeAtMouse(AssetDragDrop::createPrefabObject(scene, prefab, parent));
-      }
-      ImGui::EndDragDropTarget();
+  if (ImGui::BeginDragDropTarget()) {
+    GameObject* parent = EditorScene::getDefaultParent();
+    Scene& scene = *EditorScene::getScene();
+    if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+      placeAtMouse(AssetDragDrop::createModelObject(scene, model, parent));
     }
+    if (const SPtr<PrefabAsset> prefab = AssetDragDrop::acceptPrefab()) {
+      placeAtMouse(AssetDragDrop::createPrefabObject(scene, prefab, parent));
+    }
+    ImGui::EndDragDropTarget();
   }
+
+  const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
+  updateViewportTarget(static_cast<uint32>(size.x * scale.x),
+                       static_cast<uint32>(size.y * scale.y));
+  const uint64 textureId = ImGuiRenderer::getTextureId(*m_viewportTarget);
+  if (textureId != 0) {
+    ImGui::GetWindowDrawList()->AddImage(static_cast<ImTextureID>(textureId), min,
+                                         ImVec2(min.x + size.x, min.y + size.y));
+    m_bViewportDrawn = true;
+  }
+
+  m_viewportTools->render(*EditorScene::getScene(), m_viewportArea, m_bViewportHovered);
+  // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
+  ProfilerUI::renderOverlay(m_sceneRenderer->getLastFrameStats(), min.x + size.x, min.y);
   ImGui::End();
-  ImGui::PopStyleVar(2);
+}
+
+/*
+ */
+void
+EditorApplication::updateViewportTarget(uint32 width, uint32 height)
+{
+  width = Math::max(width, kMinViewportSize);
+  height = Math::max(height, kMinViewportSize);
+  if (m_viewportTarget && m_viewportTarget->getWidth() == width &&
+      m_viewportTarget->getHeight() == height) {
+    return;
+  }
+
+  // The old texture is freed by the deferred deletion once the GPU is done with it, and
+  // the view points at it, so the view goes first. The swap chain's format keeps the
+  // pipelines the same as when F11 draws into the window.
+  m_viewportTargetView.reset();
+  m_viewportTarget = IGraphicsAPI::instance().createTexture(
+      {.format = getSwapChain()->getFormat(),
+       .width = width,
+       .height = height,
+       .usage = TextureUsageFlags(TextureUsage::ColorAttachment) | TextureUsage::Sampled});
+  m_viewportTargetView = m_viewportTarget->createView();
 }
 
 /*
@@ -587,11 +710,9 @@ EditorApplication::placeAtMouse(const SPtr<GameObject>& gameObject)
     return;
   }
 
-  // The swap chain covers the whole main viewport, menu bar included.
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
   const ImVec2 mouse = ImGui::GetMousePos();
-  const Vector2 screenPoint((mouse.x - viewport->Pos.x) / viewport->Size.x,
-                            (mouse.y - viewport->Pos.y) / viewport->Size.y);
+  const Vector2 screenPoint((mouse.x - m_viewportArea.x) / m_viewportArea.width,
+                            (mouse.y - m_viewportArea.y) / m_viewportArea.height);
   const Camera& camera = m_editorCamera->getCamera();
   const Ray ray = camera.screenToWorldRay(screenPoint);
 

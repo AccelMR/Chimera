@@ -48,6 +48,7 @@ ConsoleVariable<bool> g_cvarFloatingWindows("Editor.FloatingWindows",
 
 bool UIHelpers::bShowDemoWindow = false;
 bool UIHelpers::bRenderImGui = true;
+bool UIHelpers::bResetLayout = false;
 LinearColor UIHelpers::rendererColor = LinearColor::Black;
 
 /*
@@ -141,6 +142,32 @@ const ANSICHAR*
 UIHelpers::getFolderIcon(bool bOpen)
 {
   return bOpen ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
+}
+
+/*
+ */
+bool
+UIHelpers::beginOverlayChild(const ANSICHAR* id, float backgroundAlpha, int32 windowFlags)
+{
+  ImVec4 background = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+  background.w *= backgroundAlpha;
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, background);
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, ImGui::GetStyle().WindowRounding);
+  return ImGui::BeginChild(id, ImVec2(0.0f, 0.0f),
+                           ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY |
+                               ImGuiChildFlags_AlwaysUseWindowPadding,
+                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
+                               static_cast<ImGuiWindowFlags>(windowFlags));
+}
+
+/*
+ */
+void
+UIHelpers::endOverlayChild()
+{
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
 }
 
 } // namespace chUIHelpers

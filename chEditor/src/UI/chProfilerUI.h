@@ -30,6 +30,13 @@ class ProfilerUI
   static void
   render(const RenderFrameStats& stats);
 
+  /**
+   * The stats overlay, inside the viewport panel; right and top are the corner of its scene
+   * image, in ImGui screen coordinates.
+   */
+  static void
+  renderOverlay(const RenderFrameStats& stats, float right, float top);
+
   NODISCARD static bool
   isWindowVisible();
 
@@ -41,6 +48,19 @@ class ProfilerUI
 
   static void
   setOverlayVisible(bool bVisible);
+
+  /**
+   * Only the frames per second, in the corner of the window, for the frames F11 hides the
+   * rest of the editor.
+   */
+  static void
+  renderFullscreenFps();
+
+  NODISCARD static bool
+  isFullscreenFpsVisible();
+
+  static void
+  setFullscreenFpsVisible(bool bVisible);
 };
 
 } // namespace chEngineSDK

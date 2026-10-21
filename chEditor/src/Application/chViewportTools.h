@@ -20,11 +20,23 @@ class Scene;
 struct LightItem;
 
 /**
+ * Where the scene image shows, in ImGui screen coordinates.
+ */
+struct ViewportArea
+{
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 1.0f;
+  float height = 1.0f;
+};
+
+/**
  * Exists so the viewport edits the scene the way Unreal and Unity do: a click selects the
  * object under the mouse, a gizmo moves, rotates or scales the selection (W, E, R, or the
  * toolbar, which also picks world or local space and snapping), lights show an icon and the
  * selected one its reach, F frames the selection, and a cube in the corner turns the camera
- * to look along an axis. Everything is drawn with ImGui over the scene.
+ * to look along an axis. Everything is drawn with ImGui over the scene image of the
+ * viewport panel.
  */
 class ViewportTools
 {
@@ -43,11 +55,12 @@ class ViewportTools
   beginFrame();
 
   /**
-   * Draws the tools and applies what the user did to the scene and the camera. Call it
-   * between beginFrame and ImGui::Render.
+   * Draws the tools over the scene image and applies what the user did to the scene and the
+   * camera. Call it inside the viewport panel, after its image; bHovered says whether the
+   * mouse is over the image and not over a window in front of it.
    */
   void
-  render(Scene& scene);
+  render(Scene& scene, const ViewportArea& area, bool bHovered);
 
   /**
    * True while a gizmo or the view cube is dragged; the camera must leave the mouse alone.
@@ -142,6 +155,12 @@ class ViewportTools
 
   // A click selects only when it started on the scene, not on a window or a gizmo.
   bool m_bClickStartedInScene = false;
+
+  // This frame's, set by render().
+  ViewportArea m_area;
+  bool m_bHovered = false;
+  // Measured last frame, to center the toolbar.
+  float m_toolbarWidth = 0.0f;
 
   // Kept between frames, so finding the lights to draw does not allocate.
   Vector<const LightItem*> m_visibleLights;

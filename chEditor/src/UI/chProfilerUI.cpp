@@ -10,6 +10,8 @@
 
 #include "chProfilerUI.h"
 
+#include <cstring>
+
 #include "chConsoleVariable.h"
 #include "chEngineConfig.h"
 #include "chMath.h"
@@ -17,6 +19,7 @@
 #include "chRenderSettings.h"
 #include "chSceneRenderer.h"
 #include "chStringUtils.h"
+#include "chUIHelpers.h"
 
 #include "imgui.h"
 
@@ -32,9 +35,14 @@ ConsoleVariable<bool> g_cvarShowStats("Editor.ShowStats",
                                       false,
                                       "Shows the frame stats in the corner of the viewport.",
                                       "ShowStats");
+ConsoleVariable<bool> g_cvarShowFullscreenFps(
+    "Editor.ShowFullscreenFPS",
+    true,
+    "Shows the frames per second in a corner while F11 hides the editor UI.",
+    "ShowFullscreenFPS");
 
 constexpr float kOverlayMargin = 8.0f;
-// The overlay sits in the top right corner under the view cube, where panels do not dock.
+// Below the top of the scene image, so the overlay sits under the view cube.
 constexpr float kOverlayTop = 152.0f;
 constexpr float kGraphHeight = 80.0f;
 // Size the window gets the first time it opens; ImGui remembers it after.
@@ -43,6 +51,8 @@ constexpr float kWindowHeight = 720.0f;
 // The graph never scales below the time of a 30 fps frame, so a steady frame does not look
 // noisy.
 constexpr float kMinGraphMilliseconds = 1000.0f / 30.0f;
+// Measured last frame, to keep the overlay right aligned.
+float g_overlayWidth = 0.0f;
 // Scope tree levels open the first time the window shows.
 constexpr uint32 kDefaultOpenDepth = 3;
 
@@ -371,22 +381,14 @@ renderWindow(const RenderFrameStats& stats)
 }
 
 void
-renderOverlay(const RenderFrameStats& stats)
+drawOverlay(const RenderFrameStats& stats, float right, float top)
 {
-  constexpr ImGuiWindowFlags kFlags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove |
-      ImGuiWindowFlags_NoInputs;
-
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - kOverlayMargin,
-                                 viewport->WorkPos.y + kOverlayTop),
-                          ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-  ImGui::SetNextWindowViewport(viewport->ID);
-  ImGui::SetNextWindowBgAlpha(0.6f);
-  if (!ImGui::Begin("##StatsOverlay", nullptr, kFlags)) {
-    ImGui::End();
+  // A child of the viewport panel, so it draws over the scene image; mouse clicks go through
+  // it to the scene. Right aligned with last frame's width, the first one it has.
+  ImGui::SetCursorScreenPos(ImVec2(right - kOverlayMargin - g_overlayWidth, top + kOverlayTop));
+  if (!chUIHelpers::UIHelpers::beginOverlayChild("##StatsOverlay", 0.6f,
+                                                 ImGuiWindowFlags_NoInputs)) {
+    chUIHelpers::UIHelpers::endOverlayChild();
     return;
   }
 
@@ -415,7 +417,8 @@ renderOverlay(const RenderFrameStats& stats)
     textCount(stats.visibleLights);
     ImGui::EndTable();
   }
-  ImGui::End();
+  chUIHelpers::UIHelpers::endOverlayChild();
+  g_overlayWidth = ImGui::GetItemRectSize().x;
 }
 } // namespace
 
@@ -431,8 +434,15 @@ ProfilerUI::render(const RenderFrameStats& stats)
   if (bWindow) {
     renderWindow(stats);
   }
-  if (bOverlay) {
-    renderOverlay(stats);
+}
+
+/*
+ */
+void
+ProfilerUI::renderOverlay(const RenderFrameStats& stats, float right, float top)
+{
+  if (g_cvarShowStats.get()) {
+    drawOverlay(stats, right, top);
   }
 }
 
@@ -468,6 +478,50 @@ ProfilerUI::setOverlayVisible(bool bVisible)
 {
   g_cvarShowStats.set(bVisible, ConsoleVariableSource::Console);
   saveVisibility("ShowStats", bVisible);
+}
+
+/*
+ * ImGui's own average, so it works without the profiler and costs no window.
+ */
+void
+ProfilerUI::renderFullscreenFps()
+{
+  // The number goes on the stack, so drawing it allocates nothing.
+  ANSICHAR text[StringUtils::MAX_INTEGER_CHARS + 4];
+  ANSICHAR number[StringUtils::MAX_INTEGER_CHARS];
+  const StringView fps =
+      StringUtils::toChars(number, static_cast<int32>(ImGui::GetIO().Framerate + 0.5f));
+  std::memcpy(text, fps.data(), fps.size());
+  std::memcpy(text + fps.size(), " FPS", 5);
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImVec2 padding = ImGui::GetStyle().WindowPadding;
+  const ImVec2 textSize = ImGui::CalcTextSize(text);
+  const ImVec2 min(viewport->Pos.x + kOverlayMargin, viewport->Pos.y + kOverlayMargin);
+  const ImVec2 max(min.x + textSize.x + padding.x * 2.0f, min.y + textSize.y + padding.y * 2.0f);
+  ImDrawList* drawList = ImGui::GetForegroundDrawList(viewport);
+  ImVec4 background = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+  background.w *= 0.6f;
+  drawList->AddRectFilled(min, max, ImGui::GetColorU32(background),
+                          ImGui::GetStyle().WindowRounding);
+  drawList->AddText(ImVec2(min.x + padding.x, min.y + padding.y),
+                    ImGui::GetColorU32(ImGuiCol_Text), text);
+}
+
+/*
+ */
+bool
+ProfilerUI::isFullscreenFpsVisible()
+{
+  return g_cvarShowFullscreenFps.get();
+}
+
+/*
+ */
+void
+ProfilerUI::setFullscreenFpsVisible(bool bVisible)
+{
+  g_cvarShowFullscreenFps.set(bVisible, ConsoleVariableSource::Console);
+  saveVisibility("ShowFullscreenFPS", bVisible);
 }
 
 } // namespace chEngineSDK

@@ -13,6 +13,7 @@
 
 #include "chDebugDraw.h"
 #include "chSceneRenderer.h"
+#include "chViewportTools.h"
 
 #include "chUUID.h"
 
@@ -78,8 +79,31 @@ class EditorApplication : public WindowedApplication
   void
   renderUI();
 
+  /**
+   * Fills the main window with a dockspace, docking the panels in their default places the
+   * first time (nothing in imgui.ini) and after View > Reset Layout.
+   */
   void
-  renderViewportDropTarget();
+  renderDockSpace();
+
+  /**
+   * The panel that shows the scene, with the viewport tools over it; also takes the models
+   * and prefabs dropped on it.
+   */
+  void
+  renderViewportPanel();
+
+  /**
+   * Makes the scene image again when the panel changed size, before the UI shows it.
+   */
+  void
+  updateViewportTarget(uint32 width, uint32 height);
+
+  /**
+   * Draws this frame's ImGui draw data into the back buffer.
+   */
+  void
+  addImGuiPass(RenderGraph& graph, RGTextureHandle backBuffer, LoadOp loadOp, Format format);
 
   void
   onCameraFlightChanged(bool bFlying);
@@ -102,9 +126,19 @@ class EditorApplication : public WindowedApplication
  private:
   UniquePtr<SceneRenderer> m_sceneRenderer;
   UniquePtr<ViewportGrid> m_viewportGrid;
-  // Size of the swap chain the camera was last set up for.
+  // Size in pixels the camera was last set up for: the viewport panel's, or the swap
+  // chain's while F11 hides the UI.
   uint32 m_viewportWidth = 0;
   uint32 m_viewportHeight = 0;
+  // What the viewport panel shows; the scene is drawn into it while the UI is shown.
+  SPtr<ITexture> m_viewportTarget;
+  SPtr<ITextureView> m_viewportTargetView;
+  ViewportArea m_viewportArea;
+  // The panel showed the scene image this frame; false while it is behind another tab.
+  bool m_bViewportDrawn = false;
+  bool m_bViewportHovered = false;
+  // Copied in the update, so drawing does not read UI state.
+  bool m_bFrameDrawsViewport = false;
   UniquePtr<EditorCamera> m_editorCamera;
   UniquePtr<ViewportTools> m_viewportTools;
   // Lines of the editor (selection bounds), filled again every frame; kept so it does not
@@ -113,6 +147,8 @@ class EditorApplication : public WindowedApplication
   // Whether the frame the update decided draws the editor UI (F11 hides it), so drawing
   // does not read the toggle.
   bool m_bFrameHasUI = true;
+  // With the UI hidden, the frame still draws the frames per second counter.
+  bool m_bFrameHasFps = false;
   // The title the window was made with, before the scene name.
   String m_windowTitle;
   uint32 m_titleRevision = ~0u;

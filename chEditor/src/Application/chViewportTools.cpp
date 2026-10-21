@@ -30,6 +30,7 @@
 #include "chRay.h"
 #include "chScene.h"
 #include "chTransform.h"
+#include "chUIHelpers.h"
 #include "chVector2.h"
 #include "chVector4.h"
 #include "chViewportGrid.h"
@@ -86,33 +87,32 @@ const Matrix4 kViewCubeToEngine(0.0f, 1.0f, 0.0f, 0.0f,
                                 0.0f, 0.0f, 0.0f, 1.0f);
 
 NODISCARD bool
-toScreen(const Camera& camera, const ImGuiViewport& viewport, const Vector3& world,
+toScreen(const Camera& camera, const ViewportArea& area, const Vector3& world,
          ImVec2& outPoint)
 {
   Vector2 screen;
   if (!camera.worldToScreenPoint(world, screen)) {
     return false;
   }
-  outPoint = ImVec2(viewport.Pos.x + screen.x * viewport.Size.x,
-                    viewport.Pos.y + screen.y * viewport.Size.y);
+  outPoint = ImVec2(area.x + screen.x * area.width, area.y + screen.y * area.height);
   return true;
 }
 
 void
-drawWorldLine(ImDrawList& drawList, const Camera& camera, const ImGuiViewport& viewport,
+drawWorldLine(ImDrawList& drawList, const Camera& camera, const ViewportArea& area,
               const Vector3& from, const Vector3& to, ImU32 color)
 {
   ImVec2 screenFrom;
   ImVec2 screenTo;
-  if (toScreen(camera, viewport, from, screenFrom) &&
-      toScreen(camera, viewport, to, screenTo)) {
+  if (toScreen(camera, area, from, screenFrom) &&
+      toScreen(camera, area, to, screenTo)) {
     drawList.AddLine(screenFrom, screenTo, color, 1.5f);
   }
 }
 
 // axisU and axisV are unit length and perpendicular; they span the circle's plane.
 void
-drawWorldCircle(ImDrawList& drawList, const Camera& camera, const ImGuiViewport& viewport,
+drawWorldCircle(ImDrawList& drawList, const Camera& camera, const ViewportArea& area,
                 const Vector3& center, const Vector3& axisU, const Vector3& axisV,
                 float radius, ImU32 color)
 {
@@ -123,7 +123,7 @@ drawWorldCircle(ImDrawList& drawList, const Camera& camera, const ImGuiViewport&
     float cosine = 0.0f;
     Math::sinCos(angle, sine, cosine);
     const Vector3 point = center + (axisU * cosine + axisV * sine) * radius;
-    drawWorldLine(drawList, camera, viewport, previous, point, color);
+    drawWorldLine(drawList, camera, area, previous, point, color);
     previous = point;
   }
 }
@@ -185,9 +185,13 @@ ViewportTools::beginFrame()
 /*
  */
 void
-ViewportTools::render(Scene& scene)
+ViewportTools::render(Scene& scene, const ViewportArea& area, bool bHovered)
 {
   const Camera& camera = m_editorCamera.getCamera();
+  m_area = area;
+  m_bHovered = bHovered;
+  // ImGuizmo draws on the panel and counts as hovered only while the panel is.
+  ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 
   handleShortcuts();
   renderToolbar();
@@ -210,12 +214,11 @@ ViewportTools::isUsingMouse() const
 void
 ViewportTools::handleShortcuts()
 {
-  // A panel keeps the keyboard focus after a click on it, so the keys also work while the
-  // mouse is over the scene, unless text is being typed. With the right button held the
+  // Another panel keeps the keyboard focus after a click on it, so the keys also work while
+  // the mouse is over the scene, unless text is being typed. With the right button held the
   // same keys fly the camera.
   const ImGuiIO& io = ImGui::GetIO();
-  const bool bOverScene = !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
-  if (io.WantTextInput || (io.WantCaptureKeyboard && !bOverScene) ||
+  if (io.WantTextInput || !m_bHovered ||
       ImGui::IsMouseDown(ImGuiMouseButton_Right) || isUsingMouse()) {
     return;
   }
@@ -245,19 +248,14 @@ ViewportTools::handleShortcuts()
 void
 ViewportTools::renderToolbar()
 {
-  constexpr ImGuiWindowFlags kFlags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove;
-
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
-                                 viewport->WorkPos.y + kViewportMargin),
-                          ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-  ImGui::SetNextWindowViewport(viewport->ID);
-  ImGui::SetNextWindowBgAlpha(0.75f);
-  if (!ImGui::Begin("##ViewportToolbar", nullptr, kFlags)) {
-    ImGui::End();
+  // A child of the panel, so it always draws over the scene image; centered with last
+  // frame's width, the first one it has.
+  ImGui::SetCursorScreenPos(
+      ImVec2(m_area.x + Math::max((m_area.width - m_toolbarWidth) * 0.5f, kViewportMargin),
+             m_area.y + kViewportMargin));
+  if (!chUIHelpers::UIHelpers::beginOverlayChild("##ViewportToolbar", 0.75f,
+                                                 ImGuiWindowFlags_None)) {
+    chUIHelpers::UIHelpers::endOverlayChild();
     return;
   }
 
@@ -358,7 +356,8 @@ ViewportTools::renderToolbar()
     ImGui::PopStyleColor();
   }
   ImGui::SetItemTooltip("Frame time, draws and triangles in the corner of the viewport");
-  ImGui::End();
+  chUIHelpers::UIHelpers::endOverlayChild();
+  m_toolbarWidth = ImGui::GetItemRectSize().x;
 }
 
 /*
@@ -457,9 +456,8 @@ ViewportTools::renderCameraSettings()
 void
 ViewportTools::renderLights(const Camera& camera)
 {
-  // The scene is under every window, so the lights draw behind them too.
-  const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-  ImDrawList& drawList = *ImGui::GetBackgroundDrawList(ImGui::GetMainViewport());
+  const ViewportArea& area = m_area;
+  ImDrawList& drawList = *ImGui::GetWindowDrawList();
   for (const LightItem* light : m_visibleLights) {
     const bool bSelected = light->owner && EditorSelection::isSelected(*light->owner);
     if (bSelected) {
@@ -475,19 +473,19 @@ ViewportTools::renderLights(const Camera& camera)
               camera.getPosition().distance(position) * kArrowScreenScale;
           const Vector3 tip = position + direction * length;
           const Vector3 headBase = tip - direction * (length * 0.25f);
-          drawWorldLine(drawList, camera, viewport, position, tip, kShapeColor);
+          drawWorldLine(drawList, camera, area, position, tip, kShapeColor);
           for (const Vector3& side : {axisU, -axisU, axisV, -axisV}) {
-            drawWorldLine(drawList, camera, viewport, tip,
+            drawWorldLine(drawList, camera, area, tip,
                           headBase + side * (length * 0.1f), kShapeColor);
           }
           break;
         }
         case LightType::Point:
-          drawWorldCircle(drawList, camera, viewport, position, Vector3::FORWARD,
+          drawWorldCircle(drawList, camera, area, position, Vector3::FORWARD,
                           Vector3::RIGHT, light->range, kShapeColor);
-          drawWorldCircle(drawList, camera, viewport, position, Vector3::FORWARD,
+          drawWorldCircle(drawList, camera, area, position, Vector3::FORWARD,
                           Vector3::UP, light->range, kShapeColor);
-          drawWorldCircle(drawList, camera, viewport, position, Vector3::RIGHT,
+          drawWorldCircle(drawList, camera, area, position, Vector3::RIGHT,
                           Vector3::UP, light->range, kShapeColor);
           break;
         case LightType::Spot: {
@@ -496,10 +494,10 @@ ViewportTools::renderLights(const Camera& camera)
             const float coneSin = Math::sqrt(Math::max(1.0f - coneCos * coneCos, 0.0f));
             const Vector3 center = position + direction * (light->range * coneCos);
             const float radius = light->range * coneSin;
-            drawWorldCircle(drawList, camera, viewport, center, axisU, axisV, radius, color);
+            drawWorldCircle(drawList, camera, area, center, axisU, axisV, radius, color);
             if (bWithEdges) {
               for (const Vector3& side : {axisU, -axisU, axisV, -axisV}) {
-                drawWorldLine(drawList, camera, viewport, position, center + side * radius,
+                drawWorldLine(drawList, camera, area, position, center + side * radius,
                               color);
               }
             }
@@ -512,7 +510,7 @@ ViewportTools::renderLights(const Camera& camera)
     }
 
     ImVec2 icon;
-    if (!toScreen(camera, viewport, light->position, icon)) {
+    if (!toScreen(camera, area, light->position, icon)) {
       continue;
     }
     const ImU32 fill = toIconColor(light->color);
@@ -534,7 +532,7 @@ ViewportTools::renderLights(const Camera& camera)
     }
     else if (light->type == LightType::Spot) {
       ImVec2 aim;
-      if (toScreen(camera, viewport,
+      if (toScreen(camera, area,
                    light->position + light->direction *
                                          (camera.getPosition().distance(light->position) *
                                           kArrowScreenScale * 0.3f),
@@ -552,8 +550,7 @@ ViewportTools::renderLights(const Camera& camera)
 void
 ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
 {
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGuizmo::SetRect(viewport->Pos.x, viewport->Pos.y, viewport->Size.x, viewport->Size.y);
+  ImGuizmo::SetRect(m_area.x, m_area.y, m_area.width, m_area.height);
   ImGuizmo::SetOrthographic(camera.getProjectionType() == CameraProjectionType::Orthographic);
 
   // Gathered here, while the frustum is current, for the light icons and picking.
@@ -668,10 +665,8 @@ ViewportTools::renderViewCube()
   style.Colors[ImGuizmo::DIRECTION_Y] = colorZ;
   style.Colors[ImGuizmo::DIRECTION_Z] = colorX;
 
-  const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  const ImVec2 position(viewport->WorkPos.x + viewport->WorkSize.x - kViewCubeSize -
-                            kViewportMargin,
-                        viewport->WorkPos.y + kViewportMargin);
+  const ImVec2 position(m_area.x + m_area.width - kViewCubeSize - kViewportMargin,
+                        m_area.y + kViewportMargin);
   ImGuizmo::ViewManipulate(cubeView[0], camera.getProjectionMatrix().data(),
                            ImGuizmo::TRANSLATE, ImGuizmo::WORLD, unusedModel[0], distance,
                            position, ImVec2(kViewCubeSize, kViewCubeSize), 0x10101010);
@@ -721,7 +716,7 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
 {
   const ImGuiIO& io = ImGui::GetIO();
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    m_bClickStartedInScene = !io.WantCaptureMouse && !ImGuizmo::IsOver() &&
+    m_bClickStartedInScene = m_bHovered && !ImGuizmo::IsOver() &&
                              !ImGuizmo::IsViewManipulateHovered() && !isUsingMouse();
   }
   if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left) || !m_bClickStartedInScene) {
@@ -733,7 +728,7 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
     return;
   }
 
-  const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+  const ViewportArea& area = m_area;
   const ImVec2 mouse = ImGui::GetMousePos();
 
   // Light icons first: they sit in front of what they light.
@@ -742,7 +737,7 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
   float nearestIcon = pickRadius * pickRadius;
   for (const LightItem* light : m_visibleLights) {
     ImVec2 icon;
-    if (!light->owner || !toScreen(camera, viewport, light->position, icon)) {
+    if (!light->owner || !toScreen(camera, area, light->position, icon)) {
       continue;
     }
     const float dx = icon.x - mouse.x;
@@ -755,8 +750,8 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
   }
 
   if (!picked) {
-    const Vector2 screenPoint((mouse.x - viewport.Pos.x) / viewport.Size.x,
-                              (mouse.y - viewport.Pos.y) / viewport.Size.y);
+    const Vector2 screenPoint((mouse.x - area.x) / area.width,
+                              (mouse.y - area.y) / area.height);
     SceneRayHit hit;
     if (scene.raycast(camera.screenToWorldRay(screenPoint), hit)) {
       picked = hit.gameObject;
