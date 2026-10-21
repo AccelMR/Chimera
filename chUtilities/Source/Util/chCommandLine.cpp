@@ -20,7 +20,7 @@
 
 #if USING(CH_PLATFORM_WIN32)
 # include "chUnicode.h"
-# include "Win32/chWindows.h"
+# include "chWindows.h"
 # include <shellapi.h>
 #endif
 

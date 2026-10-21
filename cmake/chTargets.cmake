@@ -4,11 +4,13 @@
 #   ch_add_module(<name> EXPORT_DEFINE <macro> FOLDER <folder>)   engine shared library
 #   ch_add_plugin(<name> FOLDER <folder> [CODEC])                  library loaded at run time
 #   ch_add_executable(<name> FOLDER <folder> SOURCES <files...>)
-#   ch_add_test(<name> SOURCE <file>)
-#   ch_collect_sources(<out var>)       the src/ files, for targets built by hand
+#   ch_add_test(<name> SOURCE <file> [PRIVATE_ACCESS <modules...>])
+#   ch_collect_sources(<out var>)       the Source/ files, for targets built by hand
 #
-# Sources are every .cpp and .h under the target's src/ folder (found again on each build, so
-# adding a file needs no manual configure).
+# Sources are every .cpp and .h under the target's Source/ folder (found again on each build,
+# so adding a file needs no manual configure). Folders under a Private/ folder are never on the
+# include path of other targets, so a module's internal headers cannot be included from outside
+# it; tests that check them ask for them with PRIVATE_ACCESS.
 
 if(UNIX AND NOT APPLE)
   include(CheckIPOSupported)
@@ -16,16 +18,27 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Adds <dir> and every folder below it to the include path, because engine includes are flat
-# (#include "chLogger.h").
+# (#include "chLogger.h"). Folders under a Private/ folder are always PRIVATE, and are kept in
+# the target property CH_PRIVATE_INCLUDE_DIRS for ch_add_test's PRIVATE_ACCESS.
 function(ch_include_subfolders TARGET_NAME SCOPE DIR)
   file(GLOB_RECURSE CHILDREN LIST_DIRECTORIES true "${DIR}/*")
   set(DIRS "${DIR}")
+  set(PRIVATE_DIRS "")
   foreach(CHILD ${CHILDREN})
     if(IS_DIRECTORY "${CHILD}")
-      list(APPEND DIRS "${CHILD}")
+      file(RELATIVE_PATH RELATIVE_CHILD "${DIR}" "${CHILD}")
+      if("/${RELATIVE_CHILD}/" MATCHES "/Private/")
+        list(APPEND PRIVATE_DIRS "${CHILD}")
+      else()
+        list(APPEND DIRS "${CHILD}")
+      endif()
     endif()
   endforeach()
   target_include_directories(${TARGET_NAME} ${SCOPE} ${DIRS})
+  if(PRIVATE_DIRS)
+    target_include_directories(${TARGET_NAME} PRIVATE ${PRIVATE_DIRS})
+    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY CH_PRIVATE_INCLUDE_DIRS ${PRIVATE_DIRS})
+  endif()
 endfunction()
 
 # Puts every target created under <dir>, subfolders included, into the IDE folder <folder>.
@@ -73,15 +86,32 @@ function(ch_target_defaults TARGET_NAME FOLDER_NAME)
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${SOURCES})
 endfunction()
 
+# Includes are flat, so two of our headers with the same name would silently pick whichever
+# folder comes first on the include path; this stops the configure instead.
+function(ch_check_unique_headers)
+  foreach(HEADER ${ARGN})
+    get_filename_component(HEADER_NAME "${HEADER}" NAME)
+    get_property(EXISTING GLOBAL PROPERTY "CH_HEADER_${HEADER_NAME}")
+    if(EXISTING AND NOT EXISTING STREQUAL HEADER)
+      message(FATAL_ERROR "Two headers are named ${HEADER_NAME}, but includes are flat:\n"
+        "  ${EXISTING}\n  ${HEADER}")
+    endif()
+    set_property(GLOBAL PROPERTY "CH_HEADER_${HEADER_NAME}" "${HEADER}")
+  endforeach()
+endfunction()
+
 function(ch_collect_sources OUT_VAR)
   file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h")
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
+  set(HEADERS ${SOURCES})
+  list(FILTER HEADERS INCLUDE REGEX "\\.h$")
+  ch_check_unique_headers(${HEADERS})
   set(${OUT_VAR} ${SOURCES} PARENT_SCOPE)
 endfunction()
 
-# An engine shared library. Its include folders are PUBLIC, so linking it is enough to use its
-# headers. EXPORT_DEFINE is the macro its export header checks (CH_CORE_EXPORTS...).
+# An engine shared library. Its include folders are PUBLIC (except Private/ ones), so linking
+# it is enough to use its headers. EXPORT_DEFINE is the macro its export header checks (CH_CORE_EXPORTS...).
 function(ch_add_module TARGET_NAME)
   cmake_parse_arguments(ARG "" "EXPORT_DEFINE;FOLDER" "" ${ARGN})
   ch_collect_sources(SOURCES)
@@ -89,7 +119,7 @@ function(ch_add_module TARGET_NAME)
   set_target_properties(${TARGET_NAME} PROPERTIES
     DEFINE_SYMBOL ${ARG_EXPORT_DEFINE}
     PREFIX "")
-  ch_include_subfolders(${TARGET_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+  ch_include_subfolders(${TARGET_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Source")
   ch_target_defaults(${TARGET_NAME} ${ARG_FOLDER})
 endfunction()
 
@@ -106,7 +136,7 @@ function(ch_add_plugin TARGET_NAME)
       RUNTIME_OUTPUT_DIRECTORY "${CH_CODEC_OUTPUT_DIR}"
       INSTALL_RPATH "$ORIGIN:$ORIGIN/..")
   endif()
-  ch_include_subfolders(${TARGET_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+  ch_include_subfolders(${TARGET_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source")
   ch_target_defaults(${TARGET_NAME} ${ARG_FOLDER})
 endfunction()
 
@@ -116,9 +146,14 @@ function(ch_add_executable TARGET_NAME)
   ch_target_defaults(${TARGET_NAME} ${ARG_FOLDER})
 endfunction()
 
-# A unit test executable, also registered with CTest.
+# A unit test executable, also registered with CTest. PRIVATE_ACCESS gives it the Private/
+# folders of those modules, for tests of internal classes.
 function(ch_add_test TARGET_NAME)
-  cmake_parse_arguments(ARG "" "SOURCE" "" ${ARGN})
+  cmake_parse_arguments(ARG "" "SOURCE" "PRIVATE_ACCESS" ${ARGN})
   ch_add_executable(${TARGET_NAME} FOLDER Tests SOURCES ${ARG_SOURCE})
+  foreach(MODULE ${ARG_PRIVATE_ACCESS})
+    target_include_directories(${TARGET_NAME} PRIVATE
+      $<TARGET_PROPERTY:${MODULE},CH_PRIVATE_INCLUDE_DIRS>)
+  endforeach()
   add_test(NAME ${TARGET_NAME} COMMAND ${TARGET_NAME})
 endfunction()

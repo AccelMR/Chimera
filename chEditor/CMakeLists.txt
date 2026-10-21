@@ -1,7 +1,7 @@
 # ---------- Editor ----------
 ch_collect_sources(EDITOR_SOURCES)
 ch_add_executable(chEditor FOLDER Editor SOURCES chEditorMain.cpp ${EDITOR_SOURCES})
-ch_include_subfolders(chEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+ch_include_subfolders(chEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 
 target_link_libraries(chEditor PRIVATE chCore chImguiSDL3 chImGuizmo)
 

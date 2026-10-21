@@ -1,4 +1,5 @@
-ch_add_test(chCoreTest SOURCE chCoreTestMain.cpp)
+# Tests internal classes too (ShadowRenderer, ModelSerializer).
+ch_add_test(chCoreTest SOURCE chCoreTestMain.cpp PRIVATE_ACCESS chCore)
 
 # chCore brings the CH_*_ENABLED defines its headers depend on.
 target_link_libraries(chCoreTest PRIVATE chCore)

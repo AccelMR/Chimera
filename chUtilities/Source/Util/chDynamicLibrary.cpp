@@ -19,7 +19,7 @@
 
 #if USING(CH_PLATFORM_WIN32)
 # include "chUnicode.h"
-# include "Win32/chWindows.h"
+# include "chWindows.h"
 #else
 # include <dlfcn.h>
 #endif

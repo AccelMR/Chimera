@@ -23,7 +23,7 @@
 #include "chStringUtils.h"
 
 #if USING(CH_PLATFORM_WIN32)
-#include "Win32/chWindows.h"
+#include "chWindows.h"
 #endif
 
 namespace chEngineSDK {
