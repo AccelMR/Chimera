@@ -32,7 +32,7 @@ class CH_CORE_EXPORT GameObject : public Object
    */
   GameObject(const String& name, Scene* scene);
 
-  ~GameObject() override;
+  ~GameObject();
 
   GameObject(const GameObject&) = delete;
 

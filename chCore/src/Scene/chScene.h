@@ -42,7 +42,7 @@ class CH_CORE_EXPORT Scene : public Object
  public:
   Scene(const String& name, UUID id);
 
-  ~Scene() override;
+  ~Scene();
 
   Scene(const Scene&) = delete;
 
