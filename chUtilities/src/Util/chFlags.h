@@ -3,259 +3,170 @@
  * @file chFlags.h
  * @author AccelMR
  * @date 2022/08/27
- *   Basic class for Flags to be used along the engine.
+ * @brief A set of bits taken from an enum class.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 #include "chPrerequisitesUtilities.h"
 
+#include <type_traits>
+
 namespace chEngineSDK {
 
-/*
- * Description: 
- *     Flags type to be used along the engine.
- * 
- *  Since Chimera uses enum classes as standard, there's no | or & operator overloads 
- *    this class is a solution for that.
- * 
+/**
+ * A set of values of an enum class used as bits. An enum class has no | or &, and a
+ * separate type keeps "one bit" (the enum) apart from "any mix of bits" (Flags), so a
+ * function that takes one value cannot get a mix by mistake.
+ *
  * Sample usage:
+ * enum class AccessMode : uint16 { None = 0, Read = 1 << 0, Write = 1 << 1 };
+ * CH_FLAGS(AccessMode);
  *
- * enum class AccessMode : uint32 {
- *   None = 0x00,
- *   Read = 0x01,
- *   Write = 0x02
- * };
- * using AccessModeFlag = Flags<AccessMode>;
- * CH_FLAGS_OPERATORS(AccessMode);
- *
- * AccessModeFlag f;
- * f.isSet(AccessMode::Read);
- *
+ * AccessModeFlags mode = AccessMode::Read | AccessMode::Write;
+ * mode.isSet(AccessMode::Read);
  */
-template<typename Enum, typename Storage = uint32>
+template<typename Enum>
 class Flags
 {
+  static_assert(std::is_enum_v<Enum>, "Flags needs an enum");
+
  public:
-  using InternalType = Storage;
+  using Storage = std::underlying_type_t<Enum>;
+  static_assert(std::is_unsigned_v<Storage>, "The enum of Flags needs an unsigned type");
 
-  Flags() = default;
+  constexpr Flags() noexcept = default;
 
-  Flags(Enum value) : m_bits(static_cast<Storage>(value)) {}
-  Flags(const Flags<Enum, Storage>& value) : m_bits(value.m_bits) {}
-  explicit Flags(Storage bits) : m_bits(bits) {}
+  constexpr Flags(Enum value) noexcept
+   : m_bits(static_cast<Storage>(value))
+  {}
 
-  /**
-   * @brief Checks whether all of the provided bits are set
-   */
-  FORCEINLINE bool
-  isSet(Enum value) const {
-    return (m_bits & static_cast<Storage>(value)) == static_cast<Storage>(value);
+  NODISCARD static constexpr Flags
+  fromBits(Storage bits) noexcept
+  {
+    Flags flags;
+    flags.m_bits = bits;
+    return flags;
   }
 
   /**
-   * @brief Checks whether any of the provided bits are set
-   */
-  FORCEINLINE bool
-  isSetAny(Enum value) const {
-    return (m_bits & static_cast<Storage>(value)) != 0;
+   *   True when every bit of value is set, so an empty value is always set.
+   **/
+  NODISCARD FORCEINLINE constexpr bool
+  isSet(Flags value) const noexcept
+  {
+    return (m_bits & value.m_bits) == value.m_bits;
   }
 
-  /**
-   * @brief Checks whether any of the provided bits are set
-   */
-  FORCEINLINE bool
-  isSetAny(const Flags<Enum, Storage>& value) const {
+  NODISCARD FORCEINLINE constexpr bool
+  isSetAny(Flags value) const noexcept
+  {
     return (m_bits & value.m_bits) != 0;
   }
 
-  /**
-   * @brief Activates all of the provided bits.
-   */
-  FORCEINLINE Flags<Enum, Storage>&
-  set(Enum value) {
-    m_bits |= static_cast<Storage>(value);
+  FORCEINLINE constexpr Flags&
+  set(Flags value) noexcept
+  {
+    m_bits |= value.m_bits;
     return *this;
   }
 
-  /**
-   * @brief Deactivates all of the provided bits.
-   */
-  FORCEINLINE void
-  unset(Enum value) {
-    m_bits &= ~static_cast<Storage>(value);
+  FORCEINLINE constexpr Flags&
+  unset(Flags value) noexcept
+  {
+    m_bits &= static_cast<Storage>(~value.m_bits);
+    return *this;
   }
 
-  FORCEINLINE bool
-  operator==(Enum rhs) const {
-    return m_bits == static_cast<Storage>(rhs);
+  NODISCARD FORCEINLINE constexpr Storage
+  getBits() const noexcept
+  {
+    return m_bits;
   }
 
-  FORCEINLINE bool
-  operator==(const Flags<Enum, Storage>& rhs) const {
+  NODISCARD FORCEINLINE constexpr explicit
+  operator bool() const noexcept
+  {
+    return m_bits != 0;
+  }
+
+  NODISCARD FORCEINLINE constexpr bool
+  operator==(Flags rhs) const noexcept
+  {
     return m_bits == rhs.m_bits;
   }
 
-  FORCEINLINE bool
-  operator==(bool rhs) const {
-    return (static_cast<bool>(*this)) == rhs;
-  }
-
-  FORCEINLINE bool
-  operator!=(Enum rhs) const {
-    return m_bits != static_cast<Storage>(rhs);
-  }
-
-  FORCEINLINE bool
-  operator!=(const Flags<Enum, Storage>& rhs) const {
-    return m_bits != rhs.m_bits;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator=(Enum rhs) {
-    m_bits = static_cast<Storage>(rhs);
-    return *this;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator=(const Flags<Enum, Storage>& rhs) {
-    m_bits = rhs.m_bits;
-    return *this;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator|=(Enum rhs) {
-    m_bits |= static_cast<Storage>(rhs);
-    return *this;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator|=(const Flags<Enum, Storage>& rhs) {
+  FORCEINLINE constexpr Flags&
+  operator|=(Flags rhs) noexcept
+  {
     m_bits |= rhs.m_bits;
     return *this;
   }
 
-  FORCEINLINE Flags<Enum, Storage>
-  operator|(Enum rhs) const {
-    Flags<Enum, Storage> out(*this);
-    out |= rhs;
-    return out;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>
-  operator|(const Flags<Enum, Storage>& rhs) const {
-    Flags<Enum, Storage> out(*this);
-    out |= rhs;
-    return out;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator&=(Enum rhs) {
-    m_bits &= static_cast<Storage>(rhs);
-    return *this;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator&=(const Flags<Enum, Storage>& rhs) {
+  FORCEINLINE constexpr Flags&
+  operator&=(Flags rhs) noexcept
+  {
     m_bits &= rhs.m_bits;
     return *this;
   }
 
-  FORCEINLINE Flags<Enum, Storage>
-  operator&(Enum rhs) const {
-    Flags<Enum, Storage> out = *this;
-    out.m_bits &= static_cast<Storage>(rhs);
-    return out;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>
-  operator&(const Flags<Enum, Storage>& rhs) const {
-    Flags<Enum, Storage> out = *this;
-    out.m_bits &= rhs.m_bits;
-    return out;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator^=(Enum rhs) {
-    m_bits ^= static_cast<Storage>(rhs);
-    return *this;
-  }
-
-  FORCEINLINE Flags<Enum, Storage>&
-  operator^=(const Flags<Enum, Storage>& rhs) {
+  FORCEINLINE constexpr Flags&
+  operator^=(Flags rhs) noexcept
+  {
     m_bits ^= rhs.m_bits;
     return *this;
   }
 
-  FORCEINLINE Flags<Enum, Storage>
-  operator^(Enum rhs) const {
-    Flags<Enum, Storage> out = *this;
-    out.m_bits ^= static_cast<Storage>(rhs);
-    return out;
+  NODISCARD FORCEINLINE constexpr Flags
+  operator~() const noexcept
+  {
+    return fromBits(static_cast<Storage>(~m_bits));
   }
 
-  FORCEINLINE Flags<Enum, Storage>
-  operator^(const Flags<Enum, Storage>& rhs) const {
-    Flags<Enum, Storage> out = *this;
-    out.m_bits ^= rhs.m_bits;
-    return out;
+  NODISCARD friend FORCEINLINE constexpr Flags
+  operator|(Flags lhs, Flags rhs) noexcept
+  {
+    return lhs |= rhs;
   }
 
-  FORCEINLINE Flags<Enum, Storage>
-  operator~() const {
-    Flags<Enum, Storage> out;
-    out.m_bits = (Storage)~m_bits;
-    return out;
+  NODISCARD friend FORCEINLINE constexpr Flags
+  operator&(Flags lhs, Flags rhs) noexcept
+  {
+    return lhs &= rhs;
   }
 
-  FORCEINLINE operator bool() const {
-    return m_bits ? true : false;
-  }
-
-  FORCEINLINE operator uint8() const {
-    return static_cast<uint8>(m_bits);
-  }
-
-  FORCEINLINE operator uint16() const {
-    return static_cast<uint16>(m_bits);
-  }
-
-  FORCEINLINE operator uint32() const {
-    return static_cast<uint32>(m_bits);
-  }
-
-  friend Flags<Enum, Storage>
-  operator&(Enum a, Flags<Enum, Storage> &b) {
-    Flags<Enum, Storage> out;
-    out.m_bits = a & b.m_bits;
-    return out;
+  NODISCARD friend FORCEINLINE constexpr Flags
+  operator^(Flags lhs, Flags rhs) noexcept
+  {
+    return lhs ^= rhs;
   }
 
  private:
-  Storage m_bits{0};
+  Storage m_bits = 0;
 };
 
 /**
-* Defines global operators for a Flags<Enum, Storage> implementation.
-*/
-#define CH_FLAGS_OPERATORS(Enum) CH_FLAGS_OPERATORS_EXT(Enum, uint32)
+ * Declares <Enum>Flags and the operators that mix two values of the enum. Use it right
+ * after the enum, in the same namespace.
+ */
+#define CH_FLAGS(Enum)                                                                  \
+  using Enum##Flags = ::chEngineSDK::Flags<Enum>;                                       \
+  NODISCARD constexpr Enum##Flags operator|(Enum lhs, Enum rhs) noexcept                \
+  {                                                                                     \
+    return Enum##Flags(lhs) | rhs;                                                      \
+  }                                                                                     \
+  NODISCARD constexpr Enum##Flags operator&(Enum lhs, Enum rhs) noexcept                \
+  {                                                                                     \
+    return Enum##Flags(lhs) & rhs;                                                      \
+  }                                                                                     \
+  NODISCARD constexpr Enum##Flags operator^(Enum lhs, Enum rhs) noexcept                \
+  {                                                                                     \
+    return Enum##Flags(lhs) ^ rhs;                                                      \
+  }                                                                                     \
+  NODISCARD constexpr Enum##Flags operator~(Enum value) noexcept                        \
+  {                                                                                     \
+    return ~Enum##Flags(value);                                                         \
+  }                                                                                     \
+  static_assert(true, "CH_FLAGS needs a semicolon")
 
-/**
-* Defines global operators for a Flags<Enum, Storage> implementation.
-*/
-#define CH_FLAGS_OPERATORS_EXT(Enum, Storage)                               \
-inline Flags<Enum, Storage>                                                 \
-operator|(Enum a, Enum b) {                                                 \
-  Flags<Enum, Storage> r(a); r |= b; return r;                              \
-}                                                                           \
-                                                                            \
-inline Flags<Enum, Storage>                                                 \
-operator&(Enum a, Enum b) {                                                 \
-  Flags<Enum, Storage> r(a); r &= b; return r;                              \
-}                                                                           \
-                                                                            \
-inline Flags<Enum, Storage>                                                 \
-operator~(Enum a) {                                                         \
-  return ~Flags<Enum, Storage>(a);                                          \
-}
-}
+} // namespace chEngineSDK

@@ -350,7 +350,7 @@ class CH_CORE_EXPORT RenderGraph
     ResourceState initialState = ResourceState::Undefined;
     ResourceState finalState = ResourceState::Undefined;
     // Filled by compile().
-    TextureUsageFlags usage = TextureUsage::NoneUsage;
+    TextureUsageFlags usage = TextureUsage::None;
     uint32 firstPass = INVALID_INDEX;
     uint32 lastPass = INVALID_INDEX;
     uint32 slot = INVALID_INDEX;
@@ -364,7 +364,7 @@ class CH_CORE_EXPORT RenderGraph
   struct Slot
   {
     RGTextureDesc desc;
-    TextureUsageFlags usage = TextureUsage::NoneUsage;
+    TextureUsageFlags usage = TextureUsage::None;
     bool inUse = false;
     ResourceState state = ResourceState::Undefined;
   };

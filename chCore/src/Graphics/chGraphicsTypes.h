@@ -195,7 +195,7 @@ enum class TextureType {
 };
 
 enum class TextureUsage : uint16 {
-  NoneUsage         = 0,
+  None              = 0,
   TransferSrc       = 1 << 0,
   TransferDst       = 1 << 1,
   Sampled           = 1 << 2,
@@ -205,8 +205,7 @@ enum class TextureUsage : uint16 {
   Transient         = 1 << 6,
   InputAttachment   = 1 << 7
 };
-CH_FLAGS_OPERATORS_EXT(TextureUsage, uint16);
-using TextureUsageFlags = Flags<TextureUsage, uint16>;
+CH_FLAGS(TextureUsage);
 
 enum class TextureViewType {
   View1D,
@@ -244,8 +243,7 @@ enum class ShaderStage : uint32 {
   TessControl = 0x10,
   TessEvaluation = 0x20,
 };
-CH_FLAGS_OPERATORS_EXT(ShaderStage, uint32);
-using ShaderStageFlags = Flags<ShaderStage, uint32>;
+CH_FLAGS(ShaderStage);
 
 enum class BufferUsage : uint16 {
   VertexBuffer = 0x01,
@@ -255,8 +253,7 @@ enum class BufferUsage : uint16 {
   TransferSrc = 0x10,
   TransferDst = 0x20
 };
-CH_FLAGS_OPERATORS_EXT(BufferUsage, uint16);
-using BufferUsageFlags = Flags<BufferUsage, uint16>;
+CH_FLAGS(BufferUsage);
 
 enum class MemoryUsage {
   GpuOnly,

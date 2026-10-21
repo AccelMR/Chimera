@@ -680,8 +680,8 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
     return nullptr;
   }
 
-  const AccessModeFlag accessMode =
-      readOnly ? AccessModeFlag(AccessMode::Read) : AccessMode::Read | AccessMode::Write;
+  const AccessModeFlags accessMode =
+      readOnly ? AccessModeFlags(AccessMode::Read) : AccessMode::Read | AccessMode::Write;
   auto stream = chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode);
   if (!stream->isOpen()) {
     logError("FileSystem: failed to open '" + path.toString() + "'");

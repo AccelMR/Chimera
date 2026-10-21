@@ -514,7 +514,7 @@ void
 RenderGraph::computeLifetimes()
 {
   for (TextureNode& texture : m_textures) {
-    texture.usage = TextureUsage::NoneUsage;
+    texture.usage = TextureUsage::None;
     texture.firstPass = INVALID_INDEX;
     texture.lastPass = INVALID_INDEX;
     texture.slot = INVALID_INDEX;

@@ -3060,3 +3060,53 @@ TEST_CASE("chUtilities - Float16")
     REQUIRE(Float16::toFloat(0x3555) == 0.333251953125f);
   }
 }
+
+namespace {
+enum class TestFlag : uint8
+{
+  None = 0,
+  A = 1 << 0,
+  B = 1 << 1,
+  C = 1 << 2
+};
+CH_FLAGS(TestFlag);
+
+static_assert(std::is_trivially_copyable_v<TestFlagFlags>);
+static_assert(sizeof(TestFlagFlags) == sizeof(uint8));
+static_assert(!std::is_convertible_v<TestFlagFlags, uint32>);
+constexpr TestFlagFlags kAB = TestFlag::A | TestFlag::B;
+static_assert(kAB.getBits() == 3);
+static_assert(kAB.isSet(TestFlag::A) && !kAB.isSet(TestFlag::C));
+static_assert((TestFlag::A & TestFlag::B) == TestFlag::None);
+static_assert((TestFlag::A ^ TestFlag::A) == TestFlag::None);
+} // namespace
+
+TEST_CASE("chUtilities - Flags") {
+  TestFlagFlags flags;
+  REQUIRE_FALSE(static_cast<bool>(flags));
+  REQUIRE(flags == TestFlag::None);
+  REQUIRE(flags.isSet(TestFlag::None));
+  REQUIRE_FALSE(flags.isSetAny(TestFlag::None));
+
+  flags.set(TestFlag::A).set(TestFlag::C);
+  REQUIRE(flags.getBits() == 5);
+  REQUIRE(flags.isSet(TestFlag::A | TestFlag::C));
+  REQUIRE_FALSE(flags.isSet(TestFlag::A | TestFlag::B));
+  REQUIRE(flags.isSetAny(TestFlag::A | TestFlag::B));
+  REQUIRE(TestFlag::A != flags);
+
+  flags.unset(TestFlag::A);
+  REQUIRE(flags == TestFlag::C);
+
+  REQUIRE((kAB & TestFlag::B) == TestFlag::B);
+  REQUIRE((kAB ^ TestFlag::A) == TestFlag::B);
+  REQUIRE((~TestFlag::A).getBits() == 0xFE);
+  REQUIRE((kAB | TestFlag::C).getBits() == 7);
+
+  TestFlagFlags mixed = TestFlag::A;
+  mixed |= TestFlag::B;
+  mixed &= TestFlag::B | TestFlag::C;
+  mixed ^= TestFlag::C;
+  REQUIRE(mixed == (TestFlag::B | TestFlag::C));
+  REQUIRE(TestFlagFlags::fromBits(6) == mixed);
+}

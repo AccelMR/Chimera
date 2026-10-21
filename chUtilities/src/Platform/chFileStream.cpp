@@ -344,7 +344,7 @@ MemoryDataStream::clone() const
   return chMakeShared<MemoryDataStream>(copy, m_size, true);
 }
 
-FileDataStream::FileDataStream(const Path& path, AccessModeFlag accessMode)
+FileDataStream::FileDataStream(const Path& path, AccessModeFlags accessMode)
  : DataStream(accessMode),
    m_path(path),
    m_stream(new std::fstream())

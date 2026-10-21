@@ -29,8 +29,7 @@ enum class AccessMode : uint16
   Read = 0x01,
   Write = 0x02
 };
-CH_FLAGS_OPERATORS_EXT(AccessMode, uint16);
-using AccessModeFlag = Flags<AccessMode, uint16>;
+CH_FLAGS(AccessMode);
 
 /**
  * Common interface for every byte stream, so serialization code works the same on memory
@@ -39,7 +38,7 @@ using AccessModeFlag = Flags<AccessMode, uint16>;
 class CH_UTILITY_EXPORT DataStream
 {
  public:
-  explicit DataStream(AccessModeFlag accessMode = AccessMode::Read) noexcept
+  explicit DataStream(AccessModeFlags accessMode = AccessMode::Read) noexcept
    : m_accessMode(accessMode)
   {}
 
@@ -50,7 +49,7 @@ class CH_UTILITY_EXPORT DataStream
   DataStream&
   operator=(const DataStream&) = delete;
 
-  NODISCARD FORCEINLINE AccessModeFlag
+  NODISCARD FORCEINLINE AccessModeFlags
   getAccessMode() const noexcept
   {
     return m_accessMode;
@@ -146,7 +145,7 @@ class CH_UTILITY_EXPORT DataStream
 
  protected:
   SIZE_T m_size = 0;
-  AccessModeFlag m_accessMode;
+  AccessModeFlags m_accessMode;
 };
 
 /**
@@ -251,7 +250,7 @@ class CH_UTILITY_EXPORT FileDataStream : public DataStream
    *   an existing file without emptying it. If the file cannot be opened, isOpen() is
    *   false and reads return 0.
    **/
-  explicit FileDataStream(const Path& path, AccessModeFlag accessMode = AccessMode::Read);
+  explicit FileDataStream(const Path& path, AccessModeFlags accessMode = AccessMode::Read);
 
   /**
    *   Creates the file and writes the whole source stream into it, from its start.

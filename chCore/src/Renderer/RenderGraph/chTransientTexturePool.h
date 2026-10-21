@@ -28,7 +28,7 @@ class CH_CORE_EXPORT TransientTexturePool
     SPtr<ITexture> texture;
     SPtr<ITextureView> view;
     RGTextureDesc desc;
-    TextureUsageFlags usage = TextureUsage::NoneUsage;
+    TextureUsageFlags usage = TextureUsage::None;
     ResourceState state = ResourceState::Undefined;
     uint64 lastUsedFrame = 0;
   };
