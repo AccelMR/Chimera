@@ -128,10 +128,22 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   resize(uint32 width, uint32 height);
 
   void
+  requestResize();
+
+  void
+  applyPendingResize();
+
+  void
+  onSwapChainOutOfDate();
+
+  void
   bindEvents();
 
  private:
   bool m_running = true;
+  bool m_bResizePending = false;
+  bool m_bSwapChainOutOfDate = false;
+  int64 m_lastResizeRequestNs = 0;
   SPtr<DisplayEventHandle> m_eventhandler;
   SPtr<DisplaySurface> m_display;
 

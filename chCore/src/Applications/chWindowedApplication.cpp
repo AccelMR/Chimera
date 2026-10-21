@@ -68,6 +68,20 @@ ConsoleVariable<bool> g_cvarWindowMaximized("Window.Maximized",
                                             false,
                                             "Opens the main window maximized.",
                                             "Maximized");
+
+ConsoleVariable<int32> g_cvarWindowResizeDelay("Window.ResizeDelay",
+                                               150,
+                                               "Milliseconds without a size change before "
+                                               "the swap chain follows the window; until "
+                                               "then the old size is stretched. 0 follows "
+                                               "every change.",
+                                               "ResizeDelay");
+
+NODISCARD int64
+getSteadyNanoseconds()
+{
+  return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+}
 } // namespace
 
 /*
@@ -353,6 +367,14 @@ WindowedApplication::render()
     return;
   }
 
+  applyPendingResize();
+  // An out of date swap chain cannot present, so while a drag still changes the size the
+  // frames are skipped instead of making the swap chain again for every step.
+  if (m_bSwapChainOutOfDate) {
+    std::this_thread::sleep_for(milliseconds(1));
+    return;
+  }
+
   IGraphicsAPI& graphicsAPI = IGraphicsAPI::instance();
   ISwapChain& swapChain = *m_swapChain;
   // Graphics.VSync may change at run time (menu, console); outside the frame, because an
@@ -379,7 +401,7 @@ WindowedApplication::render()
       acquireStatus == SwapChainStatus::Failed) {
     graphicsAPI.endFrame();
     if (acquireStatus == SwapChainStatus::OutOfDate) {
-      resize(m_display->getWidth(), m_display->getHeight());
+      onSwapChainOutOfDate();
     }
     return;
   }
@@ -401,12 +423,67 @@ WindowedApplication::render()
   }
 
   // A suboptimal image is still drawn and presented, so the swap chain is only recreated
-  // after the frame is done.
-  if (acquireStatus == SwapChainStatus::Suboptimal ||
-      presentStatus == SwapChainStatus::Suboptimal ||
-      presentStatus == SwapChainStatus::OutOfDate) {
+  // after the frame is done, and not at all while a window drag is still changing the size.
+  if (presentStatus == SwapChainStatus::OutOfDate) {
+    onSwapChainOutOfDate();
+  }
+  else if (!m_bResizePending && (acquireStatus == SwapChainStatus::Suboptimal ||
+                                 presentStatus == SwapChainStatus::Suboptimal)) {
     resize(m_display->getWidth(), m_display->getHeight());
   }
+}
+
+/*
+ */
+void
+WindowedApplication::onSwapChainOutOfDate()
+{
+  if (m_bResizePending) {
+    m_bSwapChainOutOfDate = true;
+    return;
+  }
+
+  resize(m_display->getWidth(), m_display->getHeight());
+}
+
+/*
+ */
+void
+WindowedApplication::requestResize()
+{
+  if (g_cvarWindowResizeDelay.get() <= 0) {
+    resize(m_display->getWidth(), m_display->getHeight());
+    return;
+  }
+
+  m_bResizePending = true;
+  m_lastResizeRequestNs = getSteadyNanoseconds();
+}
+
+/*
+ */
+void
+WindowedApplication::applyPendingResize()
+{
+  if (!m_bResizePending) {
+    return;
+  }
+
+  const int64 delayNs = static_cast<int64>(g_cvarWindowResizeDelay.get()) * 1'000'000;
+  if (getSteadyNanoseconds() - m_lastResizeRequestNs < delayNs) {
+    return;
+  }
+
+  // The size event of a drag may arrive after an out of date present already resized to it.
+  const uint32 width = m_display->getWidth();
+  const uint32 height = m_display->getHeight();
+  if (!m_bSwapChainOutOfDate && m_swapChain->getWidth() == width &&
+      m_swapChain->getHeight() == height) {
+    m_bResizePending = false;
+    return;
+  }
+
+  resize(width, height);
 }
 
 /*
@@ -418,10 +495,17 @@ WindowedApplication::resize(uint32 width, uint32 height)
     return;
   }
 
+  m_bResizePending = false;
+  m_bSwapChainOutOfDate = false;
+  const uint32 oldWidth = m_swapChain->getWidth();
+  const uint32 oldHeight = m_swapChain->getHeight();
   m_swapChain->resize(width, height);
 
-  CH_LOG_INFO(WindowedApp, "Swap chain resized to {0}x{1}.", m_swapChain->getWidth(),
-              m_swapChain->getHeight());
+  // An API may keep the swap chain (a window being minimized reports a 0x0 surface first).
+  if (m_swapChain->getWidth() != oldWidth || m_swapChain->getHeight() != oldHeight) {
+    CH_LOG_INFO(WindowedApp, "Swap chain resized to {0}x{1}.", m_swapChain->getWidth(),
+                m_swapChain->getHeight());
+  }
 }
 
 /*
@@ -438,7 +522,11 @@ WindowedApplication::bindEvents() {
     }
   });
   m_resizeEvent = eventDispatcher.OnResize.connect(
-      [&](uint32 width, uint32 height) { resize(width, height); });
+      [&](uint32 width, uint32 height) {
+        CH_PARAMETER_UNUSED(width);
+        CH_PARAMETER_UNUSED(height);
+        requestResize();
+      });
 }
 
 } // namespace chEngineSDK
