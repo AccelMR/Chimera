@@ -17,10 +17,15 @@
 
 namespace chEngineSDK {
 
-enum class CameraProjectionType
+/**
+ * Camera components store the value in scene files, so the values are fixed.
+ */
+enum class CameraProjectionType : uint32
 {
-  Perspective,
-  Orthographic
+  Perspective = 0,
+  Orthographic = 1,
+
+  COUNT
 };
 
 /**

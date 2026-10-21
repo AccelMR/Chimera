@@ -90,7 +90,8 @@ hasProjectFile(const Path& directory)
 }
 
 Path
-findProjectRoot(const Path& engineRoot, const Path& executableDirectory)
+findProjectRoot(const Path& engineRoot, const Path& executableDirectory,
+                StringView defaultProject)
 {
   const String requestedProject = CommandLine::getValue("project");
 
@@ -108,9 +109,21 @@ findProjectRoot(const Path& engineRoot, const Path& executableDirectory)
     return project;
   }
 
-#if USING(CH_EDITOR)
-  CH_PARAMETER_UNUSED(executableDirectory);
+  // A packaged game carries its project next to the executable, so it wins over the
+  // folder a development build was given.
+  if (hasProjectFile(executableDirectory)) {
+    return executableDirectory;
+  }
+  if (!defaultProject.empty()) {
+    const Path project = FileSystem::absolutePath(Path(String(defaultProject)));
+    if (hasProjectFile(project)) {
+      return project;
+    }
+    CH_LOG_WARNING(EnginePathsLog, "The default project {0} has no {1} file; ignored.",
+                   project, kProjectExtension);
+  }
 
+#if USING(CH_EDITOR)
   const Path project = engineRoot.join(Path(kDefaultProjectFolder));
   if (!hasProjectFile(project)) {
     CH_LOG_INFO(EnginePathsLog, "Creating the default project in {0}", project);
@@ -132,7 +145,7 @@ findProjectRoot(const Path& engineRoot, const Path& executableDirectory)
 } // namespace
 
 void
-EnginePaths::initialize()
+EnginePaths::initialize(StringView defaultProject)
 {
   PathState& state = pathState();
   if (state.initialized) {
@@ -147,7 +160,8 @@ EnginePaths::initialize()
                   state.executableDirectory.toString() + " or any folder above it.");
   }
 
-  state.projectRoot = findProjectRoot(state.engineRoot, state.executableDirectory);
+  state.projectRoot =
+      findProjectRoot(state.engineRoot, state.executableDirectory, defaultProject);
   FileSystem::setBaseDirectory(state.projectRoot);
 
   state.codecDirectory = state.executableDirectory.join(Path("Codecs"));

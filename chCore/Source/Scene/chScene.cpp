@@ -390,4 +390,20 @@ Scene::getActiveSkyLight() const
   return active;
 }
 
+/*
+ */
+void
+Scene::addCamera(CameraComponent& camera)
+{
+  m_cameras.push_back(&camera);
+}
+
+/*
+ */
+void
+Scene::removeCamera(CameraComponent& camera)
+{
+  Algorithm::removeFirst(m_cameras, &camera);
+}
+
 } // namespace chEngineSDK

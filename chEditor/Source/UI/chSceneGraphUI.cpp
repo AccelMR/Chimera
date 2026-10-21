@@ -20,6 +20,7 @@
 #include "chLightComponent.h"
 #include "chShapeComponent.h"
 #include "chSkyLightComponent.h"
+#include "chCameraComponent.h"
 #include "chMath.h"
 #include "chModelAsset.h"
 #include "chModel.h"
@@ -55,22 +56,22 @@ isInSubtree(const GameObject* gameObject, const GameObject& ancestor)
 }
 
 /*
- * The new light goes under parent (a root object when null) and is selected, so the
+ * The new object goes under parent (a root object when null) and is selected, so the
  * Inspector edits it at once.
  */
-template <typename LightComponentType>
+template <typename ComponentType>
 void
-createLight(Scene& scene, const ANSICHAR* name, GameObject* parent)
+createWithComponent(Scene& scene, const ANSICHAR* name, GameObject* parent)
 {
   const SPtr<GameObject> gameObject = scene.createGameObject(name, parent);
-  gameObject->addComponent<LightComponentType>();
+  gameObject->addComponent<ComponentType>();
   EditorSelection::setSelectedGameObject(gameObject);
   EditorScene::recordCreated(*gameObject, "Create");
 }
 
 /*
- * A light or sky light wins over a model on the same object, since lighting is what such an
- * object is for. Each component is compared once, so a big tree stays cheap to draw.
+ * A light, sky light or camera wins over a model on the same object, since that is what
+ * such an object is for. Each component is compared once, so a big tree stays cheap to draw.
  */
 const ANSICHAR*
 getObjectIcon(const GameObject& gameObject)
@@ -93,6 +94,9 @@ getObjectIcon(const GameObject& gameObject)
     if (typeId == TypeTraits<SkyLightComponent>::getTypeId()) {
       return ICON_FA_CLOUD_SUN;
     }
+    if (typeId == TypeTraits<CameraComponent>::getTypeId()) {
+      return ICON_FA_VIDEO;
+    }
     if (typeId == TypeTraits<ModelComponent>::getTypeId()) {
       icon = ICON_FA_CUBE;
     }
@@ -112,18 +116,28 @@ renderCreateLightItems(Scene& scene, GameObject* parent)
     return;
   }
   if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
-    createLight<DirectionalLightComponent>(scene, "Directional Light", parent);
+    createWithComponent<DirectionalLightComponent>(scene, "Directional Light", parent);
   }
   if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
-    createLight<PointLightComponent>(scene, "Point Light", parent);
+    createWithComponent<PointLightComponent>(scene, "Point Light", parent);
   }
   if (ImGui::MenuItem(ICON_FA_BULLSEYE "  Spot Light")) {
-    createLight<SpotLightComponent>(scene, "Spot Light", parent);
+    createWithComponent<SpotLightComponent>(scene, "Spot Light", parent);
   }
   if (ImGui::MenuItem(ICON_FA_CLOUD_SUN "  Sky Light")) {
-    createLight<SkyLightComponent>(scene, "Sky Light", parent);
+    createWithComponent<SkyLightComponent>(scene, "Sky Light", parent);
   }
   ImGui::EndMenu();
+}
+
+/*
+ */
+void
+renderCreateCameraItem(Scene& scene, GameObject* parent)
+{
+  if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera")) {
+    createWithComponent<CameraComponent>(scene, "Camera", parent);
+  }
 }
 
 /*
@@ -513,6 +527,7 @@ SceneGraphUI::renderObjectContextMenu(Scene& scene,
   if (!bLocked) {
     renderCreateShapeItems(scene, gameObject.get());
     renderCreateLightItems(scene, gameObject.get());
+    renderCreateCameraItem(scene, gameObject.get());
   }
   const ModelComponent* model = gameObject->getComponent<ModelComponent>();
   if (!bLocked && model && model->isWholeModel() && model->getModel() &&
@@ -584,6 +599,7 @@ SceneGraphUI::renderEmptyAreaContextMenu(Scene& scene)
     }
     renderCreateShapeItems(scene, parent);
     renderCreateLightItems(scene, parent);
+    renderCreateCameraItem(scene, parent);
     if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, EditorScene::canPaste())) {
       // Pasted where objects made without a parent go.
       EditorSelection::clear();

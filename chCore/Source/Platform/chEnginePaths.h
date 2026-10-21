@@ -35,12 +35,15 @@ class CH_CORE_EXPORT EnginePaths
    * Finds the folders and mounts them. Every getter calls it the first time, so it
    * only needs to be called directly to choose when it happens, for example before
    * opening the log file. Reads -project from CommandLine.
+   * The project is, in order: -project; the executable folder when it holds a
+   * .chproject file (a packaged game); defaultProject when it holds one; the editor's
+   * Sandbox; else the executable folder.
    * Throws if the engine root or the requested project cannot be found.
    * Every path is worked out here once, so the references returned by the getters
    * stay valid until the program ends.
    */
   static void
-  initialize();
+  initialize(StringView defaultProject = StringView());
 
   NODISCARD static const Path&
   getEngineRootDirectory();

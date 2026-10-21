@@ -29,6 +29,9 @@ struct LaunchInfo
   // Log entries kept in memory for listeners such as the editor's output log. 0 turns
   // the buffer off, and then the log file misses what was logged before it was opened.
   uint32 logBufferSize = 500;
+  // Project folder of a development build, used when neither -project nor a project next
+  // to the executable says otherwise (see EnginePaths::initialize).
+  String defaultProject = "";
 };
 
 /*

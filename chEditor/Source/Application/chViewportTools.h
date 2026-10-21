@@ -69,6 +69,12 @@ class ViewportTools
   isUsingMouse() const;
 
   /**
+   * True while the mouse was over the transform gizmo last frame, or while it is dragged.
+   */
+  NODISCARD bool
+  isGizmoHovered() const;
+
+  /**
    * With Editor.ShowBounds on, adds the bounds of what the selected objects and their
    * children draw: the world box, and the mesh's own box turned with the object. Walks
    * every render item, so it costs nothing only while the setting is off.
@@ -128,6 +134,9 @@ class ViewportTools
 
   void
   renderLights(const Camera& camera);
+
+  void
+  renderCameras(const Scene& scene, const Camera& camera);
 
   void
   manipulateSelection(Scene& scene, const Camera& camera);

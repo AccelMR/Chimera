@@ -15,6 +15,7 @@
 #include "chAnimationClipAsset.h"
 #include "chBox.h"
 #include "chCamera.h"
+#include "chCameraComponent.h"
 #include "chCapsule.h"
 #include "chDebugDraw.h"
 #include "chAngle.h"
@@ -3416,6 +3417,123 @@ TEST_CASE("chCore - Sky lights")
     missing.collectReferences(references);
     REQUIRE(references.size() == 1);
     REQUIRE(references[0] == imageId);
+  }
+}
+
+TEST_CASE("chCore - Camera component")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  REQUIRE(scene.getActiveCamera() == nullptr);
+
+  const SPtr<GameObject> first = scene.createGameObject("First Camera");
+  CameraComponent& firstCamera = first->addComponent<CameraComponent>();
+  REQUIRE(scene.getActiveCamera() == &firstCamera);
+
+  SECTION("The view follows the object")
+  {
+    // Yaw 90 turns local forward (X) to world right (Y); the scale must not matter.
+    first->getTransform().setLocalPosition(Vector3(1.0f, 2.0f, 3.0f));
+    first->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+    first->getTransform().setLocalScale(Vector3(2.0f, 2.0f, 2.0f));
+    scene.updateTransforms();
+
+    Camera camera;
+    firstCamera.fillCamera(camera, 1600.0f, 900.0f);
+    REQUIRE(camera.getPosition().nearEqual(Vector3(1.0f, 2.0f, 3.0f)));
+    REQUIRE(camera.getForwardVector().nearEqual(Vector3::RIGHT, 1e-4f));
+    REQUIRE(camera.getAspectRatio() == Approx(1600.0f / 900.0f));
+    REQUIRE(camera.getFieldOfView().valueDegree() == Approx(90.0f));
+    REQUIRE(camera.getNearClipPlane() == Approx(0.1f));
+    REQUIRE(camera.getFarClipPlane() == Approx(10000.0f));
+  }
+
+  SECTION("Looking straight down keeps the yaw and stops at 89 degrees")
+  {
+    first->getTransform().setLocalRotation(Quaternion(Rotator(-90.0f, 90.0f, 0.0f)));
+    scene.updateTransforms();
+
+    Camera camera;
+    firstCamera.fillCamera(camera, 800.0f, 600.0f);
+    const Vector3 forward = camera.getForwardVector();
+    REQUIRE(forward.z == Approx(-Math::sin(Radian(Degree(89.0f)))).margin(1e-4f));
+    REQUIRE(forward.y > 0.0f);
+    REQUIRE(forward.x == Approx(0.0f).margin(1e-4f));
+  }
+
+  SECTION("Values are kept in range")
+  {
+    firstCamera.setFieldOfView(Degree(500.0f));
+    REQUIRE(firstCamera.getFieldOfView().valueDegree() == Approx(170.0f));
+    firstCamera.setClipPlanes(0.0f, 0.0f);
+    REQUIRE(firstCamera.getNearClipPlane() == Approx(0.001f));
+    REQUIRE(firstCamera.getFarClipPlane() == Approx(0.002f));
+    firstCamera.setOrthographicSize(-1.0f);
+    REQUIRE(firstCamera.getOrthographicSize() > 0.0f);
+  }
+
+  SECTION("The last camera registered is used")
+  {
+    const SPtr<GameObject> second = scene.createGameObject("Second Camera");
+    CameraComponent& secondCamera = second->addComponent<CameraComponent>();
+    REQUIRE(scene.getActiveCamera() == &secondCamera);
+
+    secondCamera.setEnabled(false);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+
+    secondCamera.setEnabled(true);
+    REQUIRE(scene.getActiveCamera() == &secondCamera);
+
+    scene.destroyGameObject(*second);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+
+    scene.destroyGameObject(*first);
+    REQUIRE(scene.getActiveCamera() == nullptr);
+  }
+
+  SECTION("Values are saved")
+  {
+    firstCamera.setProjectionType(CameraProjectionType::Orthographic);
+    firstCamera.setFieldOfView(Degree(60.0f));
+    firstCamera.setClipPlanes(0.5f, 250.0f);
+    firstCamera.setOrthographicSize(12.0f);
+
+    MemoryDataStream stream(256);
+    firstCamera.serialize(stream);
+    stream.seek(0);
+    CameraComponent loaded;
+    REQUIRE(loaded.deserialize(stream));
+    REQUIRE(loaded.getProjectionType() == CameraProjectionType::Orthographic);
+    REQUIRE(loaded.getFieldOfView().valueDegree() == Approx(60.0f));
+    REQUIRE(loaded.getNearClipPlane() == Approx(0.5f));
+    REQUIRE(loaded.getFarClipPlane() == Approx(250.0f));
+    REQUIRE(loaded.getOrthographicSize() == Approx(12.0f));
+
+    // A cut file and an unknown projection are refused.
+    MemoryDataStream cut(256);
+    const uint32 version = CameraComponent::SERIALIZATION_VERSION;
+    cut.write(&version, sizeof(version));
+    cut.seek(0);
+    CameraComponent fromCut;
+    REQUIRE_FALSE(fromCut.deserialize(cut));
+
+    MemoryDataStream badProjection(256);
+    const uint32 projection = 7;
+    const float values[4] = {90.0f, 0.1f, 100.0f, 5.0f};
+    badProjection.write(&version, sizeof(version));
+    badProjection.write(&projection, sizeof(projection));
+    badProjection.write(values, sizeof(values));
+    badProjection.seek(0);
+    CameraComponent fromBad;
+    REQUIRE_FALSE(fromBad.deserialize(badProjection));
+  }
+
+  SECTION("Made from its saved type id")
+  {
+    const UniquePtr<Component> created =
+        ComponentRegister::create(TypeTraits<CameraComponent>::getTypeId());
+    REQUIRE(created != nullptr);
+    REQUIRE(StringView(ComponentRegister::getTypeName(
+                TypeTraits<CameraComponent>::getTypeId())) == "CameraComponent");
   }
 }
 

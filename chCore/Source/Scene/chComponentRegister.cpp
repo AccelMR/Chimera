@@ -7,6 +7,7 @@
  *  Makes components from the type id saved in a file.
  */
 /************************************************************************/
+#include "chCameraComponent.h"
 #include "chComponentRegister.h"
 
 #include "chLightComponent.h"
@@ -43,6 +44,7 @@ getTypes()
     addBuiltIn.operator()<SpotLightComponent>();
     addBuiltIn.operator()<SkyLightComponent>();
     addBuiltIn.operator()<ShapeComponent>();
+    addBuiltIn.operator()<CameraComponent>();
     return builtIn;
   }();
   return types;

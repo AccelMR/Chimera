@@ -16,6 +16,9 @@ cmake_dependent_option(CH_BUILD_CODECS "Build the import codecs" ON "CH_BUILD_ED
 option(CH_BUILD_VULKAN "Build the Vulkan graphics plugin" ON)
 cmake_dependent_option(CH_BUILD_DX12 "Build the Direct3D 12 graphics plugin" ON "WIN32" OFF)
 option(CH_BUILD_TESTS "Build the unit tests" ON)
+option(CH_BUILD_GAME "Build chGame, the runtime that plays a project without the editor" ON)
+set(CH_GAME_DEV_PROJECT "${CMAKE_SOURCE_DIR}/Examples/BaseExample" CACHE PATH
+    "Project chGame opens in a development build when no -project is given")
 option(CH_ENABLE_PROFILER "Build the profiler (CPU scopes, render stats); off for shipping" ON)
 option(CH_ENABLE_DEBUG_DRAW "Build the debug lines (DebugDraw and its pass); off for shipping" ON)
 
@@ -105,6 +108,10 @@ endif()
 
 if(CH_BUILD_EDITOR)
   add_subdirectory(chEditor)
+endif()
+
+if(CH_BUILD_GAME)
+  add_subdirectory(chGame)
 endif()
 
 if(CH_BUILD_TESTS)

@@ -14,6 +14,7 @@
 #include "chAnimationClipAsset.h"
 #include "chAnimationTimelineUI.h"
 #include "chAssetDragDrop.h"
+#include "chCameraComponent.h"
 #include "chEditorScene.h"
 #include "chAssetManager.h"
 #include "chEditorSelection.h"
@@ -152,6 +153,9 @@ InspectorUI::renderInspectorUI()
   renderLightComponent(*selected);
   if (SkyLightComponent* skyLight = selected->getComponent<SkyLightComponent>()) {
     renderSkyLightComponent(*skyLight);
+  }
+  if (CameraComponent* camera = selected->getComponent<CameraComponent>()) {
+    renderCameraComponent(*camera);
   }
   ImGui::EndDisabled();
   ImGui::End();
@@ -579,6 +583,66 @@ InspectorUI::renderSkyLightComponent(SkyLightComponent& skyLight)
     skyLight.setShowSky(bShowSky);
   }
   ImGui::SetItemTooltip("Draws the image behind the scene");
+}
+
+/*
+ * The camera looks along the GameObject's forward axis, so it has no direction of its own
+ * here.
+ */
+void
+InspectorUI::renderCameraComponent(CameraComponent& camera)
+{
+  if (!ImGui::CollapsingHeader(ICON_FA_VIDEO "  Camera###Camera",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+  GameObject& gameObject = *camera.getOwner();
+
+  bool bEnabled = camera.isEnabled();
+  if (ImGui::Checkbox("Enabled##Camera", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
+    camera.setEnabled(bEnabled);
+  }
+  ImGui::SetItemTooltip("A game views the scene through the last enabled camera");
+
+  constexpr const ANSICHAR* kProjectionNames[] = {"Perspective", "Orthographic"};
+  static_assert(sizeof(kProjectionNames) / sizeof(kProjectionNames[0]) ==
+                static_cast<SIZE_T>(CameraProjectionType::COUNT));
+  int32 projection = static_cast<int32>(camera.getProjectionType());
+  if (ImGui::Combo("Projection", &projection, kProjectionNames,
+                   static_cast<int32>(CameraProjectionType::COUNT))) {
+    EditorScene::recordChange(gameObject, "Edit Projection");
+    camera.setProjectionType(static_cast<CameraProjectionType>(projection));
+  }
+
+  if (camera.getProjectionType() == CameraProjectionType::Perspective) {
+    float fieldOfView = camera.getFieldOfView().valueDegree();
+    if (ImGui::SliderFloat("Field of View", &fieldOfView, 1.0f, 170.0f, "%.1f deg")) {
+      EditorScene::recordChange(gameObject, "Edit Field of View");
+      camera.setFieldOfView(Degree(fieldOfView));
+    }
+    ImGui::SetItemTooltip("Horizontal");
+  }
+  else {
+    float size = camera.getOrthographicSize();
+    if (ImGui::DragFloat("Size", &size, 0.05f, 0.001f, 100000.0f)) {
+      EditorScene::recordChange(gameObject, "Edit Size");
+      camera.setOrthographicSize(size);
+    }
+    ImGui::SetItemTooltip("Half the visible height, in world units");
+  }
+
+  float nearPlane = camera.getNearClipPlane();
+  float farPlane = camera.getFarClipPlane();
+  const bool bNearChanged = ImGui::DragFloat("Near Plane", &nearPlane, 0.01f, 0.001f,
+                                             farPlane * 0.5f, "%.3f",
+                                             ImGuiSliderFlags_Logarithmic);
+  const bool bFarChanged = ImGui::DragFloat("Far Plane", &farPlane, 1.0f, nearPlane * 2.0f,
+                                            1000000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+  if (bNearChanged || bFarChanged) {
+    EditorScene::recordChange(gameObject, "Edit Clip Planes");
+    camera.setClipPlanes(nearPlane, farPlane);
+  }
 }
 
 /*

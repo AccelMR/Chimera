@@ -67,9 +67,12 @@ enum class BlendOp {
   Max
 };
 
+/**
+ * Size of a mesh index. Mesh files store the value, so the values are fixed.
+ */
 enum class IndexType : uint32 {
   UInt16 = 0,
-  UInt32,
+  UInt32 = 1,
 
   COUNT
 };

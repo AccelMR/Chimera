@@ -14,6 +14,7 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
+class CameraComponent;
 class ShapeComponent;
 class SkyLightComponent;
 
@@ -53,6 +54,9 @@ class InspectorUI
 
   void
   renderSkyLightComponent(SkyLightComponent& skyLight);
+
+  void
+  renderCameraComponent(CameraComponent& camera);
 
   void
   renderAnimation(ModelComponent& modelComponent);

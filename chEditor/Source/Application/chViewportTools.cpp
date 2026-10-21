@@ -11,6 +11,7 @@
 
 #include "chBox.h"
 #include "chCamera.h"
+#include "chCameraComponent.h"
 #include "chConsoleVariable.h"
 #include "chDebugDraw.h"
 #include "chEditorCamera.h"
@@ -196,6 +197,7 @@ ViewportTools::render(Scene& scene, const ViewportArea& area, bool bHovered)
   handleShortcuts();
   renderToolbar();
   renderLights(camera);
+  renderCameras(scene, camera);
   manipulateSelection(scene, camera);
   renderViewCube();
   handleClickSelection(scene, camera);
@@ -207,6 +209,14 @@ bool
 ViewportTools::isUsingMouse() const
 {
   return ImGuizmo::IsUsing() || ImGuizmo::IsUsingViewManipulate();
+}
+
+/*
+ */
+bool
+ViewportTools::isGizmoHovered() const
+{
+  return ImGuizmo::IsOver();
 }
 
 /*
@@ -546,6 +556,81 @@ ViewportTools::renderLights(const Camera& camera)
 }
 
 /*
+ * The selected camera shows its view as a pyramid (a box when orthographic) cut short at a
+ * fixed size on screen, since its far plane is usually far beyond the scene; the small
+ * triangle marks its top.
+ */
+void
+ViewportTools::renderCameras(const Scene& scene, const Camera& camera)
+{
+  const ViewportArea& area = m_area;
+  ImDrawList& drawList = *ImGui::GetWindowDrawList();
+  for (const CameraComponent* cameraComponent : scene.getCameras()) {
+    GameObject* owner = cameraComponent->getOwner();
+    const bool bSelected = EditorSelection::isSelected(*owner);
+    Camera view;
+    cameraComponent->fillCamera(view, area.width, area.height);
+    const Vector3& position = view.getPosition();
+
+    if (bSelected) {
+      const Vector3 forward = view.getForwardVector();
+      const Vector3 right = view.getRightVector();
+      const Vector3 up = view.getUpVector();
+      const float length = Math::min(
+          camera.getPosition().distance(position) * kArrowScreenScale * 2.0f,
+          cameraComponent->getFarClipPlane());
+      const float aspect = area.height > 0.0f ? area.width / area.height : 1.0f;
+      const bool bPerspective =
+          cameraComponent->getProjectionType() == CameraProjectionType::Perspective;
+      const float halfWidth =
+          bPerspective ? Math::tan(Radian(cameraComponent->getFieldOfView()) * 0.5f) * length
+                       : cameraComponent->getOrthographicSize() * aspect;
+      const float halfHeight = halfWidth / aspect;
+
+      const Vector3 farCenter = position + forward * length;
+      const Vector3 farCorners[4] = {farCenter - right * halfWidth + up * halfHeight,
+                                     farCenter + right * halfWidth + up * halfHeight,
+                                     farCenter + right * halfWidth - up * halfHeight,
+                                     farCenter - right * halfWidth - up * halfHeight};
+      for (uint32 i = 0; i < 4; ++i) {
+        const Vector3 nearCorner =
+            bPerspective ? position : farCorners[i] - forward * length;
+        drawWorldLine(drawList, camera, area, nearCorner, farCorners[i], kShapeColor);
+        drawWorldLine(drawList, camera, area, farCorners[i], farCorners[(i + 1) % 4],
+                      kShapeColor);
+        if (!bPerspective) {
+          drawWorldLine(drawList, camera, area, nearCorner,
+                        farCorners[(i + 1) % 4] - forward * length, kShapeColor);
+        }
+      }
+      const Vector3 topCenter = farCenter + up * halfHeight;
+      const Vector3 topTip = topCenter + up * (halfHeight * 0.4f);
+      drawWorldLine(drawList, camera, area, farCorners[0] * 0.7f + farCorners[1] * 0.3f,
+                    topTip, kShapeColor);
+      drawWorldLine(drawList, camera, area, farCorners[0] * 0.3f + farCorners[1] * 0.7f,
+                    topTip, kShapeColor);
+    }
+
+    ImVec2 icon;
+    if (!toScreen(camera, area, position, icon)) {
+      continue;
+    }
+    // A body with a lens on its right, like a film camera seen from the side.
+    const float radius = ImGui::GetFontSize() * kLightIconRadius;
+    const ImU32 outline = bSelected ? kSelectedIconOutlineColor : kIconOutlineColor;
+    const ImVec2 bodyMin(icon.x - radius * 1.1f, icon.y - radius * 0.7f);
+    const ImVec2 bodyMax(icon.x + radius * 0.5f, icon.y + radius * 0.7f);
+    const ImVec2 lensBack(icon.x + radius * 0.5f, icon.y);
+    const ImVec2 lensTop(icon.x + radius * 1.2f, icon.y - radius * 0.6f);
+    const ImVec2 lensBottom(icon.x + radius * 1.2f, icon.y + radius * 0.6f);
+    drawList.AddRectFilled(bodyMin, bodyMax, kIconRayColor, radius * 0.2f);
+    drawList.AddRect(bodyMin, bodyMax, outline, radius * 0.2f, 0, bSelected ? 2.5f : 1.5f);
+    drawList.AddTriangleFilled(lensBack, lensTop, lensBottom, kIconRayColor);
+    drawList.AddTriangle(lensBack, lensTop, lensBottom, outline, bSelected ? 2.5f : 1.5f);
+  }
+}
+
+/*
  */
 void
 ViewportTools::manipulateSelection(Scene& scene, const Camera& camera)
@@ -731,7 +816,7 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
   const ViewportArea& area = m_area;
   const ImVec2 mouse = ImGui::GetMousePos();
 
-  // Light icons first: they sit in front of what they light.
+  // Light and camera icons first: they sit in front of what is behind them.
   GameObject* picked = nullptr;
   const float pickRadius = ImGui::GetFontSize() * kLightIconPickRadius;
   float nearestIcon = pickRadius * pickRadius;
@@ -746,6 +831,20 @@ ViewportTools::handleClickSelection(Scene& scene, const Camera& camera)
     if (distanceSquared <= nearestIcon) {
       nearestIcon = distanceSquared;
       picked = light->owner;
+    }
+  }
+  for (const CameraComponent* cameraComponent : scene.getCameras()) {
+    ImVec2 icon;
+    GameObject* owner = cameraComponent->getOwner();
+    if (!toScreen(camera, area, owner->getTransform().getWorldPosition(), icon)) {
+      continue;
+    }
+    const float dx = icon.x - mouse.x;
+    const float dy = icon.y - mouse.y;
+    const float distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared <= nearestIcon) {
+      nearestIcon = distanceSquared;
+      picked = owner;
     }
   }
 

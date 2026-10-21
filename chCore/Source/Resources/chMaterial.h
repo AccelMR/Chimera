@@ -20,15 +20,16 @@ class TextureAsset;
 /**
  * Texture inputs of a metallic-roughness material. Their channels follow glTF:
  * MetallicRoughness keeps roughness in green and metallic in blue, Occlusion reads red, and
- * Normal is a tangent space map with green pointing up the image.
+ * Normal is a tangent space map with green pointing up the image. Material files store one
+ * texture per value in this order, so the values are fixed.
  */
 enum class MaterialTexture : uint32
 {
-  BaseColor,
-  MetallicRoughness,
-  Normal,
-  Emissive,
-  Occlusion,
+  BaseColor = 0,
+  MetallicRoughness = 1,
+  Normal = 2,
+  Emissive = 3,
+  Occlusion = 4,
 
   COUNT
 };

@@ -65,7 +65,7 @@ BaseApplication::launch(int32 argc,
   try {
     // The log file lives in the project's Saved folder, so the project (-project) must
     // be known before the file is opened.
-    EnginePaths::initialize();
+    EnginePaths::initialize(info.defaultProject);
     const Path logFile = EnginePaths::getLogDirectory().join(Path(info.logFileName));
     logger.setFileOutput(true, logFile.toString());
 

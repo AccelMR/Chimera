@@ -19,6 +19,7 @@
 #include "chRenderItem.h"
 
 namespace chEngineSDK {
+class CameraComponent;
 class Frustum;
 
 /**
@@ -198,6 +199,28 @@ class CH_CORE_EXPORT Scene : public Object
   getActiveSkyLight() const;
 
   /**
+   * Called by CameraComponent while it is registered.
+   */
+  void
+  addCamera(CameraComponent& camera);
+
+  void
+  removeCamera(CameraComponent& camera);
+
+  /**
+   * The camera a game views the scene through: the last one registered, null when there
+   * is none.
+   */
+  NODISCARD FORCEINLINE const CameraComponent*
+  getActiveCamera() const { return m_cameras.empty() ? nullptr : m_cameras.back(); }
+
+  /**
+   * Every registered camera, in registration order.
+   */
+  NODISCARD FORCEINLINE const Vector<CameraComponent*>&
+  getCameras() const { return m_cameras; }
+
+  /**
    * Lines the scene's components draw in update(). Cleared when update() starts.
    */
   NODISCARD FORCEINLINE DebugDraw&
@@ -227,6 +250,8 @@ class CH_CORE_EXPORT Scene : public Object
   Vector<SkyLightItem> m_skyLights;
   Vector<uint32> m_freeSkyLights;
   uint32 m_nextSkyLightOrder = 0;
+  // In registration order.
+  Vector<CameraComponent*> m_cameras;
   DebugDraw m_debugDraw;
   DebugDraw m_fixedDebugDraw;
 };

@@ -19,42 +19,50 @@
 #include "chVector4.h"
 
 namespace chEngineSDK {
+/**
+ * What a vertex attribute holds. Mesh files store the value, so every value is fixed: new
+ * types go at the end and none is ever reordered.
+ */
 enum class VertexAttributeType : uint32 {
-  Position,
-  Normal,
-  Color,
-  TexCoord0,
-  TexCoord1,
-  Tangent,
-  Bitangent,
-  BoneIndices,
-  BoneWeights,
-  Custom,
+  Position = 0,
+  Normal = 1,
+  Color = 2,
+  TexCoord0 = 3,
+  TexCoord1 = 4,
+  Tangent = 5,
+  Bitangent = 6,
+  BoneIndices = 7,
+  BoneWeights = 8,
+  Custom = 9,
 
   COUNT
 };
 
+/**
+ * Data format of a vertex attribute. Mesh files store the value, so every value is fixed:
+ * new formats go at the end and none is ever reordered.
+ */
 enum class VertexFormat : uint32 {
-  Float,
-  Float2,
-  Float3,
-  Float4,
-  Int,
-  Int2,
-  Int3,
-  Int4,
-  UInt,
-  UInt2,
-  UInt3,
-  UInt4,
-  Byte4,
-  Byte4Normalized,
-  UByte4,
-  UByte4Normalized,
-  Short2,
-  Short2Normalized,
-  Short4,
-  Short4Normalized,
+  Float = 0,
+  Float2 = 1,
+  Float3 = 2,
+  Float4 = 3,
+  Int = 4,
+  Int2 = 5,
+  Int3 = 6,
+  Int4 = 7,
+  UInt = 8,
+  UInt2 = 9,
+  UInt3 = 10,
+  UInt4 = 11,
+  Byte4 = 12,
+  Byte4Normalized = 13,
+  UByte4 = 14,
+  UByte4Normalized = 15,
+  Short2 = 16,
+  Short2Normalized = 17,
+  Short4 = 18,
+  Short4Normalized = 19,
 
   COUNT
 };

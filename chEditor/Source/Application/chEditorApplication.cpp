@@ -627,13 +627,22 @@ EditorApplication::renderDockSpace()
 void
 EditorApplication::renderViewportPanel()
 {
+  // ImGuizmo only starts a drag while no ImGui item is hovered, so the button that takes the
+  // scene's clicks steps aside while the mouse is over the gizmo; the panel must not move
+  // with that drag either.
+  const bool bGizmoHasMouse = m_viewportTools->isGizmoHovered();
+  ImGuiWindowFlags windowFlags =
+      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+      ImGuiWindowFlags_NoCollapse;
+  if (bGizmoHasMouse) {
+    windowFlags |= ImGuiWindowFlags_NoMove;
+  }
+
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   // The wheel moves the camera, not the panel; there is no close button, the scene is always
   // there.
-  const bool bOpen = ImGui::Begin(ICON_FA_DESKTOP "  Viewport###Viewport", nullptr,
-                                  ImGuiWindowFlags_NoScrollbar |
-                                      ImGuiWindowFlags_NoScrollWithMouse |
-                                      ImGuiWindowFlags_NoCollapse);
+  const bool bOpen =
+      ImGui::Begin(ICON_FA_DESKTOP "  Viewport###Viewport", nullptr, windowFlags);
   ImGui::PopStyleVar();
   if (!bOpen) {
     ImGui::End();
@@ -643,11 +652,20 @@ EditorApplication::renderViewportPanel()
   const ImVec2 min = ImGui::GetCursorScreenPos();
   const ImVec2 available = ImGui::GetContentRegionAvail();
   const ImVec2 size(Math::max(available.x, 1.0f), Math::max(available.y, 1.0f));
-  // Takes the clicks, so a floating panel does not move when the scene is dragged.
-  ImGui::InvisibleButton("##Scene", size,
-                         ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
-                             ImGuiButtonFlags_MouseButtonMiddle);
-  m_bViewportHovered = ImGui::IsItemHovered();
+  if (bGizmoHasMouse) {
+    ImGui::Dummy(size);
+    m_bViewportHovered =
+        ImGui::IsWindowHovered() &&
+        ImGui::IsMouseHoveringRect(min, ImVec2(min.x + size.x, min.y + size.y));
+  }
+  else {
+    // Takes the clicks, so a floating panel does not move when the scene is dragged.
+    ImGui::InvisibleButton("##Scene", size,
+                           ImGuiButtonFlags_MouseButtonLeft |
+                               ImGuiButtonFlags_MouseButtonRight |
+                               ImGuiButtonFlags_MouseButtonMiddle);
+    m_bViewportHovered = ImGui::IsItemHovered();
+  }
   m_viewportArea = {.x = min.x, .y = min.y, .width = size.x, .height = size.y};
 
   if (ImGui::BeginDragDropTarget()) {
