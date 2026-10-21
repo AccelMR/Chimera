@@ -88,7 +88,7 @@ TextureAsset::serialize(SPtr<DataStream> stream) {
                                   .height = m_height,
                                   .format = m_format,
                                   .mipLevels = m_mipLevels};
-  stream << header;
+  *stream << header;
 
   stream->write(m_textureData.data(), m_textureData.size());
   CH_LOG_DEBUG(TextureAssetLog, "Serialized texture asset {0} with size {1}",

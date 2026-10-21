@@ -18,6 +18,7 @@
 #include "chStringUtils.h"
 
 #if USING(CH_PLATFORM_WIN32)
+# include "chUnicode.h"
 # include "Win32/chWindows.h"
 #else
 # include <dlfcn.h>
@@ -35,14 +36,14 @@ lastErrorMessage()
   const DWORD code = GetLastError();
   String message = StringUtils::format("error {0}", static_cast<uint32>(code));
 
-  LPSTR buffer = nullptr;
+  LPWSTR buffer = nullptr;
   const DWORD length =
-      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
                          FORMAT_MESSAGE_IGNORE_INSERTS,
-                     nullptr, code, 0, reinterpret_cast<LPSTR>(&buffer), 0, nullptr);
+                     nullptr, code, 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
   if (length > 0 && buffer) {
     message += ": ";
-    message += StringUtils::trim(String(buffer, length));
+    message += StringUtils::trim(UTF8::fromWide(WString(buffer, length)));
     LocalFree(buffer);
   }
   return message;
@@ -66,8 +67,9 @@ DynamicLibrary::DynamicLibrary(Path path)
 #if USING(CH_PLATFORM_WIN32)
   // LoadLibraryEx needs '\' separators: with '/' the dependencies of a library given by
   // absolute path are not searched next to it.
-  const String windowsPath = StringUtils::replaceAllChars(m_path.toString(), '/', '\\');
-  m_handle = LoadLibraryExA(windowsPath.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+  const WString windowsPath =
+      UTF8::toWide(StringUtils::replaceAllChars(m_path.toString(), '/', '\\'));
+  m_handle = LoadLibraryExW(windowsPath.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
   m_handle = dlopen(m_path.toString().c_str(), RTLD_LAZY | RTLD_GLOBAL);
 #endif

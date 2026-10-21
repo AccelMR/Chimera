@@ -18,6 +18,12 @@
 
 #include "chStringUtils.h"
 
+#if USING(CH_PLATFORM_WIN32)
+# include "chUnicode.h"
+# include "Win32/chWindows.h"
+# include <shellapi.h>
+#endif
+
 namespace chEngineSDK {
 
 namespace {
@@ -28,6 +34,11 @@ struct CommandLineData
   UnorderedSet<String> flags;
   int32 argc = 0;
   const ANSICHAR* const* argv = nullptr;
+#if USING(CH_PLATFORM_WIN32)
+  // UTF-8 copies of the process arguments that getArgv points into.
+  Vector<String> processArgs;
+  Vector<const ANSICHAR*> processArgv;
+#endif
 };
 
 NODISCARD CommandLineData&
@@ -42,7 +53,7 @@ getData() noexcept
 /*
  */
 void
-CommandLine::initialize(int32 argc, const ANSICHAR* const* argv)
+CommandLine::parse(int32 argc, const ANSICHAR* const* argv)
 {
   CommandLineData& data = getData();
   data.values.clear();
@@ -68,6 +79,35 @@ CommandLine::initialize(int32 argc, const ANSICHAR* const* argv)
           String(arg.substr(equals + 1));
     }
   }
+}
+
+/*
+ */
+void
+CommandLine::initialize(int32 argc, const ANSICHAR* const* argv)
+{
+#if USING(CH_PLATFORM_WIN32)
+  int32 wideCount = 0;
+  LPWSTR* wideArgs = CommandLineToArgvW(GetCommandLineW(), &wideCount);
+  if (wideArgs) {
+    CommandLineData& data = getData();
+    data.processArgs.clear();
+    data.processArgs.reserve(static_cast<SIZE_T>(wideCount));
+    for (int32 i = 0; i < wideCount; ++i) {
+      data.processArgs.push_back(UTF8::fromWide(WString(wideArgs[i])));
+    }
+    LocalFree(wideArgs);
+
+    data.processArgv.clear();
+    data.processArgv.reserve(data.processArgs.size());
+    for (const String& arg : data.processArgs) {
+      data.processArgv.push_back(arg.c_str());
+    }
+    parse(wideCount, data.processArgv.data());
+    return;
+  }
+#endif
+  parse(argc, argv);
 }
 
 /*

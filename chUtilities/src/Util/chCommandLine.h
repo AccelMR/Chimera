@@ -35,18 +35,26 @@ class CH_UTILITY_EXPORT CommandLine
 {
  public:
   /**
-   * Replaces any options read before. argv is kept for getArgv, so it must live as long
-   * as the program, as main's argv does.
+   * Reads the arguments of the running process, given main's argc and argv. On Windows
+   * argv is in the system code page, so the arguments are read again as UTF-16 and kept
+   * as UTF-8.
    */
   static void
   initialize(int32 argc, const ANSICHAR* const* argv);
+
+  /**
+   * Replaces any options read before with these UTF-8 arguments. argv is kept for
+   * getArgv, so it must live as long as the program, as main's argv does.
+   */
+  static void
+  parse(int32 argc, const ANSICHAR* const* argv);
 
   NODISCARD static String
   getValue(const String& key, const String& defaultValue = "");
 
   /**
    * Returns nullptr when the option is missing, so "-Key=" (an empty value) can be told
-   * apart from no option. The pointer stays valid until the next initialize.
+   * apart from no option. The pointer stays valid until the next initialize or parse.
    */
   NODISCARD static const String*
   tryGetValue(const String& key);

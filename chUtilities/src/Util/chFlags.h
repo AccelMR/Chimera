@@ -21,16 +21,16 @@ namespace chEngineSDK {
  * 
  * Sample usage:
  *
- * enum class ACCESS_MODE: FlagAccesMode {
- *   kINVALID = 0x00,
- *   kREAD = 0x01,
- *   kWRITE = 0x02
+ * enum class AccessMode : uint32 {
+ *   None = 0x00,
+ *   Read = 0x01,
+ *   Write = 0x02
  * };
- * using FileAccessModeFlag = Flags<ACCESS_MODE>;
- * CH_FLAGS_OPERATORS(ACCESS_MODE);
+ * using AccessModeFlag = Flags<AccessMode>;
+ * CH_FLAGS_OPERATORS(AccessMode);
  *
- * FileAccessModeFlag f;
- * f.isSet(ACCESS_MODE::kINVALID);
+ * AccessModeFlag f;
+ * f.isSet(AccessMode::Read);
  *
  */
 template<typename Enum, typename Storage = uint32>

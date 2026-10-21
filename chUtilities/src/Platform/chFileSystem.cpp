@@ -70,6 +70,22 @@ logError(const String& action, const Path& path, const std::error_code& error)
            error.message());
 }
 
+// On Windows std::filesystem reads and gives narrow text in the system code page, not
+// UTF-8, so every conversion goes through char8_t.
+fs::path
+toFsPath(StringView text)
+{
+  return fs::path(
+      std::u8string_view(reinterpret_cast<const char8_t*>(text.data()), text.size()));
+}
+
+String
+fromFsPath(const fs::path& path)
+{
+  const std::u8string text = path.generic_u8string();
+  return String(reinterpret_cast<const ANSICHAR*>(text.data()), text.size());
+}
+
 String
 normalize(const fs::path& path)
 {
@@ -80,7 +96,7 @@ normalize(const fs::path& path)
   if (!result.has_filename() && result.has_relative_path()) {
     result = result.parent_path();
   }
-  return result.generic_string();
+  return fromFsPath(result);
 }
 
 // True when normalize() would return the same text: no "." or ".." segment, no
@@ -179,7 +195,7 @@ splitVirtualPath(const Path& path, VirtualPath& output)
 
   // Normalized first so "/Game/../x" cannot reach outside the mount.
   if (!isNormalized(text)) {
-    output.storage = normalize(fs::path(path.toString()));
+    output.storage = normalize(toFsPath(path.toString()));
     text = output.storage;
     if (text.size() < 2 || text[0] != '/') {
       return false;
@@ -225,13 +241,13 @@ toDiskPath(const Path& path)
     }
   }
 
-  const fs::path fsPath(text);
+  const fs::path fsPath = toFsPath(text);
   if (fsPath.is_absolute()) {
     return normalize(fsPath);
   }
 
   if (!baseDirectory().empty()) {
-    return normalize(fs::path(baseDirectory()) / fsPath);
+    return normalize(toFsPath(baseDirectory()) / fsPath);
   }
 
   std::error_code error;
@@ -261,7 +277,7 @@ resolveVirtualPath(const VirtualPath& virtualPath, Access access)
     if (checkDisk) {
       String candidate = joinText(mount.root, virtualPath.rest);
       std::error_code error;
-      if (fs::exists(fs::path(candidate), error)) {
+      if (fs::exists(toFsPath(candidate), error)) {
         return candidate;
       }
     }
@@ -353,7 +369,7 @@ forEachEntry(const fs::path& directory,
   }
 
   if (error) {
-    logError("list", Path(directory.generic_string()), error);
+    logError("list", Path(fromFsPath(directory)), error);
   }
   return true;
 }
@@ -383,10 +399,10 @@ forEachVirtualEntry(const VirtualPath& virtualPath,
     }
 
     const String layerDirectory = joinText(mount.root, virtualPath.rest);
-    listedAny |= forEachEntry(fs::path(layerDirectory), recursive,
+    listedAny |= forEachEntry(toFsPath(layerDirectory), recursive,
                               [&](const fs::directory_entry& entry) {
       // Entries are built from layerDirectory, so their text starts with it.
-      const String entryText = entry.path().generic_string();
+      const String entryText = fromFsPath(entry.path());
       StringView relative = StringView(entryText).substr(layerDirectory.size());
       if (!relative.empty() && relative[0] == '/') {
         relative.remove_prefix(1);
@@ -422,8 +438,8 @@ forEachChild(const Path& path,
   }
 
   const String directory = toDiskPath(path);
-  if (!forEachEntry(fs::path(directory), recursive, [&](const fs::directory_entry& entry) {
-        func(Path(entry.path().generic_string()), entry);
+  if (!forEachEntry(toFsPath(directory), recursive, [&](const fs::directory_entry& entry) {
+        func(Path(fromFsPath(entry.path())), entry);
       })) {
     logError("FileSystem: '" + path.toString() + "' is not a directory");
   }
@@ -509,13 +525,13 @@ Path
 FileSystem::getExecutableDirectory()
 {
 #if USING(CH_PLATFORM_WIN32)
-  std::wstring buffer(MAX_PATH, L'\0');
+  WString buffer(MAX_PATH, L'\0');
   DWORD length = 0;
   while (true) {
     length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
     if (length == 0) {
-      logError("FileSystem: GetModuleFileNameW failed with error " +
-               std::to_string(GetLastError()));
+      CH_LOG_ERROR(FileSystemLog, "FileSystem: GetModuleFileNameW failed with error {0}",
+                   static_cast<uint32>(GetLastError()));
       return Path();
     }
     if (length < buffer.size()) {
@@ -541,8 +557,8 @@ FileSystem::getExecutableDirectory()
 Path
 FileSystem::toRelativePath(const Path& path)
 {
-  const fs::path realPath(toRealPath(path, Access::Read));
-  return Path(realPath.lexically_relative(fs::path(toDiskPath(Path(".")))).generic_string());
+  const fs::path realPath = toFsPath(toRealPath(path, Access::Read));
+  return Path(fromFsPath(realPath.lexically_relative(toFsPath(toDiskPath(Path("."))))));
 }
 
 bool
@@ -555,11 +571,11 @@ FileSystem::renameFile(const Path& oldPath, const Path& newPath)
   }
 
   std::error_code error;
-  if (!fs::is_regular_file(fs::path(oldRealPath), error)) {
+  if (!fs::is_regular_file(toFsPath(oldRealPath), error)) {
     return false;
   }
 
-  fs::rename(fs::path(oldRealPath), fs::path(newRealPath), error);
+  fs::rename(toFsPath(oldRealPath), toFsPath(newRealPath), error);
   if (error) {
     logError("rename", oldPath, error);
     return false;
@@ -572,7 +588,7 @@ FileSystem::removeFile(const Path& path)
 {
   const String realPath = toRealPath(path, Access::Write);
   std::error_code error;
-  if (realPath.empty() || !fs::is_regular_file(fs::path(realPath), error)) {
+  if (realPath.empty() || !fs::is_regular_file(toFsPath(realPath), error)) {
     return false;
   }
   return remove(path);
@@ -587,26 +603,26 @@ FileSystem::absolutePath(const Path& path)
 Path
 FileSystem::relativePath(const Path& basePath, const Path& path)
 {
-  const fs::path relative = fs::path(toRealPath(path, Access::Read))
-                                .lexically_relative(fs::path(toRealPath(basePath, Access::Read)));
+  const fs::path relative = toFsPath(toRealPath(path, Access::Read))
+                                .lexically_relative(toFsPath(toRealPath(basePath, Access::Read)));
   if (relative.empty()) {
     return Path();
   }
-  return Path(relative.generic_string());
+  return Path(fromFsPath(relative));
 }
 
 bool
 FileSystem::isFile(const Path& path)
 {
   std::error_code error;
-  return fs::is_regular_file(fs::path(toRealPath(path, Access::Read)), error);
+  return fs::is_regular_file(toFsPath(toRealPath(path, Access::Read)), error);
 }
 
 bool
 FileSystem::isDirectory(const Path& path)
 {
   std::error_code error;
-  return fs::is_directory(fs::path(toRealPath(path, Access::Read)), error);
+  return fs::is_directory(toFsPath(toRealPath(path, Access::Read)), error);
 }
 
 bool
@@ -624,7 +640,7 @@ FileSystem::createDirectory(const Path& path)
   }
 
   std::error_code error;
-  fs::create_directory(fs::path(realPath), error);
+  fs::create_directory(toFsPath(realPath), error);
   if (error) {
     logError("create directory", path, error);
     return false;
@@ -641,7 +657,7 @@ FileSystem::createDirectories(const Path& path)
   }
 
   std::error_code error;
-  fs::create_directories(fs::path(realPath), error);
+  fs::create_directories(toFsPath(realPath), error);
   if (error) {
     logError("create directories", path, error);
     return false;
@@ -653,7 +669,7 @@ bool
 FileSystem::exists(const Path& path)
 {
   std::error_code error;
-  return fs::exists(fs::path(toRealPath(path, Access::Read)), error);
+  return fs::exists(toFsPath(toRealPath(path, Access::Read)), error);
 }
 
 SPtr<DataStream>
@@ -664,12 +680,9 @@ FileSystem::openFile(const Path& path, bool readOnly /*= true*/)
     return nullptr;
   }
 
-  AccesModeFlag accessMode(ACCESS_MODE::kREAD);
-  if (!readOnly) {
-    accessMode.set(ACCESS_MODE::kWRITE);
-  }
-
-  auto stream = chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode, true);
+  const AccessModeFlag accessMode =
+      readOnly ? AccessModeFlag(AccessMode::Read) : AccessMode::Read | AccessMode::Write;
+  auto stream = chMakeShared<FileDataStream>(Path(std::move(realPath)), accessMode);
   if (!stream->isOpen()) {
     logError("FileSystem: failed to open '" + path.toString() + "'");
     return nullptr;
@@ -686,14 +699,13 @@ FileSystem::createAndOpenFile(const Path& path)
   }
 
   std::error_code error;
-  fs::create_directories(fs::path(realPath).parent_path(), error);
+  fs::create_directories(toFsPath(realPath).parent_path(), error);
   if (error) {
     logError("create directories for", path, error);
     return nullptr;
   }
 
-  auto stream =
-      chMakeShared<FileDataStream>(Path(std::move(realPath)), ACCESS_MODE::kWRITE, true);
+  auto stream = chMakeShared<FileDataStream>(Path(std::move(realPath)), AccessMode::Write);
   if (!stream->isOpen()) {
     logError("FileSystem: failed to create '" + path.toString() + "'");
     return nullptr;
@@ -701,19 +713,20 @@ FileSystem::createAndOpenFile(const Path& path)
   return stream;
 }
 
-void
-FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path)
+bool
+FileSystem::dumpMemStreamIntoFile(const SPtr<DataStream>& source, const Path& path)
 {
   String realPath = toRealPath(path, Access::Write);
   if (realPath.empty()) {
-    return;
+    return false;
   }
 
-  // The constructor writes the whole memory stream and the destructor closes the file.
-  FileDataStream fileStream(Path(std::move(realPath)), memStream);
+  FileDataStream fileStream(Path(std::move(realPath)), source);
   if (!fileStream.isOpen()) {
     logError("FileSystem: failed to write '" + path.toString() + "'");
+    return false;
   }
+  return true;
 }
 
 bool
@@ -725,7 +738,7 @@ FileSystem::remove(const Path& path)
   }
 
   std::error_code error;
-  const bool removed = fs::remove(fs::path(realPath), error);
+  const bool removed = fs::remove(toFsPath(realPath), error);
   if (error) {
     logError("remove", path, error);
     return false;
@@ -742,7 +755,7 @@ FileSystem::removeAll(const Path& path)
   }
 
   std::error_code error;
-  const std::uintmax_t removedCount = fs::remove_all(fs::path(realPath), error);
+  const uint64 removedCount = fs::remove_all(toFsPath(realPath), error);
   if (error) {
     logError("remove all", path, error);
     return false;

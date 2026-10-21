@@ -142,77 +142,46 @@ class CH_UTILITY_EXPORT FileSystem
   static bool
   createDirectories(const Path& path);
 
-  /**
-   *   Returns true if a path exist, doesn't matter if it is file or directory.
-   **/
-  static bool
+  NODISCARD static bool
   exists(const Path& path);
 
   /**
-   *   Opens a file and positions the pointer to the end of the file.
-   *
-   * @param path
-   *    The path where the file is.
-   *
-   * @param readOnly = true
-   *    Tue if this file will be only for reading.
-   *
-   * @return SPtr<DataStream>
-   *  Shared pointer to the Data stream related with this Stream.
+   *   Opens an existing file with the read point at its start. readOnly false opens it
+   *   for reading and writing without emptying it.
    **/
-  static SPtr<DataStream>
+  NODISCARD static SPtr<DataStream>
   openFile(const Path& path, bool readOnly = true);
 
   /**
-   *   Creates and opens a file. If file exist this will override all information.
-   *   If the directory doesn't exist, it will be created.
-   *
-   * @param path
-   *    The path where the file is going to be located.
-   *
-   * @return SPtr<DataStream>
-   *  Pointer to the created file, nullptr if could not be created.
+   *   Creates a file, or empties it if it exists, with every missing parent directory.
+   *   Returns nullptr if it could not be created.
    **/
-  static SPtr<DataStream>
+  NODISCARD static SPtr<DataStream>
   createAndOpenFile(const Path& path);
 
   /**
-   *   Dumps the information from a MemoryDataStream into a FileStream.
-   *
-   * @param memStream
-   *    Source to take data.
-   *
-   * @param path
-   *    Where to dumps the data.
+   *   Writes the whole source stream, from its start, into a new or emptied file.
    **/
-  static void
-  dumpMemStreamIntoFile(const SPtr<DataStream>& memStream, const Path& path);
+  NODISCARD static bool
+  dumpMemStreamIntoFile(const SPtr<DataStream>& source, const Path& path);
 
   /**
    *   Removes a file or an empty directory. Fails on a directory that is not empty.
-   *
-   * @return bool
-   *    True if it could be deleted.
    **/
   static bool
   remove(const Path& path);
 
   /**
-   *   Removes a file or a directory with everything inside it.
-   *
-   * @return bool
-   *    True if something was deleted.
+   *   Removes a file or a directory with everything inside it. Returns true if something
+   *   was deleted.
    **/
   static bool
   removeAll(const Path& path);
 
   /**
-   *   Reads a whole file into a byte vector.
-   *
-   * @return Vector<uint8>
-   *  The file bytes, empty if the file could not be read.
+   *   Reads a whole file. Empty if the file could not be read.
    **/
-  static Vector<uint8>
+  NODISCARD static Vector<uint8>
   fastRead(const Path& path);
 
   /**

@@ -2076,13 +2076,13 @@ TEST_CASE("chUtilities - MemoryDataStream") {
     auto memory = chMakeShared<MemoryDataStream>(3);
     const uint8 bytes[3] = {'a', 'b', 'c'};
     memory->write(bytes, sizeof(bytes));
-    FileSystem::dumpMemStreamIntoFile(memory, memoryFile);
+    REQUIRE(FileSystem::dumpMemStreamIntoFile(memory, memoryFile));
 
     SPtr<DataStream> fromMemory = FileSystem::openFile(memoryFile);
     REQUIRE(fromMemory);
     REQUIRE(fromMemory->getAsString() == "abc");
 
-    FileSystem::dumpMemStreamIntoFile(fromMemory, fileFile);
+    REQUIRE(FileSystem::dumpMemStreamIntoFile(fromMemory, fileFile));
     fromMemory->close();
     SPtr<DataStream> fromFile = FileSystem::openFile(fileFile);
     REQUIRE(fromFile);
@@ -2098,6 +2098,145 @@ TEST_CASE("chUtilities - MemoryDataStream") {
     REQUIRE_FALSE(FileDataStream(Path("chStreamTest_missing.bin")).isOpen());
     REQUIRE(FileSystem::openFile(Path("chStreamTest_missing.bin")) == nullptr);
   }
+
+  SECTION("a moved stream keeps the memory and leaves the source empty") {
+    MemoryDataStream source(3);
+    const uint8 bytes[3] = {4, 5, 6};
+    source.write(bytes, sizeof(bytes));
+
+    MemoryDataStream moved(std::move(source));
+    REQUIRE(source.size() == 0);
+    REQUIRE(source.getStartPtr() == nullptr);
+    REQUIRE(moved.size() == 3);
+
+    MemoryDataStream assigned;
+    assigned = std::move(moved);
+    assigned.seek(0);
+    uint8 target[3] = {};
+    REQUIRE(assigned.read(target, sizeof(target)) == 3);
+    REQUIRE(target[2] == 6);
+  }
+
+  SECTION("seek stops at the end") {
+    MemoryDataStream stream(4);
+    stream.seek(4);
+    REQUIRE(stream.tell() == 4);
+    REQUIRE(stream.isAtEnd());
+    uint8 target = 0;
+    REQUIRE(stream.read(&target, 1) == 0);
+  }
+
+  SECTION("a closed stream reads and writes nothing") {
+    MemoryDataStream stream(4);
+    stream.close();
+    uint8 value = 1;
+    REQUIRE(stream.size() == 0);
+    REQUIRE(stream.read(&value, 1) == 0);
+    REQUIRE(stream.write(&value, 1) == 0);
+  }
+}
+
+TEST_CASE("chUtilities - FileDataStream") {
+  const Path file("chStreamTest_fileStream.bin");
+  {
+    SPtr<DataStream> output = FileSystem::createAndOpenFile(file);
+    REQUIRE(output);
+    const uint8 bytes[4] = {1, 2, 3, 4};
+    REQUIRE(output->write(bytes, sizeof(bytes)) == sizeof(bytes));
+  }
+
+  SECTION("isAtEnd is true once the last byte is read, before any read fails") {
+    SPtr<DataStream> input = FileSystem::openFile(file);
+    REQUIRE(input);
+    REQUIRE(input->size() == 4);
+    REQUIRE_FALSE(input->isAtEnd());
+    uint8 target[4] = {};
+    REQUIRE(input->read(target, sizeof(target)) == 4);
+    REQUIRE(input->isAtEnd());
+    REQUIRE(target[3] == 4);
+  }
+
+  SECTION("a read only stream writes nothing") {
+    SPtr<DataStream> input = FileSystem::openFile(file);
+    REQUIRE(input);
+    const uint8 value = 9;
+    REQUIRE(input->write(&value, 1) == 0);
+  }
+
+  SECTION("a read and write stream writes after a read reached the end") {
+    SPtr<DataStream> stream = FileSystem::openFile(file, false);
+    REQUIRE(stream);
+    uint8 target[8] = {};
+    REQUIRE(stream->read(target, sizeof(target)) == 4);
+    stream->seek(0);
+    const uint8 value = 7;
+    REQUIRE(stream->write(&value, 1) == 1);
+    stream->close();
+
+    SPtr<DataStream> input = FileSystem::openFile(file);
+    REQUIRE(input);
+    REQUIRE(input->size() == 4);
+    REQUIRE(input->read(target, 4) == 4);
+    REQUIRE(target[0] == 7);
+    REQUIRE(target[1] == 2);
+  }
+
+  SECTION("cloning a write stream does not empty the file") {
+    SPtr<DataStream> output = FileSystem::openFile(file, false);
+    REQUIRE(output);
+    SPtr<DataStream> clone = output->clone();
+    REQUIRE(clone->size() == 4);
+    REQUIRE_FALSE(clone->isWriteable());
+  }
+
+  SECTION("a closed stream reads nothing") {
+    SPtr<DataStream> input = FileSystem::openFile(file);
+    REQUIRE(input);
+    input->close();
+    uint8 target = 0;
+    REQUIRE(input->read(&target, 1) == 0);
+    REQUIRE(input->tell() == 0);
+    REQUIRE(input->isAtEnd());
+  }
+
+  REQUIRE(FileSystem::remove(file));
+}
+
+TEST_CASE("chUtilities - Paths outside ASCII") {
+  // "Jos\xC3\xA9" is "Jose" with an acute e, written as UTF-8 bytes.
+  const Path directory("chStreamTest_Jos\xC3\xA9");
+  const Path file = directory / Path("\xC3\xB1" "and\xC3\xBA.txt");
+  REQUIRE(FileSystem::createDirectories(directory));
+  REQUIRE(FileSystem::isDirectory(directory));
+  {
+    SPtr<DataStream> output = FileSystem::createAndOpenFile(file);
+    REQUIRE(output);
+    REQUIRE(output->write("abc", 3) == 3);
+  }
+  REQUIRE(FileSystem::isFile(file));
+
+  // Checked apart from FileSystem: text read in the wrong code page would still find its
+  // own files, but under another name.
+  const std::filesystem::path onDisk =
+      std::filesystem::path(FileSystem::getBaseDirectory().getPlatformString()) /
+      std::filesystem::path(u8"chStreamTest_Jos\u00E9");
+  REQUIRE(std::filesystem::is_directory(onDisk));
+
+  SPtr<DataStream> input = FileSystem::openFile(file);
+  REQUIRE(input);
+  REQUIRE(input->getAsString() == "abc");
+  input->close();
+
+  Vector<Path> files;
+  Vector<Path> directories;
+  FileSystem::getChildren(directory, files, directories);
+  REQUIRE(files.size() == 1);
+  REQUIRE(files[0].getFileName() == "\xC3\xB1" "and\xC3\xBA.txt");
+  REQUIRE(FileSystem::absolutePath(file).toString().find("chStreamTest_Jos\xC3\xA9") !=
+          String::npos);
+
+  REQUIRE(FileSystem::removeAll(directory));
+  REQUIRE_FALSE(FileSystem::exists(directory));
 }
 
 TEST_CASE("chUtilities - Path matches std::filesystem") {
@@ -2452,7 +2591,7 @@ TEST_CASE("chUtilities - FileSystem") {
 TEST_CASE("chUtilities - CommandLine") {
   SECTION("values and flags") {
     const ANSICHAR* argv[] = {"program", "-option1=value1", "-Option2=Value=2", "-flag"};
-    CommandLine::initialize(4, argv);
+    CommandLine::parse(4, argv);
 
     REQUIRE(CommandLine::getValue("option1") == "value1");
     REQUIRE(CommandLine::getValue("OPTION2") == "Value=2");
@@ -2465,7 +2604,7 @@ TEST_CASE("chUtilities - CommandLine") {
 
   SECTION("dashes and plain arguments") {
     const ANSICHAR* argv[] = {"program", "--double", "plain", "-", "--", "-=x", "-empty="};
-    CommandLine::initialize(7, argv);
+    CommandLine::parse(7, argv);
 
     REQUIRE(CommandLine::hasFlag("double"));
     REQUIRE_FALSE(CommandLine::hasFlag("plain"));
@@ -2478,7 +2617,7 @@ TEST_CASE("chUtilities - CommandLine") {
   SECTION("integers") {
     const ANSICHAR* argv[] = {"program", "-Width=1280", "-Height=abc", "-Depth=12px",
                               "-Big=99999999999", "-Negative=-5", "-Empty="};
-    CommandLine::initialize(7, argv);
+    CommandLine::parse(7, argv);
 
     REQUIRE(CommandLine::getInt("width", 1920) == 1280);
     REQUIRE(CommandLine::getInt("height", 1080) == 1080);
@@ -2491,9 +2630,9 @@ TEST_CASE("chUtilities - CommandLine") {
 
   SECTION("initialize replaces the previous options") {
     const ANSICHAR* first[] = {"program", "-old=1", "-oldFlag"};
-    CommandLine::initialize(3, first);
+    CommandLine::parse(3, first);
     const ANSICHAR* second[] = {"program"};
-    CommandLine::initialize(1, second);
+    CommandLine::parse(1, second);
 
     REQUIRE(CommandLine::getValue("old").empty());
     REQUIRE_FALSE(CommandLine::hasFlag("oldflag"));
@@ -2501,7 +2640,7 @@ TEST_CASE("chUtilities - CommandLine") {
 
   SECTION("tryGetValue tells an empty value from a missing one") {
     const ANSICHAR* argv[] = {"program", "-Empty=", "-Flag"};
-    CommandLine::initialize(3, argv);
+    CommandLine::parse(3, argv);
 
     REQUIRE(CommandLine::tryGetValue("empty") != nullptr);
     REQUIRE(CommandLine::tryGetValue("empty")->empty());
@@ -2642,7 +2781,7 @@ TEST_CASE("chUtilities - ConsoleVariable") {
   SECTION("config values and the command line, before and after registering") {
     const ANSICHAR* argv[] = {"program", "-Test.FromCommandLine=7", "-Alias=8",
                               "-Test.Flag", "-Test.Both=1", "-BothAlias=2"};
-    CommandLine::initialize(6, argv);
+    CommandLine::parse(6, argv);
 
     ConsoleVariable<int32> early("Test.Early", 0, "");
     ConsoleVariable<int32> fromCommandLine("Test.FromCommandLine", 0, "");
@@ -2674,7 +2813,7 @@ TEST_CASE("chUtilities - ConsoleVariable") {
     REQUIRE(late.get() == 10);
 
     const ANSICHAR* empty[] = {"program"};
-    CommandLine::initialize(1, empty);
+    CommandLine::parse(1, empty);
   }
 
   SECTION("a destroyed variable leaves the registry") {

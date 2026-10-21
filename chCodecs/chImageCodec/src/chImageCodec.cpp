@@ -18,6 +18,8 @@
 #include "chTextureMips.h"
 
 #define STB_IMAGE_IMPLEMENTATION
+// stb reads file names in the system code page on Windows unless told they are UTF-8.
+#define STBI_WINDOWS_UTF8
 #include "stb_image.h"
 
 namespace chEngineSDK{

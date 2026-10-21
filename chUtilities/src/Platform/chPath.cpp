@@ -17,7 +17,9 @@
  /************************************************************************/
 #include "chPath.h"
 
-#include <filesystem>
+#if USING(CH_PLATFORM_WIN32)
+# include "chUnicode.h"
+#endif
 
 namespace chEngineSDK {
 namespace {
@@ -173,7 +175,7 @@ String
 Path::getPlatformString() const
 {
 #if USING(CH_PLATFORM_WIN32)
-  return std::filesystem::path(m_path).generic_wstring();
+  return UTF8::toWide(m_path);
 #else
   return m_path;
 #endif

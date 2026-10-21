@@ -3,555 +3,312 @@
  * @file chFileStream.h
  * @author AccelMR
  * @date 2022/08/26
- *   Handles read and write from files steams.
+ * @brief Streams that read and write bytes from memory or from a file.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
 /************************************************************************/
 /*
  * Includes
- */                                                                     
+ */
 /************************************************************************/
 #include "chPrerequisitesUtilities.h"
 
 #include <iosfwd>
+#include <type_traits>
 
-#include "chPath.h"
 #include "chFlags.h"
+#include "chPath.h"
 
-namespace chEngineSDK{
-/*
- * Description: 
- *     Enum class to be used for any stream data and how it is going to be accessed. 
- *
- *  NOTE: This must never be used alone. Use it through AccessModeFlag.
- * 
- * Sample usage:
- *  AccessModeFlag myFlag(ACCESS_MODE::kREAD | ACCESS_MODE::kWRITE);
- */
-enum class ACCESS_MODE: uint16 {
-  NonePlatformEvent  = 0x00,
-  kREAD  = 0x01,
-  kWRITE = 0x02
+namespace chEngineSDK {
+
+enum class AccessMode : uint16
+{
+  None = 0x00,
+  Read = 0x01,
+  Write = 0x02
 };
-CH_FLAGS_OPERATORS_EXT(ACCESS_MODE, uint16);
-using AccesModeFlag = Flags<ACCESS_MODE, uint16>;
+CH_FLAGS_OPERATORS_EXT(AccessMode, uint16);
+using AccessModeFlag = Flags<AccessMode, uint16>;
 
-enum class STRING_ENCODER {
-  kUTF8,
-  kUTF16
-};
-
-/*
- * Description: 
- *     Data Stream interface class.
- *
- * Sample usage:
- *    Interface classes are not to be used as an object itself.
+/**
+ * Common interface for every byte stream, so serialization code works the same on memory
+ * and on files. Streams never throw: failed reads and writes return fewer bytes.
  */
-class CH_UTILITY_EXPORT DataStream {
+class CH_UTILITY_EXPORT DataStream
+{
  public:
-  /** 
-   *   Base constructor.
-   * 
-   * @param _accessMode
-   *    Flag access, how this stream is going to be treated.
-   **/
-  DataStream(AccesModeFlag _accessMode = AccesModeFlag(ACCESS_MODE::kREAD))
-    : m_accessMode(_accessMode)
+  explicit DataStream(AccessModeFlag accessMode = AccessMode::Read) noexcept
+   : m_accessMode(accessMode)
   {}
 
-  /** 
-   *   Default destructor.
-   **/
+  DataStream(const DataStream&) = delete;
+
   virtual ~DataStream() = default;
 
-  /** 
-   *   Returns access mode of this data stream.
-   **/
-  FORCEINLINE AccesModeFlag
-  getAccessMode() const {
+  DataStream&
+  operator=(const DataStream&) = delete;
+
+  NODISCARD FORCEINLINE AccessModeFlag
+  getAccessMode() const noexcept
+  {
     return m_accessMode;
   }
 
-  /** 
-   *   True if this stream is readable.
-   **/
-  FORCEINLINE virtual bool
-  isReadable() const {
-    return m_accessMode.isSetAny(ACCESS_MODE::kREAD);
+  NODISCARD FORCEINLINE bool
+  isReadable() const noexcept
+  {
+    return m_accessMode.isSetAny(AccessMode::Read);
   }
 
-  /** 
-   *   True if this stream is writable.
-   **/
-  FORCEINLINE virtual bool
-  isWriteable() const {
-    return m_accessMode.isSetAny(ACCESS_MODE::kWRITE);
+  NODISCARD FORCEINLINE bool
+  isWriteable() const noexcept
+  {
+    return m_accessMode.isSetAny(AccessMode::Write);
   }
 
-  /** 
-   *   Returns content as string.
+  /**
+   *   Reads the whole stream from its start as text. UTF-16 and UTF-32 with a byte order
+   *   mark are converted; anything else is read as UTF-8.
    **/
-  virtual String
+  NODISCARD String
   getAsString();
-  
-  /**
-   * @brief Reads data from the buffer and copies it to the specified value.
-   */
+
   template<typename T>
-  FORCEINLINE const DataStream&
-  operator>>(T& val) {
-    CH_ASSERT(isReadable()); //Debug only
-    read(static_cast<void*>(&val), sizeof(T));
+  FORCEINLINE DataStream&
+  operator>>(T& value)
+  {
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "Only trivially copyable types can be read as raw bytes");
+    CH_ASSERT(isReadable());
+    read(&value, sizeof(T));
     return *this;
   }
 
-  /** 
-   *   So we can use >> with Sptr
-   **/
-  template<typename T>
-  friend const SPtr<DataStream>&
-  operator>>(const SPtr<DataStream> &ds, T& val) {
-    *ds >> val;
-    return ds;
-  }
-
-  /**
-   * @brief Reads data from the buffer and copies it to the specified value.
-   */
   template<typename T>
   FORCEINLINE DataStream&
-  operator<<(const T& val) {
-    CH_ASSERT(isWriteable()); //Debug only
-    write(static_cast<const void*>(&val), sizeof(T));
+  operator<<(const T& value)
+  {
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "Only trivially copyable types can be written as raw bytes");
+    CH_ASSERT(isWriteable());
+    write(&value, sizeof(T));
     return *this;
   }
-  
-  /** 
-   *   So we can use << with Sptr
-   **/
-  template<typename T>
-  friend const SPtr<DataStream>& 
-  operator<<(const SPtr<DataStream>& ds, const T& val) {
-    *ds << val;
-    return ds;
-  }
 
-  /** 
-   *   Specific for string behavior.
-   **/
-  friend SPtr<DataStream>& 
-  operator<<(SPtr<DataStream>& ds, const String& val) {
-    ds->writeString(val);
-    return ds;
-  }
-  
-  /** 
-   *   Specific for string behavior.
-   **/
-  friend SPtr<DataStream>& 
-  operator<<(SPtr<DataStream>& ds, const ANSICHAR* val) {
-    ds->writeString(String(val));
-    return ds;
-  }
+  NODISCARD virtual bool
+  isFile() const noexcept = 0;
 
   /**
-   * @brief Overload for const ANSICHAR* to handle string literals directly.
-   */
-  FORCEINLINE DataStream&
-  operator<<(const ANSICHAR* val) {
-      writeString(String(val));
-      return *this;
-  }
-
-  /** 
-   *   True if this stream is file.
-   **/
-  virtual bool
-  isFile() const = 0;
-
-  /** 
-   *   Reads the requested number of bytes from the stream. 
-   * 
-   * @param buf
-   *    The buffer where the info is going to be written.
-   * 
-   * @param size
-   *    Size of the buffer where this is going to write.
-   * 
-   * @return DataStream&
-   *    Reference to this.
+   *   Returns the number of bytes read, less than size at the end of the stream.
    **/
   virtual SIZE_T
-  read(void* buf, SIZE_T size) = 0;
-
-  /** 
-   *   Writes the requested number of bytes into the stream.
-   * 
-   * @param buf
-   *    The buffer to copy into the stream.
-   * 
-   * @param size
-   *    Size of the buffer to be written.
-   *
-   * @return DataStream&
-   *    Reference to this.
-   **/
-  virtual SIZE_T
-  write(const void* buf, SIZE_T size) = 0;
-
-  /** 
-   *   Writes a String into the file, user proper formatting.
-   * 
-   * @param str
-   *    String to be written.
-   * 
-   * @param encoder
-   *  The encoder to be used, UTF8 by default.
-   **/
-  virtual void
-  writeString(const String& str, STRING_ENCODER encoder = STRING_ENCODER(STRING_ENCODER::kUTF8));
-
-  /** 
-   *   Writes a Wide String into the file, user proper formatting.
-   * 
-   * @param wStr
-   *    Wide String to be written.
-   * 
-   * @param encoder
-   *  The encoder to be used, UTF16 by default.
-   **/
-  virtual void
-  writeString(const WString& wStr, STRING_ENCODER encoder = STRING_ENCODER(STRING_ENCODER::kUTF16));
-
-  /** 
-   *  Skip a defined number of bytes. This can also be a negative value,
-   *  in which case the file pointer rewinds a defined number of bytes.
-   **/
-  virtual void
-  skip(SIZE_T count) = 0;
+  read(void* buffer, SIZE_T size) = 0;
 
   /**
-   *  Repositions the read point to a specified byte.
-   */
+   *   Returns the number of bytes written, less than size when the stream is full or the
+   *   write failed.
+   **/
+  virtual SIZE_T
+  write(const void* buffer, SIZE_T size) = 0;
+
+  /**
+   *   Moves the read and write point to pos bytes from the start, never past the end.
+   **/
   virtual void
   seek(SIZE_T pos) = 0;
-  
-  /** 
-   *   Returns the current byte offset from beginning.
-   **/
-  virtual SIZE_T
+
+  NODISCARD virtual SIZE_T
   tell() const = 0;
 
-  /** 
-   *   True if the stream is at the end.
-   **/
-  virtual bool
+  NODISCARD virtual bool
   isAtEnd() const = 0;
-  
+
   /**
-   * @brief Close the stream. This makes further operations invalid.
-   */
+   *   Releases the stream. Reads and writes after it return 0.
+   **/
   virtual void
   close() = 0;
 
-  /**
-   * Writes any buffered data to its destination. Streams without a buffer do nothing.
-   */
   virtual void
   flush()
   {}
 
-  /**
-   *    Creates a copy of this stream.
-   */
-  virtual SPtr<DataStream>
+  NODISCARD virtual SPtr<DataStream>
   clone() const = 0;
 
-  /** 
-   *   Returns the size of this Stream.
-   **/
-  FORCEINLINE SIZE_T
-  size() const { return m_size; }
+  NODISCARD FORCEINLINE SIZE_T
+  size() const noexcept
+  {
+    return m_size;
+  }
 
  protected:
   SIZE_T m_size = 0;
-  AccesModeFlag m_accessMode;
+  AccessModeFlag m_accessMode;
 };
 
-/*
- * Description: 
- *     Data stream for handling data from memory.
- *
+/**
+ * Stream over a block of memory, either a fixed block or one that grows as it is written.
  */
-class CH_UTILITY_EXPORT MemoryDataStream: public DataStream
+class CH_UTILITY_EXPORT MemoryDataStream : public DataStream
 {
  public:
   /**
-   * An empty stream that grows as it is written, for data whose size is only known once it
-   * is written. It owns its memory.
-   */
-  MemoryDataStream();
-
-  /**
-   *   Default constructor
-   */
-  MemoryDataStream(SIZE_T _size);
-
-  /** 
-   *   Constructor from a already created chunk of memory. 
-   * 
-   * @param memory
-   *   Pointer to the chunk of memory to store.
-   * 
-   * @param _size
-   *    Size of the chunk of memory.
-   * 
-   * @param  _freeOnClose
-   *    If true, the stream frees memory with free() on close, so it must come from
-   *    malloc(). If false, something else frees it.
+   *   An empty stream that grows as it is written, for data whose size is only known once
+   *   it is written. It owns its memory.
    **/
-  MemoryDataStream(void* memory, SIZE_T _size, bool _freeOnClose = true);
+  MemoryDataStream() noexcept;
 
-  
   /**
-   *    Creates a stream which pre-buffers the contents of another stream.
-   *        Data from the other buffer will be entirely read and stored in an
-   *        internal buffer.
-   * @param sourceStream    
-   *   Stream to read data from.
-   */
+   *   A fixed block of size bytes that the stream owns.
+   **/
+  explicit MemoryDataStream(SIZE_T size);
+
+  /**
+   *   A fixed block made elsewhere. With bFreeOnClose the stream frees it with free() on
+   *   close, so it must come from malloc().
+   **/
+  MemoryDataStream(void* memory, SIZE_T size, bool bFreeOnClose = true) noexcept;
+
+  /**
+   *   Copies what is left to read in sourceStream into memory the stream owns.
+   **/
   explicit MemoryDataStream(const SPtr<DataStream>& sourceStream);
 
-  /**
-   *   Default destructor
-   */
-  ~MemoryDataStream();
+  MemoryDataStream(MemoryDataStream&& other) noexcept;
 
-  /** 
-   *   Returns true if is file.
-   **/
-  FORCEINLINE bool
-  isFile() const override {
+  ~MemoryDataStream() override;
+
+  MemoryDataStream&
+  operator=(MemoryDataStream&& other) noexcept;
+
+  NODISCARD bool
+  isFile() const noexcept override
+  {
     return false;
   }
 
-  /** 
-   *   Returns the pointer to the start data of this memory.
-   **/
-  FORCEINLINE uint8*
-  getStartPtr() const {
+  NODISCARD FORCEINLINE uint8*
+  getStartPtr() const noexcept
+  {
     return m_data;
   }
 
-  /** 
-   *   Returns the pointer to the current data.
-   **/
-  FORCEINLINE uint8*
-  getCurrentPtr() const {
+  NODISCARD FORCEINLINE uint8*
+  getCurrentPtr() const noexcept
+  {
     return m_currPos;
   }
- 
-  /** 
-   *   Reads the requested number of bytes from the stream. 
-   * 
-   * @param buf
-   *    The buffer where the info is going to be written.
-   * 
-   * @param size
-   *    Size of the buffer where this is going to write.
-   * 
-   * @return DataStream&
-   *    Reference to this.
-   **/
+
   SIZE_T
-  read(void* buf, SIZE_T size) override;
+  read(void* buffer, SIZE_T size) override;
 
-  /** 
-   *   Writes the requested number of bytes into the stream.
-   * 
-   * @param buf
-   *    The buffer to copy into the stream.
-   * 
-   * @param size
-   *    Size of the buffer to be written.
-   *
-   * @return DataStream&
-   *    Reference to this.
-   **/
   SIZE_T
-  write(const void* buf, SIZE_T size) override;
+  write(const void* buffer, SIZE_T size) override;
 
-  /** 
-   *  Skip a defined number of bytes. This can also be a negative value,
-   *  in which case the file pointer rewinds a defined number of bytes.
-   **/
-  void
-  skip(SIZE_T count) override;
-
-  /**
-   *  Repositions the read point to a specified byte.
-   */
   void
   seek(SIZE_T pos) override;
 
-  /** 
-   *   Returns the current byte offset from beginning.
-   **/
   NODISCARD SIZE_T
   tell() const override;
 
-  /** 
-   *   True if the stream is at the end.
-   **/
-  bool
+  NODISCARD bool
   isAtEnd() const override;
 
-  /**
-   *   Close the stream. This makes further operations invalid.
-   */
   void
   close() override;
 
   /**
-   *    Creates a copy of this stream.
-   */
-  SPtr<DataStream>
+   *   The copy owns its data, so it stays valid after this stream is closed.
+   **/
+  NODISCARD SPtr<DataStream>
   clone() const override;
 
  private:
   SIZE_T
-  writeGrowing(const void* buf, SIZE_T size);
+  writeGrowing(const void* buffer, SIZE_T size);
 
- friend class FileDataStream;
-  uint8* m_data;
-  uint8* m_currPos;
-  uint8* m_end;
+  uint8* m_data = nullptr;
+  uint8* m_currPos = nullptr;
+  uint8* m_end = nullptr;
   // Allocated bytes of a stream that grows; m_end marks what was written.
   SIZE_T m_capacity = 0;
-
-  bool m_freeOnClose;
+  bool m_bFreeOnClose = true;
   bool m_bGrowable = false;
 };
 
-/*
- * Description: 
- *     Data stream specialized for handling data from standard streams. 
- *
- * Sample usage:
- *
+/**
+ * Stream over a file on disk. It takes a real path; virtual paths go through
+ * FileSystem::openFile.
  */
-class CH_UTILITY_EXPORT FileDataStream: public DataStream
+class CH_UTILITY_EXPORT FileDataStream : public DataStream
 {
  public:
   /**
-   * Opens the file. It never throws: if the file cannot be opened, isOpen() is false and
-   * reads return 0.
-   */
-  FileDataStream(const Path& _path,
-                 AccesModeFlag _accessMode = AccesModeFlag(ACCESS_MODE::kREAD), 
-                 bool _freeOnClose = true);
+   *   Opens the file. Write alone creates it or empties it; Read and Write together open
+   *   an existing file without emptying it. If the file cannot be opened, isOpen() is
+   *   false and reads return 0.
+   **/
+  explicit FileDataStream(const Path& path, AccessModeFlag accessMode = AccessMode::Read);
 
   /**
-   * Creates the file and writes the whole source stream into it, from its start. Any
-   * kind of stream can be the source.
-   */
-  explicit FileDataStream(const Path& _path, const SPtr<DataStream>& sourceDataStream);
+   *   Creates the file and writes the whole source stream into it, from its start.
+   **/
+  FileDataStream(const Path& path, const SPtr<DataStream>& sourceDataStream);
 
- /*
-  *   Default destructor
-  */
-  ~FileDataStream();
+  ~FileDataStream() override;
 
-  bool
-  isFile() const override {
+  NODISCARD bool
+  isFile() const noexcept override
+  {
     return true;
   }
 
-  /**
-   * @brief @copydoc DataStream::read
-   */
   SIZE_T
-  read(void* buf, SIZE_T count) override;
-  
-  /**
-   * @brief @copydoc DataStream::write
-   */
+  read(void* buffer, SIZE_T size) override;
+
   SIZE_T
-  write(const void* buf, SIZE_T count) override;
-  
-  /**
-   * @brief @copydoc DataStream::skip
-   */
-  void
-  skip(SIZE_T count) override;
-  
-  /**
-   * @brief @copydoc DataStream::seek
-   */
+  write(const void* buffer, SIZE_T size) override;
+
   void
   seek(SIZE_T pos) override;
-  
-  /**
-   * @brief @copydoc DataStream::tell
-   */
-  SIZE_T
+
+  NODISCARD SIZE_T
   tell() const override;
-  
+
   /**
-   * @brief @copydoc DataStream::isEOF
-   */
-  bool
+   *   Compares the read point with the size the file had when it was opened.
+   **/
+  NODISCARD bool
   isAtEnd() const override;
-  
+
   /**
-   * @brief @copydoc DataStream::clone
-   */
-  SPtr<DataStream>
+   *   Opens the same file again for reading only, because opening it again for writing
+   *   would empty it.
+   **/
+  NODISCARD SPtr<DataStream>
   clone() const override;
-  
-  /**
-   * @brief @copydoc DataStream::close
-   */
+
   void
   close() override;
 
   void
   flush() override;
 
-  /** 
-   *   True if this file is open.
-   * To open again a file, use FileSystem::openFile(path);
-   **/
-  bool
+  NODISCARD bool
   isOpen() const;
-  
-  /**
-   * @brief Returns the path of the file opened by the stream.
-   */
-  FORCEINLINE const Path& 
-  getPath() const {
+
+  NODISCARD FORCEINLINE const Path&
+  getPath() const noexcept
+  {
     return m_path;
   }
 
  private:
-
- /** 
-  *   Initializes this class using.
-  **/
-  void
-  init();
-
-
-  protected:
-   Path m_path;
-   SPtr<std::istream> m_pInStream;
-   SPtr<std::ifstream> m_pFStreamRO;
-   SPtr<std::fstream> m_pFStream;
-   bool m_freeOnClose;
+  Path m_path;
+  UniquePtr<std::fstream> m_stream;
 };
 
-}
-
+} // namespace chEngineSDK

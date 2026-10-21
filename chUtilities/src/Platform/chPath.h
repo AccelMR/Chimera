@@ -96,10 +96,9 @@ class CH_UTILITY_EXPORT Path
   }
 
   /**
-   * Constructs a wide string from this path, platform-specific.
-   *
-   * @return Path as a wide string (Windows) or regular string (other platforms).
-   */
+   *   Returns the text the operating system calls take: UTF-16 on Windows (the narrow
+   *   calls there read the system code page, not UTF-8), the UTF-8 text elsewhere.
+   **/
   NODISCARD
 #if USING(CH_PLATFORM_WIN32)
   WString
@@ -209,9 +208,6 @@ class CH_UTILITY_EXPORT Path
  protected:
   void
   append(StringView other);
-
-  friend class FileSystem;
-  friend class FileDataStream;
 
   String m_path;
 };
