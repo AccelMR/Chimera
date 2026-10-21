@@ -101,10 +101,24 @@ class CH_CORE_EXPORT WindowedApplication : public BaseApplication
   onCloseRequested() { return true; }
 
   /**
+   * Id the desktop knows the program by when Application.Id is empty, so the editor and a
+   * game get different window rules without a config file.
+   */
+  NODISCARD virtual StringView
+  getDefaultApplicationId() const { return "chimera-engine"; }
+
+  /**
    * Ends the main loop after the current frame.
    */
   void
   quit() { m_running = false; }
+
+  /**
+   * Writes the main window's size and maximized state into /Saved/Config/<configFile>.ini,
+   * so the next start opens it the same way. Call it before destroyModules closes the window.
+   */
+  void
+  saveWindowPlacement(StringView configFile) const;
 
  private:
   void

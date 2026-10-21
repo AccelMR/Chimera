@@ -15,12 +15,12 @@
 #include "chDisplayEventHandle.h"
 #include "chDisplayManager.h"
 #include "chDynamicLibManager.h"
+#include "chEngineConfig.h"
 #include "chEnginePaths.h"
 #include "chEventDispatcherManager.h"
 #include "chGraphicsSettings.h"
 #include "chGraphicsTypes.h"
 #include "chLogger.h"
-#include "chMath.h"
 #include "chProfiler.h"
 #include "chStringUtils.h"
 
@@ -40,20 +40,34 @@ ConsoleVariable<String> g_cvarApplicationName("Application.Name",
                                               "Name the platform shows for the program.",
                                               "AppName");
 
+ConsoleVariable<String> g_cvarApplicationId("Application.Id",
+                                            "",
+                                            "Id the desktop matches the windows by (Wayland "
+                                            "app_id, X11 class), e.g. in window rules. Empty "
+                                            "uses the application's own.",
+                                            "AppId");
+
 ConsoleVariable<String> g_cvarWindowTitle("Window.Title",
                                           "Chimera Engine Windowed Application",
                                           "Title of the main window.",
                                           "WindowTitle");
 
 ConsoleVariable<int32> g_cvarWindowWidth("Window.Width",
-                                         2560,
-                                         "Width of the main window when it opens.",
+                                         0,
+                                         "Width of the main window when it opens, in screen "
+                                         "units. 0 opens it maximized.",
                                          "Width");
 
 ConsoleVariable<int32> g_cvarWindowHeight("Window.Height",
-                                          1440,
-                                          "Height of the main window when it opens.",
+                                          0,
+                                          "Height of the main window when it opens, in "
+                                          "screen units. 0 opens it maximized.",
                                           "Height");
+
+ConsoleVariable<bool> g_cvarWindowMaximized("Window.Maximized",
+                                            false,
+                                            "Opens the main window maximized.",
+                                            "Maximized");
 } // namespace
 
 /*
@@ -122,14 +136,20 @@ WindowedApplication::initialize() {
   initializeModules();
 
   loadGraphicsAPI();
+  // Without a saved size the window takes the whole display, and its size before being
+  // restored is the display's, so a restore does not shrink it to a small default.
+  const bool bHasSize = g_cvarWindowWidth.get() > 0 && g_cvarWindowHeight.get() > 0;
   // The plugin is loaded by now, so the title can say which API draws.
   initializeDisplay(
       {.name = g_cvarApplicationName.get(),
+       .appId = g_cvarApplicationId.get().empty() ? String(getDefaultApplicationId())
+                                                  : g_cvarApplicationId.get(),
        .title = StringUtils::format("{0} - {1}", g_cvarWindowTitle.get(),
                                     IGraphicsAPI::instance().getAPIName()),
-       .width = static_cast<uint32>(Math::max(1, g_cvarWindowWidth.get())),
-       .height = static_cast<uint32>(Math::max(1, g_cvarWindowHeight.get())),
+       .width = bHasSize ? static_cast<uint32>(g_cvarWindowWidth.get()) : 0,
+       .height = bHasSize ? static_cast<uint32>(g_cvarWindowHeight.get()) : 0,
        .resizable = true,
+       .maximized = !bHasSize || g_cvarWindowMaximized.get(),
        .platformFlags = IGraphicsAPI::instance().getPlatformWindowFlags()});
   initializeGraphics();
   initializeRenderComponents();
@@ -199,6 +219,31 @@ WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
   }
   m_display = wptrDisplay.lock();
   CH_LOG_INFO(WindowedApp, "Display initialized successfully.");
+}
+
+/*
+ */
+void
+WindowedApplication::saveWindowPlacement(StringView configFile) const
+{
+  // A minimized window may report a size it never had on screen, so the last good one stays.
+  if (!m_display || m_display->isMinimized()) {
+    return;
+  }
+
+  uint32 width = 0;
+  uint32 height = 0;
+  m_display->getWindowSize(width, height);
+  if (width == 0 || height == 0) {
+    return;
+  }
+
+  ANSICHAR buffer[StringUtils::MAX_INTEGER_CHARS];
+  EngineConfig::setUserValue(configFile, "Window", "Width", StringUtils::toChars(buffer, width));
+  EngineConfig::setUserValue(configFile, "Window", "Height",
+                             StringUtils::toChars(buffer, height));
+  EngineConfig::setUserValue(configFile, "Window", "Maximized",
+                             m_display->isMaximized() ? "true" : "false");
 }
 
 /*

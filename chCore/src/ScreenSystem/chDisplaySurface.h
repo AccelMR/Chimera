@@ -34,10 +34,15 @@ namespace chEngineSDK{
  */
 struct CH_CORE_EXPORT ScreenDescriptor {
   String name = "chimeraDefault";
+  // Stable id the desktop matches windows by (Wayland app_id, X11 class), e.g. in window
+  // rules. Only the first window made sets it.
+  String appId;
   String title = "chimeraDEfaultTitle";
+  // In screen units; 0 takes the usable size of the primary display.
   uint32 width = 1280;
   uint32 height = 720;
   bool resizable = true;
+  bool maximized = false;
   // Extra flags of the platform window layer, the ones the graphics API asks for.
   uint64 platformFlags = 0;
 };
@@ -116,6 +121,16 @@ class CH_CORE_EXPORT DisplaySurface
    */
   NODISCARD bool
   isMinimized() const;
+
+  NODISCARD bool
+  isMaximized() const;
+
+  /**
+   * Size of the window in screen units, the units ScreenDescriptor uses, so it can be saved
+   * and given back when the window is made again.
+   */
+  void
+  getWindowSize(uint32& outWidth, uint32& outHeight) const;
 
   /**
    *   Do not use unless you know what you are doing.

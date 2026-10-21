@@ -66,6 +66,9 @@ class EditorApplication : public WindowedApplication
   NODISCARD virtual bool
   onCloseRequested() override;
 
+  NODISCARD virtual StringView
+  getDefaultApplicationId() const override { return "chimera-editor"; }
+
  private:
   void
   initializeEditorComponents();

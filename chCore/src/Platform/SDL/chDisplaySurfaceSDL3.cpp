@@ -26,10 +26,14 @@ static bool s_sdlInitialized = false;
 static uint32 s_windowCount = 0;
 
 bool
-initializeSDL3() {
+initializeSDL3(const ScreenDescriptor& desc) {
   if (s_sdlInitialized) {
     return true;
   }
+
+  // SDL reads the metadata when the video subsystem starts.
+  SDL_SetAppMetadata(desc.name.c_str(), nullptr,
+                     desc.appId.empty() ? nullptr : desc.appId.c_str());
 
   uint32 sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
 
@@ -59,7 +63,7 @@ shutdownSDL3() {
 */
 NODISCARD bool
 DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandler) {
-  if (!initializeSDL3()) {
+  if (!initializeSDL3(desc)) {
     return false;
   }
 
@@ -72,17 +76,29 @@ DisplaySurface::init(ScreenDescriptor desc, SPtr<DisplayEventHandle> eventHandle
                        SDL_PROP_WINDOW_CREATE_TITLE_STRING,
                        desc.title.c_str());
 
-  //TODO: probably change this? this set a max width and height, but you can scale smaller for a reason
-  SDL_SetNumberProperty(properties,
-                       SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER,
-                       desc.width);
-  SDL_SetNumberProperty(properties,
-                       SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
-                       desc.height);
+  uint32 width = desc.width;
+  uint32 height = desc.height;
+  if (width == 0 || height == 0) {
+    SDL_Rect bounds{};
+    if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &bounds)) {
+      width = width == 0 ? static_cast<uint32>(bounds.w) : width;
+      height = height == 0 ? static_cast<uint32>(bounds.h) : height;
+    }
+    else {
+      CH_LOG_WARNING(DisplaySurfaceLog, "Could not read the display size: {0}",
+                     SDL_GetError());
+      width = width == 0 ? 1280 : width;
+      height = height == 0 ? 720 : height;
+    }
+  }
+
+  SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width);
+  SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height);
 
   SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER,
                         static_cast<int64>(desc.platformFlags));
   SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, desc.resizable);
+  SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, desc.maximized);
 
   // TODO: Add more capabilities based on descriptor
   // if (true) {
@@ -133,6 +149,26 @@ bool
 DisplaySurface::isMinimized() const
 {
   return (SDL_GetWindowFlags(m_displayHandle) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+/*
+ */
+bool
+DisplaySurface::isMaximized() const
+{
+  return (SDL_GetWindowFlags(m_displayHandle) & SDL_WINDOW_MAXIMIZED) != 0;
+}
+
+/*
+ */
+void
+DisplaySurface::getWindowSize(uint32& outWidth, uint32& outHeight) const
+{
+  int32 width = 0;
+  int32 height = 0;
+  SDL_GetWindowSize(m_displayHandle, &width, &height);
+  outWidth = static_cast<uint32>(width);
+  outHeight = static_cast<uint32>(height);
 }
 
 /*

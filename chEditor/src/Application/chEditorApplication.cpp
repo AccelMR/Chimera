@@ -116,6 +116,7 @@ void
 EditorApplication::destroyModules()
 {
   CH_LOG_INFO(EditorApp, "EditorApplication destroying modules.");
+  saveWindowPlacement("Editor");
   // Its worker runs codec code and uses the codec manager.
   ImportDialog::shutDown();
   if (IGraphicsAPI::isStarted()) {
@@ -686,6 +687,11 @@ EditorApplication::updateViewportTarget(uint32 width, uint32 height)
   height = Math::max(height, kMinViewportSize);
   if (m_viewportTarget && m_viewportTarget->getWidth() == width &&
       m_viewportTarget->getHeight() == height) {
+    return;
+  }
+  // While a splitter or the window is dragged the size changes every frame; the old image is
+  // stretched until the button is released, so it is made once instead of per frame.
+  if (m_viewportTarget && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
     return;
   }
 
