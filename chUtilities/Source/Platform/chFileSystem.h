@@ -98,6 +98,13 @@ class CH_UTILITY_EXPORT FileSystem
   renameFile(const Path& oldPath, const Path& newPath);
 
   /**
+   *   Renames or moves a directory with everything in it. Fails if oldPath is not a
+   *   directory or newPath already exists.
+   **/
+  NODISCARD static bool
+  renameDirectory(const Path& oldPath, const Path& newPath);
+
+  /**
    *   Removes a regular file. Fails if path is not a regular file.
    **/
   NODISCARD static bool

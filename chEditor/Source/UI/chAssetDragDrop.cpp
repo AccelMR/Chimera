@@ -45,7 +45,12 @@ constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
 constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
 constexpr const ANSICHAR* kAnimationPayload = "CH_ANIMATION";
 constexpr const ANSICHAR* kScriptPayload = "CH_SCRIPT";
+constexpr const ANSICHAR* kOtherAssetPayload = "CH_ASSET";
 constexpr const ANSICHAR* kGameObjectPayload = "CH_GAMEOBJECT";
+
+constexpr Array<const ANSICHAR*, 7> kAssetPayloads = {
+    kModelPayload,     kTexturePayload, kMaterialPayload,  kPrefabPayload,
+    kAnimationPayload, kScriptPayload,  kOtherAssetPayload};
 
 /*
  * Targets ask for the dragged object every frame of a drag, so the last one found is kept
@@ -82,7 +87,6 @@ findPayloadGameObject(const ImGuiPayload& payload)
 }
 
 /*
- * Null for asset types that cannot be dropped anywhere.
  */
 const ANSICHAR*
 getPayloadName(const IAsset& asset)
@@ -105,7 +109,7 @@ getPayloadName(const IAsset& asset)
   if (asset.isTypeOf<ScriptAsset>()) {
     return kScriptPayload;
   }
-  return nullptr;
+  return kOtherAssetPayload;
 }
 
 /*
@@ -142,16 +146,36 @@ void
 AssetDragDrop::source(const IAsset& asset)
 {
   const ANSICHAR* payloadName = getPayloadName(asset);
-  if (!payloadName) {
-    return;
-  }
-
   if (ImGui::BeginDragDropSource()) {
     const UUID& uuid = asset.getUUID();
     ImGui::SetDragDropPayload(payloadName, &uuid, sizeof(UUID));
     ImGui::TextUnformatted(asset.getName());
     ImGui::EndDragDropSource();
   }
+}
+
+/*
+ */
+SPtr<IAsset>
+AssetDragDrop::acceptAnyAsset()
+{
+  const ImGuiPayload* dragged = ImGui::GetDragDropPayload();
+  if (!dragged) {
+    return nullptr;
+  }
+  for (const ANSICHAR* payloadName : kAssetPayloads) {
+    if (!dragged->IsDataType(payloadName)) {
+      continue;
+    }
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(payloadName);
+    if (!payload || payload->DataSize != static_cast<int32>(sizeof(UUID))) {
+      return nullptr;
+    }
+    UUID uuid;
+    std::memcpy(&uuid, payload->Data, sizeof(UUID));
+    return AssetManager::instance().getAsset(uuid);
+  }
+  return nullptr;
 }
 
 /*

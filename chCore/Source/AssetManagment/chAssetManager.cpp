@@ -328,6 +328,74 @@ AssetManager::makeUniqueAssetName(const Path& folder, StringView name) const
   return baseName;
 }
 
+/*
+ */
+bool
+AssetManager::moveAsset(const SPtr<IAsset>& asset, const Path& folder)
+{
+  if (!asset) {
+    CH_LOG_ERROR(AssetSystem, "Cannot move null asset");
+    return false;
+  }
+  if (!asset->moveTo(folder)) {
+    return false;
+  }
+  CH_LOG_DEBUG(AssetSystem, "Moved asset {0} to {1}", asset->getName(), folder);
+  return true;
+}
+
+/*
+ */
+bool
+AssetManager::moveFolder(const Path& folder, const Path& newFolder)
+{
+  const String& oldText = folder.toString();
+  const String& newText = newFolder.toString();
+  const auto isInside = [](StringView path, StringView base) {
+    return path == base ||
+           (path.size() > base.size() && path.starts_with(base) && path[base.size()] == '/');
+  };
+
+  if (oldText == EnginePaths::getGameAssetDirectory().toString()) {
+    CH_LOG_ERROR(AssetSystem, "The asset root folder cannot be moved");
+    return false;
+  }
+  if (isInside(newText, oldText)) {
+    CH_LOG_ERROR(AssetSystem, "Cannot move {0} into itself", folder);
+    return false;
+  }
+
+  // Checked before touching the disk, so files and metadata never disagree.
+  for (const auto& [uuid, asset] : m_assets) {
+    const StringView assetFolder = asset->getAssetPath();
+    if (isInside(assetFolder, oldText) &&
+        newText.size() + assetFolder.size() - oldText.size() >=
+            sizeof(AssetMetadata::assetPath)) {
+      CH_LOG_ERROR(AssetSystem, "Moving {0} to {1} makes the folder of {2} too long", folder,
+                   newFolder, asset->getName());
+      return false;
+    }
+  }
+
+  if (!FileSystem::renameDirectory(folder, newFolder)) {
+    CH_LOG_ERROR(AssetSystem, "Failed to move folder {0} to {1}", folder, newFolder);
+    return false;
+  }
+
+  String movedFolder;
+  for (const auto& [uuid, asset] : m_assets) {
+    const StringView assetFolder = asset->getAssetPath();
+    if (!isInside(assetFolder, oldText)) {
+      continue;
+    }
+    movedFolder = newText;
+    movedFolder += assetFolder.substr(oldText.size());
+    StringUtils::copyToBuffer(asset->m_metadata.assetPath, movedFolder);
+  }
+  CH_LOG_DEBUG(AssetSystem, "Moved folder {0} to {1}", folder, newFolder);
+  return true;
+}
+
 #endif // Editor-specific functionality
 
 /*

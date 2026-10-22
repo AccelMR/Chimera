@@ -15,6 +15,7 @@
 
 namespace chEngineSDK {
 class EditorCamera;
+class IAsset;
 class PrefabAsset;
 class SceneAsset;
 
@@ -165,6 +166,13 @@ class EditorScene
    */
   NODISCARD static String
   getDisplayName();
+
+  /**
+   * Called after an asset was renamed or moved, so the open scene or prefab shows its new
+   * name and the next start of the editor finds the scene at its new path.
+   */
+  static void
+  onAssetMoved(const IAsset& asset);
 
   static void
   requestNew();

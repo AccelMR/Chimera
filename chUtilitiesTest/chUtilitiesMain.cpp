@@ -2597,6 +2597,17 @@ TEST_CASE("chUtilities - FileSystem") {
     REQUIRE_FALSE(FileSystem::copyFile(Path("chFileSystemTestDir/a"),
                                        Path("chFileSystemTestDir/copy/a")));
 
+    // A directory moves with its contents; a taken name or a file is refused.
+    REQUIRE(FileSystem::renameDirectory(Path("chFileSystemTestDir/a/b"),
+                                        Path("chFileSystemTestDir/copy/b")));
+    REQUIRE(FileSystem::isFile(Path("chFileSystemTestDir/copy/b/g.bin")));
+    REQUIRE_FALSE(FileSystem::exists(Path("chFileSystemTestDir/a/b")));
+    REQUIRE_FALSE(FileSystem::renameDirectory(Path("chFileSystemTestDir/copy/b"),
+                                              Path("chFileSystemTestDir/copy/deep")));
+    REQUIRE(FileSystem::isFile(Path("chFileSystemTestDir/copy/b/g.bin")));
+    REQUIRE_FALSE(FileSystem::renameDirectory(Path("chFileSystemTestDir/copy/b/g.bin"),
+                                              Path("chFileSystemTestDir/copy/h.bin")));
+
     REQUIRE(FileSystem::removeAll(root));
     REQUIRE_FALSE(FileSystem::exists(root));
   }

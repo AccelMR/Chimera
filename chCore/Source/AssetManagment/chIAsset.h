@@ -182,6 +182,14 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   NODISCARD bool
   rename(const ANSICHAR* newName);
 
+#if USING(CH_EDITOR)
+  /**
+   * Moves the asset file into another virtual folder, keeping its name.
+   */
+  NODISCARD bool
+  moveTo(const Path& folder);
+#endif // USING(CH_EDITOR)
+
   virtual void
   clearAssetData() = 0;
 

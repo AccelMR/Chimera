@@ -138,6 +138,13 @@ IAsset::rename(const ANSICHAR* newName) {
   const Path assetPath(m_metadata.assetPath);
   const Path oldFile = assetFilePath(assetPath, m_metadata.name, getFileExtension());
   const Path newFile = assetFilePath(assetPath, newName, getFileExtension());
+  // renameFile would replace the other asset's file. A change of case only finds the asset's
+  // own file on Windows, which keeps no two names that differ by case.
+  if (!StringUtils::equalsIgnoreCase(m_metadata.name, newName) &&
+      FileSystem::exists(newFile)) {
+    CH_LOG(AssetSystem, Error, "{0} already has an asset named {1}", assetPath, newName);
+    return false;
+  }
   if (!FileSystem::renameFile(oldFile, newFile)) {
     CH_LOG(AssetSystem, Error, "Failed to rename asset {0} to {1}", m_metadata.name, newName);
     return false;
@@ -146,6 +153,38 @@ IAsset::rename(const ANSICHAR* newName) {
   StringUtils::copyToBuffer(m_metadata.name, newName);
   return true;
 }
+
+#if USING(CH_EDITOR)
+/*
+ */
+bool
+IAsset::moveTo(const Path& folder) {
+  if (folder.toString() == m_metadata.assetPath) {
+    return true;
+  }
+
+  if (folder.toString().size() >= sizeof(m_metadata.assetPath)) {
+    CH_LOG(AssetSystem, Error, "Folder {0} is longer than {1} characters", folder,
+           sizeof(m_metadata.assetPath) - 1);
+    return false;
+  }
+
+  const Path oldFile = getFilePath();
+  const Path newFile = assetFilePath(folder, m_metadata.name, getFileExtension());
+  // renameFile would replace the other asset's file.
+  if (FileSystem::exists(newFile)) {
+    CH_LOG(AssetSystem, Error, "{0} already has an asset named {1}", folder, m_metadata.name);
+    return false;
+  }
+  if (!FileSystem::renameFile(oldFile, newFile)) {
+    CH_LOG(AssetSystem, Error, "Failed to move asset {0} to {1}", m_metadata.name, folder);
+    return false;
+  }
+
+  StringUtils::copyToBuffer(m_metadata.assetPath, folder.toString());
+  return true;
+}
+#endif // USING(CH_EDITOR)
 
 /*
  */

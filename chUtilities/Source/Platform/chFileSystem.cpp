@@ -590,6 +590,32 @@ FileSystem::renameFile(const Path& oldPath, const Path& newPath)
 }
 
 bool
+FileSystem::renameDirectory(const Path& oldPath, const Path& newPath)
+{
+  const String oldRealPath = toRealPath(oldPath, Access::Write);
+  const String newRealPath = toRealPath(newPath, Access::Write);
+  if (oldRealPath.empty() || newRealPath.empty()) {
+    return false;
+  }
+
+  std::error_code error;
+  if (!fs::is_directory(toFsPath(oldRealPath), error)) {
+    return false;
+  }
+  // POSIX rename replaces an empty directory, so a taken name is refused first.
+  if (fs::exists(toFsPath(newRealPath), error)) {
+    return false;
+  }
+
+  fs::rename(toFsPath(oldRealPath), toFsPath(newRealPath), error);
+  if (error) {
+    logError("rename", oldPath, error);
+    return false;
+  }
+  return true;
+}
+
+bool
 FileSystem::removeFile(const Path& path)
 {
   const String realPath = toRealPath(path, Access::Write);

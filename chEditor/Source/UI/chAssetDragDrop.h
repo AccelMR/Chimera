@@ -28,11 +28,18 @@ class AssetDragDrop
 {
  public:
   /**
-   * Makes the last ImGui item a drag source for the asset when its type can be dropped
-   * somewhere.
+   * Makes the last ImGui item a drag source for the asset. Types that only a folder takes
+   * (scenes, skeletons) share one payload name.
    */
   static void
   source(const IAsset& asset);
+
+  /**
+   * Same as acceptModel, for an asset of any type, and not loaded. Used to move assets
+   * between folders.
+   */
+  NODISCARD static SPtr<IAsset>
+  acceptAnyAsset();
 
   /**
    * Call between BeginDragDropTarget and EndDragDropTarget. Returns the model dropped this

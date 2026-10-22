@@ -23,13 +23,16 @@
 #include "chAnimationPreviewUI.h"
 #include "chAssetManager.h"
 #include "chAssetThumbnails.h"
+#include "chConfigFile.h"
 #include "chLogger.h"
 #include "chImportDialog.h"
 #include "chEditorScene.h"
 #include "chEditorSelection.h"
+#include "chEngineConfig.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chMath.h"
+#include "chProjectPackager.h"
 #include "chUIHelpers.h"
 
 #include "chPrefabAsset.h"
@@ -87,6 +90,93 @@ shortenName(const ANSICHAR* name, ShortName& outBuffer)
   return outBuffer;
 }
 
+constexpr const ANSICHAR* kFolderPayload = "CH_FOLDER";
+
+/*
+ * Names every file system takes: no separators or characters Windows refuses, and no
+ * trailing dot or space, which Windows drops.
+ */
+bool
+isValidFileName(StringView name)
+{
+  if (name.empty() || name == "." || name == ".." || name.back() == '.' ||
+      name.back() == ' ') {
+    return false;
+  }
+  for (const ANSICHAR c : name) {
+    if (static_cast<uint8>(c) < 32 || StringView("/\\:*?\"<>|").find(c) != StringView::npos) {
+      return false;
+    }
+  }
+  return true;
+}
+
+NODISCARD bool
+isInsideFolder(StringView path, StringView folder)
+{
+  return path == folder || (path.size() > folder.size() && path.starts_with(folder) &&
+                            path[folder.size()] == '/');
+}
+
+String
+getScenePath(const IAsset& scene)
+{
+  String path(scene.getAssetPath());
+  path += '/';
+  path += scene.getName();
+  return path;
+}
+
+/*
+ * The template names its class after the script, so the name must be a Lua identifier.
+ */
+bool
+isLuaIdentifier(StringView name)
+{
+  if (name.empty() || (name[0] >= '0' && name[0] <= '9')) {
+    return false;
+  }
+  for (const ANSICHAR c : name) {
+    const bool bLetter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    if (!bLetter && !(c >= '0' && c <= '9') && c != '_') {
+      return false;
+    }
+  }
+  return true;
+}
+
+String
+makeScriptTemplate(const String& name)
+{
+  return StringUtils::format(
+      "-- {0}: runs on every GameObject that has it while the game plays.\n"
+      "-- The line below tells code editors what self holds (gameObject, transform...).\n"
+      "---@class {0} : Script\n"
+      "local {0} = {{\n"
+      "  -- Fields set here are the defaults every object starts with (self.speed).\n"
+      "  speed = 1,\n"
+      "}}\n"
+      "\n"
+      "-- Runs once, before the first update.\n"
+      "function {0}:onStart()\n"
+      "end\n"
+      "\n"
+      "-- Runs every frame; deltaTime is in seconds.\n"
+      "function {0}:update(deltaTime)\n"
+      "end\n"
+      "\n"
+      "-- Runs at the fixed rate, for logic that must not depend on the frame rate.\n"
+      "-- function {0}:fixedUpdate(deltaTime)\n"
+      "-- end\n"
+      "\n"
+      "-- Runs when the object is destroyed or the game stops.\n"
+      "-- function {0}:onDestroy()\n"
+      "-- end\n"
+      "\n"
+      "return {0}\n",
+      name);
+}
+
 } // namespace
 
 /*
@@ -116,6 +206,7 @@ void
 ContentAssetUI::renderContentAssetUI()
 {
   renderDeleteConfirmationPopup();
+  renderMoveConfirmationPopup();
 
   if (!ImGui::Begin(ICON_FA_FOLDER_OPEN "  Content Browser###ContentBrowser",
                     &bShowContentWindow)) {
@@ -123,6 +214,7 @@ ContentAssetUI::renderContentAssetUI()
     return;
   }
 
+  handleRenameShortcut();
   renderSearchBar();
   renderAssetTypeFilters();
   renderViewModeControls();
@@ -138,7 +230,11 @@ ContentAssetUI::renderContentAssetUI()
   if (m_requestedFolder != INVALID_FOLDER) {
     m_currentFolder = m_requestedFolder;
     m_requestedFolder = INVALID_FOLDER;
+    m_selectedFolder = INVALID_FOLDER;
     m_needsFilterUpdate = true;
+  }
+  if (m_bMoveRequested && !m_bOpenMoveConfirmation) {
+    applyPendingMove();
   }
 
   ImGui::End();
@@ -261,7 +357,7 @@ ContentAssetUI::renderAssetDisplayArea()
 
   ImGui::EndChild();
   // A folder inside the area is a smaller target, so ImGui gives it the drop instead.
-  acceptPrefabDrop(getCurrentFolderPath());
+  acceptFolderDrop(getCurrentFolderPath());
 }
 
 /*
@@ -350,6 +446,9 @@ ContentAssetUI::renderGridView()
 
   ImGuiListClipper clipper;
   clipper.Begin(rowCount);
+  if (const int32 renameItem = findRenameFocusItem(); renameItem >= 0) {
+    clipper.IncludeItemByIndex(renameItem / columns);
+  }
   while (clipper.Step()) {
     for (int32 row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
       const int32 first = row * columns;
@@ -383,6 +482,9 @@ ContentAssetUI::renderListView()
   const int32 folderCount = static_cast<int32>(folders.size());
   ImGuiListClipper clipper;
   clipper.Begin(folderCount + static_cast<int32>(m_visibleAssets.size()));
+  if (const int32 renameItem = findRenameFocusItem(); renameItem >= 0) {
+    clipper.IncludeItemByIndex(renameItem);
+  }
   while (clipper.Step()) {
     for (int32 i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
       if (i < folderCount) {
@@ -485,6 +587,7 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
   AssetDragDrop::source(*asset);
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
     EditorSelection::setSelectedAsset(asset);
+    m_selectedFolder = INVALID_FOLDER;
   }
   if (EditorSelection::getSelectedAsset() == asset) {
     ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
@@ -554,6 +657,7 @@ ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
   if (ImGui::Selectable(asset->getName(), EditorSelection::getSelectedAsset() == asset,
                         ImGuiSelectableFlags_SpanAllColumns)) {
     EditorSelection::setSelectedAsset(asset);
+    m_selectedFolder = INVALID_FOLDER;
   }
   AssetDragDrop::source(*asset);
 
@@ -711,7 +815,7 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
     AssetThumbnails::regenerate(*asset);
   }
 
-  if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename")) {
+  if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename", "F2")) {
     startInlineRename(asset);
     ImGui::CloseCurrentPopup();
   }
@@ -735,13 +839,28 @@ ContentAssetUI::startInlineRename(const SPtr<IAsset>& asset)
     return;
   }
 
+  cancelInlineRename();
   m_isRenaming = true;
   m_renamingAsset = asset;
   m_renameFocusRequested = true;
-
   StringUtils::copyToBuffer(m_renameBuffer, asset->getName());
+}
 
-  CH_LOG_DEBUG(ContentAssetUILog, "Started inline rename for asset: {0}", asset->getName());
+/*
+ */
+void
+ContentAssetUI::startFolderRename(uint32 folderIndex)
+{
+  // /Game is the mount of the project's Assets folder, so it keeps its name.
+  if (folderIndex == 0 || folderIndex >= m_folders.size()) {
+    return;
+  }
+
+  cancelInlineRename();
+  m_isRenaming = true;
+  m_renamingFolder = folderIndex;
+  m_renameFocusRequested = true;
+  StringUtils::copyToBuffer(m_renameBuffer, m_folders[folderIndex].name);
 }
 
 /*
@@ -749,18 +868,42 @@ ContentAssetUI::startInlineRename(const SPtr<IAsset>& asset)
 void
 ContentAssetUI::finishInlineRename()
 {
-  if (!m_isRenaming || !m_renamingAsset) {
+  if (!m_isRenaming) {
     return;
   }
 
   const String newName = StringUtils::trim(String(m_renameBuffer));
-
-  if (!newName.empty() && newName != m_renamingAsset->getName()) {
-    if (!AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str())) {
+  if (m_renamingAsset && !newName.empty() && newName != m_renamingAsset->getName()) {
+    if (!isValidFileName(newName)) {
+      CH_LOG_ERROR(ContentAssetUILog, "{0} is not a valid asset name.", newName);
+    }
+    else if (AssetManager::instance().renameAsset(m_renamingAsset, newName.c_str())) {
+      EditorScene::onAssetMoved(*m_renamingAsset);
+      // Nothing was written in a script just made, so its class takes the new name.
+      if (m_bRenameRewritesScript && m_renamingAsset->isTypeOf<ScriptAsset>() &&
+          isLuaIdentifier(newName)) {
+        const SPtr<ScriptAsset> script = std::static_pointer_cast<ScriptAsset>(m_renamingAsset);
+        script->setSource(makeScriptTemplate(newName));
+        if (!AssetManager::instance().saveAsset(script)) {
+          CH_LOG_ERROR(ContentAssetUILog, "Failed to save the script {0}.", newName);
+        }
+      }
+    }
+    else {
       CH_LOG_ERROR(ContentAssetUILog, "Failed to rename asset to: {0}", newName);
     }
     // The new name may no longer match the search.
     m_needsFilterUpdate = true;
+  }
+  else if (m_renamingFolder != INVALID_FOLDER && !newName.empty() &&
+           newName != m_folders[m_renamingFolder].name) {
+    const FolderNode& folder = m_folders[m_renamingFolder];
+    if (isValidFileName(newName)) {
+      requestFolderMove(folder.path, m_folders[folder.parent].path.join(Path(newName)));
+    }
+    else {
+      CH_LOG_ERROR(ContentAssetUILog, "{0} is not a valid folder name.", newName);
+    }
   }
 
   cancelInlineRename();
@@ -773,7 +916,9 @@ ContentAssetUI::cancelInlineRename()
 {
   m_isRenaming = false;
   m_renamingAsset = nullptr;
+  m_renamingFolder = INVALID_FOLDER;
   m_renameFocusRequested = false;
+  m_bRenameRewritesScript = false;
   std::memset(m_renameBuffer, 0, sizeof(m_renameBuffer));
 }
 
@@ -785,7 +930,27 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset)
   if (!m_isRenaming || m_renamingAsset != asset) {
     return false;
   }
+  renderRenameField();
+  return true;
+}
 
+/*
+ */
+bool
+ContentAssetUI::renderFolderRename(uint32 folderIndex)
+{
+  if (!m_isRenaming || m_renamingFolder != folderIndex) {
+    return false;
+  }
+  renderRenameField();
+  return true;
+}
+
+/*
+ */
+void
+ContentAssetUI::renderRenameField()
+{
   const ImVec2 textSize = ImGui::CalcTextSize(m_renameBuffer);
   const float inputWidth = Math::max(textSize.x + 20.0f, 100.0f);
 
@@ -796,6 +961,7 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset)
   ImGui::SetNextItemWidth(inputWidth);
 
   if (m_renameFocusRequested) {
+    ImGui::SetScrollHereY();
     ImGui::SetKeyboardFocusHere();
     m_renameFocusRequested = false;
   }
@@ -821,8 +987,259 @@ ContentAssetUI::renderInlineRename(const SPtr<IAsset>& asset)
   }
 
   ImGui::PopStyleVar(2);
+}
 
-  return true;
+/*
+ */
+int32
+ContentAssetUI::findRenameFocusItem() const
+{
+  if (!m_renameFocusRequested) {
+    return -1;
+  }
+  const Vector<uint32>& folders = getVisibleSubfolders();
+  for (SIZE_T i = 0; i < folders.size(); ++i) {
+    if (folders[i] == m_renamingFolder) {
+      return static_cast<int32>(i);
+    }
+  }
+  if (!m_renamingAsset) {
+    return -1;
+  }
+  for (SIZE_T i = 0; i < m_visibleAssets.size(); ++i) {
+    if (m_assets[m_visibleAssets[i]] == m_renamingAsset) {
+      return static_cast<int32>(folders.size() + i);
+    }
+  }
+  return -1;
+}
+
+/*
+ */
+void
+ContentAssetUI::handleRenameShortcut()
+{
+  if (m_isRenaming || !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+      ImGui::GetIO().WantTextInput || !ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+    return;
+  }
+  if (m_selectedFolder != INVALID_FOLDER) {
+    startFolderRename(m_selectedFolder);
+    return;
+  }
+  // Only an asset the browser shows, since the field is drawn in its tile.
+  const SPtr<IAsset>& selected = EditorSelection::getSelectedAsset();
+  if (selected && passesFolderFilter(selected)) {
+    startInlineRename(selected);
+  }
+}
+
+/*
+ */
+void
+ContentAssetUI::folderDragSource(uint32 folderIndex)
+{
+  if (folderIndex == 0 || !ImGui::BeginDragDropSource()) {
+    return;
+  }
+  // ImGui copies the bytes; the path is read back on drop.
+  const String& path = m_folders[folderIndex].path.toString();
+  ImGui::SetDragDropPayload(kFolderPayload, path.data(), path.size());
+  ImGui::Text("%s %s", UIHelpers::getFolderIcon(false), m_folders[folderIndex].name.c_str());
+  ImGui::EndDragDropSource();
+}
+
+/*
+ * Prefabs are made after the frame's UI, because saving refreshes the asset list.
+ */
+void
+ContentAssetUI::acceptFolderDrop(const Path& folder)
+{
+  if (!ImGui::BeginDragDropTarget()) {
+    return;
+  }
+  if (const SPtr<GameObject> gameObject = AssetDragDrop::acceptGameObject()) {
+    // A drag selects its row when it starts, so this only matters if something changed the
+    // selection during the drag.
+    if (!EditorSelection::isSelected(*gameObject)) {
+      EditorSelection::setSelectedGameObject(gameObject);
+    }
+    EditorScene::requestCreatePrefabs(folder);
+  }
+  else if (const SPtr<IAsset> asset = AssetDragDrop::acceptAnyAsset()) {
+    requestAssetMove(asset, folder);
+  }
+  else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kFolderPayload)) {
+    const Path dragged(String(static_cast<const ANSICHAR*>(payload->Data),
+                              static_cast<SIZE_T>(payload->DataSize)));
+    requestFolderMove(dragged, folder.join(Path(dragged.getFileName())));
+  }
+  ImGui::EndDragDropTarget();
+}
+
+/*
+ */
+void
+ContentAssetUI::requestAssetMove(const SPtr<IAsset>& asset, const Path& folder)
+{
+  if (!asset || folder.toString() == asset->getAssetPath()) {
+    return;
+  }
+  m_moveAsset = asset;
+  m_moveFolder = Path();
+  m_moveTarget = folder;
+  m_bMoveRequested = true;
+  findBrokenScenePaths();
+  m_bOpenMoveConfirmation = !m_moveWarnings.empty();
+}
+
+/*
+ */
+void
+ContentAssetUI::requestFolderMove(const Path& folder, const Path& newFolder)
+{
+  if (folder.toString() == newFolder.toString()) {
+    return;
+  }
+  m_moveAsset = nullptr;
+  m_moveFolder = folder;
+  m_moveTarget = newFolder;
+  m_bMoveRequested = true;
+  findBrokenScenePaths();
+  m_bOpenMoveConfirmation = !m_moveWarnings.empty();
+}
+
+/*
+ */
+void
+ContentAssetUI::findBrokenScenePaths()
+{
+  m_moveWarnings.clear();
+
+  Vector<String> movedScenes;
+  if (m_moveAsset) {
+    if (m_moveAsset->isTypeOf<SceneAsset>()) {
+      movedScenes.push_back(getScenePath(*m_moveAsset));
+    }
+  }
+  else {
+    for (const SPtr<IAsset>& asset : m_assets) {
+      if (asset->isTypeOf<SceneAsset>() &&
+          isInsideFolder(asset->getAssetPath(), m_moveFolder.toString())) {
+        movedScenes.push_back(getScenePath(*asset));
+      }
+    }
+  }
+  if (movedScenes.empty()) {
+    return;
+  }
+
+  // The editor's own startup scene follows the open scene (EditorScene::onAssetMoved).
+  if (const String* startup =
+          EngineConfig::getFile("Game").getValue("Game", "StartupScene")) {
+    if (Algorithm::contains(movedScenes, *startup)) {
+      m_moveWarnings.push_back(
+          StringUtils::format("Game.ini [Game] StartupScene names {0}", *startup));
+    }
+  }
+
+  ConfigFile packageSettings;
+  const Path packagePath = EnginePaths::getProjectConfigDirectory().join(
+      Path(String(ProjectPackager::PACKAGE_SETTINGS_FILE)));
+  if (FileSystem::exists(packagePath) && packageSettings.load(packagePath)) {
+    if (const String* scenes = packageSettings.getValue("Package", "Scenes")) {
+      for (const String& scene : StringUtils::splitString(*scenes, ',')) {
+        if (Algorithm::contains(movedScenes, scene)) {
+          m_moveWarnings.push_back(
+              StringUtils::format("Package.ini [Package] Scenes lists {0}", scene));
+        }
+      }
+    }
+  }
+}
+
+/*
+ */
+void
+ContentAssetUI::renderMoveConfirmationPopup()
+{
+  if (m_bOpenMoveConfirmation) {
+    ImGui::OpenPopup("Move Scene?");
+    m_bOpenMoveConfirmation = false;
+  }
+  if (!ImGui::BeginPopupModal("Move Scene?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    return;
+  }
+
+  ImGui::TextUnformatted("These settings name a scene by its path and will not find it:");
+  for (const String& warning : m_moveWarnings) {
+    ImGui::BulletText("%s", warning.c_str());
+  }
+  ImGui::TextUnformatted("Assets that use it reference it by UUID and keep working.");
+  ImGui::Separator();
+
+  if (ImGui::Button("Move Anyway", ImVec2(120, 0))) {
+    m_bMoveConfirmed = true;
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    m_bMoveRequested = false;
+    m_moveAsset = nullptr;
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
+}
+
+/*
+ */
+void
+ContentAssetUI::applyPendingMove()
+{
+  // Waits for the question; Cancel clears the request.
+  if (!m_moveWarnings.empty() && !m_bMoveConfirmed) {
+    return;
+  }
+  m_bMoveRequested = false;
+  m_bMoveConfirmed = false;
+  m_moveWarnings.clear();
+
+  AssetManager& assetManager = AssetManager::instance();
+  if (m_moveAsset) {
+    if (assetManager.moveAsset(m_moveAsset, m_moveTarget)) {
+      EditorScene::onAssetMoved(*m_moveAsset);
+    }
+    m_moveAsset = nullptr;
+    refreshAssets();
+    return;
+  }
+
+  // The current folder follows when it is the moved one or inside it.
+  const String& oldText = m_moveFolder.toString();
+  const String& currentText = getCurrentFolderPath().toString();
+  String newCurrent;
+  if (isInsideFolder(currentText, oldText)) {
+    newCurrent = m_moveTarget.toString();
+    newCurrent += StringView(currentText).substr(oldText.size());
+  }
+
+  if (!assetManager.moveFolder(m_moveFolder, m_moveTarget)) {
+    return;
+  }
+  for (const SPtr<IAsset>& asset : m_assets) {
+    if (isInsideFolder(asset->getAssetPath(), m_moveTarget.toString())) {
+      EditorScene::onAssetMoved(*asset);
+    }
+  }
+  refreshAssets();
+  if (!newCurrent.empty()) {
+    const uint32 found = findFolder(Path(newCurrent));
+    if (found != INVALID_FOLDER) {
+      m_currentFolder = found;
+      m_bRevealCurrentFolder = true;
+    }
+  }
+  m_selectedFolder = findFolder(m_moveTarget);
 }
 
 /*
@@ -846,6 +1263,12 @@ ContentAssetUI::rebuildFolderTree()
 {
   const Path previous = m_folders.empty() ? EnginePaths::getGameAssetDirectory()
                                           : getCurrentFolderPath();
+  const Path previousSelected =
+      m_selectedFolder != INVALID_FOLDER ? m_folders[m_selectedFolder].path : Path();
+  // The index it holds may point at another folder after the scan.
+  if (m_renamingFolder != INVALID_FOLDER) {
+    cancelInlineRename();
+  }
   m_folders.clear();
   m_folders.push_back({.path = EnginePaths::getGameAssetDirectory(),
                        .name = "Game",
@@ -856,6 +1279,7 @@ ContentAssetUI::rebuildFolderTree()
   const uint32 found = findFolder(previous);
   m_currentFolder = found == INVALID_FOLDER ? 0 : found;
   m_requestedFolder = INVALID_FOLDER;
+  m_selectedFolder = previousSelected.empty() ? INVALID_FOLDER : findFolder(previousSelected);
   m_needsFilterUpdate = true;
 }
 
@@ -922,27 +1346,6 @@ ContentAssetUI::requestFolder(uint32 folderIndex)
 }
 
 /*
- * One prefab per selected object, made after the frame's UI, because saving refreshes the
- * asset list.
- */
-void
-ContentAssetUI::acceptPrefabDrop(const Path& folder)
-{
-  if (!ImGui::BeginDragDropTarget()) {
-    return;
-  }
-  if (const SPtr<GameObject> gameObject = AssetDragDrop::acceptGameObject()) {
-    // A drag selects its row when it starts, so this only matters if something changed the
-    // selection during the drag.
-    if (!EditorSelection::isSelected(*gameObject)) {
-      EditorSelection::setSelectedGameObject(gameObject);
-    }
-    EditorScene::requestCreatePrefabs(folder);
-  }
-  ImGui::EndDragDropTarget();
-}
-
-/*
  */
 void
 ContentAssetUI::renderFolderTree()
@@ -993,7 +1396,9 @@ ContentAssetUI::renderFolderTreeNode(uint32 folderIndex)
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
     requestFolder(folderIndex);
   }
-  acceptPrefabDrop(folder.path);
+  folderDragSource(folderIndex);
+  acceptFolderDrop(folder.path);
+  handleFolderContextMenu(folderIndex);
   if (bOpen) {
     for (const uint32 child : folder.children) {
       renderFolderTreeNode(child);
@@ -1024,6 +1429,7 @@ ContentAssetUI::renderBreadcrumb()
     if (ImGui::SmallButton(m_folders[folderIndex].name.c_str())) {
       requestFolder(folderIndex);
     }
+    acceptFolderDrop(m_folders[folderIndex].path);
     ImGui::PopID();
     if (i > 1) {
       ImGui::SameLine(0.0f, 2.0f);
@@ -1051,11 +1457,21 @@ ContentAssetUI::renderGridFolderItem(uint32 folderIndex, int32 column)
   pushTileColors();
   ImGui::Button("##folder", ImVec2(gridSize, gridSize));
   ImGui::PopStyleColor(3);
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+    m_selectedFolder = folderIndex;
+  }
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     requestFolder(folderIndex);
     m_bRevealCurrentFolder = true;
   }
-  acceptPrefabDrop(folder.path);
+  folderDragSource(folderIndex);
+  acceptFolderDrop(folder.path);
+  handleFolderContextMenu(folderIndex);
+  if (m_selectedFolder == folderIndex) {
+    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                        ImGui::GetColorU32(ImGuiCol_HeaderActive),
+                                        ImGui::GetStyle().FrameRounding, 0, 2.0f);
+  }
 
   const ImVec2 buttonMin = ImGui::GetItemRectMin();
   const ImVec2 iconPos =
@@ -1064,11 +1480,13 @@ ContentAssetUI::renderGridFolderItem(uint32 folderIndex, int32 column)
                                       IM_COL32(230, 190, 90, 255),
                                       UIHelpers::getFolderIcon(false));
 
-  ShortName shortName;
-  const ANSICHAR* displayName = shortenName(folder.name.c_str(), shortName);
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                       (gridSize - ImGui::CalcTextSize(displayName).x) * 0.5f);
-  ImGui::TextUnformatted(displayName);
+  if (!renderFolderRename(folderIndex)) {
+    ShortName shortName;
+    const ANSICHAR* displayName = shortenName(folder.name.c_str(), shortName);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         (gridSize - ImGui::CalcTextSize(displayName).x) * 0.5f);
+    ImGui::TextUnformatted(displayName);
+  }
 
   ImGui::EndGroup();
   if (ImGui::IsItemHovered()) {
@@ -1090,17 +1508,53 @@ ContentAssetUI::renderListFolderItem(uint32 folderIndex)
   ImGui::TextUnformatted(UIHelpers::getFolderIcon(false));
 
   ImGui::TableSetColumnIndex(1);
-  ImGui::Selectable(folder.name.c_str(), false, ImGuiSelectableFlags_SpanAllColumns);
-  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-    requestFolder(folderIndex);
-    m_bRevealCurrentFolder = true;
+  if (!renderFolderRename(folderIndex)) {
+    if (ImGui::Selectable(folder.name.c_str(), m_selectedFolder == folderIndex,
+                          ImGuiSelectableFlags_SpanAllColumns)) {
+      m_selectedFolder = folderIndex;
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      requestFolder(folderIndex);
+      m_bRevealCurrentFolder = true;
+    }
+    folderDragSource(folderIndex);
+    acceptFolderDrop(folder.path);
+    handleFolderContextMenu(folderIndex);
   }
-  acceptPrefabDrop(folder.path);
 
   ImGui::TableSetColumnIndex(2);
   ImGui::TextUnformatted("Folder");
 
   ImGui::PopID();
+}
+
+/*
+ */
+void
+ContentAssetUI::handleFolderContextMenu(uint32 folderIndex)
+{
+  if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    ImGui::OpenPopup("FolderContext");
+  }
+  if (!ImGui::BeginPopup("FolderContext")) {
+    return;
+  }
+
+  if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) {
+    requestFolder(folderIndex);
+    m_bRevealCurrentFolder = true;
+  }
+  if (ImGui::MenuItem(ICON_FA_I_CURSOR "  Rename", "F2", false, folderIndex != 0)) {
+    // The field is drawn in the folder's tile, so its parent must be the folder shown.
+    const uint32 parent = m_folders[folderIndex].parent;
+    if (parent != m_currentFolder) {
+      requestFolder(parent);
+      m_bRevealCurrentFolder = true;
+    }
+    startFolderRename(folderIndex);
+    m_selectedFolder = folderIndex;
+  }
+  ImGui::EndPopup();
 }
 
 /*
@@ -1146,14 +1600,28 @@ ContentAssetUI::createFolder()
   rebuildFolderTree();
   const uint32 created = findFolder(folder);
   if (created != INVALID_FOLDER) {
-    m_currentFolder = created;
-    m_bRevealCurrentFolder = true;
+    m_selectedFolder = created;
+    startFolderRename(created);
   }
 }
 
 /*
  */
 void
+ContentAssetUI::onAssetCreated(const SPtr<IAsset>& asset)
+{
+  refreshAssets();
+  if (asset) {
+    EditorSelection::setSelectedAsset(asset);
+    m_selectedFolder = INVALID_FOLDER;
+    startInlineRename(asset);
+    m_bRenameRewritesScript = asset->isTypeOf<ScriptAsset>();
+  }
+}
+
+/*
+ */
+SPtr<IAsset>
 ContentAssetUI::createScript()
 {
   AssetManager& assetManager = AssetManager::instance();
@@ -1162,39 +1630,14 @@ ContentAssetUI::createScript()
   const SPtr<ScriptAsset> script = assetManager.createAsset<ScriptAsset>(name, folder).lock();
   if (!script) {
     CH_LOG_ERROR(ContentAssetUILog, "Failed to create a script.");
-    return;
+    return nullptr;
   }
-  script->setSource(StringUtils::format(
-      "-- {0}: runs on every GameObject that has it while the game plays.\n"
-      "-- The line below tells code editors what self holds (gameObject, transform...).\n"
-      "---@class {0} : Script\n"
-      "local {0} = {{\n"
-      "  -- Fields set here are the defaults every object starts with (self.speed).\n"
-      "  speed = 1,\n"
-      "}}\n"
-      "\n"
-      "-- Runs once, before the first update.\n"
-      "function {0}:onStart()\n"
-      "end\n"
-      "\n"
-      "-- Runs every frame; deltaTime is in seconds.\n"
-      "function {0}:update(deltaTime)\n"
-      "end\n"
-      "\n"
-      "-- Runs at the fixed rate, for logic that must not depend on the frame rate.\n"
-      "-- function {0}:fixedUpdate(deltaTime)\n"
-      "-- end\n"
-      "\n"
-      "-- Runs when the object is destroyed or the game stops.\n"
-      "-- function {0}:onDestroy()\n"
-      "-- end\n"
-      "\n"
-      "return {0}\n",
-      name));
+  script->setSource(makeScriptTemplate(name));
   if (!assetManager.saveAsset(script)) {
     CH_LOG_ERROR(ContentAssetUILog, "Failed to save the script {0}.", name);
+    return nullptr;
   }
-  refreshAssets();
+  return script;
 }
 
 /*
@@ -1252,13 +1695,16 @@ ContentAssetUI::renderEmptyAreaContextMenu()
       const SPtr<MaterialAsset> material =
           assetManager.createAsset<MaterialAsset>(
               assetManager.makeUniqueAssetName(folder, "M_New"), folder).lock();
-      if (!material || !assetManager.saveAsset(material)) {
-        CH_LOG_ERROR(ContentAssetUILog, "Failed to create a material.");
+      if (material && assetManager.saveAsset(material)) {
+        onAssetCreated(material);
       }
-      refreshAssets();
+      else {
+        CH_LOG_ERROR(ContentAssetUILog, "Failed to create a material.");
+        refreshAssets();
+      }
     }
     if (ImGui::MenuItem(ICON_FA_FILE_CODE "  Script")) {
-      createScript();
+      onAssetCreated(createScript());
     }
     ImGui::EndMenu();
   }

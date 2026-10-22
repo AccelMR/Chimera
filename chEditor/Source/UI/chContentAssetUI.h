@@ -19,7 +19,7 @@ namespace chEngineSDK {
  * Editor window that lists the project assets in a grid or a table, with search and
  * type filters. The filtered list is only rebuilt when the assets or the filters
  * change, and only the visible rows are drawn. Models are dragged from here onto the
- * scene.
+ * scene, and assets and folders onto folders to move them.
  */
 class ContentAssetUI
 {
@@ -64,6 +64,67 @@ class ContentAssetUI
    */
   bool
   renderInlineRename(const SPtr<IAsset>& asset);
+
+  void
+  startFolderRename(uint32 folderIndex);
+
+  /**
+   * Same as renderInlineRename, for a folder.
+   */
+  bool
+  renderFolderRename(uint32 folderIndex);
+
+  void
+  renderRenameField();
+
+  /**
+   * Position of the item whose rename field waits for focus, counting the visible
+   * subfolders first, or -1. The clippers draw it even when it is out of view.
+   */
+  NODISCARD int32
+  findRenameFocusItem() const;
+
+  /**
+   * F2 renames the selected folder, else the selected asset.
+   */
+  void
+  handleRenameShortcut();
+
+  /**
+   * Makes the last ImGui item a drag source for the folder, so it can be moved.
+   */
+  void
+  folderDragSource(uint32 folderIndex);
+
+  /**
+   * Makes the last ImGui item a target for assets and folders, which move into folder, and
+   * for objects dragged from the Scene Graph, which become prefabs there.
+   */
+  void
+  acceptFolderDrop(const Path& folder);
+
+  /**
+   * The move runs after the frame's lists are drawn, because it reads the folders from
+   * disk again. When a setting names a scene that moves by its path, it asks first.
+   */
+  void
+  requestAssetMove(const SPtr<IAsset>& asset, const Path& folder);
+
+  void
+  requestFolderMove(const Path& folder, const Path& newFolder);
+
+  void
+  applyPendingMove();
+
+  void
+  renderMoveConfirmationPopup();
+
+  /**
+   * The settings that name, by path, a scene the pending move takes elsewhere. Assets
+   * reference each other by UUID, so only text paths in config files break.
+   */
+  void
+  findBrokenScenePaths();
 
   void
   renderSearchBar();
@@ -157,13 +218,6 @@ class ContentAssetUI
   void
   requestFolder(uint32 folderIndex);
 
-  /**
-   * Makes the last ImGui item a target for objects dragged from the Scene Graph, which
-   * become prefabs in folder.
-   */
-  void
-  acceptPrefabDrop(const Path& folder);
-
   void
   renderGridFolderItem(uint32 folderIndex, int32 column);
 
@@ -171,13 +225,25 @@ class ContentAssetUI
   renderListFolderItem(uint32 folderIndex);
 
   void
+  handleFolderContextMenu(uint32 folderIndex);
+
+  /**
+   * Makes a folder in the current one and starts renaming it.
+   */
+  void
   createFolder();
 
   /**
-   * Writes a new script from a template into the current folder.
+   * Writes a new script from a template into the current folder. Null on failure.
+   */
+  SPtr<IAsset>
+  createScript();
+
+  /**
+   * Refreshes the list and starts renaming an asset just made.
    */
   void
-  createScript();
+  onAssetCreated(const SPtr<IAsset>& asset);
 
   /**
    * Opens what can be opened: scenes, prefabs in prefab mode, scripts in the program the
@@ -220,10 +286,26 @@ class ContentAssetUI
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
 
+  // Picked by a click on a folder tile or row; an asset click clears it. Used by F2.
+  uint32 m_selectedFolder = INVALID_FOLDER;
+
   bool m_isRenaming = false;
   SPtr<IAsset> m_renamingAsset = nullptr;
+  uint32 m_renamingFolder = INVALID_FOLDER;
   ANSICHAR m_renameBuffer[256] = {0};
+  // Also keeps the renamed row drawn and scrolls to it, for a new asset out of view.
   bool m_renameFocusRequested = false;
+  // Set for a script just made from the template, whose class is named after the file.
+  bool m_bRenameRewritesScript = false;
+
+  // Either an asset or a folder (m_moveFolder not empty) moves into m_moveTarget.
+  bool m_bMoveRequested = false;
+  bool m_bMoveConfirmed = false;
+  SPtr<IAsset> m_moveAsset;
+  Path m_moveFolder;
+  Path m_moveTarget;
+  Vector<String> m_moveWarnings;
+  bool m_bOpenMoveConfirmation = false;
 
   bool showAllTypes = true;
   bool showModels = true;

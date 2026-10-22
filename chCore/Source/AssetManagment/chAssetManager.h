@@ -112,6 +112,20 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
    */
   NODISCARD String
   makeUniqueAssetName(const Path& folder, StringView name) const;
+
+  /**
+   * Moves the asset file into another virtual folder. Assets reference each other by UUID,
+   * so nothing that uses it needs to change.
+   */
+  bool
+  moveAsset(const SPtr<IAsset>& asset, const Path& folder);
+
+  /**
+   * Renames or moves a folder under /Game with everything in it, and updates the folder of
+   * every asset inside.
+   */
+  bool
+  moveFolder(const Path& folder, const Path& newFolder);
 #endif // Editor-specific functionality
 
   /*

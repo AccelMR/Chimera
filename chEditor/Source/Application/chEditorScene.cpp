@@ -1194,6 +1194,27 @@ EditorScene::getDisplayName()
 /*
  */
 void
+EditorScene::onAssetMoved(const IAsset& asset)
+{
+  EditorSceneState& state = getState();
+  if (state.prefab.get() == &asset && state.scene) {
+    state.scene->setName(asset.getName());
+    ++state.revision;
+  }
+  else if (state.asset.get() == &asset && state.scene) {
+    // While playing, scene is the copy and editScene the scene that is saved.
+    state.scene->setName(asset.getName());
+    if (state.editScene) {
+      state.editScene->setName(asset.getName());
+    }
+    rememberStartupScene(*state.asset);
+    ++state.revision;
+  }
+}
+
+/*
+ */
+void
 EditorScene::requestNew()
 {
   requestAction(PendingAction::New, nullptr);
