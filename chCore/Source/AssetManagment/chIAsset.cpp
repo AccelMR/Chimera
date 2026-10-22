@@ -24,9 +24,8 @@
 namespace chEngineSDK {
 namespace {
 Path
-assetFilePath(const Path& folder, StringView assetName)
+assetFilePath(const Path& folder, StringView assetName, StringView extension)
 {
-  const StringView extension = EnginePaths::getEngineAssetExtension();
   String fileName;
   fileName.reserve(assetName.size() + extension.size());
   fileName.append(assetName);
@@ -48,7 +47,15 @@ IAsset::getTypeName() const
 Path
 IAsset::getFilePath() const
 {
-  return assetFilePath(Path(m_metadata.assetPath), m_metadata.name);
+  return assetFilePath(Path(m_metadata.assetPath), m_metadata.name, getFileExtension());
+}
+
+/*
+ */
+StringView
+IAsset::getFileExtension() const
+{
+  return EnginePaths::getEngineAssetExtension();
 }
 
 /*
@@ -62,7 +69,7 @@ IAsset::save() {
     return false;
   }
 
-  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
+  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name, getFileExtension());
   SPtr<DataStream> stream = FileSystem::createAndOpenFile(fullFilePath);
   if (!stream) {
     CH_LOG(AssetSystem, Error, "Failed to create asset file {0}", assetPath.toString());
@@ -70,8 +77,10 @@ IAsset::save() {
   }
 
   m_referencedAssets.clear();
-  collectReferences(m_referencedAssets);
-  AssetFile::writeStart(*stream, m_metadata.uuid, m_metadata.assetType, m_referencedAssets);
+  if (!isPlainFile()) {
+    collectReferences(m_referencedAssets);
+    AssetFile::writeStart(*stream, m_metadata.uuid, m_metadata.assetType, m_referencedAssets);
+  }
 
   const bool success = serialize(stream);
   if (!success) {
@@ -82,10 +91,7 @@ IAsset::save() {
   stream->close();
 
 #if USING(CH_EDITOR)
-  ConfigFile metaFile;
-  AssetMeta::write(m_editorData, EnginePaths::getProjectDirectory(), metaFile);
-  writeEditorValues(metaFile);
-  if (!metaFile.save(AssetMeta::getPath(fullFilePath))) {
+  if (!saveMetaFile()) {
     CH_LOG(AssetSystem, Warning, "Failed to write the .meta file of asset {0}",
            m_metadata.name);
   }
@@ -95,6 +101,19 @@ IAsset::save() {
          assetPath.toString());
   return true;
 }
+
+#if USING(CH_EDITOR)
+/*
+ */
+bool
+IAsset::saveMetaFile() const
+{
+  ConfigFile metaFile;
+  AssetMeta::write(m_editorData, EnginePaths::getProjectDirectory(), metaFile);
+  writeEditorValues(metaFile);
+  return metaFile.save(AssetMeta::getPath(getFilePath()));
+}
+#endif // USING(CH_EDITOR)
 
 /*
  */
@@ -119,8 +138,8 @@ IAsset::rename(const ANSICHAR* newName) {
   }
 
   const Path assetPath(m_metadata.assetPath);
-  const Path oldFile = assetFilePath(assetPath, m_metadata.name);
-  const Path newFile = assetFilePath(assetPath, newName);
+  const Path oldFile = assetFilePath(assetPath, m_metadata.name, getFileExtension());
+  const Path newFile = assetFilePath(assetPath, newName, getFileExtension());
   if (!FileSystem::renameFile(oldFile, newFile)) {
     CH_LOG(AssetSystem, Error, "Failed to rename asset {0} to {1}", m_metadata.name, newName);
     return false;
@@ -156,7 +175,7 @@ IAsset::load() {
 
   m_state = AssetState::Loading;
 
-  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name);
+  const Path fullFilePath = assetFilePath(assetPath, m_metadata.name, getFileExtension());
   SPtr<DataStream> stream = FileSystem::openFile(fullFilePath, true);
 
   if (!stream || !stream->isReadable()) {
@@ -165,9 +184,10 @@ IAsset::load() {
     return false;
   }
   AssetFileInfo info;
-  if (!AssetFile::readInfo(*stream, info) || info.uuid != m_metadata.uuid ||
-      info.assetType != m_metadata.assetType ||
-      !AssetFile::readReferences(*stream, m_referencedAssets)) {
+  if (!isPlainFile() &&
+      (!AssetFile::readInfo(*stream, info) || info.uuid != m_metadata.uuid ||
+       info.assetType != m_metadata.assetType ||
+       !AssetFile::readReferences(*stream, m_referencedAssets))) {
     CH_LOG(AssetSystem, Error, "Invalid asset file {0}", m_metadata.name);
     m_state = AssetState::Failed;
     return false;

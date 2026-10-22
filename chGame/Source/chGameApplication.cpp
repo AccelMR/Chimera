@@ -21,6 +21,7 @@
 #include "chScene.h"
 #include "chSceneAsset.h"
 #include "chSceneManager.h"
+#include "chScriptManager.h"
 #include "chSceneRenderer.h"
 #include "chUUID.h"
 
@@ -56,6 +57,7 @@ GameApplication::onPostInitialize()
   AssetManager& assetManager = AssetManager::instance();
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
+  ScriptManager::startUp();
 
   SceneManager::startUp();
   m_sceneRenderer = chMakeUnique<SceneRenderer>();
@@ -109,6 +111,11 @@ GameApplication::destroyModules()
   // Assets hold GPU buffers and textures, so they go while the graphics API still exists.
   if (AssetManager::isStarted()) {
     AssetManager::shutDown();
+  }
+  // After the assets: a scene asset owns its scene, whose script components run onDestroy
+  // when it closes.
+  if (ScriptManager::isStarted()) {
+    ScriptManager::shutDown();
   }
 
   WindowedApplication::destroyModules();

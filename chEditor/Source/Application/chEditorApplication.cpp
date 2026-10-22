@@ -46,6 +46,7 @@
 #include "chPackageDialog.h"
 #include "chScene.h"
 #include "chSceneManager.h"
+#include "chScriptManager.h"
 #include "chStringUtils.h"
 
 #include "chContentAssetUI.h"
@@ -174,6 +175,11 @@ EditorApplication::destroyModules()
   // Assets hold GPU buffers and textures, so they go while the graphics API still exists.
   if (AssetManager::isStarted()) {
     AssetManager::shutDown();
+  }
+  // After the assets: a scene asset owns its scene, whose script components run onDestroy
+  // when it closes.
+  if (ScriptManager::isStarted()) {
+    ScriptManager::shutDown();
   }
 #if USING(CH_CODECS)
   // The codec objects live in the codec libraries, which stay loaded until the parent
@@ -404,6 +410,7 @@ EditorApplication::initializeEditorComponents() {
   AssetManager& assetManager = AssetManager::instance();
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
+  ScriptManager::startUp();
 
   m_sceneRenderer = chMakeUnique<SceneRenderer>();
   m_viewportGrid = chMakeUnique<ViewportGrid>();

@@ -12,6 +12,7 @@
 
 #include "chAssetManager.h"
 #include "chSceneAsset.h"
+#include "chScriptManager.h"
 
 #if USING(CH_DEBUG_MODE)
 #define CH_SCENE_LOG_LEVEL All
@@ -143,6 +144,9 @@ void
 SceneManager::fixedUpdate(float deltaTime)
 {
   if (SPtr<Scene> scene = m_activeScene.lock()) {
+    if (scene->isPlaying() && ScriptManager::isStarted()) {
+      ScriptManager::instance().beginFixedUpdate(deltaTime);
+    }
     scene->fixedUpdate(deltaTime);
   }
 }
@@ -153,6 +157,9 @@ void
 SceneManager::update(float deltaTime)
 {
   if (SPtr<Scene> scene = m_activeScene.lock()) {
+    if (scene->isPlaying() && ScriptManager::isStarted()) {
+      ScriptManager::instance().beginUpdate(deltaTime);
+    }
     scene->update(deltaTime);
   }
 }

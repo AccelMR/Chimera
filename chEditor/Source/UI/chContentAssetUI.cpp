@@ -35,6 +35,7 @@
 #include "chPrefabAsset.h"
 #include "chMaterialAsset.h"
 #include "chSceneAsset.h"
+#include "chScriptAsset.h"
 
 #include "imgui.h"
 
@@ -1118,6 +1119,10 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
   else if (asset->isTypeOf<PrefabAsset>()) {
     EditorScene::requestEditPrefab(std::static_pointer_cast<PrefabAsset>(asset));
   }
+  else if (asset->isTypeOf<ScriptAsset>()) {
+    // Scripts are edited outside the editor; Play reads them from disk again.
+    UIHelpers::openFileInSystem(asset->getFilePath());
+  }
   else {
     AssetInspectorUI::open(asset);
     // A clip is watched more than read, so it also starts playing.
@@ -1149,6 +1154,50 @@ ContentAssetUI::createFolder()
     m_currentFolder = created;
     m_bRevealCurrentFolder = true;
   }
+}
+
+/*
+ */
+void
+ContentAssetUI::createScript()
+{
+  AssetManager& assetManager = AssetManager::instance();
+  const Path& folder = getCurrentFolderPath();
+  const String name = assetManager.makeUniqueAssetName(folder, "NewScript");
+  const SPtr<ScriptAsset> script = assetManager.createAsset<ScriptAsset>(name, folder).lock();
+  if (!script) {
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to create a script.");
+    return;
+  }
+  script->setSource(StringUtils::format(
+      "-- {0}: runs on every GameObject that has it while the game plays.\n"
+      "local {0} = {{\n"
+      "  -- Fields set here are the defaults every object starts with (self.speed).\n"
+      "  speed = 1,\n"
+      "}}\n"
+      "\n"
+      "-- Runs once, before the first update.\n"
+      "function {0}:onStart()\n"
+      "end\n"
+      "\n"
+      "-- Runs every frame; deltaTime is in seconds.\n"
+      "function {0}:update(deltaTime)\n"
+      "end\n"
+      "\n"
+      "-- Runs at the fixed rate, for logic that must not depend on the frame rate.\n"
+      "-- function {0}:fixedUpdate(deltaTime)\n"
+      "-- end\n"
+      "\n"
+      "-- Runs when the object is destroyed or the game stops.\n"
+      "-- function {0}:onDestroy()\n"
+      "-- end\n"
+      "\n"
+      "return {0}\n",
+      name));
+  if (!assetManager.saveAsset(script)) {
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to save the script {0}.", name);
+  }
+  refreshAssets();
 }
 
 /*
@@ -1210,6 +1259,9 @@ ContentAssetUI::renderEmptyAreaContextMenu()
         CH_LOG_ERROR(ContentAssetUILog, "Failed to create a material.");
       }
       refreshAssets();
+    }
+    if (ImGui::MenuItem(ICON_FA_FILE_CODE "  Script")) {
+      createScript();
     }
     ImGui::EndMenu();
   }

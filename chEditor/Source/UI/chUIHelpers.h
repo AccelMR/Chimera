@@ -25,6 +25,7 @@ enum class AssetType
   Scene,
   Skeleton,
   Animation,
+  Script,
   Unknown
 };
 
@@ -62,6 +63,13 @@ class UIHelpers {
 
   static void
   endOverlayChild();
+
+  /**
+   * Opens the file in the program the system uses for its type (a .lua in the user's code
+   * editor). Logs when it cannot.
+   */
+  static void
+  openFileInSystem(const Path& file);
 
   // Variable to control the visibility of the ImGui demo window
   static bool bShowDemoWindow;

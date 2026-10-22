@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chAssetDragDrop.h"
 #include "chAnimationClipAsset.h"
+#include "chScriptAsset.h"
 
 #include <cstring>
 #include <type_traits>
@@ -43,6 +44,7 @@ constexpr const ANSICHAR* kTexturePayload = "CH_TEXTURE";
 constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
 constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
 constexpr const ANSICHAR* kAnimationPayload = "CH_ANIMATION";
+constexpr const ANSICHAR* kScriptPayload = "CH_SCRIPT";
 constexpr const ANSICHAR* kGameObjectPayload = "CH_GAMEOBJECT";
 
 /*
@@ -99,6 +101,9 @@ getPayloadName(const IAsset& asset)
   }
   if (asset.isTypeOf<AnimationClipAsset>()) {
     return kAnimationPayload;
+  }
+  if (asset.isTypeOf<ScriptAsset>()) {
+    return kScriptPayload;
   }
   return nullptr;
 }
@@ -187,6 +192,14 @@ SPtr<AnimationClipAsset>
 AssetDragDrop::acceptAnimation()
 {
   return acceptAsset<AnimationClipAsset>(kAnimationPayload);
+}
+
+/*
+ */
+SPtr<ScriptAsset>
+AssetDragDrop::acceptScript()
+{
+  return acceptAsset<ScriptAsset>(kScriptPayload);
 }
 
 /*

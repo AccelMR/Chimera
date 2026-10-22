@@ -174,7 +174,14 @@ class ContentAssetUI
   createFolder();
 
   /**
-   * Opens what can be opened (scenes, and prefabs in prefab mode); does nothing for the rest.
+   * Writes a new script from a template into the current folder.
+   */
+  void
+  createScript();
+
+  /**
+   * Opens what can be opened: scenes, prefabs in prefab mode, scripts in the program the
+   * system uses for .lua files; the rest goes to the Asset Inspector.
    */
   void
   openAsset(const SPtr<IAsset>& asset);

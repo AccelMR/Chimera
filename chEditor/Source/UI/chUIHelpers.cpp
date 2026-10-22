@@ -11,6 +11,7 @@
 #include "chConsoleVariable.h"
 #include "chDisplayEventHandle.h"
 #include "chEditorTheme.h"
+#include "chFileSystem.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
@@ -21,6 +22,7 @@
 #include "chSceneAsset.h"
 #include "chSkeletonAsset.h"
 #include "chAnimationClipAsset.h"
+#include "chScriptAsset.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -88,6 +90,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<AnimationClipAsset>()) {
     return {AssetType::Animation, ICON_FA_RUNNING};
+  }
+  if (asset->isTypeOf<ScriptAsset>()) {
+    return {AssetType::Script, ICON_FA_FILE_CODE};
   }
   return {AssetType::Unknown, ICON_FA_FILE};
 }
@@ -168,6 +173,22 @@ UIHelpers::endOverlayChild()
   ImGui::EndChild();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor();
+}
+
+/*
+ */
+void
+UIHelpers::openFileInSystem(const Path& file)
+{
+  const String path = FileSystem::absolutePath(file).toString();
+#if USING(CH_DISPLAY_SDL3)
+  const String url = (path.starts_with('/') ? "file://" : "file:///") + path;
+  if (!SDL_OpenURL(url.c_str())) {
+    CH_LOG_WARNING(UIImguiHelper, "Could not open {0}: {1}", path, SDL_GetError());
+  }
+#else
+  CH_LOG_WARNING(UIImguiHelper, "Opening {0} needs a display backend.", path);
+#endif // USING(CH_DISPLAY_SDL3)
 }
 
 } // namespace chUIHelpers

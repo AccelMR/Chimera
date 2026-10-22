@@ -83,6 +83,11 @@ AssetMeta::write(const AssetEditorData& data, const Path& baseFolder, ConfigFile
   if (!data.sourcePart.empty()) {
     outFile.setValue(kImportSection, "Part", data.sourcePart);
   }
+  // Assets made in the editor (scenes, materials, scripts) were never imported, so default
+  // import settings would only be noise.
+  if (data.sourceFile.empty()) {
+    return;
+  }
 
   const ImportSettings& settings = data.importSettings;
   outFile.setValue(kImportSection, "SRGB", boolText(settings.srgb));

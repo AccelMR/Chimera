@@ -33,6 +33,8 @@
 #include "chShapeComponent.h"
 #include "chSkeleton.h"
 #include "chSkeletonAsset.h"
+#include "chScriptAsset.h"
+#include "chScriptComponent.h"
 #include "chSkyLightComponent.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
@@ -157,6 +159,7 @@ InspectorUI::renderInspectorUI()
   if (CameraComponent* camera = selected->getComponent<CameraComponent>()) {
     renderCameraComponent(*camera);
   }
+  renderScriptComponents(*selected);
   ImGui::EndDisabled();
   ImGui::End();
 }
@@ -583,6 +586,140 @@ InspectorUI::renderSkyLightComponent(SkyLightComponent& skyLight)
     skyLight.setShowSky(bShowSky);
   }
   ImGui::SetItemTooltip("Draws the image behind the scene");
+}
+
+/*
+ * Removing a script waits until every section is drawn, since the components are being walked.
+ */
+void
+InspectorUI::renderScriptComponents(GameObject& gameObject)
+{
+  ScriptComponent* toRemove = nullptr;
+  for (const UniquePtr<Component>& component : gameObject.getComponents()) {
+    if (component->getTypeId() != TypeTraits<ScriptComponent>::getTypeId()) {
+      continue;
+    }
+    ScriptComponent& scriptComponent = static_cast<ScriptComponent&>(*component);
+    ImGui::PushID(&scriptComponent);
+    if (renderScriptComponent(scriptComponent)) {
+      toRemove = &scriptComponent;
+    }
+    ImGui::PopID();
+  }
+  if (toRemove) {
+    EditorScene::recordChange(gameObject, "Remove Script");
+    gameObject.removeComponent(*toRemove);
+  }
+  renderAddScript(gameObject);
+}
+
+/*
+ */
+bool
+InspectorUI::renderScriptComponent(ScriptComponent& scriptComponent)
+{
+  if (!ImGui::CollapsingHeader(ICON_FA_FILE_CODE "  Script###Script",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
+    return false;
+  }
+  GameObject& gameObject = *scriptComponent.getOwner();
+
+  bool bEnabled = scriptComponent.isEnabled();
+  if (ImGui::Checkbox("Enabled##Script", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
+    scriptComponent.setEnabled(bEnabled);
+  }
+
+  const SPtr<ScriptAsset>& script = scriptComponent.getScript();
+  const ANSICHAR* scriptName = "None (drop a script)";
+  if (script) {
+    scriptName = script->getName();
+  }
+  else if (!scriptComponent.getScriptId().isNull()) {
+    scriptName = "Missing script";
+  }
+  ImGui::Button(scriptName, ImVec2(-FLT_MIN, 0.0f));
+  if (script) {
+    ImGui::SetItemTooltip("%s\nDrop another script to replace it",
+                          script->getFilePath().toString().c_str());
+  }
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<ScriptAsset> dropped = AssetDragDrop::acceptScript()) {
+      EditorScene::recordChange(gameObject, "Set Script");
+      scriptComponent.setScript(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  if (script && ImGui::SmallButton(ICON_FA_EXTERNAL_LINK_ALT "  Open")) {
+    chUIHelpers::UIHelpers::openFileInSystem(script->getFilePath());
+  }
+  if (script) {
+    ImGui::SameLine();
+  }
+  const bool bRemove = ImGui::SmallButton(ICON_FA_TRASH "  Remove");
+
+  if (EditorScene::isPlaying()) {
+    if (scriptComponent.isRunning()) {
+      ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Running");
+    }
+    else if (scriptComponent.hasFailed()) {
+      ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.4f, 1.0f),
+                         "Stopped after an error (see the Output Log)");
+    }
+    else {
+      ImGui::TextDisabled("Not started");
+    }
+  }
+  return bRemove;
+}
+
+/*
+ */
+void
+InspectorUI::renderAddScript(GameObject& gameObject)
+{
+  const auto addScript = [&gameObject](const SPtr<ScriptAsset>& script) {
+    EditorScene::recordChange(gameObject, "Add Script");
+    gameObject.addComponent<ScriptComponent>(script);
+  };
+
+  ImGui::Spacing();
+  if (ImGui::Button(ICON_FA_PLUS "  Add Script", ImVec2(-FLT_MIN, 0.0f))) {
+    ImGui::OpenPopup("AddScript");
+  }
+  ImGui::SetItemTooltip("Pick a script, or drop one from the Content Browser");
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<ScriptAsset> dropped = AssetDragDrop::acceptScript()) {
+      addScript(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  if (!ImGui::BeginPopup("AddScript")) {
+    return;
+  }
+  // Only while the list is open, so the copy of the asset list is not made every frame.
+  AssetManager& assetManager = AssetManager::instance();
+  bool bAnyScript = false;
+  for (const SPtr<IAsset>& asset : assetManager.getAllAssets()) {
+    if (!asset->isTypeOf<ScriptAsset>()) {
+      continue;
+    }
+    bAnyScript = true;
+    ImGui::PushID(asset.get());
+    if (ImGui::Selectable(asset->getName())) {
+      if (assetManager.syncLoadAsset(asset)) {
+        addScript(std::static_pointer_cast<ScriptAsset>(asset));
+      }
+    }
+    ImGui::SetItemTooltip("%s", asset->getFilePath().toString().c_str());
+    ImGui::PopID();
+  }
+  if (!bAnyScript) {
+    ImGui::TextDisabled("No scripts yet: Content Browser > Create > Script");
+  }
+  ImGui::EndPopup();
 }
 
 /*

@@ -6,6 +6,7 @@
  * @brief Unit tests for chCore code that runs without a window or a GPU.
  */
 /************************************************************************/
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -59,6 +60,11 @@
 #include "chScene.h"
 #include "chSceneHistory.h"
 #include "chSceneManager.h"
+#include "chScriptAllocator.h"
+#include "chScriptAsset.h"
+#include "chScriptBinder.h"
+#include "chScriptComponent.h"
+#include "chScriptManager.h"
 #include "chShadowRenderer.h"
 #include "chShapeComponent.h"
 #include "chSkeleton.h"
@@ -4739,4 +4745,450 @@ TEST_CASE("chCore - Input key events")
   REQUIRE(pressed == 1);
   onPressed.disconnect();
   onReleased.disconnect();
+}
+
+namespace {
+CH_LOG_DECLARE_STATIC(ScriptTestLog, All);
+
+/*
+ * The component tests need the module; it cannot start twice, so it starts once and stays.
+ */
+ScriptManager&
+getTestScriptManager()
+{
+  if (!ScriptManager::isStarted()) {
+    ScriptManager::startUp();
+  }
+  return ScriptManager::instance();
+}
+
+SPtr<ScriptAsset>
+createTestScriptAsset(const ANSICHAR* name, const ANSICHAR* source)
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<ScriptAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, name);
+  StringUtils::copyToBuffer(metadata.assetPath, "/Game/Scripts");
+  return chMakeShared<ScriptAsset>(metadata, String(source));
+}
+} // namespace
+
+TEST_CASE("chCore - Script allocator")
+{
+  for (const bool bUsePools : {true, false}) {
+    ScriptAllocator allocator(bUsePools);
+    void* block = ScriptAllocator::allocate(&allocator, nullptr, 0, 24);
+    REQUIRE(block != nullptr);
+    REQUIRE(reinterpret_cast<SIZE_T>(block) % 16 == 0);
+    std::memset(block, 0xAB, 24);
+    REQUIRE(allocator.getBytesInUse() == 24);
+
+    // Grows inside its size class, then into another one and past the pools, keeping the
+    // bytes it had.
+    block = ScriptAllocator::allocate(&allocator, block, 24, 30);
+    block = ScriptAllocator::allocate(&allocator, block, 30, 200);
+    REQUIRE(static_cast<uint8*>(block)[23] == 0xAB);
+    block = ScriptAllocator::allocate(&allocator, block, 200, 1000);
+    REQUIRE(static_cast<uint8*>(block)[0] == 0xAB);
+    REQUIRE(allocator.getBytesInUse() == 1000);
+    block = ScriptAllocator::allocate(&allocator, block, 1000, 16);
+    REQUIRE(static_cast<uint8*>(block)[15] == 0xAB);
+
+    REQUIRE(ScriptAllocator::allocate(&allocator, block, 16, 0) == nullptr);
+    REQUIRE(allocator.getBytesInUse() == 0);
+
+    if (bUsePools) {
+      // A freed block is the next one given in its size class.
+      void* const first = ScriptAllocator::allocate(&allocator, nullptr, 0, 40);
+      REQUIRE(ScriptAllocator::allocate(&allocator, first, 40, 0) == nullptr);
+      void* const second = ScriptAllocator::allocate(&allocator, nullptr, 0, 33);
+      REQUIRE(second == first);
+      REQUIRE(ScriptAllocator::allocate(&allocator, second, 33, 0) == nullptr);
+    }
+  }
+}
+
+TEST_CASE("chCore - Script binder")
+{
+  ScriptManager scripts(true);
+
+  SECTION("Vectors")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      local v = Vector3(1, 2, 3)
+      assert(v.x == 1 and v.y == 2 and v.z == 3)
+      v.y = 5
+      assert(v.y == 5)
+      local zero = Vector3()
+      assert(zero.x == 0 and zero.y == 0 and zero.z == 0)
+
+      local sum = Vector3(1, 0, 0) + Vector3(0, 2, 0)
+      assert(sum == Vector3(1, 2, 0))
+      assert(Vector3(2, 4, 6) * 0.5 == Vector3(1, 2, 3))
+      assert(2 * Vector3(1, 2, 3) == Vector3(2, 4, 6))
+      assert(-Vector3(1, 2, 3) == Vector3(-1, -2, -3))
+      assert(Vector3(2, 4, 6) / 2 == Vector3(1, 2, 3))
+      assert(Vector3(3, 4, 0):length() == 5)
+      assert(Vector3(1, 0, 0):dot(Vector3(0, 1, 0)) == 0)
+      assert(Vector3(1, 0, 0):cross(Vector3(0, 1, 0)) == Vector3(0, 0, 1))
+      assert(Vector3(0, 0, 10):normalized() == Vector3(0, 0, 1))
+      assert(tostring(Vector3(1, 2, 3)) == "Vector3(1.000, 2.000, 3.000)")
+      assert(Vector3(1, 2, 3) ~= Vector3(1, 2, 4))
+      assert(Vector3(1, 2, 3) ~= "Vector3")
+    )lua"));
+  }
+
+  SECTION("In-place methods change the value and return it")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      local v = Vector3(1, 1, 1)
+      local same = v:add(Vector3(1, 0, 0)):scale(2)
+      assert(rawequal(same, v))
+      assert(v == Vector3(4, 2, 2))
+      v:subVectors(Vector3(5, 5, 5), Vector3(1, 2, 3)):normalize()
+      assert(v:nearEqual(Vector3(4, 3, 2):normalized()))
+      v:set(3, 4, 0):clampLength(1)
+      assert(v:nearEqual(Vector3(0.6, 0.8, 0)))
+      local c = v:copy()
+      c.x = 100
+      assert(v.x ~= 100)
+    )lua"));
+  }
+
+  SECTION("Constants are copies")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      local up = Vector3.UP
+      up:scale(5)
+      assert(Vector3.UP == Vector3(0, 0, 1))
+      assert(not rawequal(Vector3.UP, Vector3.UP))
+    )lua"));
+  }
+
+  SECTION("Rotations and colors")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      assert(Quaternion() == Quaternion.IDENTITY)
+      local yaw = Quaternion.FromEuler(0, 90, 0)
+      assert(yaw:rotateVector(Vector3.FORWARD):nearEqual(Vector3.RIGHT))
+      local v = Vector3(1, 0, 0)
+      v:rotate(yaw)
+      assert(v:nearEqual(Vector3.RIGHT))
+      local euler = yaw:toEuler()
+      assert(math.abs(euler.yaw - 90) < 0.001 and math.abs(euler.pitch) < 0.001)
+      assert((yaw * yaw):rotateVector(Vector3.FORWARD):nearEqual(Vector3.BACKWARD))
+      local rotator = Rotator(10, 20, 30)
+      rotator.yaw = 45
+      assert(rotator.yaw == 45)
+      assert(Color(1, 0, 0) == Color.RED)
+      assert(Color.Lerp(Color.BLACK, Color.WHITE, 0.5) == Color(0.5, 0.5, 0.5, 1))
+    )lua"));
+  }
+
+  SECTION("Wrong values are script errors, not crashes")
+  {
+    REQUIRE_FALSE(scripts.runString("local v = Vector3(1, 2, 3); return v:dot(5)"));
+    REQUIRE_FALSE(scripts.runString("local v = Vector3(); return v.lenght"));
+    REQUIRE_FALSE(scripts.runString("local v = Vector3(); v.w = 1"));
+    REQUIRE_FALSE(scripts.runString("return Vector3(1, 2)"));
+    REQUIRE_FALSE(scripts.runString("return Vector3.NOPE"));
+    REQUIRE_FALSE(scripts.runString("local q = Quaternion(); return Vector3.dot(q, q)"));
+    REQUIRE(scripts.runString("assert(getmetatable(Vector3()) == 'Vector3')"));
+  }
+
+  SECTION("Sandbox")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      assert(io == nil and os == nil and package == nil and debug == nil and require == nil)
+      assert(load == nil and loadfile == nil and dofile == nil)
+      assert(string and table and math and utf8 and coroutine)
+      print("print reaches the log", 1, true)
+      Log.info("Log reaches the log")
+    )lua"));
+    REQUIRE_FALSE(scripts.runString("this is not lua"));
+  }
+
+  SECTION("Time")
+  {
+    scripts.resetTime();
+    scripts.beginFixedUpdate(0.5f);
+    REQUIRE(scripts.runString("assert(Time.deltaTime == 0.5 and Time.fixedDeltaTime == 0.5)"));
+    scripts.beginUpdate(0.25f);
+    scripts.beginUpdate(0.25f);
+    REQUIRE(scripts.runString(R"lua(
+      assert(Time.deltaTime == 0.25 and Time.time == 0.5 and Time.frameCount == 2)
+    )lua"));
+  }
+}
+
+TEST_CASE("chCore - Script component")
+{
+  ScriptManager& scripts = getTestScriptManager();
+  REQUIRE(scripts.runString("Events = { selves = {}, starts = 0, destroys = 0 }"));
+  const SPtr<ScriptAsset> mover = createTestScriptAsset("Mover", R"lua(
+    local Mover = { speed = 2 }
+    function Mover:onStart()
+      self.distance = 0
+      Events.starts = Events.starts + 1
+      Events.selves[self] = true
+    end
+    function Mover:update(dt)
+      self.distance = self.distance + self.speed * dt
+      Events.distance = self.distance
+      Events.updates = (Events.updates or 0) + 1
+    end
+    function Mover:fixedUpdate(dt)
+      Events.fixed = (Events.fixed or 0) + 1
+    end
+    function Mover:onDestroy()
+      Events.destroys = Events.destroys + 1
+    end
+    return Mover
+  )lua");
+
+  Scene scene("Scripts", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> runner = scene.createGameObject("Runner");
+  ScriptComponent& component = runner->addComponent<ScriptComponent>(mover);
+  REQUIRE(component.getScriptId() == mover->getUUID());
+
+  SECTION("Nothing runs while the scene does not play")
+  {
+    scene.update(0.5f);
+    scene.fixedUpdate(0.5f);
+    REQUIRE_FALSE(component.isRunning());
+    REQUIRE(scripts.runString("assert(Events.starts == 0 and Events.updates == nil)"));
+  }
+
+  SECTION("onStart, update, fixedUpdate, onDestroy")
+  {
+    scene.setPlaying(true);
+    scene.update(0.5f);
+    scene.update(0.25f);
+    scene.fixedUpdate(0.1f);
+    REQUIRE(component.isRunning());
+    REQUIRE(scripts.runString(R"lua(
+      assert(Events.starts == 1 and Events.updates == 2 and Events.fixed == 1)
+      assert(math.abs(Events.distance - 1.5) < 1e-6)
+    )lua"));
+
+    component.setEnabled(false);
+    REQUIRE_FALSE(component.isRunning());
+    REQUIRE(scripts.runString("assert(Events.destroys == 1)"));
+
+    // Registered again it starts over with a new instance.
+    component.setEnabled(true);
+    scene.update(0.1f);
+    REQUIRE(scripts.runString("assert(Events.starts == 2)"));
+  }
+
+  SECTION("Each component has its own self")
+  {
+    const SPtr<GameObject> other = scene.createGameObject("Other");
+    other->addComponent<ScriptComponent>(mover);
+    scene.setPlaying(true);
+    scene.update(0.5f);
+    REQUIRE(scripts.runString(R"lua(
+      local count = 0
+      for self in pairs(Events.selves) do
+        count = count + 1
+        assert(self.distance == 1 and self.speed == 2)
+      end
+      assert(count == 2)
+    )lua"));
+  }
+
+  SECTION("Destroying the object runs onDestroy")
+  {
+    scene.setPlaying(true);
+    scene.update(0.1f);
+    scene.destroyGameObject(*runner);
+    REQUIRE(scripts.runString("assert(Events.destroys == 1)"));
+  }
+
+  SECTION("An error stops only its component")
+  {
+    const SPtr<ScriptAsset> broken = createTestScriptAsset("Broken", R"lua(
+      local Broken = {}
+      function Broken:update(dt)
+        error("broken on purpose")
+      end
+      return Broken
+    )lua");
+    const SPtr<GameObject> other = scene.createGameObject("Other");
+    ScriptComponent& brokenComponent = other->addComponent<ScriptComponent>(broken);
+    scene.setPlaying(true);
+    scene.update(0.1f);
+    scene.update(0.1f);
+    REQUIRE(brokenComponent.hasFailed());
+    REQUIRE_FALSE(brokenComponent.isRunning());
+    REQUIRE(component.isRunning());
+    REQUIRE(scripts.runString("assert(Events.updates == 2)"));
+  }
+
+  SECTION("A script that returns no class never runs")
+  {
+    const SPtr<ScriptAsset> noClass = createTestScriptAsset("NoClass", "return 5");
+    component.setScript(noClass);
+    scene.setPlaying(true);
+    scene.update(0.1f);
+    REQUIRE(component.hasFailed());
+  }
+
+  SECTION("Saved with its script, kept when the asset is missing")
+  {
+    MemoryDataStream stream;
+    component.serialize(stream);
+    stream.seek(0);
+    ScriptComponent read;
+    REQUIRE(read.deserialize(stream));
+    REQUIRE(read.getScriptId() == mover->getUUID());
+    REQUIRE(read.getScript() == nullptr);
+
+    Vector<chEngineSDK::UUID> references;
+    read.collectReferences(references);
+    REQUIRE(references.size() == 1);
+    REQUIRE(references[0] == mover->getUUID());
+    REQUIRE(ComponentRegister::create(TypeTraits<ScriptComponent>::getTypeId()) != nullptr);
+  }
+}
+
+/*
+ * Not run by default (ctest skips hidden tags); run it in Release:
+ *   chCoreTest "chCore - Script steering benchmark"
+ * Moves 1000 agents toward a target with seek steering, written three ways.
+ */
+TEST_CASE("chCore - Script steering benchmark", "[.benchmark]")
+{
+  constexpr const ANSICHAR* kSetup = R"lua(
+    N = 1000
+    local maxSpeed, maxForce = 5.0, 10.0
+    target = Vector3(0, 0, 0)
+    opAgents, ipAgents, numAgents = {}, {}, {}
+    for i = 1, N do
+      local x, y = math.cos(i) * 50, math.sin(i) * 50
+      opAgents[i] = { pos = Vector3(x, y, 0), vel = Vector3() }
+      ipAgents[i] = { pos = Vector3(x, y, 0), vel = Vector3(), desired = Vector3(),
+                      steer = Vector3() }
+      numAgents[i] = { px = x, py = y, pz = 0, vx = 0, vy = 0, vz = 0 }
+    end
+
+    function stepOperators(dt)
+      local t = target
+      for i = 1, N do
+        local a = opAgents[i]
+        local steer = (t - a.pos):normalized() * maxSpeed - a.vel
+        local length = steer:length()
+        if length > maxForce then steer = steer * (maxForce / length) end
+        a.vel = a.vel + steer * dt
+        a.pos = a.pos + a.vel * dt
+      end
+    end
+
+    function stepInPlace(dt)
+      local t = target
+      for i = 1, N do
+        local a = ipAgents[i]
+        a.desired:subVectors(t, a.pos):normalize():scale(maxSpeed)
+        a.steer:subVectors(a.desired, a.vel):clampLength(maxForce)
+        a.vel:addScaled(a.steer, dt)
+        a.pos:addScaled(a.vel, dt)
+      end
+    end
+
+    function stepNumbers(dt)
+      local tx, ty, tz = target.x, target.y, target.z
+      local sqrt = math.sqrt
+      for i = 1, N do
+        local a = numAgents[i]
+        local dx, dy, dz = tx - a.px, ty - a.py, tz - a.pz
+        local length = sqrt(dx * dx + dy * dy + dz * dz)
+        if length > 1e-8 then
+          local k = maxSpeed / length
+          dx, dy, dz = dx * k, dy * k, dz * k
+        end
+        local sx, sy, sz = dx - a.vx, dy - a.vy, dz - a.vz
+        local steerLength = sqrt(sx * sx + sy * sy + sz * sz)
+        if steerLength > maxForce then
+          local k = maxForce / steerLength
+          sx, sy, sz = sx * k, sy * k, sz * k
+        end
+        a.vx, a.vy, a.vz = a.vx + sx * dt, a.vy + sy * dt, a.vz + sz * dt
+        a.px, a.py, a.pz = a.px + a.vx * dt, a.py + a.vy * dt, a.pz + a.vz * dt
+      end
+    end
+  )lua";
+  constexpr uint32 kWarmUpFrames = 30;
+  constexpr uint32 kFrames = 300;
+  constexpr float kDeltaTime = 1.0f / 60.0f;
+
+  for (const bool bPool : {true, false}) {
+    ScriptManager scripts(bPool);
+    REQUIRE(scripts.runString(kSetup));
+    lua_State* const state = scripts.getState();
+
+    for (const ANSICHAR* style : {"stepOperators", "stepInPlace", "stepNumbers"}) {
+      const auto runFrame = [state, style]() {
+        lua_getglobal(state, style);
+        lua_pushnumber(state, static_cast<lua_Number>(kDeltaTime));
+        lua_call(state, 1, 0);
+      };
+      for (uint32 frame = 0; frame < kWarmUpFrames; ++frame) {
+        runFrame();
+      }
+      scripts.collectGarbage();
+      const uint64 allocationsBefore = scripts.getAllocationCount();
+      const auto start = std::chrono::steady_clock::now();
+      for (uint32 frame = 0; frame < kFrames; ++frame) {
+        runFrame();
+      }
+      const auto end = std::chrono::steady_clock::now();
+      const double milliseconds =
+          std::chrono::duration<double, std::milli>(end - start).count() / kFrames;
+      const double allocations =
+          static_cast<double>(scripts.getAllocationCount() - allocationsBefore) / kFrames;
+      CH_LOG_INFO(ScriptTestLog, "{} with {}: {:.3f} ms per frame, {:.0f} allocations per frame",
+                  style, bPool ? "pools" : "malloc", milliseconds, allocations);
+    }
+
+    // The three ways move the agents the same (float vectors against double numbers).
+    REQUIRE(scripts.runString(R"lua(
+      for i = 1, N, 97 do
+        local a, b, c = opAgents[i], ipAgents[i], numAgents[i]
+        assert(a.pos:nearEqual(b.pos))
+        assert(math.abs(a.pos.x - c.px) < 1e-2 and math.abs(a.pos.y - c.py) < 1e-2)
+      end
+    )lua"));
+  }
+
+  // The same work in C++, for scale.
+  struct Agent
+  {
+    Vector3 position;
+    Vector3 velocity;
+  };
+  Vector<Agent> agents(1000);
+  for (uint32 i = 0; i < agents.size(); ++i) {
+    const Radian angle(static_cast<float>(i + 1));
+    agents[i] = {Vector3(Math::cos(angle) * 50.0f, Math::sin(angle) * 50.0f, 0.0f),
+                 Vector3::ZERO};
+  }
+  const auto start = std::chrono::steady_clock::now();
+  for (uint32 frame = 0; frame < kWarmUpFrames + kFrames; ++frame) {
+    for (Agent& agent : agents) {
+      Vector3 steer =
+          (Vector3::ZERO - agent.position).getNormalized() * 5.0f - agent.velocity;
+      const float length = steer.magnitude();
+      if (length > 10.0f) {
+        steer *= 10.0f / length;
+      }
+      agent.velocity += steer * kDeltaTime;
+      agent.position += agent.velocity * kDeltaTime;
+    }
+  }
+  const auto end = std::chrono::steady_clock::now();
+  CH_LOG_INFO(ScriptTestLog, "C++: {:.3f} ms per frame",
+              std::chrono::duration<double, std::milli>(end - start).count() /
+                  (kWarmUpFrames + kFrames));
+  REQUIRE(agents[0].position.magnitude() < 50.0f);
 }

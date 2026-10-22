@@ -14,6 +14,7 @@
 #include "chLogger.h"
 #include "chModelComponent.h"
 #include "chSceneManager.h"
+#include "chScriptComponent.h"
 #include "chShapeComponent.h"
 #include "chSkyLightComponent.h"
 
@@ -45,6 +46,7 @@ getTypes()
     addBuiltIn.operator()<SkyLightComponent>();
     addBuiltIn.operator()<ShapeComponent>();
     addBuiltIn.operator()<CameraComponent>();
+    addBuiltIn.operator()<ScriptComponent>();
     return builtIn;
   }();
   return types;

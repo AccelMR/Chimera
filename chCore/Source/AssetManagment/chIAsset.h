@@ -121,10 +121,25 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   getAssetPath() const { return m_metadata.assetPath; }
 
   /**
-   * The asset file: "<asset path>/<name>.chAss".
+   * The asset file: "<asset path>/<name><extension>".
    */
   NODISCARD Path
   getFilePath() const;
+
+  /**
+   * ".chAss" for the files the engine writes; a plain file asset keeps the extension of its
+   * source (".lua").
+   */
+  NODISCARD virtual StringView
+  getFileExtension() const;
+
+  /**
+   * True when the file is the source itself (a script), so other tools can edit it: it has no
+   * asset file start and no references, and its UUID lives in its .meta file, which the game
+   * needs too.
+   */
+  NODISCARD virtual bool
+  isPlainFile() const { return false; }
 
 #if USING(CH_EDITOR)
   NODISCARD FORCEINLINE const AssetEditorData&
@@ -151,6 +166,14 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
   NODISCARD bool
   save();
+
+#if USING(CH_EDITOR)
+  /**
+   * Writes only the .meta file next to the asset file.
+   */
+  NODISCARD bool
+  saveMetaFile() const;
+#endif // USING(CH_EDITOR)
 
  protected:
 

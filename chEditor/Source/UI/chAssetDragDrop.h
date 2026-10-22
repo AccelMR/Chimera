@@ -16,6 +16,7 @@ class AnimationClipAsset;
 class MaterialAsset;
 class ModelAsset;
 class PrefabAsset;
+class ScriptAsset;
 class TextureAsset;
 
 /**
@@ -63,6 +64,12 @@ class AssetDragDrop
    */
   NODISCARD static SPtr<AnimationClipAsset>
   acceptAnimation();
+
+  /**
+   * Same as acceptModel, for scripts.
+   */
+  NODISCARD static SPtr<ScriptAsset>
+  acceptScript();
 
   /**
    * Makes the last ImGui item a drag source for gameObject, an object of the open scene. When

@@ -30,6 +30,7 @@
 #include "chSceneAsset.h"
 #include "chSceneHistory.h"
 #include "chSceneManager.h"
+#include "chScriptManager.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -848,6 +849,13 @@ startPlaying(EditorSceneState& state)
   if (state.history.isEntryOpen()) {
     state.history.commit(*state.scene);
     setDirty(state, !state.history.isAtSavedState());
+  }
+
+  // Scripts are read from disk again, so Play runs what was saved in an outside editor.
+  if (ScriptManager::isStarted()) {
+    ScriptManager& scriptManager = ScriptManager::instance();
+    scriptManager.reloadScripts();
+    scriptManager.resetTime();
   }
 
   // Its own UUID, because the scene manager keeps scenes by UUID and the scene stays kept.

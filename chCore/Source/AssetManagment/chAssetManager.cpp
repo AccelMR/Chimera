@@ -29,6 +29,7 @@
 #include "chSceneAsset.h"
 #include "chSkeletonAsset.h"
 #include "chAnimationClipAsset.h"
+#include "chScriptAsset.h"
 
 
 namespace chEngineSDK {
@@ -53,6 +54,7 @@ AssetManager::initialize() {
   m_assetRegister->registerAssetCreator<SceneAsset>();
   m_assetRegister->registerAssetCreator<SkeletonAsset>();
   m_assetRegister->registerAssetCreator<AnimationClipAsset>();
+  m_assetRegister->registerAssetCreator<ScriptAsset>();
 }
 
 /*
@@ -208,10 +210,17 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
   }
 
   FileSystem::forEachFileChildRecursive(directory, [&](const Path& file) {
-    if (file.getExtension() != EnginePaths::getEngineAssetExtension()) {
+    const String extension = file.getExtension();
+    SPtr<IAsset> asset;
+    if (extension == EnginePaths::getEngineAssetExtension()) {
+      asset = lazyLoadAssetFile(file);
+    }
+    else if (extension == ScriptAsset::EXTENSION) {
+      asset = lazyLoadScriptFile(file);
+    }
+    else {
       return;
     }
-    SPtr<IAsset> asset = lazyLoadAssetFile(file);
     if (!asset) {
       CH_LOG_ERROR(AssetSystem, "Failed to lazy load asset from file: {0}", file.toString());
       return;
@@ -320,6 +329,83 @@ AssetManager::makeUniqueAssetName(const Path& folder, StringView name) const
 }
 
 #endif // Editor-specific functionality
+
+/*
+ */
+SPtr<IAsset>
+AssetManager::lazyLoadScriptFile(const Path& file)
+{
+  // AssetMeta is editor only, so the name of the .meta file is built here.
+  String metaText = file.toString();
+  metaText += ".meta";
+  const Path metaPath(std::move(metaText));
+  ConfigFile metaFile;
+  const bool bHasMeta = FileSystem::isFile(metaPath) && metaFile.load(metaPath);
+  UUID uuid = UUID::null();
+  if (bHasMeta) {
+    const String* text = metaFile.getValue(ScriptAsset::META_SECTION, ScriptAsset::META_UUID_KEY);
+    if (text && !UUID::fromString(*text, uuid)) {
+      uuid = UUID::null();
+    }
+  }
+
+  const Path virtualFile = FileSystem::toVirtualPath(file);
+  bool bTaken = false;
+  if (!uuid.isNull()) {
+    const auto it = m_assets.find(uuid);
+    if (it != m_assets.end()) {
+      if (it->second->getFilePath() == virtualFile) {
+        return it->second;
+      }
+      // A copied script brings the .meta of the original along.
+      bTaken = true;
+    }
+  }
+
+#if USING(CH_EDITOR)
+  const bool bNeedsUUID = uuid.isNull() || bTaken;
+  if (bNeedsUUID) {
+    if (bTaken) {
+      CH_LOG_WARNING(AssetSystem, "Script {0} has the UUID of another script; it gets a new one.",
+                     virtualFile);
+    }
+    uuid = UUID::createRandom();
+  }
+#else
+  if (uuid.isNull() || bTaken) {
+    CH_LOG_ERROR(AssetSystem,
+                 "Script {0} has no UUID of its own in its .meta file and is skipped. Open the "
+                 "project in the editor, which writes one.",
+                 virtualFile);
+    return nullptr;
+  }
+#endif // USING(CH_EDITOR)
+
+  AssetMetadata metadata;
+  metadata.uuid = uuid;
+  metadata.assetType = AssetTypeTraits<ScriptAsset>::getTypeId();
+  if (!StringUtils::copyToBuffer(metadata.name, file.getFileName(false)) ||
+      !StringUtils::copyToBuffer(metadata.assetPath, virtualFile.getDirectory().toString())) {
+    CH_LOG_ERROR(AssetSystem, "Script file name or folder is too long: {0}", file);
+    return nullptr;
+  }
+  SPtr<ScriptAsset> asset = chMakeShared<ScriptAsset>(metadata);
+
+#if USING(CH_EDITOR)
+  if (bHasMeta) {
+    AssetMeta::read(metaFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
+    asset->readEditorValues(metaFile);
+  }
+  else {
+    asset->m_editorData = AssetMeta::makeNew(Path(), StringView(), ImportSettings{});
+  }
+  if (bNeedsUUID && !asset->saveMetaFile()) {
+    CH_LOG_WARNING(AssetSystem, "Could not write the .meta file of script {0}", virtualFile);
+  }
+#endif // USING(CH_EDITOR)
+
+  return asset;
+}
 
 /*
  */

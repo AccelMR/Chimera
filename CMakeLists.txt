@@ -85,6 +85,22 @@ endif()
 add_subdirectory(Externals/SDL3 SYSTEM)
 ch_set_folder_for_directory(Externals/SDL3 Externals/SDL3)
 
+# Lua runs the game scripts. It is built as C++, so a script error unwinds with an exception
+# and the destructors of the engine code it crosses still run (a C build would longjmp over
+# them). It is a shared library so chCore, its tests and plugins all call one copy.
+# lua.c and onelua.c are the standalone interpreter; ltests.c is Lua's own test suite.
+file(GLOB CH_LUA_SOURCES "${CMAKE_SOURCE_DIR}/Externals/lua/*.c")
+list(FILTER CH_LUA_SOURCES EXCLUDE REGEX "/(lua|onelua|ltests)\\.c$")
+set_source_files_properties(${CH_LUA_SOURCES} PROPERTIES LANGUAGE CXX)
+add_library(chLua SHARED ${CH_LUA_SOURCES})
+target_include_directories(chLua SYSTEM PUBLIC "${CMAKE_SOURCE_DIR}/Externals/lua")
+set_target_properties(chLua PROPERTIES PREFIX "" FOLDER Externals/lua)
+if(WIN32)
+  target_compile_definitions(chLua PUBLIC LUA_BUILD_AS_DLL)
+else()
+  target_compile_definitions(chLua PRIVATE LUA_USE_POSIX)
+endif()
+
 # Only the editor uses ImGui; it draws it with its own renderer on the graphics interfaces.
 if(CH_BUILD_EDITOR)
   add_subdirectory(chImgui)

@@ -1,6 +1,6 @@
 ch_add_module(chCore EXPORT_DEFINE CH_CORE_EXPORTS FOLDER Engine)
 
-target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3)
+target_link_libraries(chCore PUBLIC chUtilities SDL3::SDL3 chLua)
 
 # chCore's headers change with these, so they are PUBLIC: every module that includes them
 # sees the same ones chCore was built with.

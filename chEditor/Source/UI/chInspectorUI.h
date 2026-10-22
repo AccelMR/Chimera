@@ -15,6 +15,7 @@
 
 namespace chEngineSDK {
 class CameraComponent;
+class ScriptComponent;
 class ShapeComponent;
 class SkyLightComponent;
 
@@ -57,6 +58,21 @@ class InspectorUI
 
   void
   renderCameraComponent(CameraComponent& camera);
+
+  /**
+   * A section per script of the object, then the Add Script button.
+   */
+  void
+  renderScriptComponents(GameObject& gameObject);
+
+  /**
+   * True when its Remove button was pressed.
+   */
+  NODISCARD bool
+  renderScriptComponent(ScriptComponent& scriptComponent);
+
+  void
+  renderAddScript(GameObject& gameObject);
 
   void
   renderAnimation(ModelComponent& modelComponent);
