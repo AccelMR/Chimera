@@ -574,6 +574,12 @@ MainMenuBarUI::renderEditMenu()
       EditorScene::requestStop();
     }
   }
+
+  ImGui::Separator();
+  if (ImGui::BeginMenu(ICON_FA_FILE_CODE "  Script Editor")) {
+    UIHelpers::renderScriptEditorSettings();
+    ImGui::EndMenu();
+  }
   ImGui::EndMenu();
 }
 

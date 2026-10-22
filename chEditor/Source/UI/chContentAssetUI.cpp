@@ -1116,7 +1116,7 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
   }
   else if (asset->isTypeOf<ScriptAsset>()) {
     // Scripts are edited outside the editor; Play reads them from disk again.
-    UIHelpers::openFileInSystem(asset->getFilePath());
+    UIHelpers::openScript(asset->getFilePath());
   }
   else {
     AssetInspectorUI::open(asset);

@@ -22,6 +22,9 @@ chEditor/Content/fonts/fa-brands-400.ttf chEditor/Content/fonts/fa-regular-400.t
 *.ini
 # Config defaults shipped with the engine and the editor
 !*/Content/Config/*.ini
+# Config of the example projects; their Saved folders are per machine
+!Examples/*/Config/*.ini
+Examples/*/Saved/
 
 [Pp]rojects/
 

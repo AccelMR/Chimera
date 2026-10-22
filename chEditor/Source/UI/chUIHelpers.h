@@ -88,6 +88,20 @@ class UIHelpers {
   static void
   openFileInSystem(const Path& file);
 
+  /**
+   * Opens a script in the code editor of Editor.ScriptEditor together with the project
+   * folder, so its language server finds the script definitions; falls back to
+   * openFileInSystem.
+   */
+  static void
+  openScript(const Path& file);
+
+  /**
+   * The Editor.ScriptEditor field, for a menu.
+   */
+  static void
+  renderScriptEditorSettings();
+
   // Variable to control the visibility of the ImGui demo window
   static bool bShowDemoWindow;
   // False hides the whole editor UI (F11), leaving only the scene.

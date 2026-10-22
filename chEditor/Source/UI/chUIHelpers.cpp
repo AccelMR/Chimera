@@ -12,6 +12,8 @@
 #include "chDisplayEventHandle.h"
 #include "chDisplaySurface.h"
 #include "chEditorTheme.h"
+#include "chEngineConfig.h"
+#include "chEnginePaths.h"
 #include "chIGraphicsAPI.h"
 #include "chFileSystem.h"
 #include "chLinearColor.h"
@@ -25,6 +27,7 @@
 #include "chSkeletonAsset.h"
 #include "chAnimationClipAsset.h"
 #include "chScriptAsset.h"
+#include "chStringUtils.h"
 
 #include "../../Content/Fonts/IconsFontAwsome5.h"
 #include "imgui.h"
@@ -48,6 +51,108 @@ ConsoleVariable<bool> g_cvarFloatingWindows("Editor.FloatingWindows",
                                             false,
                                             "Lets panels leave the main window.",
                                             "FloatingWindows");
+
+ConsoleVariable<String> g_cvarScriptEditor(
+    "Editor.ScriptEditor",
+    "code",
+    "Command of the code editor scripts open in, given the project folder and the script "
+    "(code, codium, cursor), so its language server reads the project's .luarc.json. Empty, "
+    "or not found on the PATH, opens scripts with the system's program.",
+    "ScriptEditor");
+
+constexpr SIZE_T kCommandBufferSize = 256;
+
+/*
+ * The command as a file: a path as it is, else the first PATH folder that has it. Windows
+ * also tries the extensions it runs; a bare name is never taken there, because editors
+ * keep a shell script of that name next to their .cmd for WSL.
+ */
+Path
+findCommand(const String& command)
+{
+  if (command.find('/') != String::npos || command.find('\\') != String::npos) {
+    return FileSystem::isFile(Path(command)) ? Path(command) : Path();
+  }
+#if USING(CH_DISPLAY_SDL3)
+  const ANSICHAR* const pathVariable = SDL_getenv("PATH");
+  if (!pathVariable) {
+    return Path();
+  }
+# if USING(CH_PLATFORM_WIN32)
+  constexpr ANSICHAR kSeparator = ';';
+  const bool bHasExtension = command.find('.') != String::npos;
+  const Vector<String> candidates =
+      bHasExtension ? Vector<String>{command}
+                    : Vector<String>{command + ".exe", command + ".cmd", command + ".bat"};
+# else
+  constexpr ANSICHAR kSeparator = ':';
+  const Vector<String> candidates{command};
+# endif // USING(CH_PLATFORM_WIN32)
+  const StringView folders(pathVariable);
+  SIZE_T start = 0;
+  while (start <= folders.size()) {
+    SIZE_T end = folders.find(kSeparator, start);
+    if (end == StringView::npos) {
+      end = folders.size();
+    }
+    const StringView folder = folders.substr(start, end - start);
+    if (!folder.empty()) {
+      for (const String& candidate : candidates) {
+        const Path file = Path(String(folder)).join(Path(candidate));
+        if (FileSystem::isFile(file)) {
+          return file;
+        }
+      }
+    }
+    start = end + 1;
+  }
+#endif // USING(CH_DISPLAY_SDL3)
+  return Path();
+}
+
+/*
+ * Starts the editor with the project folder and the file, without waiting for it.
+ */
+bool
+launchScriptEditor(const Path& editor, const Path& folder, const Path& file)
+{
+#if USING(CH_DISPLAY_SDL3)
+  const SDL_PropertiesID properties = SDL_CreateProperties();
+  SDL_SetBooleanProperty(properties, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, true);
+# if USING(CH_PLATFORM_WIN32)
+  // A .cmd only runs through cmd.exe, whose quoting the SDL argument list does not follow;
+  // /s with the whole line in quotes keeps quoted paths with spaces as they are.
+  const auto quote = [](const Path& path) {
+    return "\"" + StringUtils::replaceAllChars(path.toString(), '/', '\\') + "\"";
+  };
+  const String extension = StringUtils::toLower(editor.getExtension());
+  const String arguments = quote(editor) + " " + quote(folder) + " " + quote(file);
+  const String commandLine = extension == ".cmd" || extension == ".bat"
+                                 ? "cmd.exe /d /s /c \"" + arguments + "\""
+                                 : arguments;
+  SDL_SetStringProperty(properties, SDL_PROP_PROCESS_CREATE_CMDLINE_STRING,
+                        commandLine.c_str());
+# else
+  const ANSICHAR* arguments[] = {editor.toString().c_str(), folder.toString().c_str(),
+                                 file.toString().c_str(), nullptr};
+  SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, arguments);
+# endif // USING(CH_PLATFORM_WIN32)
+  SDL_Process* process = SDL_CreateProcessWithProperties(properties);
+  SDL_DestroyProperties(properties);
+  if (!process) {
+    CH_LOG_WARNING(UIImguiHelper, "Could not start {0}: {1}", editor, SDL_GetError());
+    return false;
+  }
+  // Only the handle goes; the editor keeps running.
+  SDL_DestroyProcess(process);
+  return true;
+#else
+  CH_PARAMETER_UNUSED(editor);
+  CH_PARAMETER_UNUSED(folder);
+  CH_PARAMETER_UNUSED(file);
+  return false;
+#endif // USING(CH_DISPLAY_SDL3)
+}
 } // namespace
 
 bool UIHelpers::bShowDemoWindow = false;
@@ -237,6 +342,50 @@ UIHelpers::openFileInSystem(const Path& file)
 #else
   CH_LOG_WARNING(UIImguiHelper, "Opening {0} needs a display backend.", path);
 #endif // USING(CH_DISPLAY_SDL3)
+}
+
+/*
+ */
+void
+UIHelpers::openScript(const Path& file)
+{
+  const String& command = g_cvarScriptEditor.get();
+  if (!command.empty() && EnginePaths::hasProject()) {
+    const Path editor = findCommand(command);
+    if (!editor.empty()) {
+      if (launchScriptEditor(editor, FileSystem::absolutePath(EnginePaths::getProjectDirectory()),
+                             FileSystem::absolutePath(file))) {
+        return;
+      }
+    }
+    else {
+      CH_LOG_WARNING(UIImguiHelper, "The script editor '{0}' is not on the PATH; opening the "
+                     "script with the system's program.", command);
+    }
+  }
+  openFileInSystem(file);
+}
+
+/*
+ */
+void
+UIHelpers::renderScriptEditorSettings()
+{
+  ANSICHAR buffer[kCommandBufferSize];
+  StringUtils::copyToBuffer(buffer, g_cvarScriptEditor.get());
+  ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+  if (ImGui::InputText("Command", buffer, sizeof(buffer))) {
+    g_cvarScriptEditor.set(String(buffer), ConsoleVariableSource::Console);
+  }
+  ImGui::SetItemTooltip("%s", g_cvarScriptEditor.getHelp().c_str());
+  bool bSave = ImGui::IsItemDeactivatedAfterEdit();
+  if (ImGui::Button("Reset to Default")) {
+    g_cvarScriptEditor.set(g_cvarScriptEditor.getDefault(), ConsoleVariableSource::Console);
+    bSave = true;
+  }
+  if (bSave) {
+    EngineConfig::setUserValue("Editor", "Editor", "ScriptEditor", g_cvarScriptEditor.get());
+  }
 }
 
 } // namespace chUIHelpers

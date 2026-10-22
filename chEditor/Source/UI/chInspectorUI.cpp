@@ -652,7 +652,7 @@ InspectorUI::renderScriptComponent(ScriptComponent& scriptComponent)
   }
 
   if (script && ImGui::SmallButton(ICON_FA_EXTERNAL_LINK_ALT "  Open")) {
-    chUIHelpers::UIHelpers::openFileInSystem(script->getFilePath());
+    chUIHelpers::UIHelpers::openScript(script->getFilePath());
   }
   if (script) {
     ImGui::SameLine();
