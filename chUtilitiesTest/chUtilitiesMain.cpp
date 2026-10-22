@@ -2583,6 +2583,17 @@ TEST_CASE("chUtilities - FileSystem") {
                                    Path("chFileSystemTestDir/a/b/g.bin")));
     REQUIRE(FileSystem::isFile(Path("chFileSystemTestDir/a/b/g.bin")));
 
+    REQUIRE(FileSystem::copyFile(Path("chFileSystemTestDir/a/b/g.bin"),
+                                 Path("chFileSystemTestDir/copy/deep/g.bin")));
+    REQUIRE(FileSystem::fastRead(Path("chFileSystemTestDir/copy/deep/g.bin")) == readBack);
+    // A second copy replaces the file instead of failing.
+    REQUIRE(FileSystem::copyFile(Path("chFileSystemTestDir/a/b/g.bin"),
+                                 Path("chFileSystemTestDir/copy/deep/g.bin")));
+    REQUIRE_FALSE(FileSystem::copyFile(Path("chFileSystemTestDir/missing.bin"),
+                                       Path("chFileSystemTestDir/copy/missing.bin")));
+    REQUIRE_FALSE(FileSystem::copyFile(Path("chFileSystemTestDir/a"),
+                                       Path("chFileSystemTestDir/copy/a")));
+
     REQUIRE(FileSystem::removeAll(root));
     REQUIRE_FALSE(FileSystem::exists(root));
   }

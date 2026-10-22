@@ -594,6 +594,36 @@ FileSystem::removeFile(const Path& path)
   return remove(path);
 }
 
+bool
+FileSystem::copyFile(const Path& source, const Path& destination)
+{
+  const String sourceRealPath = toRealPath(source, Access::Read);
+  const String destinationRealPath = toRealPath(destination, Access::Write);
+  if (sourceRealPath.empty() || destinationRealPath.empty()) {
+    return false;
+  }
+
+  std::error_code error;
+  if (!fs::is_regular_file(toFsPath(sourceRealPath), error)) {
+    return false;
+  }
+
+  const fs::path destinationPath = toFsPath(destinationRealPath);
+  fs::create_directories(destinationPath.parent_path(), error);
+  if (error) {
+    logError("create the folder of", destination, error);
+    return false;
+  }
+
+  fs::copy_file(toFsPath(sourceRealPath), destinationPath,
+                fs::copy_options::overwrite_existing, error);
+  if (error) {
+    logError("copy", source, error);
+    return false;
+  }
+  return true;
+}
+
 Path
 FileSystem::absolutePath(const Path& path)
 {

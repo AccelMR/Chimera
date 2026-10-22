@@ -20,9 +20,12 @@ ConsoleVariable<bool> g_cvarVSync("Graphics.VSync",
                                   "Waits for the display refresh before showing a frame.",
                                   "VSync");
 
+// On only in debug builds: the checks cost frame time, and a player without the graphics SDK
+// has no validation layer to load.
 ConsoleVariable<bool> g_cvarValidationLayer("Graphics.ValidationLayer",
-                                            true,
-                                            "Turns on the graphics API debug checks.",
+                                            USING(CH_DEBUG_MODE),
+                                            "Turns on the graphics API debug checks. Default: on "
+                                            "in debug builds only.",
                                             "ValidationLayer");
 
 } // namespace chEngineSDK

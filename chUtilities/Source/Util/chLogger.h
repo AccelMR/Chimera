@@ -176,6 +176,15 @@ class CH_UTILITY_EXPORT Logger : public Module<Logger>
   setGlobalVerbosity(LogVerbosity verbosity);
 
   /**
+   * Gives console output somewhere to go in a windowed program, which starts without a
+   * console on Windows: opens a console window, unless the output is already redirected (to
+   * a file or a pipe), which is kept. Elsewhere it does nothing, the terminal that started
+   * the program already shows it. Callable before startUp.
+   */
+  static void
+  openConsoleWindow();
+
+  /**
    * @brief Enable/disable console output
    * @param enabled True to enable, false to disable
    */

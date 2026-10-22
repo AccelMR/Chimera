@@ -23,6 +23,7 @@
 #include "chLinearColor.h"
 #include "chLogger.h"
 #include "chModelAsset.h"
+#include "chPackageDialog.h"
 #include "chPrefabAsset.h"
 #include "chProfilerUI.h"
 #include "chAnimationPreviewUI.h"
@@ -485,6 +486,11 @@ MainMenuBarUI::renderFileMenu()
   }
   if (bEditingPrefab && ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Back to Scene")) {
     EditorScene::requestBackToScene();
+  }
+  ImGui::Separator();
+  if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Package Project...", nullptr, false,
+                      !bEditingPrefab && !PackageDialog::isPackaging())) {
+    PackageDialog::open();
   }
   ImGui::Separator();
   if (ImGui::MenuItem(ICON_FA_SIGN_OUT_ALT "  Exit")) {

@@ -21,7 +21,6 @@ CH_LOG_DECLARE_STATIC(EnginePathsLog, All);
 
 namespace {
 const ANSICHAR* const kEngineContentFolder = "chCore/Content";
-const ANSICHAR* const kProjectExtension = ".chproject";
 #if USING(CH_EDITOR)
 const ANSICHAR* const kEditorContentFolder = "chEditor/Content";
 const ANSICHAR* const kDefaultProjectFolder = "Projects/Sandbox";
@@ -31,9 +30,11 @@ const ANSICHAR* const kDefaultProjectName = "Sandbox";
 struct PathState
 {
   bool initialized = false;
+  bool bPackaged = false;
   Path executableDirectory;
   Path codecDirectory;
   Path engineRoot;
+  Path engineContentDirectory;
   Path projectRoot;
   Path absoluteGameAssetDirectory;
   Path gameAssetDirectory;
@@ -82,7 +83,7 @@ hasProjectFile(const Path& directory)
   Vector<Path> directories;
   FileSystem::getChildren(directory, files, directories);
   for (const Path& file : files) {
-    if (file.getExtension() == kProjectExtension) {
+    if (file.getExtension() == EnginePaths::PROJECT_EXTENSION) {
       return true;
     }
   }
@@ -97,13 +98,15 @@ findProjectRoot(const Path& engineRoot, const Path& executableDirectory,
 
   if (!requestedProject.empty()) {
     Path project = FileSystem::absolutePath(Path(requestedProject));
-    if (FileSystem::isFile(project) && project.getExtension() == kProjectExtension) {
+    if (FileSystem::isFile(project) &&
+        project.getExtension() == EnginePaths::PROJECT_EXTENSION) {
       project = project.getDirectory();
     }
 
     if (!hasProjectFile(project)) {
       CH_EXCEPT(InvalidArgumentException,
-                "-project must be a folder with a " + String(kProjectExtension) +
+                "-project must be a folder with a " +
+                    String(EnginePaths::PROJECT_EXTENSION) +
                     " file, or the file itself: " + project.toString());
     }
     return project;
@@ -120,7 +123,7 @@ findProjectRoot(const Path& engineRoot, const Path& executableDirectory,
       return project;
     }
     CH_LOG_WARNING(EnginePathsLog, "The default project {0} has no {1} file; ignored.",
-                   project, kProjectExtension);
+                   project, EnginePaths::PROJECT_EXTENSION);
   }
 
 #if USING(CH_EDITOR)
@@ -128,7 +131,7 @@ findProjectRoot(const Path& engineRoot, const Path& executableDirectory,
   if (!hasProjectFile(project)) {
     CH_LOG_INFO(EnginePathsLog, "Creating the default project in {0}", project);
     const Path projectFile =
-        project.join(Path(String(kDefaultProjectName) + kProjectExtension));
+        project.join(Path(String(kDefaultProjectName) += EnginePaths::PROJECT_EXTENSION));
     SPtr<DataStream> file = FileSystem::createAndOpenFile(projectFile);
     if (!file) {
       CH_EXCEPT(InternalErrorException,
@@ -153,11 +156,22 @@ EnginePaths::initialize(StringView defaultProject)
   }
 
   state.executableDirectory = FileSystem::getExecutableDirectory();
-  state.engineRoot = findEngineRoot(state.executableDirectory);
-  if (state.engineRoot.empty()) {
-    CH_EXCEPT(InternalErrorException,
-              "Could not find " + String(kEngineContentFolder) + " in " +
-                  state.executableDirectory.toString() + " or any folder above it.");
+  const Path packageEngineDirectory =
+      state.executableDirectory.join(Path(String(PACKAGE_ENGINE_FOLDER)));
+  state.bPackaged = hasProjectFile(state.executableDirectory) &&
+                    FileSystem::isDirectory(packageEngineDirectory);
+  if (state.bPackaged) {
+    state.engineRoot = state.executableDirectory;
+    state.engineContentDirectory = packageEngineDirectory;
+  }
+  else {
+    state.engineRoot = findEngineRoot(state.executableDirectory);
+    if (state.engineRoot.empty()) {
+      CH_EXCEPT(InternalErrorException,
+                "Could not find " + String(kEngineContentFolder) + " in " +
+                    state.executableDirectory.toString() + " or any folder above it.");
+    }
+    state.engineContentDirectory = state.engineRoot.join(Path(kEngineContentFolder));
   }
 
   state.projectRoot =
@@ -180,9 +194,11 @@ EnginePaths::initialize(StringView defaultProject)
   FileSystem::createDirectories(savedDirectory.join(Path("Logs")));
   FileSystem::createDirectories(savedDirectory.join(Path("Config")));
 
-  FileSystem::mount("Engine", state.engineRoot.join(Path(kEngineContentFolder)));
+  FileSystem::mount("Engine", state.engineContentDirectory);
 #if USING(CH_EDITOR)
-  FileSystem::mount("Editor", state.engineRoot.join(Path(kEditorContentFolder)));
+  if (!state.bPackaged) {
+    FileSystem::mount("Editor", state.engineRoot.join(Path(kEditorContentFolder)));
+  }
 #endif
   FileSystem::mount("Game", state.absoluteGameAssetDirectory, 0, true);
   FileSystem::mount("Saved", savedDirectory, 0, true);
@@ -190,6 +206,9 @@ EnginePaths::initialize(StringView defaultProject)
   state.initialized = true;
 
   CH_LOG_INFO(EnginePathsLog, "Engine root: {0}", state.engineRoot);
+  if (state.bPackaged) {
+    CH_LOG_INFO(EnginePathsLog, "Running from a package.");
+  }
   CH_LOG_INFO(EnginePathsLog, "Project: {0}", state.projectRoot);
 }
 
@@ -198,6 +217,20 @@ EnginePaths::getEngineRootDirectory()
 {
   initialize();
   return pathState().engineRoot;
+}
+
+const Path&
+EnginePaths::getEngineContentDirectory()
+{
+  initialize();
+  return pathState().engineContentDirectory;
+}
+
+bool
+EnginePaths::isPackaged()
+{
+  initialize();
+  return pathState().bPackaged;
 }
 
 const Path&

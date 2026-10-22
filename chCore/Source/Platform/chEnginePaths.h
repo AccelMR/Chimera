@@ -23,9 +23,11 @@ namespace chEngineSDK {
  *   /Saved   logs, config and cache of the project
  *
  * The engine root is the first folder, starting at the executable and going up,
- * that has chCore/Content. The project is the folder given with -project=<path>
- * (a folder with a .chproject file, or the file itself). Without it the editor
- * opens <EngineRoot>/Projects/Sandbox, and a game uses the executable folder.
+ * that has chCore/Content. A packaged game instead has a .chproject file and an Engine
+ * folder next to the executable: the executable folder is then both the engine root and
+ * the project, and /Engine is that Engine folder. The project is the folder given with
+ * -project=<path> (a folder with a .chproject file, or the file itself). Without it the
+ * editor opens <EngineRoot>/Projects/Sandbox, and a game uses the executable folder.
  * The project folder is also the FileSystem base directory.
  */
 class CH_CORE_EXPORT EnginePaths
@@ -47,6 +49,19 @@ class CH_CORE_EXPORT EnginePaths
 
   NODISCARD static const Path&
   getEngineRootDirectory();
+
+  /**
+   * Real folder mounted as /Engine: <EngineRoot>/chCore/Content, or the Engine folder of
+   * a package.
+   */
+  NODISCARD static const Path&
+  getEngineContentDirectory();
+
+  /**
+   * True when the executable runs from a package made by the editor's Package Project.
+   */
+  NODISCARD static bool
+  isPackaged();
 
   NODISCARD static const Path&
   getProjectDirectory();
@@ -112,6 +127,13 @@ class CH_CORE_EXPORT EnginePaths
   {
     return ".chAss";
   }
+
+  static constexpr StringView PROJECT_EXTENSION = ".chproject";
+
+  /**
+   * Folder next to a packaged executable that holds the engine content.
+   */
+  static constexpr StringView PACKAGE_ENGINE_FOLDER = "Engine";
 };
 
 } // namespace chEngineSDK

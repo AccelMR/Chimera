@@ -141,8 +141,14 @@ function(ch_add_plugin TARGET_NAME)
 endfunction()
 
 function(ch_add_executable TARGET_NAME)
-  cmake_parse_arguments(ARG "" "FOLDER" "SOURCES" ${ARGN})
+  cmake_parse_arguments(ARG "WINDOWED" "FOLDER" "SOURCES" ${ARGN})
   add_executable(${TARGET_NAME} ${ARG_SOURCES})
+  # A WINDOWED program opens no console on Windows (-log opens one); its entry point stays
+  # main, so the source is the same on every platform.
+  if(ARG_WINDOWED AND WIN32)
+    set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_options(${TARGET_NAME} PRIVATE "LINKER:/ENTRY:mainCRTStartup")
+  endif()
   ch_target_defaults(${TARGET_NAME} ${ARG_FOLDER})
 endfunction()
 

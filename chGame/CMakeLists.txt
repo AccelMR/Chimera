@@ -1,6 +1,6 @@
 # ---------- Game runtime ----------
 ch_collect_sources(GAME_SOURCES)
-ch_add_executable(chGame FOLDER Game SOURCES chGameMain.cpp ${GAME_SOURCES})
+ch_add_executable(chGame WINDOWED FOLDER Game SOURCES chGameMain.cpp ${GAME_SOURCES})
 ch_include_subfolders(chGame PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 
 target_link_libraries(chGame PRIVATE chCore)

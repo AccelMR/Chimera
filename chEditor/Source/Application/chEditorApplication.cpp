@@ -42,6 +42,7 @@
 #include "chViewportGrid.h"
 #include "chViewportTools.h"
 #include "chImportDialog.h"
+#include "chPackageDialog.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chStringUtils.h"
@@ -119,6 +120,7 @@ EditorApplication::destroyModules()
   saveWindowPlacement("Editor");
   // Its worker runs codec code and uses the codec manager.
   ImportDialog::shutDown();
+  PackageDialog::shutDown();
   if (IGraphicsAPI::isStarted()) {
     IGraphicsAPI::instance().waitIdle();
   }
@@ -565,6 +567,7 @@ EditorApplication::renderUI()
   AnimationPreviewUI::render();
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
+  PackageDialog::render();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
 
   ImGui::Render();

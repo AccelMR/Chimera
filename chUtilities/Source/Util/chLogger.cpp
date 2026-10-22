@@ -24,6 +24,11 @@
 #include "chPath.h"
 #include "chSTDThreading.h"
 
+#if USING(CH_PLATFORM_WIN32)
+# include <cstdio>
+# include "chWindows.h"
+#endif
+
 namespace chEngineSDK {
 
 namespace {
@@ -438,6 +443,36 @@ Logger::getCategories()
   CategoryRegistry& registry = getCategoryRegistry();
   LockGuard<Mutex> lock(registry.mutex);
   return registry.categories;
+}
+
+/*
+ */
+void
+Logger::openConsoleWindow()
+{
+#if USING(CH_PLATFORM_WIN32)
+  const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+  if (output && output != INVALID_HANDLE_VALUE && GetFileType(output) != FILE_TYPE_UNKNOWN) {
+    return;
+  }
+  if (!AllocConsole()) {
+    return;
+  }
+  // The C streams were bound to nothing when the program started; std::cout writes through
+  // them.
+  FILE* stream = nullptr;
+  freopen_s(&stream, "CONOUT$", "w", stdout);
+  freopen_s(&stream, "CONOUT$", "w", stderr);
+  std::cout.clear();
+  std::cerr.clear();
+
+  // A new console shows the log's color codes as text until it is told to read them.
+  const HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+  DWORD mode = 0;
+  if (GetConsoleMode(console, &mode)) {
+    SetConsoleMode(console, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  }
+#endif // USING(CH_PLATFORM_WIN32)
 }
 
 /*

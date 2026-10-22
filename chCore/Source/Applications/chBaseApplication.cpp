@@ -55,11 +55,15 @@ BaseApplication::launch(int32 argc,
                         const LaunchInfo& info,
                         void (*startUpApplication)())
 {
+  CommandLine::initialize(argc, argv);
+  // Windowed programs start without a console; -log asks for one, before the first message.
+  if (CommandLine::hasFlag("log")) {
+    Logger::openConsoleWindow();
+  }
+
   Logger::startUp();
   Logger& logger = Logger::instance();
   logger.setBufferingEnabled(info.logBufferSize > 0, info.logBufferSize);
-
-  CommandLine::initialize(argc, argv);
 
   int32 exitCode = 0;
   try {

@@ -98,6 +98,13 @@ class CH_UTILITY_EXPORT FileSystem
   removeFile(const Path& path);
 
   /**
+   *   Copies a regular file, creating every missing parent of destination and replacing
+   *   a file already there.
+   **/
+  NODISCARD static bool
+  copyFile(const Path& source, const Path& destination);
+
+  /**
    *   Returns the real absolute path on disk, with "." and ".." removed. A virtual
    *   path gives the file in the layer that would be read.
    **/

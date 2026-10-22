@@ -18,6 +18,7 @@
 #include "chCameraComponent.h"
 #include "chCapsule.h"
 #include "chDebugDraw.h"
+#include "chDynamicLibrary.h"
 #include "chAngle.h"
 #include "chAssetFile.h"
 #include "chAssetMeta.h"
@@ -47,6 +48,7 @@
 #include "chModelSerializer.h"
 #include "chModelSerializationHeaders.h"
 #include "chPrefabAsset.h"
+#include "chProjectPackager.h"
 #include "chQuaternion.h"
 #include "chRay.h"
 #include "chRenderFrame.h"
@@ -1644,6 +1646,203 @@ TEST_CASE("chCore - Asset meta file")
   }
 
   REQUIRE(AssetMeta::getPath(Path("/Game/Rock.chAss")) == Path("/Game/Rock.chAss.meta"));
+}
+
+namespace {
+void
+writeTestFile(const Path& path, StringView text)
+{
+  SPtr<DataStream> stream = FileSystem::createAndOpenFile(path);
+  REQUIRE(stream);
+  stream->write(text.data(), text.size());
+  stream->close();
+}
+} // namespace
+
+TEST_CASE("chCore - Project packager")
+{
+  const Path root = FileSystem::absolutePath(Path("PackagerTestDir"));
+  FileSystem::removeAll(root);
+
+  const Path binaries = root.join(Path("Build"));
+  String executable(ProjectPackager::GAME_EXECUTABLE_NAME);
+  executable += ProjectPackager::EXECUTABLE_EXTENSION;
+  String library("chCore");
+  library += DynamicLibrary::EXTENSION;
+  writeTestFile(binaries.join(Path(executable)), "exe");
+  writeTestFile(binaries.join(Path(library)), "lib");
+  writeTestFile(binaries.join(Path("chGame.pdb")), "symbols");
+  writeTestFile(binaries.join(Path("Codecs/chImageCodec.bin")), "codec");
+  writeTestFile(binaries.join(Path("Shaders/SPIRV/forward.ps.spv")), "spirv");
+
+  const Path engine = root.join(Path("EngineContent"));
+  writeTestFile(engine.join(Path("Config/Engine.ini")), "[Window]\nWidth=640\n");
+  writeTestFile(engine.join(Path("Shaders/forward.hlsl")), "source");
+
+  const Path project = root.join(Path("Project"));
+  writeTestFile(project.join(Path("Project.chproject")), "");
+  writeTestFile(project.join(Path("Config/Game.ini")), "[Game]\nTitle=Test\n");
+  writeTestFile(project.join(Path("Config/Editor.ini")), "[Editor]\nGrid=false\n");
+  writeTestFile(project.join(Path("Config/Package.ini")), "[Package]\nScenes=/Game/Maps/Main\n");
+  const Path mainScene = project.join(Path("Assets/Maps/Main.chAss"));
+  writeTestFile(mainScene, "scene");
+  writeTestFile(project.join(Path("Assets/Unused.chAss")), "unused");
+
+  const Path output = root.join(Path("Out/MyGame"));
+  PackageDesc desc{.gameName = "MyGame",
+                   .outputDirectory = output,
+                   .binaryDirectory = binaries,
+                   .engineContentDirectory = engine,
+                   .projectDirectory = project,
+                   .assetFiles = {mainScene},
+                   .startupScene = "/Game/Maps/Main"};
+
+  SECTION("The package holds what a game reads and nothing else")
+  {
+    const PackageResult result = ProjectPackager::package(desc);
+    REQUIRE(result.bSucceeded);
+    REQUIRE(result.binaryFileCount == 3);
+    REQUIRE(result.assetFileCount == 1);
+
+    String packagedExecutable("MyGame");
+    packagedExecutable += ProjectPackager::EXECUTABLE_EXTENSION;
+    REQUIRE(FileSystem::isFile(output.join(Path(packagedExecutable))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path(executable))));
+    REQUIRE(FileSystem::isFile(output.join(Path(library))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("chGame.pdb"))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Codecs"))));
+    REQUIRE(FileSystem::isFile(output.join(Path("Shaders/SPIRV/forward.ps.spv"))));
+    REQUIRE(FileSystem::isFile(output.join(Path("Engine/Config/Engine.ini"))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Engine/Shaders"))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Config/Editor.ini"))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Config/Package.ini"))));
+    REQUIRE(FileSystem::isFile(output.join(Path("Assets/Maps/Main.chAss"))));
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Assets/Unused.chAss"))));
+    REQUIRE(FileSystem::isFile(output.join(Path("MyGame.chproject"))));
+
+    ConfigFile gameConfig;
+    REQUIRE(gameConfig.load(output.join(Path("Config/Game.ini"))));
+    REQUIRE(gameConfig.getValue("Game", "StartupScene"));
+    REQUIRE(*gameConfig.getValue("Game", "StartupScene") == "/Game/Maps/Main");
+    REQUIRE(*gameConfig.getValue("Game", "Title") == "Test");
+    REQUIRE(gameConfig.getValue("Window", "Title"));
+    REQUIRE(*gameConfig.getValue("Window", "Title") == "MyGame");
+
+    // A window title the project set itself is kept.
+    writeTestFile(project.join(Path("Config/Engine.ini")), "[Window]\nTitle=Mine\n");
+    REQUIRE(ProjectPackager::package(desc).bSucceeded);
+    ConfigFile secondConfig;
+    REQUIRE(secondConfig.load(output.join(Path("Config/Game.ini"))));
+    REQUIRE_FALSE(secondConfig.getValue("Window", "Title"));
+
+    // A second package replaces the first as a whole.
+    writeTestFile(output.join(Path("Stale.txt")), "old");
+    REQUIRE(ProjectPackager::package(desc).bSucceeded);
+    REQUIRE_FALSE(FileSystem::exists(output.join(Path("Stale.txt"))));
+  }
+
+  SECTION("Progress counts every file and a cancel removes the output")
+  {
+    PackageProgress progress;
+    REQUIRE(ProjectPackager::package(desc, &progress).bSucceeded);
+    // Executable, library, shader, asset, Engine.ini and Game.ini.
+    REQUIRE(progress.totalFiles.load() == 6);
+    REQUIRE(progress.copiedFiles.load() == 6);
+
+    PackageProgress cancelled;
+    cancelled.bCancelRequested.store(true);
+    const PackageResult result = ProjectPackager::package(desc, &cancelled);
+    REQUIRE_FALSE(result.bSucceeded);
+    REQUIRE(result.bCancelled);
+    REQUIRE_FALSE(FileSystem::exists(output));
+  }
+
+  SECTION("Bad requests are refused before anything is copied")
+  {
+    PackageDesc otherFolder = desc;
+    otherFolder.outputDirectory = root.join(Path("NotAPackage"));
+    writeTestFile(otherFolder.outputDirectory.join(Path("Keep.txt")), "mine");
+    REQUIRE_FALSE(ProjectPackager::package(otherFolder).bSucceeded);
+    REQUIRE(FileSystem::isFile(otherFolder.outputDirectory.join(Path("Keep.txt"))));
+
+    PackageDesc noBuild = desc;
+    noBuild.binaryDirectory = root.join(Path("Missing"));
+    REQUIRE_FALSE(ProjectPackager::package(noBuild).bSucceeded);
+
+    PackageDesc insideAssets = desc;
+    insideAssets.outputDirectory = project.join(Path("Assets/Package"));
+    REQUIRE_FALSE(ProjectPackager::package(insideAssets).bSucceeded);
+
+    PackageDesc badName = desc;
+    badName.gameName = "My:Game";
+    REQUIRE_FALSE(ProjectPackager::package(badName).bSucceeded);
+    REQUIRE_FALSE(FileSystem::exists(output));
+  }
+
+  SECTION("Debug builds are told apart by the engine library")
+  {
+    REQUIRE_FALSE(ProjectPackager::isDebugBuild(binaries));
+    String debugLibrary("chCored");
+    debugLibrary += DynamicLibrary::EXTENSION;
+    writeTestFile(binaries.join(Path(debugLibrary)), "lib");
+    REQUIRE(ProjectPackager::isDebugBuild(binaries));
+  }
+
+  SECTION("Game names")
+  {
+    REQUIRE(ProjectPackager::isValidGameName("My Game-2"));
+    REQUIRE_FALSE(ProjectPackager::isValidGameName(""));
+    REQUIRE_FALSE(ProjectPackager::isValidGameName("a/b"));
+    REQUIRE_FALSE(ProjectPackager::isValidGameName("Game."));
+    REQUIRE_FALSE(ProjectPackager::isValidGameName(".."));
+  }
+
+  FileSystem::removeAll(root);
+}
+
+TEST_CASE("chCore - Packaged assets follow references")
+{
+  const chEngineSDK::UUID scene = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID model = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID material = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID texture = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID missing = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID unused = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID secondScene = chEngineSDK::UUID::createRandom();
+  const chEngineSDK::UUID secondModel = chEngineSDK::UUID::createRandom();
+
+  // The material is reached twice and the texture points back at the scene.
+  UnorderedMap<chEngineSDK::UUID, Vector<chEngineSDK::UUID>> references;
+  references[scene] = {model, material};
+  references[model] = {material, missing};
+  references[material] = {texture};
+  references[texture] = {scene};
+  references[unused] = {};
+  // A second scene shares the texture and brings its own model.
+  references[secondScene] = {texture, secondModel};
+  references[secondModel] = {};
+
+  Vector<chEngineSDK::UUID> assets;
+  Vector<chEngineSDK::UUID> missingAssets;
+  const chEngineSDK::UUID roots[] = {scene, secondScene};
+  ProjectPackager::collectAssets(
+      roots,
+      [&references](const chEngineSDK::UUID& uuid) -> const Vector<chEngineSDK::UUID>* {
+        const auto found = references.find(uuid);
+        return found != references.end() ? &found->second : nullptr;
+      },
+      assets, missingAssets);
+
+  REQUIRE(assets.size() == 6);
+  REQUIRE(assets[0] == scene);
+  REQUIRE(Algorithm::contains(assets, secondScene));
+  REQUIRE(Algorithm::contains(assets, secondModel));
+  REQUIRE(Algorithm::contains(assets, model));
+  REQUIRE(Algorithm::contains(assets, material));
+  REQUIRE(Algorithm::contains(assets, texture));
+  REQUIRE_FALSE(Algorithm::contains(assets, unused));
+  REQUIRE(missingAssets.size() == 1);
+  REQUIRE(missingAssets[0] == missing);
 }
 #endif // USING(CH_EDITOR)
 

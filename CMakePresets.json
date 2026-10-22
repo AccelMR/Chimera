@@ -66,6 +66,31 @@
       "displayName": "Linux clang Release",
       "inherits": "linux-clang-base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "game-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CH_BUILD_EDITOR": "OFF",
+        "CH_ENABLE_PROFILER": "OFF",
+        "CH_ENABLE_DEBUG_DRAW": "OFF"
+      }
+    },
+    {
+      "name": "windows-msvc-game",
+      "displayName": "Windows MSVC game build (no editor; what Package Project copies)",
+      "inherits": ["game-base", "windows-msvc"],
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "linux-clang-game",
+      "displayName": "Linux clang game build (no editor; what Package Project copies)",
+      "inherits": ["game-base", "linux-clang-release"]
+    },
+    {
+      "name": "linux-clang-game-debug",
+      "displayName": "Linux clang game build in Debug (no editor)",
+      "inherits": ["game-base", "linux-clang-debug"]
     }
   ],
   "buildPresets": [
@@ -74,7 +99,11 @@
     { "name": "windows-clang-debug", "configurePreset": "windows-clang-debug" },
     { "name": "windows-clang-release", "configurePreset": "windows-clang-release" },
     { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
-    { "name": "linux-clang-release", "configurePreset": "linux-clang-release" }
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
+    { "name": "windows-msvc-game-debug", "configurePreset": "windows-msvc-game", "configuration": "Debug" },
+    { "name": "windows-msvc-game-release", "configurePreset": "windows-msvc-game", "configuration": "Release" },
+    { "name": "linux-clang-game", "configurePreset": "linux-clang-game" },
+    { "name": "linux-clang-game-debug", "configurePreset": "linux-clang-game-debug" }
   ],
   "testPresets": [
     {
