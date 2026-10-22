@@ -169,6 +169,7 @@ AssetManager::unloadAsset(const UUID& assetUUID) {
   return unloadAsset(asset);
 }
 
+#if USING(CH_EDITOR)
 /*
  */
 bool
@@ -199,6 +200,7 @@ AssetManager::renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName) {
   CH_LOG_DEBUG(AssetSystem, "Renamed asset {0} to {1}", asset->getName(), newName);
   return true;
 }
+#endif // USING(CH_EDITOR)
 
 /*
  */
@@ -393,6 +395,50 @@ AssetManager::moveFolder(const Path& folder, const Path& newFolder)
     StringUtils::copyToBuffer(asset->m_metadata.assetPath, movedFolder);
   }
   CH_LOG_DEBUG(AssetSystem, "Moved folder {0} to {1}", folder, newFolder);
+  return true;
+}
+
+/*
+ */
+bool
+AssetManager::removeFolder(const Path& folder)
+{
+  const String& folderText = folder.toString();
+  const auto isInside = [&folderText](StringView path) {
+    return path == folderText || (path.size() > folderText.size() &&
+                                  path.starts_with(folderText) &&
+                                  path[folderText.size()] == '/');
+  };
+
+  if (folderText == EnginePaths::getGameAssetDirectory().toString()) {
+    CH_LOG_ERROR(AssetSystem, "The asset root folder cannot be deleted");
+    return false;
+  }
+  Vector<UUID> inside;
+  for (const auto& [uuid, asset] : m_assets) {
+    if (!isInside(asset->getAssetPath())) {
+      continue;
+    }
+    if (!asset->isUnloaded()) {
+      CH_LOG_ERROR(AssetSystem, "Cannot delete {0}: {1} is in use", folder, asset->getName());
+      return false;
+    }
+    inside.push_back(uuid);
+  }
+
+  const bool bRemoved = FileSystem::removeAll(folder);
+  // A failure may have deleted part of the files, so each asset is checked on its own.
+  for (const UUID& uuid : inside) {
+    const auto it = m_assets.find(uuid);
+    if (!FileSystem::exists(it->second->getFilePath())) {
+      m_assets.erase(it);
+    }
+  }
+  if (!bRemoved) {
+    CH_LOG_ERROR(AssetSystem, "Failed to delete folder {0}", folder);
+    return false;
+  }
+  CH_LOG_DEBUG(AssetSystem, "Deleted folder {0} with {1} assets", folder, inside.size());
   return true;
 }
 

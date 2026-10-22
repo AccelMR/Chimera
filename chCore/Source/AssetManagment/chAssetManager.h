@@ -57,12 +57,6 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   bool
   unloadAsset(const UUID& assetUUID);
 
-  bool
-  renameAsset(const UUID& assetUUID, const ANSICHAR* newName);
-
-  bool
-  renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName);
-
   /**
    * The asset with this UUID, loaded or not, or null when there is none.
    */
@@ -96,6 +90,12 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
 
 #if USING(CH_EDITOR)
   bool
+  renameAsset(const UUID& assetUUID, const ANSICHAR* newName);
+
+  bool
+  renameAsset(const SPtr<IAsset>& asset, const ANSICHAR* newName);
+
+  bool
   removeAsset(const UUID& assetUUID);
 
   /**
@@ -126,6 +126,13 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
    */
   bool
   moveFolder(const Path& folder, const Path& newFolder);
+
+  /**
+   * Deletes a folder under /Game with everything in it and forgets the assets that were
+   * inside. Refused while one of them is loaded, since something may still use it.
+   */
+  bool
+  removeFolder(const Path& folder);
 #endif // Editor-specific functionality
 
   /*

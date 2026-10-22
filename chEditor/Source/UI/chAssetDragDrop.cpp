@@ -143,13 +143,18 @@ acceptAsset(const ANSICHAR* payloadName)
 /*
  */
 void
-AssetDragDrop::source(const IAsset& asset)
+AssetDragDrop::source(const IAsset& asset, uint32 selectedCount)
 {
   const ANSICHAR* payloadName = getPayloadName(asset);
   if (ImGui::BeginDragDropSource()) {
     const UUID& uuid = asset.getUUID();
     ImGui::SetDragDropPayload(payloadName, &uuid, sizeof(UUID));
-    ImGui::TextUnformatted(asset.getName());
+    if (selectedCount > 1) {
+      ImGui::Text("%u assets", selectedCount);
+    }
+    else {
+      ImGui::TextUnformatted(asset.getName());
+    }
     ImGui::EndDragDropSource();
   }
 }

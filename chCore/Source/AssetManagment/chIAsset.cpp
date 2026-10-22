@@ -111,7 +111,6 @@ IAsset::makeEditorDataText() const
   writeEditorValues(editorFile);
   return editorFile.toText();
 }
-#endif // USING(CH_EDITOR)
 
 /*
  */
@@ -154,7 +153,6 @@ IAsset::rename(const ANSICHAR* newName) {
   return true;
 }
 
-#if USING(CH_EDITOR)
 /*
  */
 bool

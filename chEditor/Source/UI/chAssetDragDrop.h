@@ -29,10 +29,11 @@ class AssetDragDrop
  public:
   /**
    * Makes the last ImGui item a drag source for the asset. Types that only a folder takes
-   * (scenes, skeletons) share one payload name.
+   * (scenes, skeletons) share one payload name. With a count above one the drag shows how
+   * many assets the selection holds; the payload is still this asset.
    */
   static void
-  source(const IAsset& asset);
+  source(const IAsset& asset, uint32 selectedCount = 1);
 
   /**
    * Same as acceptModel, for an asset of any type, and not loaded. Used to move assets

@@ -105,10 +105,35 @@ class ContentAssetUI
 
   /**
    * The move runs after the frame's lists are drawn, because it reads the folders from
-   * disk again. When a setting names a scene that moves by its path, it asks first.
+   * disk again. When a setting names a scene that moves by its path, it asks first. A
+   * dragged asset that is part of a selection moves the whole selection.
    */
   void
   requestAssetMove(const SPtr<IAsset>& asset, const Path& folder);
+
+  /**
+   * Keeps the browser's selection in step with the asset EditorSelection holds, which
+   * other windows may change; that one is the active asset of the selection.
+   */
+  void
+  syncAssetSelection();
+
+  NODISCARD bool
+  isAssetSelected(const SPtr<IAsset>& asset) const;
+
+  /**
+   * Call after an asset's item. A click selects it, Ctrl+click toggles it, Shift+click
+   * selects the drawn range from the last plain or Ctrl click. A plain click on part of a
+   * selection waits for the release without a drag, so the selection can be dragged.
+   */
+  void
+  handleAssetClick(const SPtr<IAsset>& asset);
+
+  void
+  selectOnlyAsset(const SPtr<IAsset>& asset);
+
+  void
+  renderDeleteFolderPopup();
 
   void
   requestFolderMove(const Path& folder, const Path& newFolder);
@@ -286,6 +311,14 @@ class ContentAssetUI
   SPtr<IAsset> m_assetToDelete;
   bool m_showDeleteConfirmation = false;
 
+  Path m_folderToDelete;
+  uint32 m_folderToDeleteAssets = 0;
+  bool m_bOpenDeleteFolder = false;
+
+  // The last one is EditorSelection's asset.
+  Vector<SPtr<IAsset>> m_selectedAssets;
+  SPtr<IAsset> m_selectionAnchor;
+
   // Picked by a click on a folder tile or row; an asset click clears it. Used by F2.
   uint32 m_selectedFolder = INVALID_FOLDER;
 
@@ -298,10 +331,10 @@ class ContentAssetUI
   // Set for a script just made from the template, whose class is named after the file.
   bool m_bRenameRewritesScript = false;
 
-  // Either an asset or a folder (m_moveFolder not empty) moves into m_moveTarget.
+  // Either assets or a folder (m_moveFolder not empty) move into m_moveTarget.
   bool m_bMoveRequested = false;
   bool m_bMoveConfirmed = false;
-  SPtr<IAsset> m_moveAsset;
+  Vector<SPtr<IAsset>> m_moveAssets;
   Path m_moveFolder;
   Path m_moveTarget;
   Vector<String> m_moveWarnings;

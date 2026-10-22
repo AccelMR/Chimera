@@ -176,13 +176,13 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
  protected:
 
+#if USING(CH_EDITOR)
   /**
    * Renames the asset file.
    */
   NODISCARD bool
   rename(const ANSICHAR* newName);
 
-#if USING(CH_EDITOR)
   /**
    * Moves the asset file into another virtual folder, keeping its name.
    */

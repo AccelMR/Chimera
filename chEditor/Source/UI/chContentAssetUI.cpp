@@ -195,7 +195,11 @@ ContentAssetUI::ContentAssetUI()
 void
 ContentAssetUI::refreshAssets()
 {
-  m_assets = AssetManager::instance().getAllAssets();
+  AssetManager& assetManager = AssetManager::instance();
+  m_assets = assetManager.getAllAssets();
+  Algorithm::removeAllIf(m_selectedAssets, [&assetManager](const SPtr<IAsset>& asset) {
+    return !assetManager.getAsset(asset->getUUID());
+  });
   rebuildFolderTree();
   m_needsFilterUpdate = true;
 }
@@ -206,7 +210,9 @@ void
 ContentAssetUI::renderContentAssetUI()
 {
   renderDeleteConfirmationPopup();
+  renderDeleteFolderPopup();
   renderMoveConfirmationPopup();
+  syncAssetSelection();
 
   if (!ImGui::Begin(ICON_FA_FOLDER_OPEN "  Content Browser###ContentBrowser",
                     &bShowContentWindow)) {
@@ -231,6 +237,10 @@ ContentAssetUI::renderContentAssetUI()
     m_currentFolder = m_requestedFolder;
     m_requestedFolder = INVALID_FOLDER;
     m_selectedFolder = INVALID_FOLDER;
+    // Assets of a folder no longer shown would move with a drag without being seen.
+    if (m_selectedAssets.size() > 1) {
+      m_selectedAssets.assign(1, m_selectedAssets.back());
+    }
     m_needsFilterUpdate = true;
   }
   if (m_bMoveRequested && !m_bOpenMoveConfirmation) {
@@ -584,12 +594,10 @@ ContentAssetUI::renderAssetIconButton(const SPtr<IAsset>& asset)
   else {
     ImGui::Button("##asset", buttonSize);
   }
-  AssetDragDrop::source(*asset);
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-    EditorSelection::setSelectedAsset(asset);
-    m_selectedFolder = INVALID_FOLDER;
-  }
-  if (EditorSelection::getSelectedAsset() == asset) {
+  const bool bSelected = isAssetSelected(asset);
+  AssetDragDrop::source(*asset, bSelected ? static_cast<uint32>(m_selectedAssets.size()) : 1);
+  handleAssetClick(asset);
+  if (bSelected) {
     ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                                         ImGui::GetColorU32(ImGuiCol_HeaderActive),
                                         ImGui::GetStyle().FrameRounding, 0, 2.0f);
@@ -654,12 +662,10 @@ ContentAssetUI::renderAssetNameInGrid(const SPtr<IAsset>& asset)
 void
 ContentAssetUI::renderSelectableAssetName(const SPtr<IAsset>& asset)
 {
-  if (ImGui::Selectable(asset->getName(), EditorSelection::getSelectedAsset() == asset,
-                        ImGuiSelectableFlags_SpanAllColumns)) {
-    EditorSelection::setSelectedAsset(asset);
-    m_selectedFolder = INVALID_FOLDER;
-  }
-  AssetDragDrop::source(*asset);
+  const bool bSelected = isAssetSelected(asset);
+  ImGui::Selectable(asset->getName(), bSelected, ImGuiSelectableFlags_SpanAllColumns);
+  AssetDragDrop::source(*asset, bSelected ? static_cast<uint32>(m_selectedAssets.size()) : 1);
+  handleAssetClick(asset);
 
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     openAsset(asset);
@@ -857,6 +863,11 @@ ContentAssetUI::startFolderRename(uint32 folderIndex)
   }
 
   cancelInlineRename();
+  // A search hides the folders, and with them the tile that holds the field.
+  if (searchBuffer[0] != '\0') {
+    searchBuffer[0] = '\0';
+    m_needsFilterUpdate = true;
+  }
   m_isRenaming = true;
   m_renamingFolder = folderIndex;
   m_renameFocusRequested = true;
@@ -1082,10 +1093,23 @@ ContentAssetUI::acceptFolderDrop(const Path& folder)
 void
 ContentAssetUI::requestAssetMove(const SPtr<IAsset>& asset, const Path& folder)
 {
-  if (!asset || folder.toString() == asset->getAssetPath()) {
+  if (!asset) {
     return;
   }
-  m_moveAsset = asset;
+  m_moveAssets.clear();
+  if (m_selectedAssets.size() > 1 && isAssetSelected(asset)) {
+    for (const SPtr<IAsset>& selected : m_selectedAssets) {
+      if (folder.toString() != selected->getAssetPath()) {
+        m_moveAssets.push_back(selected);
+      }
+    }
+  }
+  else if (folder.toString() != asset->getAssetPath()) {
+    m_moveAssets.push_back(asset);
+  }
+  if (m_moveAssets.empty()) {
+    return;
+  }
   m_moveFolder = Path();
   m_moveTarget = folder;
   m_bMoveRequested = true;
@@ -1101,7 +1125,7 @@ ContentAssetUI::requestFolderMove(const Path& folder, const Path& newFolder)
   if (folder.toString() == newFolder.toString()) {
     return;
   }
-  m_moveAsset = nullptr;
+  m_moveAssets.clear();
   m_moveFolder = folder;
   m_moveTarget = newFolder;
   m_bMoveRequested = true;
@@ -1117,9 +1141,11 @@ ContentAssetUI::findBrokenScenePaths()
   m_moveWarnings.clear();
 
   Vector<String> movedScenes;
-  if (m_moveAsset) {
-    if (m_moveAsset->isTypeOf<SceneAsset>()) {
-      movedScenes.push_back(getScenePath(*m_moveAsset));
+  if (m_moveFolder.empty()) {
+    for (const SPtr<IAsset>& asset : m_moveAssets) {
+      if (asset->isTypeOf<SceneAsset>()) {
+        movedScenes.push_back(getScenePath(*asset));
+      }
     }
   }
   else {
@@ -1185,7 +1211,7 @@ ContentAssetUI::renderMoveConfirmationPopup()
   ImGui::SameLine();
   if (ImGui::Button("Cancel", ImVec2(120, 0))) {
     m_bMoveRequested = false;
-    m_moveAsset = nullptr;
+    m_moveAssets.clear();
     ImGui::CloseCurrentPopup();
   }
   ImGui::EndPopup();
@@ -1205,11 +1231,13 @@ ContentAssetUI::applyPendingMove()
   m_moveWarnings.clear();
 
   AssetManager& assetManager = AssetManager::instance();
-  if (m_moveAsset) {
-    if (assetManager.moveAsset(m_moveAsset, m_moveTarget)) {
-      EditorScene::onAssetMoved(*m_moveAsset);
+  if (m_moveFolder.empty()) {
+    for (const SPtr<IAsset>& asset : m_moveAssets) {
+      if (assetManager.moveAsset(asset, m_moveTarget)) {
+        EditorScene::onAssetMoved(*asset);
+      }
     }
-    m_moveAsset = nullptr;
+    m_moveAssets.clear();
     refreshAssets();
     return;
   }
@@ -1240,6 +1268,167 @@ ContentAssetUI::applyPendingMove()
     }
   }
   m_selectedFolder = findFolder(m_moveTarget);
+}
+
+/*
+ */
+void
+ContentAssetUI::syncAssetSelection()
+{
+  const SPtr<IAsset>& active = EditorSelection::getSelectedAsset();
+  if (!active) {
+    m_selectedAssets.clear();
+  }
+  else if (!Algorithm::contains(m_selectedAssets, active)) {
+    m_selectedAssets.assign(1, active);
+    m_selectionAnchor = active;
+  }
+}
+
+/*
+ */
+bool
+ContentAssetUI::isAssetSelected(const SPtr<IAsset>& asset) const
+{
+  return Algorithm::contains(m_selectedAssets, asset);
+}
+
+/*
+ */
+void
+ContentAssetUI::selectOnlyAsset(const SPtr<IAsset>& asset)
+{
+  m_selectedAssets.assign(1, asset);
+  m_selectionAnchor = asset;
+  m_selectedFolder = INVALID_FOLDER;
+  EditorSelection::setSelectedAsset(asset);
+}
+
+/*
+ */
+void
+ContentAssetUI::handleAssetClick(const SPtr<IAsset>& asset)
+{
+  const ImGuiIO& io = ImGui::GetIO();
+  const bool bPartOfSelection = m_selectedAssets.size() > 1 && isAssetSelected(asset);
+
+  if (!ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+    if (bPartOfSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() &&
+        ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+        io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <
+            io.MouseDragThreshold * io.MouseDragThreshold) {
+      selectOnlyAsset(asset);
+    }
+    return;
+  }
+
+  m_selectedFolder = INVALID_FOLDER;
+  if (io.KeyCtrl) {
+    m_selectionAnchor = asset;
+    if (isAssetSelected(asset)) {
+      Algorithm::removeFirst(m_selectedAssets, asset);
+      EditorSelection::setSelectedAsset(m_selectedAssets.empty() ? nullptr
+                                                                 : m_selectedAssets.back());
+    }
+    else {
+      m_selectedAssets.push_back(asset);
+      EditorSelection::setSelectedAsset(asset);
+    }
+    return;
+  }
+
+  if (io.KeyShift && m_selectionAnchor) {
+    int32 anchorIndex = -1;
+    int32 clickedIndex = -1;
+    for (SIZE_T i = 0; i < m_visibleAssets.size(); ++i) {
+      const SPtr<IAsset>& visible = m_assets[m_visibleAssets[i]];
+      if (visible == m_selectionAnchor) {
+        anchorIndex = static_cast<int32>(i);
+      }
+      if (visible == asset) {
+        clickedIndex = static_cast<int32>(i);
+      }
+    }
+    if (anchorIndex >= 0 && clickedIndex >= 0) {
+      m_selectedAssets.clear();
+      const int32 first = Math::min(anchorIndex, clickedIndex);
+      const int32 last = Math::max(anchorIndex, clickedIndex);
+      for (int32 i = first; i <= last; ++i) {
+        const SPtr<IAsset>& visible = m_assets[m_visibleAssets[i]];
+        if (visible != asset) {
+          m_selectedAssets.push_back(visible);
+        }
+      }
+      // The clicked one goes last, as the active asset.
+      m_selectedAssets.push_back(asset);
+      EditorSelection::setSelectedAsset(asset);
+      return;
+    }
+  }
+
+  if (!bPartOfSelection) {
+    selectOnlyAsset(asset);
+  }
+}
+
+/*
+ */
+void
+ContentAssetUI::renderDeleteFolderPopup()
+{
+  if (m_bOpenDeleteFolder) {
+    ImGui::OpenPopup("Delete Folder?");
+    m_bOpenDeleteFolder = false;
+  }
+  if (!ImGui::BeginPopupModal("Delete Folder?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    return;
+  }
+
+  ImGui::Text("Delete %s and everything in it?", m_folderToDelete.toString().c_str());
+  ImGui::Text("Assets inside: %u", m_folderToDeleteAssets);
+  ImGui::TextUnformatted("Objects and assets that use them lose them. This cannot be undone!");
+  ImGui::Separator();
+
+  if (ImGui::Button("Delete", ImVec2(120, 0))) {
+    Vector<SPtr<IAsset>> inside;
+    for (const SPtr<IAsset>& asset : m_assets) {
+      if (isInsideFolder(asset->getAssetPath(), m_folderToDelete.toString())) {
+        inside.push_back(asset);
+      }
+    }
+    const bool bCurrentInside =
+        isInsideFolder(getCurrentFolderPath().toString(), m_folderToDelete.toString());
+    const Path parent = m_folderToDelete.getDirectory();
+
+    AssetManager& assetManager = AssetManager::instance();
+    assetManager.removeFolder(m_folderToDelete);
+    // Also after a partial failure: what the manager forgot is gone from disk.
+    for (const SPtr<IAsset>& asset : inside) {
+      if (assetManager.getAsset(asset->getUUID())) {
+        continue;
+      }
+      AssetInspectorUI::close(*asset);
+      AnimationPreviewUI::close(*asset);
+      AssetThumbnails::forget(*asset);
+      if (EditorSelection::getSelectedAsset() == asset) {
+        EditorSelection::setSelectedAsset(nullptr);
+      }
+    }
+    refreshAssets();
+    if (bCurrentInside) {
+      const uint32 found = findFolder(parent);
+      m_currentFolder = found == INVALID_FOLDER ? 0 : found;
+      m_needsFilterUpdate = true;
+    }
+    m_folderToDelete = Path();
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    m_folderToDelete = Path();
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
 }
 
 /*
@@ -1554,6 +1743,27 @@ ContentAssetUI::handleFolderContextMenu(uint32 folderIndex)
     startFolderRename(folderIndex);
     m_selectedFolder = folderIndex;
   }
+
+  ImGui::Separator();
+  // Like a single asset, a folder whose assets are loaded may still be in use.
+  uint32 assetCount = 0;
+  bool bInUse = false;
+  const String& folderText = m_folders[folderIndex].path.toString();
+  for (const SPtr<IAsset>& asset : m_assets) {
+    if (isInsideFolder(asset->getAssetPath(), folderText)) {
+      ++assetCount;
+      bInUse = bInUse || !asset->isUnloaded();
+    }
+  }
+  if (ImGui::MenuItem(ICON_FA_TRASH_ALT "  Delete", nullptr, false,
+                      folderIndex != 0 && !bInUse)) {
+    m_folderToDelete = m_folders[folderIndex].path;
+    m_folderToDeleteAssets = assetCount;
+    m_bOpenDeleteFolder = true;
+  }
+  if (bInUse) {
+    ImGui::SetItemTooltip("An asset inside is loaded.");
+  }
   ImGui::EndPopup();
 }
 
@@ -1612,8 +1822,7 @@ ContentAssetUI::onAssetCreated(const SPtr<IAsset>& asset)
 {
   refreshAssets();
   if (asset) {
-    EditorSelection::setSelectedAsset(asset);
-    m_selectedFolder = INVALID_FOLDER;
+    selectOnlyAsset(asset);
     startInlineRename(asset);
     m_bRenameRewritesScript = asset->isTypeOf<ScriptAsset>();
   }
