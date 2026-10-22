@@ -26,8 +26,9 @@ struct LightFileData
 {
   float color[3];
   float intensity;
+  uint32 castShadows;
 };
-static_assert(sizeof(LightFileData) == 16, "LightFileData must have no padding");
+static_assert(sizeof(LightFileData) == 20, "LightFileData must have no padding");
 
 struct SpotLightFileData
 {
@@ -81,11 +82,10 @@ LightComponent::serialize(DataStream& stream) const
 {
   const uint32 version = SERIALIZATION_VERSION;
   const LightFileData data{.color = {m_color.r, m_color.g, m_color.b},
-                           .intensity = m_intensity};
-  const uint8 castShadows = m_bCastShadows ? 1 : 0;
+                           .intensity = m_intensity,
+                           .castShadows = m_bCastShadows ? 1u : 0u};
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
-  stream.write(&castShadows, sizeof(castShadows));
 }
 
 /*
@@ -95,18 +95,11 @@ LightComponent::deserialize(DataStream& stream)
 {
   uint32 version = 0;
   LightFileData data;
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data)) {
+  if (stream.read(&version, sizeof(version)) != sizeof(version) ||
+      version != SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data)) {
     return false;
   }
-  // Version 1 had no shadow flag, so those lights keep the default of their type.
-  if (version >= 2) {
-    uint8 castShadows = 0;
-    if (stream.read(&castShadows, sizeof(castShadows)) != sizeof(castShadows)) {
-      return false;
-    }
-    setCastShadows(castShadows != 0);
-  }
+  setCastShadows(data.castShadows != 0);
   setColor(LinearColor(data.color[0], data.color[1], data.color[2], 1.0f));
   setIntensity(data.intensity);
   return true;

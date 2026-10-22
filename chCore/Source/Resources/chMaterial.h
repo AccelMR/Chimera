@@ -185,7 +185,7 @@ class CH_CORE_EXPORT Material
   NODISCARD bool
   deserialize(DataStream& stream);
 
-  static constexpr uint32 SERIALIZATION_VERSION = 3;
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  private:
   struct TextureSlot

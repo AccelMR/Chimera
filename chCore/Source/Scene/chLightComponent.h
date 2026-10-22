@@ -67,7 +67,7 @@ class CH_CORE_EXPORT LightComponent : public Component
   NODISCARD bool
   deserialize(DataStream& stream) override;
 
-  static constexpr uint32 SERIALIZATION_VERSION = 2;
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  protected:
   LightComponent(LightType type, float intensity, bool bCastShadows);

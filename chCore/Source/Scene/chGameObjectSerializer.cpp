@@ -29,7 +29,6 @@ constexpr uint32 kMaxNameLength = 1024;
 // Keeps a broken file, or prefabs that hold each other, from recursing until the stack runs
 // out.
 constexpr uint32 kMaxDepth = 1024;
-constexpr uint32 kFirstPrefabVersion = 2;
 
 struct GameObjectFileData
 {
@@ -165,7 +164,6 @@ struct GameObjectSerializer::ReadContext
 {
   DataStream& stream;
   Scene& scene;
-  uint32 version;
   // Objects read from a prefab get new UUIDs, so instances do not share them.
   bool bNewUuids;
 };
@@ -241,13 +239,12 @@ GameObjectSerializer::readStream(DataStream& stream,
 {
   uint32 version = 0;
   uint32 count = 0;
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION ||
+  if (stream.read(&version, sizeof(version)) != sizeof(version) ||
+      version != SERIALIZATION_VERSION ||
       stream.read(&count, sizeof(count)) != sizeof(count)) {
     return false;
   }
-  ReadContext context{
-      .stream = stream, .scene = scene, .version = version, .bNewUuids = bNewUuids};
+  ReadContext context{.stream = stream, .scene = scene, .bNewUuids = bNewUuids};
   return readList(context, parent, count, 0);
 }
 
@@ -260,13 +257,12 @@ GameObjectSerializer::readInto(DataStream& stream, GameObject& target)
   Scene& scene = *target.getScene();
   uint32 version = 0;
   uint32 count = 0;
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION ||
+  if (stream.read(&version, sizeof(version)) != sizeof(version) ||
+      version != SERIALIZATION_VERSION ||
       stream.read(&count, sizeof(count)) != sizeof(count) || count != 1) {
     return false;
   }
-  ReadContext context{
-      .stream = stream, .scene = scene, .version = version, .bNewUuids = false};
+  ReadContext context{.stream = stream, .scene = scene, .bNewUuids = false};
   ObjectHeader header;
   if (!readObjectHeader(context, header)) {
     return false;
@@ -404,9 +400,7 @@ GameObjectSerializer::readObjectHeader(ReadContext& context, ObjectHeader& outHe
   DataStream& stream = context.stream;
   outHeader.prefab = UUID::null();
   if (stream.read(&outHeader.data, sizeof(outHeader.data)) != sizeof(outHeader.data) ||
-      (context.version >= kFirstPrefabVersion &&
-       stream.read(&outHeader.prefab, sizeof(outHeader.prefab)) !=
-           sizeof(outHeader.prefab)) ||
+      stream.read(&outHeader.prefab, sizeof(outHeader.prefab)) != sizeof(outHeader.prefab) ||
       !AssetFile::readString(stream, outHeader.name, kMaxNameLength) ||
       outHeader.data.componentCount > kMaxComponents) {
     return false;
@@ -517,8 +511,8 @@ GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
   MemoryDataStream stream(const_cast<uint8*>(content.data()), content.size(), false);
   uint32 version = 0;
   uint32 count = 0;
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION ||
+  if (stream.read(&version, sizeof(version)) != sizeof(version) ||
+      version != SERIALIZATION_VERSION ||
       stream.read(&count, sizeof(count)) != sizeof(count) || count != 1) {
     return false;
   }
@@ -527,8 +521,7 @@ GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
   UUID nestedPrefab = UUID::null();
   String name;
   if (stream.read(&data, sizeof(data)) != sizeof(data) ||
-      (version >= kFirstPrefabVersion &&
-       stream.read(&nestedPrefab, sizeof(nestedPrefab)) != sizeof(nestedPrefab)) ||
+      stream.read(&nestedPrefab, sizeof(nestedPrefab)) != sizeof(nestedPrefab) ||
       !AssetFile::readString(stream, name, kMaxNameLength) ||
       data.componentCount > kMaxComponents) {
     return false;
@@ -549,7 +542,6 @@ GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
 
   ReadContext context{.stream = stream,
                       .scene = *target.getScene(),
-                      .version = version,
                       .bNewUuids = true};
   for (uint32 i = 0; i < data.componentCount; ++i) {
     if (!readComponent(context, target)) {

@@ -103,8 +103,7 @@ class CH_CORE_EXPORT GameObjectSerializer
   static void
   collectReferences(const GameObject& gameObject, Vector<UUID>& outReferences);
 
-  // Version 2 added the prefab link of every object.
-  static constexpr uint32 SERIALIZATION_VERSION = 2;
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  private:
   struct ReadContext;

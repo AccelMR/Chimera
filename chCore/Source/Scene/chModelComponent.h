@@ -192,7 +192,7 @@ class CH_CORE_EXPORT ModelComponent : public Component
   collectReferences(Vector<UUID>& outReferences) const override;
 
   static constexpr uint32 ALL = 0xFFFFFFFFu;
-  static constexpr uint32 SERIALIZATION_VERSION = 2;
+  static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  protected:
   void

@@ -52,21 +52,12 @@ struct MaterialFileData
   float normalScale;
   float occlusionStrength;
   UUID textures[kTextureCount];
-};
-static_assert(sizeof(MaterialFileData) == 44 + sizeof(UUID) * kTextureCount,
-              "MaterialFileData must have no padding");
-
-// Written after MaterialFileData since version 3; version 2 files get the defaults.
-struct MaterialAlphaFileData
-{
   float alphaCutoff;
   uint32 alphaMode;
   uint32 twoSided;
 };
-static_assert(sizeof(MaterialAlphaFileData) == 12);
-
-constexpr uint32 kFirstAlphaVersion = 3;
-constexpr uint32 kOldestReadVersion = 2;
+static_assert(sizeof(MaterialFileData) == 56 + sizeof(UUID) * kTextureCount,
+              "MaterialFileData must have no padding");
 } // namespace
 
 /*
@@ -247,16 +238,15 @@ Material::serialize(DataStream& stream) const
       .roughnessFactor = m_roughnessFactor,
       .normalScale = m_normalScale,
       .occlusionStrength = m_occlusionStrength,
-      .textures = {}};
+      .textures = {},
+      .alphaCutoff = m_alphaCutoff,
+      .alphaMode = static_cast<uint32>(m_alphaMode),
+      .twoSided = m_bTwoSided ? 1u : 0u};
   for (uint32 i = 0; i < kTextureCount; ++i) {
     data.textures[i] = m_textures[i].id;
   }
-  const MaterialAlphaFileData alphaData{.alphaCutoff = m_alphaCutoff,
-                                        .alphaMode = static_cast<uint32>(m_alphaMode),
-                                        .twoSided = m_bTwoSided ? 1u : 0u};
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
-  stream.write(&alphaData, sizeof(alphaData));
 }
 
 /*
@@ -267,17 +257,8 @@ Material::deserialize(DataStream& stream)
   uint32 version = 0;
   MaterialFileData data;
   if (stream.read(&version, sizeof(version)) != sizeof(version) ||
-      version < kOldestReadVersion || version > SERIALIZATION_VERSION ||
-      stream.read(&data, sizeof(data)) != sizeof(data)) {
-    return false;
-  }
-
-  MaterialAlphaFileData alphaData{.alphaCutoff = 0.5f,
-                                  .alphaMode = static_cast<uint32>(MaterialAlphaMode::Opaque),
-                                  .twoSided = 0};
-  if (version >= kFirstAlphaVersion &&
-      (stream.read(&alphaData, sizeof(alphaData)) != sizeof(alphaData) ||
-       alphaData.alphaMode >= static_cast<uint32>(MaterialAlphaMode::COUNT))) {
+      version != SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data) ||
+      data.alphaMode >= static_cast<uint32>(MaterialAlphaMode::COUNT)) {
     return false;
   }
 
@@ -289,9 +270,9 @@ Material::deserialize(DataStream& stream)
   m_roughnessFactor = data.roughnessFactor;
   m_normalScale = data.normalScale;
   m_occlusionStrength = data.occlusionStrength;
-  m_alphaCutoff = alphaData.alphaCutoff;
-  m_alphaMode = static_cast<MaterialAlphaMode>(alphaData.alphaMode);
-  m_bTwoSided = alphaData.twoSided != 0;
+  m_alphaCutoff = data.alphaCutoff;
+  m_alphaMode = static_cast<MaterialAlphaMode>(data.alphaMode);
+  m_bTwoSided = data.twoSided != 0;
   for (uint32 i = 0; i < kTextureCount; ++i) {
     setTexture(static_cast<MaterialTexture>(i), data.textures[i], nullptr);
   }

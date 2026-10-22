@@ -2183,22 +2183,6 @@ TEST_CASE("chCore - Material")
     REQUIRE_FALSE(loaded.deserialize(stream));
   }
 
-  SECTION("Version 2 has no alpha data and gets the defaults")
-  {
-    // Version 2 ends where the alpha data of version 3 starts, so the same bytes with
-    // version 2 written over the first ones read like an old file.
-    stream.seek(0);
-    const uint32 oldVersion = 2;
-    stream.write(&oldVersion, sizeof(oldVersion));
-    stream.seek(0);
-    Material oldMaterial;
-    REQUIRE(oldMaterial.deserialize(stream));
-    REQUIRE(oldMaterial.getMetallicFactor() == 0.75f);
-    REQUIRE(oldMaterial.getAlphaMode() == MaterialAlphaMode::Opaque);
-    REQUIRE(oldMaterial.getAlphaCutoff() == 0.5f);
-    REQUIRE_FALSE(oldMaterial.isTwoSided());
-  }
-
   SECTION("An unknown alpha mode is rejected")
   {
     const uint32 badMode = static_cast<uint32>(MaterialAlphaMode::COUNT);

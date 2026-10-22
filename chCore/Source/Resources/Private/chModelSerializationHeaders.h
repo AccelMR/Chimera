@@ -14,8 +14,7 @@
 namespace chEngineSDK {
 // Model header structure
 struct ModelHeader {
-  // Version 1 kept the nodes as a tree of matrices; it is no longer read.
-  static constexpr uint32 VERSION = 2;
+  static constexpr uint32 VERSION = 1;
 
   uint32 version;
   uint32 nodeCount;
@@ -26,7 +25,7 @@ static_assert(sizeof(ModelHeader) == 16, "ModelHeader must have no padding");
 
 // Mesh header structure
 struct MeshHeader {
-  static constexpr uint32 VERSION = 2;
+  static constexpr uint32 VERSION = 1;
 
   uint32 version;
   uint32 vertexCount;

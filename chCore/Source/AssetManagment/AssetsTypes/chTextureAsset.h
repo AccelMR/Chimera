@@ -20,7 +20,7 @@ class ITexture;
 // Written after the common asset start, before the pixels.
 struct TextureAssetHeader
 {
-  static constexpr uint32 VERSION = 2;
+  static constexpr uint32 VERSION = 1;
 
   uint32 version = VERSION;
   uint32 width = 0;

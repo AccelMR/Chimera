@@ -49,7 +49,7 @@ struct MaterialOverrideFileData
 static_assert(sizeof(MaterialOverrideFileData) == 20,
               "MaterialOverrideFileData must have no padding");
 
-// Version 2: after the overrides.
+// Written after the overrides.
 struct AnimationFileData
 {
   UUID clip;
@@ -486,8 +486,8 @@ ModelComponent::deserialize(DataStream& stream)
 {
   uint32 version = 0;
   ModelComponentFileData data;
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data) ||
+  if (stream.read(&version, sizeof(version)) != sizeof(version) ||
+      version != SERIALIZATION_VERSION || stream.read(&data, sizeof(data)) != sizeof(data) ||
       data.overrideCount > kMaxOverrides) {
     return false;
   }
@@ -515,9 +515,6 @@ ModelComponent::deserialize(DataStream& stream)
     }
   }
 
-  if (version < 2) {
-    return true;
-  }
   AnimationFileData animation;
   if (stream.read(&animation, sizeof(animation)) != sizeof(animation)) {
     return false;
