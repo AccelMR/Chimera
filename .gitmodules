@@ -17,3 +17,6 @@
 [submodule "chImgui/Externals/ImGuizmo"]
 	path = chImgui/Externals/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
+[submodule "Externals/lua"]
+	path = Externals/lua
+	url = https://github.com/lua/lua.git
