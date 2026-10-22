@@ -3,112 +3,138 @@
  * @file chDisplayEvent.h
  * @author AccelMR
  * @date 2022/09/12
- *   DisplaySurface event wrapper. Handles all event from OS. 
+ * @brief
+ *  Events of the windows and input devices, the same on every platform.
  */
- /************************************************************************/
+/************************************************************************/
 #pragma once
 
-/************************************************************************/
-/*
- * Includes
- */                                                                     
-/************************************************************************/
 #include "chPrerequisitesCore.h"
 
-#include "chDisplayEventData.h"
+#include "chFlags.h"
+#include "chInputKey.h"
 
-namespace chEngineSDK{
-/*
- * Description: 
- *     Platform event types used along chimera.
- */
-enum class PlatformEventType {
-  NonePlatformEvent = 0,
-  MouseMove,
-  MouseButton,
-  MouseWheel,
-  Keyboard,
-  Close,
-  Resize,
+namespace chEngineSDK {
 
-  Count
+enum class KeyModifier : uint16 {
+  None = 0,
+  LeftShift = 1 << 0,
+  RightShift = 1 << 1,
+  LeftControl = 1 << 2,
+  RightControl = 1 << 3,
+  LeftAlt = 1 << 4,
+  RightAlt = 1 << 5,
+  LeftSuper = 1 << 6,
+  RightSuper = 1 << 7,
+  CapsLock = 1 << 8,
+  NumLock = 1 << 9,
+};
+CH_FLAGS(KeyModifier);
+
+struct CloseEvent {
 };
 
-
-/*
- * Description: 
- *     DisplaySurface event.
- *
+/**
+ * Size of the main window's drawable area, in pixels.
  */
-class CH_CORE_EXPORT DisplayEvent
-{
- public:
- /*
-  *   Default constructor
-  */
-  DisplayEvent(PlatformEventType _type)
-    : m_type(_type), m_data(std::monostate{}) {}
-
-  DisplayEvent(PlatformEventType _type, MouseMoveData mouseData)
-    : m_type(_type), m_data(std::move(mouseData)) { }
-
-  DisplayEvent(PlatformEventType _type, KeyBoardData keyBoardData)
-    : m_type(_type), m_data(std::move(keyBoardData)) { }
-
-  DisplayEvent(PlatformEventType _type, ResizeData resizeData)
-    : m_type(_type), m_data(std::move(resizeData)) { } 
-
-  DisplayEvent(PlatformEventType _type, MouseButtonData mouseButtonData)
-    : m_type(_type), m_data(std::move(mouseButtonData)) { }
-
-  DisplayEvent(PlatformEventType _type, MouseWheelData mouseWheelData)
-    : m_type(_type), m_data(std::move(mouseWheelData)) { }
-
- /*
-  *  Default destructor.
-  */
-  ~DisplayEvent() = default;
-
-  FORCEINLINE PlatformEventType
-  getType() const{ return m_type; }
-
-  FORCEINLINE const DisplayEventData&
-  getData() const{ return m_data; }
-
-  FORCEINLINE String
-  getTypeAsString() const;
-
- private:
-  PlatformEventType m_type;
-  DisplayEventData m_data;
+struct ResizeEvent {
+  uint32 width;
+  uint32 height;
 };
 
-/*
-*/
-String 
-DisplayEvent::getTypeAsString() const {
-  switch (m_type)
+/**
+ * The main window got or lost the keyboard focus.
+ */
+struct FocusEvent {
+  bool bFocused;
+};
+
+/**
+ * A keyboard key went down or up. Repeats of a held key are not sent.
+ */
+struct KeyEvent {
+  InputKey key;
+  bool bDown;
+  KeyModifierFlags modifiers;
+
+  NODISCARD constexpr bool
+  hasShift() const noexcept
   {
-  case PlatformEventType::MouseMove:
-    return "Mouse Move";
-    break;
-  case PlatformEventType::Keyboard:
-    return "Key Board";
-    break;
-  case PlatformEventType::Close:
-    return "Close";
-    break;
-  case PlatformEventType::Resize:
-    return "Resize";
-    break;
-  case PlatformEventType::MouseButton:
-    return "Mouse Button";
-    break;
-  case PlatformEventType::NonePlatformEvent:
-  default:
-    return "None";
-    break;
+    return modifiers.isSetAny(KeyModifier::LeftShift | KeyModifier::RightShift);
   }
-}
 
-}
+  NODISCARD constexpr bool
+  hasControl() const noexcept
+  {
+    return modifiers.isSetAny(KeyModifier::LeftControl | KeyModifier::RightControl);
+  }
+
+  NODISCARD constexpr bool
+  hasAlt() const noexcept
+  {
+    return modifiers.isSetAny(KeyModifier::LeftAlt | KeyModifier::RightAlt);
+  }
+};
+
+/**
+ * Positions are in the units of the window under the mouse, from its top left corner.
+ */
+struct MouseButtonEvent {
+  InputKey button;
+  bool bDown;
+  float x;
+  float y;
+};
+
+/**
+ * Deltas are kept below a pixel and are given also while the cursor is locked.
+ */
+struct MouseMoveEvent {
+  float x;
+  float y;
+  float deltaX;
+  float deltaY;
+};
+
+/**
+ * Positive y turns away from the user, positive x to the right.
+ */
+struct MouseWheelEvent {
+  float deltaX;
+  float deltaY;
+};
+
+/**
+ * slot is the gamepad's place in InputState, kept while it stays connected.
+ */
+struct GamepadConnectionEvent {
+  uint8 slot;
+  bool bConnected;
+  GamepadType type;
+};
+
+struct GamepadButtonEvent {
+  uint8 slot;
+  InputKey button;
+  bool bDown;
+};
+
+/**
+ * value is -1 to 1, positive up and right; triggers 0 to 1.
+ */
+struct GamepadAxisEvent {
+  uint8 slot;
+  InputKey axis;
+  float value;
+};
+
+/**
+ * Every type is trivially copyable, so a frame's events live in one reused vector.
+ */
+using DisplayEvent =
+    Variant<CloseEvent, ResizeEvent, FocusEvent, KeyEvent, MouseButtonEvent, MouseMoveEvent,
+            MouseWheelEvent, GamepadConnectionEvent, GamepadButtonEvent, GamepadAxisEvent>;
+
+static_assert(std::is_trivially_copyable_v<DisplayEvent>);
+
+} // namespace chEngineSDK

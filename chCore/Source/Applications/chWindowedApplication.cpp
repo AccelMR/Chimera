@@ -20,6 +20,7 @@
 #include "chEventDispatcherManager.h"
 #include "chGraphicsSettings.h"
 #include "chGraphicsTypes.h"
+#include "chInputManager.h"
 #include "chLogger.h"
 #include "chProfiler.h"
 #include "chStringUtils.h"
@@ -103,6 +104,7 @@ WindowedApplication::run() {
   auto previousTime = high_resolution_clock::now();
 
   auto& eventDispatcher = EventDispatcherManager::instance();
+  InputManager& input = InputManager::instance();
 
   while (m_running) {
     Profiler::beginFrame();
@@ -114,8 +116,10 @@ WindowedApplication::run() {
 
     {
       CH_PROFILE_SCOPE("Events");
+      input.beginFrame();
       m_eventhandler->update();
-      eventDispatcher.dispatchEvents(m_eventhandler);
+      eventDispatcher.dispatchEvents(*m_eventhandler);
+      input.updateActions();
     }
     if (!m_running) {
       break;
@@ -125,7 +129,9 @@ WindowedApplication::run() {
       CH_PROFILE_SCOPE("FixedUpdate");
       accumulator += deltaTime;
       while (accumulator >= fixedTimeStamp) {
+        input.beginFixedStep();
         fixedUpdate(static_cast<float>(fixedTimeStamp));
+        input.endFixedStep();
         accumulator -= fixedTimeStamp;
       }
     }
@@ -184,6 +190,8 @@ WindowedApplication::initializeModules() {
   DynamicLibraryManager::startUp();
   DisplayManager::startUp();
   EventDispatcherManager::startUp();
+  InputManager::startUp();
+  InputManager::instance().loadBindings();
 
   CH_LOG_INFO(WindowedApp, "WindowedApplication modules initialized.");
 }
@@ -202,6 +210,12 @@ WindowedApplication::destroyModules()
   // Every GPU object keeps a copy of the device, so all of them must be gone by now.
   if (IGraphicsAPI::isStarted()) {
     IGraphicsAPI::shutDown();
+  }
+
+  // Before the window, whose cursor it may have changed, and before the platform layer
+  // closes, which frees the gamepads it opened.
+  if (InputManager::isStarted()) {
+    InputManager::shutDown();
   }
 
   // The window goes after every swap chain, so no surface made on it outlives it.
@@ -232,6 +246,7 @@ WindowedApplication::initializeDisplay(const ScreenDescriptor& desc) {
     CH_EXCEPT(InternalErrorException, "Failed to create display.");
   }
   m_display = wptrDisplay.lock();
+  InputManager::instance().setWindow(m_display.get());
   CH_LOG_INFO(WindowedApp, "Display initialized successfully.");
 }
 

@@ -118,6 +118,9 @@ class EditorApplication : public WindowedApplication
   void
   placeAtMouse(const SPtr<GameObject>& gameObject);
 
+  void
+  updateGameInput();
+
   /**
    * Picks the camera the viewport shows this frame: the scene's while playing (unless
    * ejected or the scene has none), else the editor's.
@@ -129,7 +132,7 @@ class EditorApplication : public WindowedApplication
   getViewCamera() const;
 
   void
-  handlePlayShortcut(const KeyBoardData& data);
+  handlePlayShortcut(const KeyEvent& event);
 
   /**
    * Shows the scene name, and whether it has unsaved changes, after the window title.
@@ -154,6 +157,12 @@ class EditorApplication : public WindowedApplication
   // The panel showed the scene image this frame; false while it is behind another tab.
   bool m_bViewportDrawn = false;
   bool m_bViewportHovered = false;
+  // The panel or one of its child windows has the keyboard focus.
+  bool m_bViewportFocused = false;
+  // Play just started, so the panel takes the focus and the game its keys.
+  bool m_bFocusViewport = false;
+  // Play state the input system was last set for.
+  bool m_bInputPlaying = false;
   // Copied in the update, so drawing does not read UI state.
   bool m_bFrameDrawsViewport = false;
   UniquePtr<EditorCamera> m_editorCamera;
@@ -190,7 +199,7 @@ class EditorApplication : public WindowedApplication
 
   HEvent m_updateInjection; ///< Event for updating ImGui with SDL events
 
-  HEvent m_onKeyDownEvent; ///< Event for handling key down events
-  HEvent m_onKeyUpEvent; ///< Event for handling key up events
+  HEvent m_onKeyPressedEvent;
+  HEvent m_onKeyReleasedEvent;
 };
 } // namespace chEngineSDK

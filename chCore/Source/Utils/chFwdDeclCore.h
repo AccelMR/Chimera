@@ -12,12 +12,6 @@ namespace chEngineSDK{
 class DisplayManager;
 class DisplaySurface;
 class DisplayEventHandle;
-class DisplayEvent;
-
-struct MouseMoveData;
-struct KeyBoardData;
-enum class KeyBoardState : uint32;
-enum class KeyBoardModifier : uint16;
 
 class Camera;
 

@@ -35,7 +35,7 @@ initializeSDL3(const ScreenDescriptor& desc) {
   SDL_SetAppMetadata(desc.name.c_str(), nullptr,
                      desc.appId.empty() ? nullptr : desc.appId.c_str());
 
-  uint32 sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
+  uint32 sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD;
 
   // TODO: Add more flags based on CVar settings
   if (false) {

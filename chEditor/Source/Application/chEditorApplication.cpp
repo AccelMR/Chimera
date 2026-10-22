@@ -16,7 +16,7 @@
 #include "chEditorScene.h"
 #include "chEditorTheme.h"
 #include "chConsoleVariable.h"
-#include "chEventDispatcherManager.h"
+#include "chInputManager.h"
 #include "chDynamicLibManager.h"
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
@@ -134,8 +134,8 @@ EditorApplication::destroyModules()
     IGraphicsAPI::instance().waitIdle();
   }
 
-  m_onKeyDownEvent.disconnect();
-  m_onKeyUpEvent.disconnect();
+  m_onKeyPressedEvent.disconnect();
+  m_onKeyReleasedEvent.disconnect();
   m_updateInjection.disconnect();
 
   // The renderer gives its textures back to the ImGui context, and the SDL backend uses the
@@ -160,10 +160,7 @@ EditorApplication::destroyModules()
   m_contentAssetUI.reset();
   m_viewportTools.reset();
 
-  if (m_editorCamera) {
-    m_editorCamera->unbindInputEvents();
-    m_editorCamera.reset();
-  }
+  m_editorCamera.reset();
   m_viewportGrid.reset();
   m_viewportTargetView.reset();
   m_viewportTarget.reset();
@@ -208,6 +205,7 @@ EditorApplication::update(const float deltaTime)
   // A minimized window draws nothing, so no UI frame is built for it either.
   m_bViewportDrawn = false;
   m_bViewportHovered = false;
+  m_bViewportFocused = false;
   m_bFrameHasFps = false;
   if (UIHelpers::bRenderImGui && !getDisplaySurface()->isMinimized()) {
     CH_PROFILE_SCOPE("BuildUI");
@@ -239,6 +237,7 @@ EditorApplication::update(const float deltaTime)
   // A drag or a text field still going on keeps its changes in one undo step.
   EditorScene::applyPending(UIHelpers::bRenderImGui &&
                             (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse()));
+  updateGameInput();
   if (EditorScene::shouldQuit()) {
     quit();
   }
@@ -414,7 +413,8 @@ EditorApplication::initializeEditorComponents() {
   m_viewportHeight = swapChain.getHeight();
   m_editorCamera = chMakeUnique<EditorCamera>(static_cast<float>(swapChain.getWidth()),
                                               static_cast<float>(swapChain.getHeight()));
-  m_editorCamera->bindInputEvents();
+  // The game reads input only while it plays; updateGameInput turns it on.
+  InputManager::instance().setGameInputEnabled(false);
 
   // After the camera, which takes the view saved with the scene.
   SceneManager::startUp();
@@ -443,98 +443,72 @@ EditorApplication::initializeEditorComponents() {
 /*
  */
 void
-EditorApplication::bindEvents() {
+EditorApplication::bindEvents()
+{
   CH_LOG_INFO(EditorApp, "Binding editor events.");
-  CH_ASSERT(EventDispatcherManager::isStarted());
+  CH_ASSERT(InputManager::isStarted());
 
-  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
-
-  m_onKeyDownEvent = eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
-    if (!data.hasModifier(KeyBoardModifier::LCTRL) &&
-        !data.hasModifier(KeyBoardModifier::RCTRL)) {
-      handlePlayShortcut(data);
+  InputManager& input = InputManager::instance();
+  m_onKeyPressedEvent = input.OnKeyPressed.connect([this](const KeyEvent& event) {
+    if (!event.hasControl()) {
+      handlePlayShortcut(event);
+      return;
     }
-    else {
-      const bool bShift = data.hasModifier(KeyBoardModifier::LSHIFT) ||
-                          data.hasModifier(KeyBoardModifier::RSHIFT);
-      if (data.key == chKeyBoard::Key::S) {
-        if (bShift) {
-          EditorScene::requestSaveAs();
-        }
-        else {
-          EditorScene::requestSave();
-        }
-      }
-      else if (data.key == chKeyBoard::Key::N) {
-        EditorScene::requestNew();
-      }
-      // A text field being typed in has its own undo.
-      else if (!ImGui::GetIO().WantTextInput) {
-        if (data.key == chKeyBoard::Key::Z && !bShift) {
-          EditorScene::requestUndo();
-        }
-        else if (data.key == chKeyBoard::Key::Y ||
-                 (data.key == chKeyBoard::Key::Z && bShift)) {
-          EditorScene::requestRedo();
-        }
-        else if (data.key == chKeyBoard::Key::D) {
-          EditorScene::requestDuplicate();
-        }
-        else if (data.key == chKeyBoard::Key::C) {
-          EditorScene::copySelection();
-        }
-        else if (data.key == chKeyBoard::Key::V) {
-          EditorScene::requestPaste();
-        }
-        else if (data.key == chKeyBoard::Key::A && EditorScene::getScene()) {
-          EditorSelection::selectAll(*EditorScene::getScene(),
-                                     EditorScene::getPrefabRoot().get());
-        }
-      }
 
-      if (data.key == chKeyBoard::Key::F5) {
-        CH_LOG_DEBUG(EditorApp, "Ctrl+F5 pressed, reloading the current document.");
-        m_outputLogUI->updateAvailableCategories();
+    const bool bShift = event.hasShift();
+    if (event.key == InputKey::S) {
+      if (bShift) {
+        EditorScene::requestSaveAs();
       }
+      else {
+        EditorScene::requestSave();
+      }
+    }
+    else if (event.key == InputKey::N) {
+      EditorScene::requestNew();
+    }
+    // A text field being typed in has its own undo.
+    else if (!ImGui::GetIO().WantTextInput) {
+      if (event.key == InputKey::Z && !bShift) {
+        EditorScene::requestUndo();
+      }
+      else if (event.key == InputKey::Y || (event.key == InputKey::Z && bShift)) {
+        EditorScene::requestRedo();
+      }
+      else if (event.key == InputKey::D) {
+        EditorScene::requestDuplicate();
+      }
+      else if (event.key == InputKey::C) {
+        EditorScene::copySelection();
+      }
+      else if (event.key == InputKey::V) {
+        EditorScene::requestPaste();
+      }
+      else if (event.key == InputKey::A && EditorScene::getScene()) {
+        EditorSelection::selectAll(*EditorScene::getScene(),
+                                   EditorScene::getPrefabRoot().get());
+      }
+    }
+
+    if (event.key == InputKey::F5) {
+      CH_LOG_DEBUG(EditorApp, "Ctrl+F5 pressed, reloading the current document.");
+      m_outputLogUI->updateAvailableCategories();
     }
   });
 
-  m_onKeyUpEvent = eventDispatcher.OnKeyUp.connect([](const KeyBoardData& keyData) {
-    switch (keyData.key) {
-    case chKeyBoard::Key::F11: {
-      UIHelpers::bRenderImGui = !UIHelpers::bRenderImGui;
-      if (UIHelpers::bRenderImGui) {
-        // ImGui got no events while hidden, so keys and buttons released meanwhile would
-        // still count as held.
-        ImGuiIO& io = ImGui::GetIO();
-        io.ClearInputKeys();
-        io.ClearInputMouse();
-      }
-    } break;
-
-    default:
-      break;
+  m_onKeyReleasedEvent = input.OnKeyReleased.connect([](const KeyEvent& event) {
+    if (event.key != InputKey::F11) {
+      return;
+    }
+    UIHelpers::bRenderImGui = !UIHelpers::bRenderImGui;
+    if (UIHelpers::bRenderImGui) {
+      // ImGui got no events while hidden, so keys and buttons released meanwhile would
+      // still count as held.
+      ImGuiIO& io = ImGui::GetIO();
+      io.ClearInputKeys();
+      io.ClearInputMouse();
     }
   });
-
-  // eventDispatcher.OnKeyPressed.connect([this](const KeyBoardData&) {
-  //   // Handle key pressed events specific to the editor
-  // });
-
-  // eventDispatcher.OnMouseButtonDown.connect([this](const MouseButtonData&) {
-  //   // Handle mouse button down events specific to the editor
-  // });
-
-  // eventDispatcher.OnMouseButtonUp.connect([this](const MouseButtonData&) {
-  //   // Handle mouse button up events specific to the editor
-  // });
-
-  // eventDispatcher.OnMouseMove.connect([this](const MouseMoveData&) {
-  //   // Handle mouse move events specific to the editor
-  // });
-  // eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData&) {
-  //   // Handle mouse wheel events specific to the editor
-  // });
 }
 
 /*
@@ -678,6 +652,12 @@ EditorApplication::renderViewportPanel()
     ImGui::End();
     return;
   }
+  if (m_bFocusViewport) {
+    ImGui::SetWindowFocus();
+    m_bFocusViewport = false;
+  }
+  // The toolbar and the stats are child windows of the panel, so they count as the panel.
+  m_bViewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
   const ImVec2 min = ImGui::GetCursorScreenPos();
   const ImVec2 available = ImGui::GetContentRegionAvail();
@@ -793,6 +773,28 @@ EditorApplication::placeAtMouse(const SPtr<GameObject>& gameObject)
 }
 
 /*
+ * As in Unreal, the game gets the keys only while it runs and the viewport has the focus,
+ * so typing in a panel or using the editor while ejected or paused never reaches it.
+ */
+void
+EditorApplication::updateGameInput()
+{
+  InputManager& input = InputManager::instance();
+  const bool bPlaying = EditorScene::isPlaying();
+  if (bPlaying != m_bInputPlaying) {
+    // Whatever the last run left (contexts, cursor, rumble) must not reach the next.
+    input.resetGameState();
+    m_bInputPlaying = bPlaying;
+    m_bFocusViewport = bPlaying;
+  }
+
+  const bool bViewportHasKeys =
+      !UIHelpers::bRenderImGui || (m_bViewportFocused && !ImGui::GetIO().WantTextInput);
+  input.setGameInputEnabled(bPlaying && !EditorScene::isPaused() &&
+                            !EditorScene::isEjected() && bViewportHasKeys);
+}
+
+/*
  */
 void
 EditorApplication::updateViewCamera(const Scene& scene)
@@ -837,12 +839,10 @@ EditorApplication::getViewCamera() const
  * editor. Escape is left to popups and text fields that have it.
  */
 void
-EditorApplication::handlePlayShortcut(const KeyBoardData& data)
+EditorApplication::handlePlayShortcut(const KeyEvent& event)
 {
-  const bool bAlt =
-      data.hasModifier(KeyBoardModifier::LALT) || data.hasModifier(KeyBoardModifier::RALT);
   const bool bPlaying = EditorScene::isPlaying();
-  if (bAlt && data.key == chKeyBoard::Key::P) {
+  if (event.hasAlt() && event.key == InputKey::P) {
     if (bPlaying) {
       EditorScene::requestStop();
     }
@@ -855,20 +855,20 @@ EditorApplication::handlePlayShortcut(const KeyBoardData& data)
     return;
   }
 
-  switch (data.key) {
-  case chKeyBoard::Key::Escape:
+  switch (event.key) {
+  case InputKey::Escape:
     if (!ImGui::GetIO().WantTextInput &&
         !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
       EditorScene::requestStop();
     }
     break;
-  case chKeyBoard::Key::Pause:
+  case InputKey::Pause:
     EditorScene::setPaused(!EditorScene::isPaused());
     break;
-  case chKeyBoard::Key::F10:
+  case InputKey::F10:
     EditorScene::requestStep();
     break;
-  case chKeyBoard::Key::F8:
+  case InputKey::F8:
     EditorScene::setEjected(!EditorScene::isEjected());
     break;
   default:

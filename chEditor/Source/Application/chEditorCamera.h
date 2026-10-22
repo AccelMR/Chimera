@@ -12,7 +12,6 @@
 #include "chPrerequisitesCore.h"
 
 #include "chCamera.h"
-#include "chEventSystem.h"
 
 namespace chEngineSDK {
 
@@ -31,15 +30,6 @@ class EditorCamera
 
   EditorCamera&
   operator=(const EditorCamera&) = delete;
-
-  /**
-   * The listeners capture this object, so it must not move while they are bound.
-   */
-  void
-  bindInputEvents();
-
-  void
-  unbindInputEvents();
 
   /**
    * Moves and turns the camera from the input of this frame. Call it once per frame.
@@ -157,13 +147,6 @@ class EditorCamera
   bool m_bFlying = false;
   // The wheel changed the speed during the flight, so it is saved when the flight ends.
   bool m_bSpeedChanged = false;
-
-  // Mouse motion of this frame, applied in update.
-  float m_lookDeltaX = 0.0f;
-  float m_lookDeltaY = 0.0f;
-
-  HEvent m_mouseWheelListener;
-  HEvent m_mouseMoveListener;
 };
 
 } // namespace chEngineSDK

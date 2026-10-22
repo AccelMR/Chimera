@@ -47,41 +47,10 @@ struct CH_CORE_EXPORT ScreenDescriptor {
   uint64 platformFlags = 0;
 };
 
-/*
- * Description:
- *     DisplaySurface platform agnostic.
- *
- * Sample usage:
- * You must avoid creating DisplaySurface from out of DisplayManager.
- *
- *  DisplayManager::startUp();
- *
- *  ScreenDescriptor winDesc;
- *  winDesc.name = "ChimeraCoreUnitTest";
- *  winDesc.title = "Chimera Core Unit Test";
- *
- *  auto Eventhandler = chMakeShared<DisplayEventHandle>();
- *  auto screen = DisplayManager::instance().createDisplay(winDesc, Eventhandler);
- *
- *  bool running = true;
- *  while (running) {
- *    Eventhandler->update();
- *
- *    while (!Eventhandler->empty()) {
- *      DisplayEvent event = Eventhandler->frontPop();
- *      switch (event.getType())
- *      {
- *      case PlatformEventType::Close:
- *        screen->close();
- *        running = false;
- *      break;
- *        break;
- *      default:
- *        break;
- *      }
- *    }
- *  }
- *
+/**
+ * Exists so the engine has one window type whatever the platform layer is. Made only by
+ * DisplayManager::createDisplay, which also ties it to the DisplayEventHandle that reads
+ * its events.
  */
 class CH_CORE_EXPORT DisplaySurface
 {

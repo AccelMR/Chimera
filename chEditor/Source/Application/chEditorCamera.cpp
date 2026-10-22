@@ -12,38 +12,32 @@
 #include "chBox.h"
 #include "chConsoleVariable.h"
 #include "chEngineConfig.h"
-#include "chEventDispatcherManager.h"
+#include "chInputManager.h"
 #include "chMath.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
 
 namespace {
-ConsoleVariable<float> g_cvarCameraSpeed("Editor.CameraSpeed",
-                                         5.0f,
+ConsoleVariable<float> g_cvarCameraSpeed("Editor.CameraSpeed", 5.0f,
                                          "Units per second the viewport camera flies.",
                                          "CameraSpeed");
-ConsoleVariable<float> g_cvarCameraLookSensitivity(
-    "Editor.CameraLookSensitivity",
-    0.15f,
-    "Degrees the viewport camera turns per pixel the mouse moves.",
-    "LookSensitivity");
+ConsoleVariable<float>
+    g_cvarCameraLookSensitivity("Editor.CameraLookSensitivity", 0.15f,
+                                "Degrees the viewport camera turns per pixel the mouse moves.",
+                                "LookSensitivity");
 ConsoleVariable<float> g_cvarCameraSprintMultiplier(
-    "Editor.CameraSprintMultiplier",
-    3.0f,
+    "Editor.CameraSprintMultiplier", 3.0f,
     "How many times faster the viewport camera flies while Shift is held.",
     "SprintMultiplier");
-ConsoleVariable<float> g_cvarCameraFieldOfView(
-    "Editor.CameraFieldOfView",
-    90.0f,
-    "Horizontal field of view of the viewport camera, in degrees.",
-    "FieldOfView");
-ConsoleVariable<float> g_cvarCameraNearPlane("Editor.CameraNearPlane",
-                                             0.1f,
+ConsoleVariable<float>
+    g_cvarCameraFieldOfView("Editor.CameraFieldOfView", 90.0f,
+                            "Horizontal field of view of the viewport camera, in degrees.",
+                            "FieldOfView");
+ConsoleVariable<float> g_cvarCameraNearPlane("Editor.CameraNearPlane", 0.1f,
                                              "Near clip plane of the viewport camera.",
                                              "NearPlane");
-ConsoleVariable<float> g_cvarCameraFarPlane("Editor.CameraFarPlane",
-                                            10000.0f,
+ConsoleVariable<float> g_cvarCameraFarPlane("Editor.CameraFarPlane", 10000.0f,
                                             "Far clip plane of the viewport camera.",
                                             "FarPlane");
 
@@ -78,53 +72,8 @@ EditorCamera::EditorCamera(float viewportWidth, float viewportHeight)
   m_camera.setProjectionType(CameraProjectionType::Perspective);
   // A config file may hold values out of range: the camera gets them clamped, and the
   // variables keep what the file says until the user edits them.
-  applyProjection(g_cvarCameraFieldOfView.get(),
-                  g_cvarCameraNearPlane.get(),
+  applyProjection(g_cvarCameraFieldOfView.get(), g_cvarCameraNearPlane.get(),
                   g_cvarCameraFarPlane.get());
-}
-
-/*
- */
-void
-EditorCamera::bindInputEvents()
-{
-  EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
-
-  m_mouseWheelListener =
-      eventDispatcher.OnMouseWheel.connect([this](const MouseWheelData& data) {
-        if (data.deltaY == 0) {
-          return;
-        }
-        const float steps = static_cast<float>(data.deltaY);
-        if (m_bFlying) {
-          setMoveSpeed(getMoveSpeed() * Math::pow(kWheelSpeedStep, steps));
-          m_bSpeedChanged = true;
-        }
-        else if (m_bFocused) {
-          m_camera.moveForward(steps * getMoveSpeed() * kWheelMoveSeconds);
-        }
-      });
-
-  m_mouseMoveListener = eventDispatcher.OnMouseMove.connect(
-      [this, &eventDispatcher](const MouseMoveData& data) {
-        if (m_bFlying) {
-          m_lookDeltaX += static_cast<float>(data.deltaX);
-          m_lookDeltaY += static_cast<float>(data.deltaY);
-        }
-        else if (m_bFocused && eventDispatcher.isMouseButtonDown(MouseButton::Middle)) {
-          m_camera.pan(-static_cast<float>(data.deltaX) * kPanSpeed,
-                       -static_cast<float>(data.deltaY) * kPanSpeed);
-        }
-      });
-}
-
-/*
- */
-void
-EditorCamera::unbindInputEvents()
-{
-  m_mouseWheelListener.disconnect();
-  m_mouseMoveListener.disconnect();
 }
 
 /*
@@ -132,13 +81,12 @@ EditorCamera::unbindInputEvents()
 void
 EditorCamera::update(float deltaTime)
 {
-  const bool bRightButton =
-      EventDispatcherManager::instance().isMouseButtonDown(MouseButton::Right);
+  const InputState& input = InputManager::instance().getState();
+  const bool bRightButton = input.isDown(InputKey::MouseRight);
+  bool bFlightStarted = false;
   if (!m_bFlying && bRightButton && m_bFocused) {
     m_bFlying = true;
-    // The click that starts the flight must not turn the camera.
-    m_lookDeltaX = 0.0f;
-    m_lookDeltaY = 0.0f;
+    bFlightStarted = true;
   }
   else if (m_bFlying && !bRightButton) {
     m_bFlying = false;
@@ -148,14 +96,30 @@ EditorCamera::update(float deltaTime)
     }
   }
 
+  const float wheelSteps = input.getMouseWheel().y;
+  if (wheelSteps != 0.0f) {
+    if (m_bFlying) {
+      setMoveSpeed(getMoveSpeed() * Math::pow(kWheelSpeedStep, wheelSteps));
+      m_bSpeedChanged = true;
+    }
+    else if (m_bFocused) {
+      m_camera.moveForward(wheelSteps * getMoveSpeed() * kWheelMoveSeconds);
+    }
+  }
+
+  const Vector2& mouseDelta = input.getMouseDelta();
   if (m_bFlying) {
-    const float sensitivity = getLookSensitivity();
-    // Moving the mouse down looks down.
-    look(m_lookDeltaX * sensitivity, -m_lookDeltaY * sensitivity);
+    // The click that starts the flight must not turn the camera.
+    if (!bFlightStarted) {
+      const float sensitivity = getLookSensitivity();
+      // Moving the mouse down looks down.
+      look(mouseDelta.x * sensitivity, -mouseDelta.y * sensitivity);
+    }
     fly(deltaTime);
   }
-  m_lookDeltaX = 0.0f;
-  m_lookDeltaY = 0.0f;
+  else if (m_bFocused && input.isDown(InputKey::MouseMiddle)) {
+    m_camera.pan(-mouseDelta.x * kPanSpeed, -mouseDelta.y * kPanSpeed);
+  }
 }
 
 /*
@@ -179,8 +143,7 @@ EditorCamera::look(float yawDegrees, float pitchDegrees)
                                   -kMaxPitchDegrees, kMaxPitchDegrees);
   const float cosPitch = Math::cos(Degree(pitch));
   const Vector3 newForward(cosPitch * Math::cos(Degree(yaw)),
-                           cosPitch * Math::sin(Degree(yaw)),
-                           Math::sin(Degree(pitch)));
+                           cosPitch * Math::sin(Degree(yaw)), Math::sin(Degree(pitch)));
   m_camera.lookAt(position + newForward * distance);
 }
 
@@ -189,26 +152,26 @@ EditorCamera::look(float yawDegrees, float pitchDegrees)
 void
 EditorCamera::fly(float deltaTime)
 {
-  const EventDispatcherManager& input = EventDispatcherManager::instance();
+  const InputState& input = InputManager::instance().getState();
   const auto axis = [](bool bPositive, bool bNegative) {
     return (bPositive ? 1.0f : 0.0f) - (bNegative ? 1.0f : 0.0f);
   };
-  const float forwardAxis = axis(input.isKeyDown(Key::W), input.isKeyDown(Key::S));
-  const float rightAxis = axis(input.isKeyDown(Key::D), input.isKeyDown(Key::A));
-  const float upAxis = axis(input.isKeyDown(Key::E), input.isKeyDown(Key::Q));
+  const float forwardAxis = axis(input.isDown(InputKey::W), input.isDown(InputKey::S));
+  const float rightAxis = axis(input.isDown(InputKey::D), input.isDown(InputKey::A));
+  const float upAxis = axis(input.isDown(InputKey::E), input.isDown(InputKey::Q));
   if (forwardAxis == 0.0f && rightAxis == 0.0f && upAxis == 0.0f) {
     return;
   }
 
   // Forward follows the view, pitch included, so looking up and pressing W climbs. E and Q
   // stay on the world's up axis. The camera never rolls, so its right is level.
-  Vector3 direction = m_camera.getForwardVector() * forwardAxis +
-                      m_camera.getRightVector() * rightAxis + Vector3::UP * upAxis;
+  Vector3 direction = m_camera.getForwardVector() * forwardAxis
+                      + m_camera.getRightVector() * rightAxis + Vector3::UP * upAxis;
   // Normalized so a diagonal is not faster than a single key.
   if (!direction.normalize()) {
     return;
   }
-  const bool bSprint = input.isKeyDown(Key::LShift) || input.isKeyDown(Key::RShift);
+  const bool bSprint = input.isDown(InputKey::LeftShift) || input.isDown(InputKey::RightShift);
   const float distance = getMoveSpeed() * deltaTime * (bSprint ? getSprintMultiplier() : 1.0f);
   const Vector3 offset = direction * distance;
 
