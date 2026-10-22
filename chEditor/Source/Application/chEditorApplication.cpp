@@ -44,6 +44,7 @@
 #include "chViewportTools.h"
 #include "chImportDialog.h"
 #include "chPackageDialog.h"
+#include "chProjectBrowserUI.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chScriptManager.h"
@@ -142,14 +143,7 @@ EditorApplication::destroyModules()
   // The renderer gives its textures back to the ImGui context, and the SDL backend uses the
   // window, which the parent destroys.
   m_imguiRenderer.reset();
-  if (ImGui::GetCurrentContext()) {
-#if USING(CH_DISPLAY_SDL3)
-    if (ImGui::GetIO().BackendPlatformUserData) {
-      ImGui_ImplSDL3_Shutdown();
-    }
-#endif // USING(CH_DISPLAY_SDL3)
-    ImGui::DestroyContext();
-  }
+  UIHelpers::shutDownImGui();
 
   m_inspectorUI.reset();
   AssetInspectorUI::shutDown();
@@ -240,11 +234,21 @@ EditorApplication::update(const float deltaTime)
     m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
   }
   ImportDialog::update();
+  Path chosenProject;
+  if (ProjectBrowserUI::takeChosenProject(chosenProject) &&
+      !(FileSystem::absolutePath(chosenProject) ==
+        FileSystem::absolutePath(EnginePaths::getProjectFile()))) {
+    EditorScene::requestOpenProject(chosenProject);
+  }
   // A drag or a text field still going on keeps its changes in one undo step.
   EditorScene::applyPending(UIHelpers::bRenderImGui &&
                             (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse()));
   updateGameInput();
   if (EditorScene::shouldQuit()) {
+    // Another project opens in a new run, once this one has closed.
+    if (!EditorScene::getProjectToOpen().empty()) {
+      requestRelaunch(ProjectBrowserUI::getLaunchArguments(EditorScene::getProjectToOpen()));
+    }
     quit();
   }
   updateWindowTitle();
@@ -399,6 +403,10 @@ EditorApplication::initializeEditorComponents() {
   CH_LOG_INFO(EditorApp, "Initializing editor components.");
   SPtr<DisplaySurface> display = getDisplaySurface();
   CH_ASSERT(display && "Display surface must not be null.");
+  // Also projects opened with -project, so the browser lists every project used.
+  if (!EnginePaths::getProjectFile().empty()) {
+    ProjectBrowserUI::addRecentProject(EnginePaths::getProjectFile());
+  }
 
 #if USING(CH_CODECS)
   AssetCodecManager::startUp();
@@ -525,34 +533,15 @@ EditorApplication::initImGui(const SPtr<DisplaySurface>& display)
 {
   CH_LOG_INFO(EditorApp, "Initializing ImGui for the editor.");
 
-  ImGui::CreateContext();
-
   // ImGui keeps the pointer, not a copy, so the string must outlive the context.
   static const String iniFilePath =
       FileSystem::absolutePath(EnginePaths::getConfigDirectory().join(Path("imgui.ini")))
           .toString();
-  ImGui::GetIO().IniFilename = iniFilePath.c_str();
-
-  UIHelpers::initConfigFlags();
-  EditorTheme::initialize();
-
-#if USING(CH_DISPLAY_SDL3)
-  // The windows ImGui opens need the same window flags the graphics API asked for, and the
-  // backend only adds this one when it is started for it.
-  const uint64 windowFlags = IGraphicsAPI::instance().getPlatformWindowFlags();
-  if ((windowFlags & SDL_WINDOW_VULKAN) != 0) {
-    ImGui_ImplSDL3_InitForVulkan(display->getPlatformHandler());
-  }
-  else {
-    ImGui_ImplSDL3_InitForOther(display->getPlatformHandler());
-  }
-#endif // USING(CH_DISPLAY_SDL3)
-  m_imguiRenderer = chMakeUnique<ImGuiRenderer>();
-
   SPtr<DisplayEventHandle> eventHandler = getEventHandler();
   CH_ASSERT(eventHandler && "Display event handler must not be null.");
-  m_updateInjection = UIHelpers::bindEventWindow(eventHandler);
+  m_updateInjection = UIHelpers::initializeImGui(display, eventHandler, iniFilePath.c_str());
   CH_ASSERT(m_updateInjection.isValid() && "Update injection event must be valid.");
+  m_imguiRenderer = chMakeUnique<ImGuiRenderer>();
 }
 
 /*
@@ -576,6 +565,7 @@ EditorApplication::renderUI()
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
   PackageDialog::render();
+  ProjectBrowserUI::renderPopup();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
 
   ImGui::Render();

@@ -50,6 +50,23 @@ class UIHelpers {
   NODISCARD static HEvent
   bindEventWindow(const SPtr<DisplayEventHandle>& eventHandler);
 
+  /**
+   * Makes the ImGui context with the editor's flags and theme and starts its platform
+   * backend on display. iniFile must outlive the context (ImGui keeps the pointer); null
+   * saves no layout. Returns the handle that feeds window events to ImGui.
+   */
+  NODISCARD static HEvent
+  initializeImGui(const SPtr<DisplaySurface>& display,
+                  const SPtr<DisplayEventHandle>& eventHandler,
+                  const ANSICHAR* iniFile);
+
+  /**
+   * Stops the platform backend and destroys the context; the ImGui renderer must be gone
+   * first, because it gives its textures back to the context.
+   */
+  static void
+  shutDownImGui();
+
   NODISCARD static const ANSICHAR*
   getFolderIcon(bool bOpen);
 

@@ -50,6 +50,7 @@
 #include "chModelSerializer.h"
 #include "chModelSerializationHeaders.h"
 #include "chPrefabAsset.h"
+#include "chProjectDescriptor.h"
 #include "chProjectPackager.h"
 #include "chQuaternion.h"
 #include "chRay.h"
@@ -1668,6 +1669,79 @@ writeTestFile(const Path& path, StringView text)
 }
 } // namespace
 
+TEST_CASE("chCore - Project descriptor")
+{
+  const Path root = FileSystem::absolutePath(Path("ProjectDescriptorTestDir"));
+  FileSystem::removeAll(root);
+
+  SECTION("An empty file is a project named after the file")
+  {
+    const Path file = root.join(Path("Old/Old.chproject"));
+    writeTestFile(file, "");
+    ProjectDescriptor descriptor;
+    REQUIRE(descriptor.load(file));
+    REQUIRE(descriptor.name == "Old");
+    REQUIRE(descriptor.engineVersion.empty());
+    REQUIRE(descriptor.gameModules.empty());
+    REQUIRE(ProjectDescriptor::findProjectFile(root.join(Path("Old"))) == file);
+    REQUIRE(ProjectDescriptor::findProjectFile(root).empty());
+  }
+
+  SECTION("Saved values read back")
+  {
+    ProjectDescriptor descriptor;
+    descriptor.name = "My Game";
+    descriptor.engineVersion = "1.2.3.4";
+    descriptor.description = "A test";
+    descriptor.gameModules = {"GameCode", "Tools"};
+    const Path file = root.join(Path("Saved/Saved.chproject"));
+    REQUIRE(descriptor.save(file));
+
+    ProjectDescriptor loaded;
+    REQUIRE(loaded.load(file));
+    REQUIRE(loaded.name == "My Game");
+    REQUIRE(loaded.engineVersion == "1.2.3.4");
+    REQUIRE(loaded.description == "A test");
+    REQUIRE(loaded.gameModules == Vector<String>{"GameCode", "Tools"});
+
+    writeTestFile(file, "[Modules]\nGameModules= A , ,B\n");
+    REQUIRE(loaded.load(file));
+    REQUIRE(loaded.name == "Saved");
+    REQUIRE(loaded.gameModules == Vector<String>{"A", "B"});
+  }
+
+  SECTION("Create makes the folders and the file")
+  {
+    Path projectFile;
+    String error;
+    REQUIRE(ProjectDescriptor::create(root, "NewGame", projectFile, error));
+    REQUIRE(projectFile == root.join(Path("NewGame/NewGame.chproject")));
+    REQUIRE(FileSystem::isDirectory(root.join(Path("NewGame/Assets"))));
+    REQUIRE(FileSystem::isDirectory(root.join(Path("NewGame/Config"))));
+    ProjectDescriptor descriptor;
+    REQUIRE(descriptor.load(projectFile));
+    REQUIRE(descriptor.name == "NewGame");
+    REQUIRE(descriptor.engineVersion == CH_ENGINE_VERSION_STRING);
+
+    // The folder is no longer empty.
+    REQUIRE_FALSE(ProjectDescriptor::create(root, "NewGame", projectFile, error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE_FALSE(ProjectDescriptor::create(root, "Bad/Name", projectFile, error));
+    REQUIRE_FALSE(ProjectDescriptor::create(Path(), "Fine", projectFile, error));
+  }
+
+  SECTION("Names")
+  {
+    REQUIRE(ProjectDescriptor::isValidName("My Game_2"));
+    REQUIRE_FALSE(ProjectDescriptor::isValidName(""));
+    REQUIRE_FALSE(ProjectDescriptor::isValidName(".."));
+    REQUIRE_FALSE(ProjectDescriptor::isValidName("Game."));
+    REQUIRE_FALSE(ProjectDescriptor::isValidName("a:b"));
+  }
+
+  FileSystem::removeAll(root);
+}
+
 TEST_CASE("chCore - Project packager")
 {
   const Path root = FileSystem::absolutePath(Path("PackagerTestDir"));
@@ -1689,7 +1763,7 @@ TEST_CASE("chCore - Project packager")
   writeTestFile(engine.join(Path("Shaders/forward.hlsl")), "source");
 
   const Path project = root.join(Path("Project"));
-  writeTestFile(project.join(Path("Project.chproject")), "");
+  writeTestFile(project.join(Path("Project.chproject")), "[Modules]\nGameModules=GameCode\n");
   writeTestFile(project.join(Path("Config/Game.ini")), "[Game]\nTitle=Test\n");
   writeTestFile(project.join(Path("Config/Editor.ini")), "[Editor]\nGrid=false\n");
   writeTestFile(project.join(Path("Config/Package.ini")), "[Package]\nScenes=/Game/Maps/Main\n");
@@ -1728,6 +1802,11 @@ TEST_CASE("chCore - Project packager")
     REQUIRE(FileSystem::isFile(output.join(Path("Assets/Maps/Main.chAss"))));
     REQUIRE_FALSE(FileSystem::exists(output.join(Path("Assets/Unused.chAss"))));
     REQUIRE(FileSystem::isFile(output.join(Path("MyGame.chproject"))));
+    ProjectDescriptor packagedProject;
+    REQUIRE(packagedProject.load(output.join(Path("MyGame.chproject"))));
+    REQUIRE(packagedProject.name == "MyGame");
+    REQUIRE(packagedProject.engineVersion == CH_ENGINE_VERSION_STRING);
+    REQUIRE(packagedProject.gameModules == Vector<String>{"GameCode"});
 
     ConfigFile gameConfig;
     REQUIRE(gameConfig.load(output.join(Path("Config/Game.ini"))));

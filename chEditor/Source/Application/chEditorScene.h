@@ -256,6 +256,19 @@ class EditorScene
   shouldQuit();
 
   /**
+   * Closes the editor to open projectFile in a new run, asking about unsaved changes first
+   * like a quit. Once shouldQuit is true, getProjectToOpen gives the project.
+   */
+  static void
+  requestOpenProject(const Path& projectFile);
+
+  /**
+   * Empty unless the editor closes to open another project.
+   */
+  NODISCARD static const Path&
+  getProjectToOpen();
+
+  /**
    * Draws the dialogs; Save As puts a new scene into folder. Call once per frame, after the
    * panels.
    */

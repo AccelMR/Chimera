@@ -19,6 +19,10 @@ option(CH_BUILD_TESTS "Build the unit tests" ON)
 option(CH_BUILD_GAME "Build chGame, the runtime that plays a project without the editor" ON)
 set(CH_GAME_DEV_PROJECT "${CMAKE_SOURCE_DIR}/Examples/BaseExample" CACHE PATH
     "Project chGame opens in a development build when no -project is given")
+# Empty by default, so the editor started by hand asks for its project. Only the Visual
+# Studio debugger passes it (as -project); other IDEs set it in their own launch settings.
+set(CH_EDITOR_DEV_PROJECT "" CACHE PATH
+    "Project the Visual Studio debugger opens chEditor with; empty shows the project browser")
 option(CH_ENABLE_PROFILER "Build the profiler (CPU scopes, render stats); off for shipping" ON)
 option(CH_ENABLE_DEBUG_DRAW "Build the debug lines (DebugDraw and its pass); off for shipping" ON)
 

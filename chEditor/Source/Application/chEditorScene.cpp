@@ -58,6 +58,7 @@ enum class PendingAction
   Open,
   EditPrefab,
   BackToScene,
+  OpenProject,
   Quit
 };
 
@@ -96,6 +97,9 @@ struct EditorSceneState
   PendingAction action = PendingAction::None;
   SPtr<SceneAsset> actionAsset;
   SPtr<PrefabAsset> actionPrefab;
+  Path actionProject;
+  // Set once the editor may close to open this project in a new run.
+  Path projectToOpen;
   bool bActionReady = false;
 
   bool bOpenUnsavedPopup = false;
@@ -409,6 +413,8 @@ getActionText(PendingAction action)
     return "going back to the scene";
   case PendingAction::Quit:
     return "closing the editor";
+  case PendingAction::OpenProject:
+    return "opening another project";
   default:
     return "going on";
   }
@@ -1412,6 +1418,23 @@ EditorScene::shouldQuit()
 /*
  */
 void
+EditorScene::requestOpenProject(const Path& projectFile)
+{
+  getState().actionProject = projectFile;
+  requestAction(PendingAction::OpenProject, nullptr);
+}
+
+/*
+ */
+const Path&
+EditorScene::getProjectToOpen()
+{
+  return getState().projectToOpen;
+}
+
+/*
+ */
+void
 EditorScene::render(const Path& folder)
 {
   EditorSceneState& state = getState();
@@ -1522,6 +1545,11 @@ EditorScene::applyPending(bool bEditing)
   } break;
 
   case PendingAction::Quit:
+    state.bQuit = true;
+    break;
+
+  case PendingAction::OpenProject:
+    state.projectToOpen = std::move(state.actionProject);
     state.bQuit = true;
     break;
 

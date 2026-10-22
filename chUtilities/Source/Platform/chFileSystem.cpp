@@ -522,7 +522,7 @@ FileSystem::getBaseDirectory()
 }
 
 Path
-FileSystem::getExecutableDirectory()
+FileSystem::getExecutablePath()
 {
 #if USING(CH_PLATFORM_WIN32)
   WString buffer(MAX_PATH, L'\0');
@@ -549,9 +549,15 @@ FileSystem::getExecutableDirectory()
     return Path();
   }
 #else
-#error "FileSystem::getExecutableDirectory is not implemented for this platform"
+#error "FileSystem::getExecutablePath is not implemented for this platform"
 #endif
-  return Path(normalize(executable.parent_path()));
+  return Path(normalize(executable));
+}
+
+Path
+FileSystem::getExecutableDirectory()
+{
+  return getExecutablePath().getDirectory();
 }
 
 Path

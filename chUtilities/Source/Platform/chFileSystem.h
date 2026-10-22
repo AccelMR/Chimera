@@ -72,6 +72,12 @@ class CH_UTILITY_EXPORT FileSystem
   getBaseDirectory();
 
   /**
+   *   Returns the running executable file, asked to the operating system.
+   **/
+  NODISCARD static Path
+  getExecutablePath();
+
+  /**
    *   Returns the folder that holds the running executable, asked to the operating
    *   system.
    **/

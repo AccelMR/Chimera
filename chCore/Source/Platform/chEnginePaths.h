@@ -11,6 +11,8 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chProjectDescriptor.h"
+
 namespace chEngineSDK {
 
 /**
@@ -26,9 +28,10 @@ namespace chEngineSDK {
  * that has chCore/Content. A packaged game instead has a .chproject file and an Engine
  * folder next to the executable: the executable folder is then both the engine root and
  * the project, and /Engine is that Engine folder. The project is the folder given with
- * -project=<path> (a folder with a .chproject file, or the file itself). Without it the
- * editor opens <EngineRoot>/Projects/Sandbox, and a game uses the executable folder.
- * The project folder is also the FileSystem base directory.
+ * -project=<path> (a folder with a .chproject file, or the file itself). Without it a
+ * game uses the executable folder, and the editor opens no project: /Game is not mounted
+ * and /Saved is the user's editor folder, until the user picks a project.
+ * The project folder (else that user folder) is also the FileSystem base directory.
  */
 class CH_CORE_EXPORT EnginePaths
 {
@@ -38,14 +41,40 @@ class CH_CORE_EXPORT EnginePaths
    * only needs to be called directly to choose when it happens, for example before
    * opening the log file. Reads -project from CommandLine.
    * The project is, in order: -project; the executable folder when it holds a
-   * .chproject file (a packaged game); defaultProject when it holds one; the editor's
-   * Sandbox; else the executable folder.
+   * .chproject file (a packaged game); defaultProject when it holds one; then none when
+   * bProjectOptional (editor builds only; ignored without the editor), else the
+   * executable folder.
    * Throws if the engine root or the requested project cannot be found.
    * Every path is worked out here once, so the references returned by the getters
    * stay valid until the program ends.
    */
   static void
-  initialize(StringView defaultProject = StringView());
+  initialize(StringView defaultProject = StringView(), bool bProjectOptional = false);
+
+  /**
+   * False only when the program started without a project and allowed it (the editor
+   * before the user picks one); then every project folder getter gives an empty path.
+   */
+  NODISCARD static bool
+  hasProject();
+
+  /**
+   * The project's .chproject file; empty when the project has none.
+   */
+  NODISCARD static const Path&
+  getProjectFile();
+
+  NODISCARD static const ProjectDescriptor&
+  getProjectDescriptor();
+
+#if USING(CH_EDITOR)
+  /**
+   * Real folder of this user's editor data, shared by every project (the recent projects;
+   * logs and config while no project is open). Made the first time it is asked for.
+   */
+  NODISCARD static const Path&
+  getEditorUserDirectory();
+#endif // USING(CH_EDITOR)
 
   NODISCARD static const Path&
   getEngineRootDirectory();

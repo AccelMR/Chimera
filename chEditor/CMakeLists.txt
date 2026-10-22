@@ -15,3 +15,8 @@ endforeach()
 ch_add_shaders(chEditorShaders ${CMAKE_CURRENT_SOURCE_DIR}/Content/Shaders)
 set_target_properties(chEditorShaders PROPERTIES FOLDER Editor)
 add_dependencies(chEditor chEditorShaders)
+
+if(CH_EDITOR_DEV_PROJECT)
+  set_target_properties(chEditor PROPERTIES
+    VS_DEBUGGER_COMMAND_ARGUMENTS "-project=${CH_EDITOR_DEV_PROJECT}")
+endif()

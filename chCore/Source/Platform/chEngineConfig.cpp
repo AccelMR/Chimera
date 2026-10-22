@@ -105,6 +105,10 @@ EngineConfig::initialize()
           folder = EnginePaths::getConfigDirectory();
           break;
       }
+      // No project is open.
+      if (folder.empty()) {
+        continue;
+      }
 
       const Path path = getFilePath(folder, info.name);
       ConfigFile layer;

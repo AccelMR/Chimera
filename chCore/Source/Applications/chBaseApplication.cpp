@@ -19,8 +19,10 @@
 #include "chEngineConfig.h"
 #include "chEnginePaths.h"
 #include "chException.h"
+#include "chFileSystem.h"
 #include "chLogger.h"
 #include "chPath.h"
+#include "chPlatformSystem.h"
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
@@ -35,6 +37,21 @@ using std::stoi;
 
 
 CH_LOG_DECLARE_STATIC(BaseApp, CH_BASE_APPLICATION_LOG_LEVEL);
+
+namespace {
+struct RelaunchRequest
+{
+  bool bRequested = false;
+  Vector<String> arguments;
+};
+
+RelaunchRequest&
+getRelaunchRequest()
+{
+  static RelaunchRequest request;
+  return request;
+}
+} // namespace
 
 /*
 */
@@ -69,7 +86,7 @@ BaseApplication::launch(int32 argc,
   try {
     // The log file lives in the project's Saved folder, so the project (-project) must
     // be known before the file is opened.
-    EnginePaths::initialize(info.defaultProject);
+    EnginePaths::initialize(info.defaultProject, info.bProjectOptional);
     const Path logFile = EnginePaths::getLogDirectory().join(Path(info.logFileName));
     logger.setFileOutput(true, logFile.toString());
 
@@ -102,8 +119,31 @@ BaseApplication::launch(int32 argc,
     exitCode = 1;
   }
 
+  RelaunchRequest& relaunch = getRelaunchRequest();
+  if (relaunch.bRequested) {
+    CH_LOG_INFO(BaseApp, "Starting again: {0}", StringUtils::join(relaunch.arguments, " "));
+  }
   Logger::shutDown();
+
+  // After the Logger, so the log file is closed before the new run opens it.
+  if (relaunch.bRequested) {
+    relaunch.arguments.insert(relaunch.arguments.begin(),
+                              FileSystem::getExecutablePath().toString());
+    if (!PlatformSystem::launchProcess(relaunch.arguments)) {
+      exitCode = 1;
+    }
+  }
   return exitCode;
+}
+
+/*
+ */
+void
+BaseApplication::requestRelaunch(Vector<String> arguments)
+{
+  RelaunchRequest& request = getRelaunchRequest();
+  request.bRequested = true;
+  request.arguments = std::move(arguments);
 }
 
 /*

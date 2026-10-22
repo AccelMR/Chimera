@@ -26,6 +26,7 @@
 #include "chPackageDialog.h"
 #include "chPrefabAsset.h"
 #include "chProfilerUI.h"
+#include "chProjectBrowserUI.h"
 #include "chAnimationPreviewUI.h"
 #include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
@@ -490,6 +491,11 @@ MainMenuBarUI::renderFileMenu()
     EditorScene::requestBackToScene();
   }
   ImGui::Separator();
+  // Both open the project browser, which lists the recent projects and makes new ones.
+  if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Project...") ||
+      ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open Project...")) {
+    ProjectBrowserUI::open();
+  }
   if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Package Project...", nullptr, false,
                       !bEditingPrefab && !PackageDialog::isPackaging())) {
     PackageDialog::open();

@@ -10,7 +10,9 @@
 
 #include "chConsoleVariable.h"
 #include "chDisplayEventHandle.h"
+#include "chDisplaySurface.h"
 #include "chEditorTheme.h"
+#include "chIGraphicsAPI.h"
 #include "chFileSystem.h"
 #include "chLinearColor.h"
 #include "chLogger.h"
@@ -109,6 +111,52 @@ UIHelpers::initConfigFlags()
   if (g_cvarFloatingWindows.get()) {
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   }
+}
+
+/*
+ */
+HEvent
+UIHelpers::initializeImGui(const SPtr<DisplaySurface>& display,
+                           const SPtr<DisplayEventHandle>& eventHandler,
+                           const ANSICHAR* iniFile)
+{
+  ImGui::CreateContext();
+  ImGui::GetIO().IniFilename = iniFile;
+
+  initConfigFlags();
+  EditorTheme::initialize();
+
+#if USING(CH_DISPLAY_SDL3)
+  // The windows ImGui opens need the same window flags the graphics API asked for, and the
+  // backend only adds this one when it is started for it.
+  const uint64 windowFlags = IGraphicsAPI::instance().getPlatformWindowFlags();
+  if ((windowFlags & SDL_WINDOW_VULKAN) != 0) {
+    ImGui_ImplSDL3_InitForVulkan(display->getPlatformHandler());
+  }
+  else {
+    ImGui_ImplSDL3_InitForOther(display->getPlatformHandler());
+  }
+#else
+  CH_PARAMETER_UNUSED(display);
+#endif // USING(CH_DISPLAY_SDL3)
+
+  return bindEventWindow(eventHandler);
+}
+
+/*
+ */
+void
+UIHelpers::shutDownImGui()
+{
+  if (!ImGui::GetCurrentContext()) {
+    return;
+  }
+#if USING(CH_DISPLAY_SDL3)
+  if (ImGui::GetIO().BackendPlatformUserData) {
+    ImGui_ImplSDL3_Shutdown();
+  }
+#endif // USING(CH_DISPLAY_SDL3)
+  ImGui::DestroyContext();
 }
 
 /*

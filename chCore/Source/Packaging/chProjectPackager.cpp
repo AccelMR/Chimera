@@ -15,6 +15,7 @@
 #include "chEnginePaths.h"
 #include "chFileSystem.h"
 #include "chLogger.h"
+#include "chProjectDescriptor.h"
 
 namespace chEngineSDK {
 
@@ -226,16 +227,22 @@ writeGameConfig(const PackageDesc& desc, String& outError)
     return false;
   }
 
-  // Empty, like the one the editor makes: only its name and place matter.
+  // The project's own file, under the game's name, so its game modules come along.
+  ProjectDescriptor descriptor;
+  const Path sourceProjectFile = ProjectDescriptor::findProjectFile(desc.projectDirectory);
+  if (!sourceProjectFile.empty() && !descriptor.load(sourceProjectFile)) {
+    outError = "Could not read " + sourceProjectFile.toString() + ".";
+    return false;
+  }
+  descriptor.name = desc.gameName;
+  descriptor.engineVersion = CH_ENGINE_VERSION_STRING;
   String projectFileName(desc.gameName);
   projectFileName += EnginePaths::PROJECT_EXTENSION;
   const Path projectFile = desc.outputDirectory.join(Path(std::move(projectFileName)));
-  SPtr<DataStream> stream = FileSystem::createAndOpenFile(projectFile);
-  if (!stream) {
+  if (!descriptor.save(projectFile)) {
     outError = "Could not write " + projectFile.toString() + ".";
     return false;
   }
-  stream->close();
   return true;
 }
 } // namespace
@@ -343,17 +350,7 @@ ProjectPackager::isDebugBuild(const Path& directory)
 bool
 ProjectPackager::isValidGameName(StringView name)
 {
-  if (name.empty() || name == "." || name == ".." || name.back() == '.' ||
-      name.back() == ' ') {
-    return false;
-  }
-  for (const ANSICHAR character : name) {
-    if (static_cast<uint8>(character) < 32 ||
-        StringView("/\\:*?\"<>|").find(character) != StringView::npos) {
-      return false;
-    }
-  }
-  return true;
+  return ProjectDescriptor::isValidName(name);
 }
 
 /*

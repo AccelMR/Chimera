@@ -32,6 +32,9 @@ struct LaunchInfo
   // Project folder of a development build, used when neither -project nor a project next
   // to the executable says otherwise (see EnginePaths::initialize).
   String defaultProject = "";
+  // True lets the program start with no project at all (the editor, which then asks for
+  // one); false plays the executable folder instead. Ignored in builds without the editor.
+  bool bProjectOptional = false;
 };
 
 /*
@@ -52,6 +55,22 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
   {
     return launch(argc, argv, info, [] { startUp<T>(); });
   }
+
+  /*
+   * Description:
+   *     Same as launch<T>, for a program that picks its application once the paths are
+   *     known: startUpApplication calls startUp<T>() for the type it wants.
+   */
+  static int32
+  launch(int32 argc, ANSICHAR* argv[], const LaunchInfo& info, void (*startUpApplication)());
+
+  /*
+   * Description:
+   *     Starts this executable again with arguments (without the program name) once this
+   *     run has shut down completely, so both never write the same files.
+   */
+  static void
+  requestRelaunch(Vector<String> arguments);
 
   /*
    * Description:
@@ -111,10 +130,6 @@ class CH_CORE_EXPORT BaseApplication : public Module<BaseApplication> {
    */
   virtual void
   update(const float deltaTime) { CH_PARAMETER_UNUSED(deltaTime); }
-
- private:
-  static int32
-  launch(int32 argc, ANSICHAR* argv[], const LaunchInfo& info, void (*startUpApplication)());
 
  private:
   bool m_running = true; ///< Flag to indicate if the application is running.
