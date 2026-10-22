@@ -13,6 +13,7 @@
 #include "chConsoleVariable.h"
 #include "chInputManager.h"
 #include "chScriptAllocator.h"
+#include "chScriptApi.h"
 #include "chScriptAsset.h"
 #include "chScriptBinder.h"
 #include "chScriptBindings.h"
@@ -224,6 +225,11 @@ ScriptManager::ScriptManager(const bool bPoolAllocator)
   m_state = lua_newstate(&ScriptAllocator::allocate, m_allocator.get());
   CH_ASSERT(m_state && "Not enough memory to start the script runtime.");
   lua_atpanic(m_state, &panic);
+#if USING(CH_EDITOR)
+  m_apiDescription = chMakeUnique<ScriptApiDescription>();
+#endif // USING(CH_EDITOR)
+  // Always written: Lua leaves the state's extra space uninitialized.
+  ScriptApiDescription::attach(m_state, m_apiDescription.get());
   if (g_cvarGenerationalGC.get()) {
     lua_gc(m_state, LUA_GCGEN, 0, 0);
   }
@@ -268,19 +274,35 @@ ScriptManager::openLibraries()
   lua_pushcfunction(m_state, &print);
   lua_setglobal(m_state, "print");
 
-  const luaL_Reg logFunctions[] = {{"info", &logInfo},
-                                   {"warning", &logWarning},
-                                   {"error", &logError},
-                                   {"debug", &logDebug},
-                                   {nullptr, nullptr}};
-  luaL_newlib(m_state, logFunctions);
-  lua_setglobal(m_state, "Log");
+  const ANSICHAR* const kLogSignature = "fun(...: any)";
+  ScriptTable(m_state, "Log", "Writes to the engine log, after the script and line that called.")
+      .rawFunction("info", &logInfo, kLogSignature)
+      .rawFunction("warning", &logWarning, kLogSignature)
+      .rawFunction("error", &logError, kLogSignature)
+      .rawFunction("debug", &logDebug, kLogSignature);
 
-  lua_createtable(m_state, 0, 4);
-  lua_pushvalue(m_state, -1);
-  m_timeTable = luaL_ref(m_state, LUA_REGISTRYINDEX);
-  lua_setglobal(m_state, "Time");
+  {
+    ScriptTable time(m_state, "Time", "Written by the engine before scripts run.");
+    time.describeField("deltaTime", "number")
+        .describeField("fixedDeltaTime", "number")
+        .describeField("time", "number")
+        .describeField("frameCount", "integer");
+    lua_pushvalue(m_state, time.getIndex());
+    m_timeTable = luaL_ref(m_state, LUA_REGISTRYINDEX);
+  }
   writeTime();
+
+  if (m_apiDescription) {
+    ScriptApiType& script = m_apiDescription->addType("Script", ScriptApiTypeKind::Shape);
+    script.description = "The self of every script. Write `---@class MyScript : Script` "
+                         "above a script's table to have its fields completed.";
+    script.fields = {{"gameObject", "GameObject"},
+                     {"transform", "Transform"},
+                     {"onStart?", "fun(self: Script)"},
+                     {"update?", "fun(self: Script, deltaTime: number)"},
+                     {"fixedUpdate?", "fun(self: Script, deltaTime: number)"},
+                     {"onDestroy?", "fun(self: Script)"}};
+  }
 
   ScriptBindings::registerMath(m_state);
   ScriptBindings::registerObjects(m_state);

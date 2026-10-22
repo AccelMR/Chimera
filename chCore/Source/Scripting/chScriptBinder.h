@@ -11,6 +11,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include <array>
 #include <cstring>
 #include <tuple>
 #include <utility>
@@ -21,13 +22,15 @@
 #include "lua.h"
 
 #include "chAngle.h"
+#include "chScriptApi.h"
 
 namespace chEngineSDK {
 
 /**
  * Exists so the binder knows how a C++ type goes to Lua (push) and comes back (check). check
- * raises a Lua error naming the argument when the value has the wrong type. A type without a
- * specialization stops the build.
+ * raises a Lua error naming the argument when the value has the wrong type, and TYPE_NAME is
+ * the type code editors are told (value and handle types use their script name). A type
+ * without a specialization stops the build.
  */
 template<typename T>
 struct ScriptTraits
@@ -124,6 +127,8 @@ struct ScriptTraits<T>
 template<>
 struct ScriptTraits<float>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "number";
+
   static FORCEINLINE void
   push(lua_State* state, const float value)
   {
@@ -140,6 +145,8 @@ struct ScriptTraits<float>
 template<>
 struct ScriptTraits<double>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "number";
+
   static FORCEINLINE void
   push(lua_State* state, const double value)
   {
@@ -156,6 +163,8 @@ struct ScriptTraits<double>
 template<>
 struct ScriptTraits<int32>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "integer";
+
   static FORCEINLINE void
   push(lua_State* state, const int32 value)
   {
@@ -175,6 +184,8 @@ struct ScriptTraits<int32>
 template<>
 struct ScriptTraits<uint32>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "integer";
+
   static FORCEINLINE void
   push(lua_State* state, const uint32 value)
   {
@@ -197,6 +208,8 @@ struct ScriptTraits<uint32>
 template<>
 struct ScriptTraits<bool>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "boolean";
+
   static FORCEINLINE void
   push(lua_State* state, const bool value)
   {
@@ -217,6 +230,8 @@ struct ScriptTraits<bool>
 template<>
 struct ScriptTraits<StringView>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "string";
+
   static FORCEINLINE void
   push(lua_State* state, const StringView value)
   {
@@ -235,6 +250,8 @@ struct ScriptTraits<StringView>
 template<>
 struct ScriptTraits<String>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "string";
+
   static FORCEINLINE void
   push(lua_State* state, const String& value)
   {
@@ -251,6 +268,8 @@ struct ScriptTraits<String>
 template<>
 struct ScriptTraits<const ANSICHAR*>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "string";
+
   static FORCEINLINE void
   push(lua_State* state, const ANSICHAR* value)
   {
@@ -270,6 +289,8 @@ struct ScriptTraits<const ANSICHAR*>
 template<>
 struct ScriptTraits<Degree>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "number";
+
   static FORCEINLINE void
   push(lua_State* state, const Degree& value)
   {
@@ -286,6 +307,8 @@ struct ScriptTraits<Degree>
 template<>
 struct ScriptTraits<Radian>
 {
+  static constexpr const ANSICHAR* TYPE_NAME = "number";
+
   static FORCEINLINE void
   push(lua_State* state, const Radian& value)
   {
@@ -674,27 +697,150 @@ indexConstant(lua_State* state);
  */
 CH_CORE_EXPORT void
 beginValueClass(lua_State* state, const ANSICHAR* name);
+
+// Descriptions for code editors are recorded only in the editor, so games build none of it.
+inline constexpr bool RECORD_API = USING(CH_EDITOR);
+
+template<typename... A>
+constexpr void
+ignore(const A&...) noexcept
+{}
+
+template<typename T>
+consteval const ANSICHAR*
+getLuaTypeName()
+{
+  if constexpr (ScriptValue<T> || ScriptHandle<T>) {
+    return getScriptTypeName<T>();
+  }
+  else {
+    return ScriptTraits<T>::TYPE_NAME;
+  }
+}
+
+/*
+ * A method made from a free function takes the value it is called on as its first argument,
+ * which scripts do not write.
+ */
+template<auto Function>
+consteval SIZE_T
+getSelfArgumentCount()
+{
+  return std::is_void_v<typename FunctionTraits<decltype(Function)>::Class> ? 1 : 0;
+}
+
+/*
+ * "name: type, ..." for the arguments from First on, named in order.
+ */
+template<typename Arguments, SIZE_T First, SIZE_T... I>
+String
+describeParameters(const ANSICHAR* const* names, std::index_sequence<I...>)
+{
+  String text;
+  ((text += (I == 0 ? "" : ", "), text += names[I], text += ": ",
+    text += getLuaTypeName<std::remove_cvref_t<Argument<Arguments, I + First>>>()),
+   ...);
+  return text;
+}
+
+template<typename Tuple>
+struct TupleTypeNames;
+
+template<typename... A>
+struct TupleTypeNames<std::tuple<A...>>
+{
+  static String
+  get()
+  {
+    String text;
+    SIZE_T index = 0;
+    ((text += (index++ == 0 ? "" : ", "), text += getLuaTypeName<std::remove_cvref_t<A>>()),
+     ...);
+    return text;
+  }
+};
+
+template<typename R>
+String
+describeResults()
+{
+  if constexpr (std::is_void_v<R>) {
+    return String();
+  }
+  else if constexpr (IsTuple<std::remove_cvref_t<R>>::value) {
+    return TupleTypeNames<std::remove_cvref_t<R>>::get();
+  }
+  else {
+    return getLuaTypeName<std::remove_cvref_t<R>>();
+  }
+}
+
+template<auto Function, SIZE_T First, SIZE_T N>
+ScriptApiSignature
+describeFunction(const std::array<const ANSICHAR*, N>& names)
+{
+  using FunctionInfo = FunctionTraits<decltype(Function)>;
+  return {describeParameters<typename FunctionInfo::Arguments, First>(
+              names.data(), std::make_index_sequence<N>()),
+          describeResults<typename FunctionInfo::Return>()};
+}
+
+template<typename T, ScriptOperator Op>
+void
+describeOperator(Vector<String>& outOperators)
+{
+  const String name = getScriptTypeName<T>();
+  if constexpr (Op == ScriptOperator::Add) {
+    outOperators.push_back("add(" + name + "): " + name);
+  }
+  else if constexpr (Op == ScriptOperator::Subtract) {
+    outOperators.push_back("sub(" + name + "): " + name);
+  }
+  else if constexpr (Op == ScriptOperator::Negate) {
+    outOperators.push_back("unm: " + name);
+  }
+  else if constexpr (Op == ScriptOperator::Multiply) {
+    if constexpr (requires(const T& value, float scalar) { value * scalar; }) {
+      outOperators.push_back("mul(number): " + name);
+    }
+    if constexpr (requires(const T& a, const T& b) { a * b; }) {
+      outOperators.push_back("mul(" + name + "): " + name);
+    }
+  }
+  else if constexpr (Op == ScriptOperator::Divide) {
+    if constexpr (requires(const T& value, float scalar) { value / scalar; }) {
+      outOperators.push_back("div(number): " + name);
+    }
+    if constexpr (requires(const T& a, const T& b) { a / b; }) {
+      outOperators.push_back("div(" + name + "): " + name);
+    }
+  }
+}
 } // namespace ScriptDetail
 
 /**
  * Exists so exposing a type to scripts is one line per member, with the name scripts see
- * chosen here (it may differ from the C++ one):
+ * chosen here (it may differ from the C++ one) and the names of its parameters, which code
+ * editors show:
  *
  *   ScriptClass<Vector3>(state)
  *     .constructor<>()
- *     .constructor<float, float, float>()
+ *     .constructor<float, float, float>("x", "y", "z")
  *     .field<&Vector3::x>("x")
- *     .method<&Vector3::dot>("dot")
- *     .method<&scaleInPlace>("scale")   // Vector3& scaleInPlace(Vector3&, float)
+ *     .method<&Vector3::dot>("dot", "other")
+ *     .method<&scaleInPlace>("scale", "scalar")   // Vector3& scaleInPlace(Vector3&, float)
+ *     .rawMethod("get", &get, "fun(out?: Vector3): Vector3")
  *     .operators<ScriptOperator::Add, ScriptOperator::Multiply>()
  *     .constant("UP", Vector3::UP);
  *
  * The wrappers are made at compile time from the function types, so a call costs the reading
- * of its arguments and nothing else. A method may be a member function or a free function
- * whose first parameter is the value; a function that returns a reference to that value
- * gives back the same Lua value, so in-place methods chain without copies. Overloads and
- * default arguments are invisible to templates: wrap them in a free function. The tables
- * stay on the Lua stack while the object lives, so make it, chain the calls and drop it.
+ * of its arguments and nothing else; the types code editors see come from the same function
+ * types, and the build stops when the parameter names do not match their count. A method may
+ * be a member function or a free function whose first parameter is the value; a function
+ * that returns a reference to that value gives back the same Lua value, so in-place methods
+ * chain without copies. Overloads and default arguments are invisible to templates: wrap them
+ * in a free function, or write a raw one with each way to call it. The tables stay on the Lua
+ * stack while the object lives, so make it, chain the calls and drop it.
  */
 template<typename T>
   requires(ScriptValue<T> || ScriptHandle<T>)
@@ -706,6 +852,11 @@ class ScriptClass
       m_base(lua_gettop(state) + 1)
   {
     ScriptDetail::beginValueClass(state, getScriptTypeName<T>());
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (ScriptApiDescription* description = ScriptApiDescription::find(state)) {
+        m_api = &description->addType(getScriptTypeName<T>(), ScriptApiTypeKind::Class);
+      }
+    }
   }
 
   ~ScriptClass() { lua_settop(m_state, m_base - 1); }
@@ -718,13 +869,26 @@ class ScriptClass
   /**
    * Scripts call Name(args...); constructors are told apart by how many arguments they take.
    */
-  template<typename... A>
+  template<typename... A, typename... Names>
   ScriptClass&
-  constructor()
+  constructor(const Names... parameterNames)
   {
     static_assert(ScriptValue<T>, "Only value types are made by scripts.");
+    static_assert(sizeof...(Names) == sizeof...(A), "Name every parameter of the constructor.");
     lua_pushcfunction(m_state, (&ScriptDetail::construct<T, A...>));
     lua_rawseti(m_state, slot(Slot::Constructors), static_cast<lua_Integer>(sizeof...(A)));
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        const std::array<const ANSICHAR*, sizeof...(Names)> names{parameterNames...};
+        m_api->constructors.push_back(
+            {ScriptDetail::describeParameters<std::tuple<A...>, 0>(
+                 names.data(), std::index_sequence_for<A...>()),
+             getScriptTypeName<T>()});
+      }
+    }
+    else {
+      ScriptDetail::ignore(parameterNames...);
+    }
     return *this;
   }
 
@@ -732,23 +896,42 @@ class ScriptClass
    * A constructor made by a free function that returns T, for when T's own constructors do
    * not fit (Quaternion() must be the identity, not zero).
    */
-  template<auto Function>
+  template<auto Function, typename... Names>
   ScriptClass&
-  constructorFunction()
+  constructorFunction(const Names... parameterNames)
   {
     using Arguments = typename ScriptDetail::FunctionTraits<decltype(Function)>::Arguments;
+    static_assert(sizeof...(Names) == std::tuple_size_v<Arguments>,
+                  "Name every parameter of the constructor.");
     lua_pushcfunction(m_state, &ScriptDetail::constructWithFunction<Function>);
     lua_rawseti(m_state, slot(Slot::Constructors),
                 static_cast<lua_Integer>(std::tuple_size_v<Arguments>));
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        const std::array<const ANSICHAR*, sizeof...(Names)> names{parameterNames...};
+        m_api->constructors.push_back(ScriptDetail::describeFunction<Function, 0>(names));
+      }
+    }
+    else {
+      ScriptDetail::ignore(parameterNames...);
+    }
     return *this;
   }
 
-  template<auto Function>
+  /**
+   * Called as value:name(args...). Name the parameters after the value it is called on.
+   */
+  template<auto Function, typename... Names>
   ScriptClass&
-  method(const ANSICHAR* name)
+  method(const ANSICHAR* name, const Names... parameterNames)
   {
+    using Arguments = typename ScriptDetail::FunctionTraits<decltype(Function)>::Arguments;
+    constexpr SIZE_T kSelf = ScriptDetail::getSelfArgumentCount<Function>();
+    static_assert(sizeof...(Names) + kSelf == std::tuple_size_v<Arguments>,
+                  "Name every parameter of the method, after the value it is called on.");
     lua_pushcfunction(m_state, &ScriptDetail::callFunction<Function>);
     lua_setfield(m_state, slot(Slot::Members), name);
+    recordFunction<Function, kSelf>(name, true, parameterNames...);
     return *this;
   }
 
@@ -764,6 +947,7 @@ class ScriptClass
     lua_setfield(m_state, slot(Slot::Members), name);
     ScriptDetail::pushAccessor(m_state, &ScriptDetail::setField<Member>);
     lua_setfield(m_state, slot(Slot::Setters), name);
+    recordField<typename ScriptDetail::MemberTraits<decltype(Member)>::Value>(name);
     return *this;
   }
 
@@ -781,38 +965,54 @@ class ScriptClass
       ScriptDetail::pushAccessor(m_state, &ScriptDetail::setProperty<Setter>);
       lua_setfield(m_state, slot(Slot::Setters), name);
     }
+    recordField<typename ScriptDetail::FunctionTraits<decltype(Getter)>::Return>(name);
     return *this;
   }
 
   /**
    * A Lua C function as it is, for what the generated wrappers cannot express (optional or
-   * varying arguments). It reads the value at index 1.
+   * varying arguments). It reads the value at index 1. Each signature is one way to call it,
+   * written for code editors as "fun(name: type, name?: type): result", without the value.
    */
+  template<typename... Signatures>
   ScriptClass&
-  rawMethod(const ANSICHAR* name, const lua_CFunction function)
+  rawMethod(const ANSICHAR* name, const lua_CFunction function,
+            const Signatures... signatures)
   {
+    static_assert(sizeof...(Signatures) > 0,
+                  "Write how the method is called: \"fun(x: number): number\".");
     lua_pushcfunction(m_state, function);
     lua_setfield(m_state, slot(Slot::Members), name);
+    recordRawFunction(name, true, signatures...);
     return *this;
   }
 
+  template<typename... Signatures>
   ScriptClass&
-  rawStaticFunction(const ANSICHAR* name, const lua_CFunction function)
+  rawStaticFunction(const ANSICHAR* name, const lua_CFunction function,
+                    const Signatures... signatures)
   {
+    static_assert(sizeof...(Signatures) > 0,
+                  "Write how the function is called: \"fun(x: number): number\".");
     lua_pushcfunction(m_state, function);
     lua_setfield(m_state, slot(Slot::Class), name);
+    recordRawFunction(name, false, signatures...);
     return *this;
   }
 
   /**
    * Called on the class: Name.function(args...).
    */
-  template<auto Function>
+  template<auto Function, typename... Names>
   ScriptClass&
-  staticFunction(const ANSICHAR* name)
+  staticFunction(const ANSICHAR* name, const Names... parameterNames)
   {
+    using Arguments = typename ScriptDetail::FunctionTraits<decltype(Function)>::Arguments;
+    static_assert(sizeof...(Names) == std::tuple_size_v<Arguments>,
+                  "Name every parameter of the function.");
     lua_pushcfunction(m_state, &ScriptDetail::callFunction<Function>);
     lua_setfield(m_state, slot(Slot::Class), name);
+    recordFunction<Function, 0>(name, false, parameterNames...);
     return *this;
   }
 
@@ -826,6 +1026,7 @@ class ScriptClass
     static_assert(ScriptValue<T>, "Only value types have value constants.");
     ScriptTraits<T>::push(m_state, value);
     lua_setfield(m_state, slot(Slot::Constants), name);
+    recordConstant(name, getScriptTypeName<T>());
     return *this;
   }
 
@@ -834,6 +1035,7 @@ class ScriptClass
   {
     lua_pushnumber(m_state, static_cast<lua_Number>(value));
     lua_setfield(m_state, slot(Slot::Class), name);
+    recordConstant(name, "number");
     return *this;
   }
 
@@ -846,6 +1048,11 @@ class ScriptClass
   operators()
   {
     (ScriptDetail::setOperator<T, Ops>(m_state, slot(Slot::Metatable)), ...);
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        (ScriptDetail::describeOperator<T, Ops>(m_api->operators), ...);
+      }
+    }
     return *this;
   }
 
@@ -871,8 +1078,137 @@ class ScriptClass
     return m_base + static_cast<int32>(which);
   }
 
+  template<auto Function, SIZE_T First, typename... Names>
+  void
+  recordFunction(const ANSICHAR* name, const bool bMethod, const Names... parameterNames)
+  {
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        const std::array<const ANSICHAR*, sizeof...(Names)> names{parameterNames...};
+        ScriptApiFunction& function = m_api->functions.emplace_back();
+        function.name = name;
+        function.bMethod = bMethod;
+        function.signatures.push_back(ScriptDetail::describeFunction<Function, First>(names));
+      }
+    }
+    else {
+      ScriptDetail::ignore(name, bMethod, parameterNames...);
+    }
+  }
+
+  template<typename... Signatures>
+  void
+  recordRawFunction(const ANSICHAR* name, const bool bMethod, const Signatures... signatures)
+  {
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        const ANSICHAR* const texts[] = {signatures...};
+        ScriptApiFunction& function = m_api->functions.emplace_back();
+        function.name = name;
+        function.bMethod = bMethod;
+        ScriptApiDescription::addSignatures(function, texts);
+      }
+    }
+    else {
+      ScriptDetail::ignore(name, bMethod, signatures...);
+    }
+  }
+
+  template<typename Value>
+  void
+  recordField(const ANSICHAR* name)
+  {
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        m_api->fields.push_back(
+            {name, ScriptDetail::getLuaTypeName<std::remove_cvref_t<Value>>()});
+      }
+    }
+    else {
+      ScriptDetail::ignore(name);
+    }
+  }
+
+  void
+  recordConstant(const ANSICHAR* name, const ANSICHAR* type)
+  {
+    if constexpr (ScriptDetail::RECORD_API) {
+      if (m_api) {
+        m_api->constants.push_back({name, type});
+      }
+    }
+    else {
+      ScriptDetail::ignore(name, type);
+    }
+  }
+
   lua_State* m_state;
   int32 m_base;
+  // Where registrations are described; null when nothing records them.
+  ScriptApiType* m_api = nullptr;
+};
+
+/**
+ * Exists so a global table of functions (Input, Scene) is registered and described the same
+ * way a type is:
+ *
+ *   ScriptTable(state, "Scene")
+ *     .rawFunction("find", &findInScene, "fun(name: string): GameObject?");
+ *
+ * The global is set when the object is destroyed, so make it, chain the calls and drop it.
+ */
+class CH_CORE_EXPORT ScriptTable
+{
+ public:
+  /**
+   * description is what code editors show for the table.
+   */
+  ScriptTable(lua_State* state, const ANSICHAR* name, const ANSICHAR* description = "");
+
+  ~ScriptTable();
+
+  ScriptTable(const ScriptTable&) = delete;
+
+  ScriptTable&
+  operator=(const ScriptTable&) = delete;
+
+  /**
+   * Called as Name.name(args...); each signature is one way to call it, written as in
+   * ScriptClass::rawMethod.
+   */
+  template<typename... Signatures>
+  ScriptTable&
+  rawFunction(const ANSICHAR* name, const lua_CFunction function,
+              const Signatures... signatures)
+  {
+    static_assert(sizeof...(Signatures) > 0,
+                  "Write how the function is called: \"fun(x: number): number\".");
+    const ANSICHAR* const texts[] = {signatures...};
+    setFunction(name, function, texts);
+    return *this;
+  }
+
+  /**
+   * Tells code editors about a value the engine keeps in the table (Time.deltaTime).
+   */
+  ScriptTable&
+  describeField(const ANSICHAR* name, const ANSICHAR* type);
+
+  /**
+   * Where the table is on the Lua stack while this lives.
+   */
+  NODISCARD FORCEINLINE int32
+  getIndex() const noexcept { return m_index; }
+
+ private:
+  void
+  setFunction(const ANSICHAR* name, lua_CFunction function,
+              Span<const ANSICHAR* const> signatures);
+
+  lua_State* m_state;
+  const ANSICHAR* m_name;
+  int32 m_index;
+  ScriptApiType* m_api = nullptr;
 };
 
 } // namespace chEngineSDK

@@ -47,6 +47,7 @@
 #include "chProjectBrowserUI.h"
 #include "chScene.h"
 #include "chSceneManager.h"
+#include "chScriptDefinitionsUI.h"
 #include "chScriptManager.h"
 #include "chStringUtils.h"
 
@@ -419,6 +420,7 @@ EditorApplication::initializeEditorComponents() {
   assetManager.initialize();
   assetManager.lazyLoadAssetsFromDirectory(EnginePaths::getGameAssetDirectory());
   ScriptManager::startUp();
+  ScriptDefinitionsUI::requestUpdate();
 
   m_sceneRenderer = chMakeUnique<SceneRenderer>();
   m_viewportGrid = chMakeUnique<ViewportGrid>();
@@ -565,6 +567,7 @@ EditorApplication::renderUI()
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
   PackageDialog::render();
+  ScriptDefinitionsUI::render();
   ProjectBrowserUI::renderPopup();
   EditorScene::render(m_contentAssetUI->getCurrentFolderPath());
 

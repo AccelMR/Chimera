@@ -621,59 +621,92 @@ getCursorMode(lua_State* state)
 void
 ScriptBindings::registerInput(lua_State* state)
 {
-  const luaL_Reg inputFunctions[] = {{"findAction", &findAction},
-                                     {"getActionCount", &getActionCount},
-                                     {"getActionName", &getActionName},
-                                     {"getActionType", &getActionType},
-                                     {"getActionContext", &getActionContext},
-                                     {"isActionDown", &isActionDown},
-                                     {"wasActionPressed", &wasActionPressed},
-                                     {"wasActionReleased", &wasActionReleased},
-                                     {"getActionValue", &getActionValue},
-                                     {"getActionValue2D", &getActionValue2D},
-                                     {"setContextEnabled", &setContextEnabled},
-                                     {"isContextEnabled", &isContextEnabled},
-                                     {"isKeyDown", &isKeyDown},
-                                     {"wasKeyPressed", &wasKeyPressed},
-                                     {"wasKeyReleased", &wasKeyReleased},
-                                     {"getAxis", &getAxis},
-                                     {"getAxis2D", &getAxis2D},
-                                     {"getMousePosition", &getMousePosition},
-                                     {"getMouseDelta", &getMouseDelta},
-                                     {"getMouseWheel", &getMouseWheel},
-                                     {"isGameInputEnabled", &isGameInputEnabled},
-                                     {"getKeyName", &getKeyName},
-                                     {"getKeyDisplayName", &getKeyDisplayName},
-                                     {"isGamepadConnected", &isGamepadConnected},
-                                     {"getGamepadType", &getGamepadType},
-                                     {"getLastGamepad", &getLastGamepad},
-                                     {"getPlayerCount", &getPlayerCount},
-                                     {"setPlayerCount", &setPlayerCount},
-                                     {"setPlayerDevices", &setPlayerDevices},
-                                     {"getBindings", &getBindings},
-                                     {"getDefaultBindings", &getDefaultBindings},
-                                     {"setBinding", &setBinding},
-                                     {"removeBinding", &removeBinding},
-                                     {"resetBindings", &resetBindings},
-                                     {"resetAllBindings", &resetAllBindings},
-                                     {"findActionsUsingKey", &findActionsUsingKey},
-                                     {"saveUserBindings", &saveUserBindings},
-                                     {"captureNextKey", &captureNextKey},
-                                     {"cancelKeyCapture", &cancelKeyCapture},
-                                     {"isCapturingKey", &isCapturingKey},
-                                     {"rumble", &rumble},
-                                     {"setCursorMode", &setCursorMode},
-                                     {"getCursorMode", &getCursorMode},
-                                     {nullptr, nullptr}};
-  luaL_newlib(state, inputFunctions);
-  lua_setglobal(state, "Input");
+  ScriptApiDescription* const api = ScriptApiDescription::find(state);
+  if (api) {
+    api->addAlias("InputAction", "integer|string");
+    api->addAlias("InputKey", "Key|string");
+    api->addAlias("InputActionType", "\"Button\"|\"Axis1D\"|\"Axis2D\"");
+    api->addAlias("GamepadType",
+                  "\"Unknown\"|\"Standard\"|\"Xbox\"|\"PlayStation\"|\"Nintendo\"");
+    api->addAlias("CursorMode", "\"Normal\"|\"Hidden\"|\"Locked\"");
+  }
+
+  const ANSICHAR* const kActionButton = "fun(action: InputAction, player?: integer): boolean";
+  const ANSICHAR* const kKeyButton = "fun(key: InputKey, gamepad?: integer): boolean";
+  const ANSICHAR* const kMouse = "fun(out?: Vector2): Vector2";
+  ScriptTable(state, "Input",
+              "Game input. Actions come from Input.ini; look their ids up once with "
+              "findAction. Players and gamepads count from 1.")
+      .rawFunction("findAction", &findAction, "fun(name: string): integer?")
+      .rawFunction("getActionCount", &getActionCount, "fun(): integer")
+      .rawFunction("getActionName", &getActionName, "fun(action: InputAction): string")
+      .rawFunction("getActionType", &getActionType,
+                   "fun(action: InputAction): InputActionType")
+      .rawFunction("getActionContext", &getActionContext, "fun(action: InputAction): string")
+      .rawFunction("isActionDown", &isActionDown, kActionButton)
+      .rawFunction("wasActionPressed", &wasActionPressed, kActionButton)
+      .rawFunction("wasActionReleased", &wasActionReleased, kActionButton)
+      .rawFunction("getActionValue", &getActionValue,
+                   "fun(action: InputAction, player?: integer): number")
+      .rawFunction("getActionValue2D", &getActionValue2D,
+                   "fun(action: InputAction, out?: Vector2, player?: integer): Vector2",
+                   "fun(action: InputAction, player: integer, out?: Vector2): Vector2")
+      .rawFunction("setContextEnabled", &setContextEnabled,
+                   "fun(context: string, enabled: boolean)")
+      .rawFunction("isContextEnabled", &isContextEnabled, "fun(context: string): boolean")
+      .rawFunction("isKeyDown", &isKeyDown, kKeyButton)
+      .rawFunction("wasKeyPressed", &wasKeyPressed, kKeyButton)
+      .rawFunction("wasKeyReleased", &wasKeyReleased, kKeyButton)
+      .rawFunction("getAxis", &getAxis, "fun(key: InputKey, gamepad?: integer): number")
+      .rawFunction("getAxis2D", &getAxis2D,
+                   "fun(key: InputKey, out?: Vector2, gamepad?: integer): Vector2",
+                   "fun(key: InputKey, gamepad: integer, out?: Vector2): Vector2")
+      .rawFunction("getMousePosition", &getMousePosition, kMouse)
+      .rawFunction("getMouseDelta", &getMouseDelta, kMouse)
+      .rawFunction("getMouseWheel", &getMouseWheel, kMouse)
+      .rawFunction("isGameInputEnabled", &isGameInputEnabled, "fun(): boolean")
+      .rawFunction("getKeyName", &getKeyName, "fun(key: InputKey): string")
+      .rawFunction("getKeyDisplayName", &getKeyDisplayName,
+                   "fun(key: InputKey, player?: integer): string")
+      .rawFunction("isGamepadConnected", &isGamepadConnected, "fun(gamepad: integer): boolean")
+      .rawFunction("getGamepadType", &getGamepadType, "fun(gamepad: integer): GamepadType")
+      .rawFunction("getLastGamepad", &getLastGamepad, "fun(): integer?")
+      .rawFunction("getPlayerCount", &getPlayerCount, "fun(): integer")
+      .rawFunction("setPlayerCount", &setPlayerCount, "fun(count: integer)")
+      .rawFunction("setPlayerDevices", &setPlayerDevices,
+                   "fun(player: integer, keyboardAndMouse: boolean, gamepads?: integer[])")
+      .rawFunction("getBindings", &getBindings, "fun(action: InputAction): string[]")
+      .rawFunction("getDefaultBindings", &getDefaultBindings,
+                   "fun(action: InputAction): string[]")
+      .rawFunction("setBinding", &setBinding,
+                   "fun(action: InputAction, index: integer, binding: string): boolean")
+      .rawFunction("removeBinding", &removeBinding,
+                   "fun(action: InputAction, index: integer): boolean")
+      .rawFunction("resetBindings", &resetBindings, "fun(action: InputAction)")
+      .rawFunction("resetAllBindings", &resetAllBindings, "fun()")
+      .rawFunction("findActionsUsingKey", &findActionsUsingKey,
+                   "fun(key: InputKey): integer[]")
+      .rawFunction("saveUserBindings", &saveUserBindings, "fun(): boolean")
+      .rawFunction("captureNextKey", &captureNextKey, "fun(callback: fun(key: Key))")
+      .rawFunction("cancelKeyCapture", &cancelKeyCapture, "fun()")
+      .rawFunction("isCapturingKey", &isCapturingKey, "fun(): boolean")
+      .rawFunction("rumble", &rumble,
+                   "fun(player: integer, low: number, high: number, milliseconds: integer): "
+                   "boolean")
+      .rawFunction("setCursorMode", &setCursorMode, "fun(mode: CursorMode)")
+      .rawFunction("getCursorMode", &getCursorMode, "fun(): CursorMode");
 
   // Key.W, Key.GamepadSouth...: the names Input.ini uses, as numbers so a check costs nothing.
+  ScriptApiEnum* const keyEnum = api ? &api->addEnum("Key") : nullptr;
   lua_createtable(state, 0, static_cast<int32>(InputKeyUtils::KEY_COUNT));
   for (uint32 i = 1; i < InputKeyUtils::KEY_COUNT; ++i) {
-    ScriptTraits<StringView>::push(state, InputKeyUtils::getName(static_cast<InputKey>(i)));
+    const StringView name = InputKeyUtils::getName(static_cast<InputKey>(i));
+    ScriptTraits<StringView>::push(state, name);
     lua_pushinteger(state, static_cast<lua_Integer>(i));
     lua_rawset(state, -3);
+    if (keyEnum) {
+      keyEnum->values.push_back({String(name), static_cast<int64>(i)});
+    }
   }
   lua_setglobal(state, "Key");
 }

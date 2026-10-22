@@ -674,45 +674,49 @@ void
 ScriptBindings::registerObjects(lua_State* state)
 {
   ScriptClass<GameObject>(state)
-      .rawMethod("isValid", &isValid)
+      .rawMethod("isValid", &isValid, "fun(): boolean")
       .method<&getName>("getName")
-      .method<&setName>("setName")
-      .rawMethod("getTransform", &getTransform)
-      .rawMethod("getParent", &getParent)
+      .method<&setName>("setName", "name")
+      .rawMethod("getTransform", &getTransform, "fun(): Transform")
+      .rawMethod("getParent", &getParent, "fun(): GameObject?")
       .method<&getChildCount>("getChildCount")
-      .rawMethod("getChild", &getChild)
-      .rawMethod("findChild", &findChild)
-      .rawMethod("findDescendant", &findDescendant)
-      .rawMethod("getScript", &getScript)
-      .rawMethod("setScriptEnabled", &setScriptEnabled)
-      .rawMethod("isScriptEnabled", &isScriptEnabled);
+      .rawMethod("getChild", &getChild, "fun(index: integer): GameObject?")
+      .rawMethod("findChild", &findChild, "fun(name: string): GameObject?")
+      .rawMethod("findDescendant", &findDescendant, "fun(name: string): GameObject?")
+      .rawMethod("getScript", &getScript, "fun(name: string): Script?")
+      .rawMethod("setScriptEnabled", &setScriptEnabled, "fun(name: string, enabled: boolean)")
+      .rawMethod("isScriptEnabled", &isScriptEnabled, "fun(name: string): boolean");
   setToString(state, ScriptHandleType<GameObject>::NAME, &gameObjectToString);
 
+  const ANSICHAR* const kGetVector = "fun(out?: Vector3): Vector3";
+  const ANSICHAR* const kGetRotation = "fun(out?: Quaternion): Quaternion";
+  const ANSICHAR* const kNumbers = "fun(x: number, y: number, z: number)";
+  const ANSICHAR* const kEuler = "fun(pitch: number, yaw: number, roll: number)";
   ScriptClass<Transform>(state)
-      .rawMethod("getGameObject", &getGameObjectOfTransform)
-      .rawMethod("getLocalPosition", &getLocalPosition)
-      .rawMethod("setLocalPosition", &setLocalPosition)
-      .rawMethod("getWorldPosition", &getWorldPosition)
-      .rawMethod("setWorldPosition", &setWorldPositionScript)
-      .rawMethod("getLocalRotation", &getLocalRotation)
-      .rawMethod("setLocalRotation", &setLocalRotation)
-      .rawMethod("getWorldRotation", &getWorldRotation)
-      .rawMethod("setWorldRotation", &setWorldRotationScript)
-      .rawMethod("getLocalScale", &getLocalScale)
-      .rawMethod("setLocalScale", &setLocalScale)
-      .rawMethod("translateWorld", &translateWorld)
-      .rawMethod("translateLocal", &translateLocal)
-      .rawMethod("rotateLocal", &rotateLocal)
-      .rawMethod("rotateWorld", &rotateWorld)
-      .rawMethod("lookAt", &lookAt)
-      .rawMethod("getForward", &getForward)
-      .rawMethod("getRight", &getRight)
-      .rawMethod("getUp", &getUp);
+      .rawMethod("getGameObject", &getGameObjectOfTransform, "fun(): GameObject")
+      .rawMethod("getLocalPosition", &getLocalPosition, kGetVector)
+      .rawMethod("setLocalPosition", &setLocalPosition, "fun(position: Vector3)", kNumbers)
+      .rawMethod("getWorldPosition", &getWorldPosition, kGetVector)
+      .rawMethod("setWorldPosition", &setWorldPositionScript, "fun(position: Vector3)",
+                 kNumbers)
+      .rawMethod("getLocalRotation", &getLocalRotation, kGetRotation)
+      .rawMethod("setLocalRotation", &setLocalRotation, "fun(rotation: Quaternion)")
+      .rawMethod("getWorldRotation", &getWorldRotation, kGetRotation)
+      .rawMethod("setWorldRotation", &setWorldRotationScript, "fun(rotation: Quaternion)")
+      .rawMethod("getLocalScale", &getLocalScale, kGetVector)
+      .rawMethod("setLocalScale", &setLocalScale, "fun(scale: Vector3)", kNumbers)
+      .rawMethod("translateWorld", &translateWorld, "fun(offset: Vector3)", kNumbers)
+      .rawMethod("translateLocal", &translateLocal, "fun(offset: Vector3)", kNumbers)
+      .rawMethod("rotateLocal", &rotateLocal, kEuler)
+      .rawMethod("rotateWorld", &rotateWorld, kEuler)
+      .rawMethod("lookAt", &lookAt, "fun(point: Vector3)", kNumbers)
+      .rawMethod("getForward", &getForward, kGetVector)
+      .rawMethod("getRight", &getRight, kGetVector)
+      .rawMethod("getUp", &getUp, kGetVector);
   setToString(state, ScriptHandleType<Transform>::NAME, &transformToString);
 
-  const luaL_Reg sceneFunctions[] = {{"find", &findInScene}, {nullptr, nullptr}};
-  luaL_newlib(state, sceneFunctions);
-  lua_setglobal(state, "Scene");
+  ScriptTable(state, "Scene", "The scene of the running script.")
+      .rawFunction("find", &findInScene, "fun(name: string): GameObject?");
 }
 
 } // namespace chEngineSDK

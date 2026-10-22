@@ -1,5 +1,6 @@
 -- chimera-uuid: a1490e4f-44e8-4b1f-a570-9d6b572b8825
 -- Floats its object up and down around where it started, using Time.time.
+---@class Bobber : Script
 local Bobber = {}
 
 local HEIGHT = 0.75

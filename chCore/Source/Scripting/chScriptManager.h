@@ -22,6 +22,7 @@ class GameObject;
 class InputManager;
 class Scene;
 class ScriptAllocator;
+class ScriptApiDescription;
 class ScriptAsset;
 
 CH_LOG_DECLARE_EXTERN(CH_CORE_EXPORT, ScriptLog);
@@ -186,6 +187,12 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   void
   collectGarbage();
 
+  /**
+   * What scripts can call, for code editors; null outside the editor.
+   */
+  NODISCARD FORCEINLINE const ScriptApiDescription*
+  getApiDescription() const noexcept { return m_apiDescription.get(); }
+
  private:
   void
   openLibraries();
@@ -201,6 +208,7 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   protectedCall(int32 argumentCount);
 
   UniquePtr<ScriptAllocator> m_allocator;
+  UniquePtr<ScriptApiDescription> m_apiDescription;
   lua_State* m_state = nullptr;
   UnorderedMap<UUID, ScriptClassInfo> m_classes;
   Scene* m_currentScene = nullptr;

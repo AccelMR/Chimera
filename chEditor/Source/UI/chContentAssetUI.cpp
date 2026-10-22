@@ -1166,6 +1166,8 @@ ContentAssetUI::createScript()
   }
   script->setSource(StringUtils::format(
       "-- {0}: runs on every GameObject that has it while the game plays.\n"
+      "-- The line below tells code editors what self holds (gameObject, transform...).\n"
+      "---@class {0} : Script\n"
       "local {0} = {{\n"
       "  -- Fields set here are the defaults every object starts with (self.speed).\n"
       "  speed = 1,\n"

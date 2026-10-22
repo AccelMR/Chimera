@@ -6,6 +6,7 @@
 --   4: the cursor switches between normal and locked (Esc stops Play in the editor).
 local Input = Input
 
+---@class InputDemo : Script
 local InputDemo = {}
 
 local function describe(action)

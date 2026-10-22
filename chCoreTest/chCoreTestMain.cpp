@@ -62,6 +62,7 @@
 #include "chSceneHistory.h"
 #include "chSceneManager.h"
 #include "chScriptAllocator.h"
+#include "chScriptApi.h"
 #include "chScriptAsset.h"
 #include "chScriptBinder.h"
 #include "chScriptComponent.h"
@@ -5697,4 +5698,98 @@ TEST_CASE("chCore - Script input")
     REQUIRE_FALSE(scripts.runString("Input.setPlayerCount(9)"));
     input.setCursorMode(CursorMode::Normal);
   }
+}
+
+TEST_CASE("chCore - Script definitions")
+{
+  ScriptManager scripts(true);
+  const ScriptApiDescription* description = scripts.getApiDescription();
+#if USING(CH_EDITOR)
+  REQUIRE(description);
+  const String text = description->writeDefinitions();
+  const auto contains = [&text](const ANSICHAR* part) {
+    INFO(part);
+    CHECK(text.find(part) != String::npos);
+  };
+
+  SECTION("Value types")
+  {
+    contains("---@meta\n");
+    contains("---@class Vector3\n");
+    contains("---@field x number\n");
+    contains("---@field UP Vector3\n");
+    contains("---@operator add(Vector3): Vector3\n");
+    contains("---@operator mul(number): Vector3\n");
+    contains("---@operator unm: Vector3\n");
+    contains("---@overload fun(): Vector3\n");
+    contains("---@overload fun(x: number, y: number, z: number): Vector3\nVector3 = {}\n");
+    contains("---@param other Vector3\n---@return number\nfunction Vector3:dot(other) end\n");
+    contains("---@return Vector3\nfunction Vector3:normalize() end\n");
+    contains("function Vector3.Lerp(a, b, alpha) end\n");
+    contains("---@param degrees number\n---@return Quaternion\n"
+             "function Quaternion.FromAxisAngle(axis, degrees) end\n");
+    contains("---@field pitch number\n");
+    contains("---@class Color\n");
+  }
+
+  SECTION("Handles and libraries")
+  {
+    contains("---@return string\nfunction GameObject:getName() end\n");
+    contains("---@return GameObject?\nfunction GameObject:getParent() end\n");
+    contains("---@param position Vector3\n"
+             "---@overload fun(self: Transform, x: number, y: number, z: number)\n"
+             "function Transform:setLocalPosition(position) end\n");
+    contains("---@param out? Vector3\n---@return Vector3\n"
+             "function Transform:getWorldPosition(out) end\n");
+    contains("function Scene.find(name) end\n");
+    contains("---@param player? integer\n---@return boolean\n"
+             "function Input.isActionDown(action, player) end\n");
+    contains("---@param callback fun(key: Key)\nfunction Input.captureNextKey(callback) end\n");
+    contains("---@alias InputAction integer|string\n");
+    contains("---@enum Key\nKey = {\n");
+    contains("  W = ");
+    contains("---@field deltaTime number\n");
+    contains("---@param ... any\nfunction Log.info(...) end\n");
+    contains("---@class Script\n---@field gameObject GameObject\n");
+    CHECK(text.find("Script = {}") == String::npos);
+  }
+
+  SECTION("Every function has a signature and the file is Lua")
+  {
+    for (const UniquePtr<ScriptApiType>& type : description->getTypes()) {
+      for (const ScriptApiFunction& function : type->functions) {
+        INFO(type->name << "." << function.name);
+        CHECK_FALSE(function.signatures.empty());
+      }
+    }
+    lua_State* state = scripts.getState();
+    REQUIRE(luaL_loadbufferx(state, text.data(), text.size(), "=definitions", "t") == LUA_OK);
+    lua_pop(state, 1);
+  }
+
+  SECTION("Signatures")
+  {
+    ScriptApiSignature signature;
+    REQUIRE(ScriptApiDescription::parseSignature(
+        " fun(a: number, b?: fun(k: Key): string): boolean, integer ", signature));
+    CHECK(signature.parameters == "a: number, b?: fun(k: Key): string");
+    CHECK(signature.results == "boolean, integer");
+    REQUIRE(ScriptApiDescription::parseSignature("fun()", signature));
+    CHECK(signature.parameters.empty());
+    CHECK(signature.results.empty());
+    CHECK_FALSE(ScriptApiDescription::parseSignature("function(a)", signature));
+    CHECK_FALSE(ScriptApiDescription::parseSignature("fun(a", signature));
+    CHECK_FALSE(ScriptApiDescription::parseSignature("fun(a) number", signature));
+  }
+
+  SECTION("LuaLS configuration")
+  {
+    const String config = ScriptApiDescription::writeLuaLsConfig("Saved/ScriptDefinitions");
+    CHECK(config.find("\"workspace.library\": [\"Saved/ScriptDefinitions\"]") !=
+          String::npos);
+    CHECK(config.find("\"io\": \"disable\"") != String::npos);
+  }
+#else
+  CHECK_FALSE(description);
+#endif // USING(CH_EDITOR)
 }

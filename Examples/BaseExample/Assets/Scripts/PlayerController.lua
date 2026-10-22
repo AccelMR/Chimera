@@ -3,6 +3,7 @@
 -- relative to where the camera looks. Sprint runs faster and Jump hops with gravity.
 local Input = Input
 
+---@class PlayerController : Script
 local PlayerController = {}
 
 local WALK_SPEED = 4

@@ -187,4 +187,57 @@ beginValueClass(lua_State* state, const ANSICHAR* name)
 }
 
 } // namespace ScriptDetail
+
+/*
+ */
+ScriptTable::ScriptTable(lua_State* state, const ANSICHAR* name, const ANSICHAR* description)
+  : m_state(state),
+    m_name(name)
+{
+  lua_newtable(state);
+  m_index = lua_gettop(state);
+  if constexpr (ScriptDetail::RECORD_API) {
+    if (ScriptApiDescription* api = ScriptApiDescription::find(state)) {
+      m_api = &api->addType(name, ScriptApiTypeKind::Library);
+      m_api->description = description;
+    }
+  }
+  else {
+    ScriptDetail::ignore(description);
+  }
+}
+
+/*
+ */
+ScriptTable::~ScriptTable()
+{
+  lua_settop(m_state, m_index);
+  lua_setglobal(m_state, m_name);
+}
+
+/*
+ */
+ScriptTable&
+ScriptTable::describeField(const ANSICHAR* name, const ANSICHAR* type)
+{
+  if (m_api) {
+    m_api->constants.push_back({name, type});
+  }
+  return *this;
+}
+
+/*
+ */
+void
+ScriptTable::setFunction(const ANSICHAR* name, const lua_CFunction function,
+                         const Span<const ANSICHAR* const> signatures)
+{
+  lua_pushcfunction(m_state, function);
+  lua_setfield(m_state, m_index, name);
+  if (m_api) {
+    ScriptApiFunction& apiFunction = m_api->functions.emplace_back();
+    apiFunction.name = name;
+    ScriptApiDescription::addSignatures(apiFunction, signatures);
+  }
+}
 } // namespace chEngineSDK

@@ -4,6 +4,7 @@
 -- zoom (Zoom action).
 local Input = Input
 
+---@class FollowCamera : Script
 local FollowCamera = {}
 
 local TARGET_NAME = "Sphere"
