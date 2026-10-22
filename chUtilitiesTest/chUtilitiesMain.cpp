@@ -1875,6 +1875,8 @@ TEST_CASE("chUtilities - Format") {
     REQUIRE(StringUtils::format("{} {} {}", 42, -7, 18446744073709551615ull) ==
             "42 -7 18446744073709551615");
     REQUIRE(StringUtils::format("{} {} {} {}", 1.0, 0.1, 1e20, -2.5f) == "1 0.1 1e+20 -2.5");
+    // A float is written as a float: its double would read 0.10000000149011612.
+    REQUIRE(StringUtils::format("{} {:.2f}", 0.1f, 0.1f) == "0.1 0.10");
     REQUIRE(StringUtils::format("{}|{}|{}", 'a', true, false) == "a|true|false");
     REQUIRE(StringUtils::format("{}", static_cast<uint8>(65)) == "65");
     REQUIRE(StringUtils::format("{} {}", TestEnum::A, TestEnum::B) == "3 -2");
@@ -1916,6 +1918,7 @@ TEST_CASE("chUtilities - ToChars") {
   ANSICHAR number[StringUtils::MAX_FLOAT_CHARS];
   REQUIRE(StringUtils::toChars(number, 0.1) == "0.1");
   REQUIRE(StringUtils::toChars(number, -2.5f) == "-2.5");
+  REQUIRE(StringUtils::toChars(number, 0.1f) == "0.1");
   REQUIRE(StringUtils::toChars(number, -2.2250738585072014e-308) ==
           "-2.2250738585072014e-308");
 }

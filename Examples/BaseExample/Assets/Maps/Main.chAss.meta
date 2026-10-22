@@ -1,14 +1,3 @@
 [Asset]
 Created=1792616879
 EngineVersion=0.2.0.1
-
-[Import]
-SRGB=true
-GenerateMips=true
-ImportModel=true
-ExpandMode=Single
-SplitParts=false
-AutoAlphaMask=true
-ImportAnimations=true
-AnimationSampleRate=30
-Skeleton=Auto

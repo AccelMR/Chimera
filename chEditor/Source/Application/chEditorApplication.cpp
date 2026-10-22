@@ -791,6 +791,10 @@ EditorApplication::updateGameInput()
   if (bPlaying != m_bInputPlaying) {
     // Whatever the last run left (contexts, cursor, rumble) must not reach the next.
     input.resetGameState();
+    // Like the scene, keys a script changed during Play and did not save are thrown away.
+    if (!bPlaying) {
+      input.loadBindings();
+    }
     m_bInputPlaying = bPlaying;
     m_bFocusViewport = bPlaying;
   }

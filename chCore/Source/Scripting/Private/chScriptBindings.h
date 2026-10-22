@@ -33,6 +33,12 @@ class ScriptBindings
    */
   static void
   registerObjects(lua_State* state);
+
+  /**
+   * Input (actions, keys, rebinding, rumble, cursor) and Key.
+   */
+  static void
+  registerInput(lua_State* state);
 };
 
 } // namespace chEngineSDK

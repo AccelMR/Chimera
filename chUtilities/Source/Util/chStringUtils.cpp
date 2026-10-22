@@ -63,14 +63,17 @@ writeInteger(ANSICHAR* buffer, SIZE_T size, T value, ANSICHAR type) noexcept
 }
 
 // Without type or precision a float gets the shortest text that reads back as the same
-// value, like std::format.
+// value in its own type (0.1f is "0.1", not the text of the double it widens to), like
+// std::format.
 StringView
-writeFloat(ANSICHAR* buffer, SIZE_T size, double value, const FormatSpec& spec) noexcept
+writeFloat(ANSICHAR* buffer, SIZE_T size, double value, bool bSinglePrecision,
+           const FormatSpec& spec) noexcept
 {
   ANSICHAR* const end = buffer + size;
   std::to_chars_result result;
   if (spec.type == '\0' && spec.precision < 0) {
-    result = std::to_chars(buffer, end, value);
+    result = bSinglePrecision ? std::to_chars(buffer, end, static_cast<float>(value))
+                              : std::to_chars(buffer, end, value);
   }
   else {
     const std::chars_format format = spec.type == 'f'   ? std::chars_format::fixed
@@ -286,9 +289,10 @@ StringUtils::unsignedToChars(ANSICHAR* buffer, SIZE_T size, uint64 value) noexce
 /*
  */
 StringView
-StringUtils::floatToChars(ANSICHAR* buffer, SIZE_T size, double value) noexcept
+StringUtils::floatToChars(ANSICHAR* buffer, SIZE_T size, double value,
+                          bool bSinglePrecision) noexcept
 {
-  return writeFloat(buffer, size, value, FormatSpec());
+  return writeFloat(buffer, size, value, bSinglePrecision, FormatSpec());
 }
 
 /*
@@ -461,7 +465,8 @@ StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
       text = writeInteger(numberBuffer, kNumberBufferSize, arg.unsignedValue, spec.type);
       break;
     case FormatArgType::Float:
-      text = writeFloat(numberBuffer, kNumberBufferSize, arg.floatValue, spec);
+      text = writeFloat(numberBuffer, kNumberBufferSize, arg.floatValue, arg.bSinglePrecision,
+                        spec);
       break;
     }
     appendPadded(result, text, spec, isNumber);

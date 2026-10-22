@@ -258,11 +258,17 @@ InputManager::processEvent(const DisplayEvent& event)
 void
 InputManager::updateActions()
 {
+  if (m_capturedKey != InputKey::None && !m_state.isDown(m_capturedKey)) {
+    m_capturedKey = InputKey::None;
+  }
+
   // The captured key goes to the menu only, also in the frame it is captured.
   const bool bCapturing = static_cast<bool>(m_keyCapture);
   if (bCapturing) {
     const InputKey key = m_state.getFirstPressedKey();
     if (key != InputKey::None) {
+      // Still held on the next frames, it would trigger the action it was just bound to.
+      m_capturedKey = key;
       // Moved out first: the callback may start another capture or change bindings.
       Function<void(InputKey)> callback = std::move(m_keyCapture);
       m_keyCapture = nullptr;
@@ -297,7 +303,8 @@ InputManager::evaluateAction(const Action& action, const Player& player, bool bE
   if (bEnabled) {
     for (const InputBinding& binding : action.bindings) {
       const InputDevice device = InputKeyUtils::getDevice(binding.key);
-      if (device != InputDevice::Gamepad && !player.bKeyboardMouse) {
+      if ((device != InputDevice::Gamepad && !player.bKeyboardMouse) ||
+          binding.key == m_capturedKey) {
         continue;
       }
       const uint32 mask = player.gamepadMask;
@@ -772,6 +779,7 @@ InputManager::resetGameState()
     context.bEnabled = true;
   }
   m_keyCapture = nullptr;
+  m_capturedKey = InputKey::None;
   m_cursorMode = CursorMode::Normal;
   applyCursorMode();
   const uint32 connected = m_state.getConnectedGamepads();

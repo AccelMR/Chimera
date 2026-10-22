@@ -264,7 +264,8 @@ class CH_CORE_EXPORT InputManager : public Module<InputManager>
 
   /**
    * The next key, button or axis past the button threshold that goes down is given to
-   * callback once, instead of reaching the actions. For rebinding menus.
+   * callback once, instead of reaching the actions, which also ignore it until it is
+   * released. For rebinding menus.
    */
   void
   captureNextKey(Function<void(InputKey)> callback);
@@ -390,6 +391,8 @@ class CH_CORE_EXPORT InputManager : public Module<InputManager>
   Array<Player, MAX_PLAYERS> m_players;
   uint32 m_playerCount = 1;
   Function<void(InputKey)> m_keyCapture;
+  // The last captured key; the actions ignore it until it is released.
+  InputKey m_capturedKey = InputKey::None;
   DisplaySurface* m_window = nullptr;
   CursorMode m_cursorMode = CursorMode::Normal;
   CursorMode m_appliedCursorMode = CursorMode::Normal;

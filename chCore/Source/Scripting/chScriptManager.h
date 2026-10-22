@@ -19,6 +19,7 @@ struct lua_State;
 
 namespace chEngineSDK {
 class GameObject;
+class InputManager;
 class Scene;
 class ScriptAllocator;
 class ScriptAsset;
@@ -115,6 +116,23 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   NODISCARD FORCEINLINE Scene*
   getCurrentScene() const noexcept { return m_currentScene; }
 
+  /**
+   * The input the Input table reads: the InputManager module when it runs while this starts;
+   * tests give a local one. Without one, Input functions raise an error.
+   */
+  FORCEINLINE void
+  setInputManager(InputManager* input) noexcept { m_input = input; }
+
+  NODISCARD FORCEINLINE InputManager*
+  getInputManager() const noexcept { return m_input; }
+
+  /**
+   * Gives the next key that goes down to the Lua function behind callback (a registry
+   * reference this takes over), called with the key's number. Needs an InputManager.
+   */
+  void
+  captureNextKey(int32 callback);
+
   void
   releaseReference(int32 reference) noexcept;
 
@@ -127,6 +145,12 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
 
   NODISCARD bool
   callMethod(int32 function, int32 instance, float deltaTime);
+
+  /**
+   * Calls function(argument), protected. False when it raised an error (logged).
+   */
+  NODISCARD bool
+  callFunction(int32 function, int64 argument);
 
   /**
    * Sets Time.deltaTime and advances Time.time and Time.frameCount, once per frame before
@@ -180,6 +204,9 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   lua_State* m_state = nullptr;
   UnorderedMap<UUID, ScriptClassInfo> m_classes;
   Scene* m_currentScene = nullptr;
+  InputManager* m_input = nullptr;
+  // Alive while the InputManager holds a key capture a script asked for.
+  WeakPtr<void> m_keyCapture;
   int32 m_timeTable = ScriptClassInfo::NO_REFERENCE;
   double m_time = 0.0;
   float m_deltaTime = 0.0f;

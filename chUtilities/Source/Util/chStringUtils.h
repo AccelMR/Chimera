@@ -268,7 +268,7 @@ class CH_UTILITY_EXPORT StringUtils
   {
     if constexpr (std::is_floating_point_v<T>) {
       static_assert(N >= MAX_FLOAT_CHARS, "The buffer is too small for a float.");
-      return floatToChars(buffer, N, static_cast<double>(value));
+      return floatToChars(buffer, N, static_cast<double>(value), std::is_same_v<T, float>);
     }
     else if constexpr (std::is_signed_v<T>) {
       static_assert(N >= MAX_INTEGER_CHARS, "The buffer is too small for an integer.");
@@ -319,6 +319,8 @@ class CH_UTILITY_EXPORT StringUtils
       bool boolValue;
     };
     StringView text;
+    // A float written without a spec gets the shortest text of the float, not of the double.
+    bool bSinglePrecision = false;
   };
 
   template<typename T>
@@ -335,7 +337,7 @@ class CH_UTILITY_EXPORT StringUtils
   unsignedToChars(ANSICHAR* buffer, SIZE_T size, uint64 value) noexcept;
 
   NODISCARD static StringView
-  floatToChars(ANSICHAR* buffer, SIZE_T size, double value) noexcept;
+  floatToChars(ANSICHAR* buffer, SIZE_T size, double value, bool bSinglePrecision) noexcept;
 
   template<typename T>
   static constexpr bool NEEDS_STRING = formatArgTypeOf<T>() == FormatArgType::Text &&
@@ -576,6 +578,7 @@ StringUtils::makeFormatArg(T&& value, String*& nextString)
   }
   else if constexpr (type == FormatArgType::Float) {
     arg.floatValue = static_cast<double>(value);
+    arg.bSinglePrecision = std::is_same_v<Type, float>;
   }
   else if constexpr (std::is_array_v<std::remove_reference_t<T>> &&
                      std::is_convertible_v<Type, StringView>) {

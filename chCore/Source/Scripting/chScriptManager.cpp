@@ -11,6 +11,7 @@
 
 #include "chAssetManager.h"
 #include "chConsoleVariable.h"
+#include "chInputManager.h"
 #include "chScriptAllocator.h"
 #include "chScriptAsset.h"
 #include "chScriptBinder.h"
@@ -180,6 +181,32 @@ readClass(lua_State* state)
   takeFunction("onDestroy", info.onDestroy);
   return 0;
 }
+
+/*
+ * Shared by the copies of the capture callback, so the Lua function is released once, when
+ * the InputManager drops the callback: after calling it, on a new capture, on a cancel, or
+ * when the game state is reset at Stop.
+ */
+struct ScriptKeyCapture
+{
+  ScriptKeyCapture(lua_State* inState, const int32 inCallback) noexcept
+    : state(inState),
+      callback(inCallback)
+  {}
+
+  ~ScriptKeyCapture()
+  {
+    luaL_unref(state, LUA_REGISTRYINDEX, callback);
+  }
+
+  ScriptKeyCapture(const ScriptKeyCapture&) = delete;
+
+  ScriptKeyCapture&
+  operator=(const ScriptKeyCapture&) = delete;
+
+  lua_State* state;
+  int32 callback;
+};
 } // namespace
 
 /*
@@ -191,7 +218,8 @@ ScriptManager::ScriptManager()
 /*
  */
 ScriptManager::ScriptManager(const bool bPoolAllocator)
-  : m_allocator(chMakeUnique<ScriptAllocator>(bPoolAllocator))
+  : m_allocator(chMakeUnique<ScriptAllocator>(bPoolAllocator)),
+    m_input(InputManager::isStarted() ? &InputManager::instance() : nullptr)
 {
   m_state = lua_newstate(&ScriptAllocator::allocate, m_allocator.get());
   CH_ASSERT(m_state && "Not enough memory to start the script runtime.");
@@ -209,6 +237,10 @@ ScriptManager::ScriptManager(const bool bPoolAllocator)
  */
 ScriptManager::~ScriptManager()
 {
+  // The capture's callback lives in this state, so it must go before the state does.
+  if (m_input && !m_keyCapture.expired()) {
+    m_input->cancelKeyCapture();
+  }
   lua_close(m_state);
 }
 
@@ -252,6 +284,7 @@ ScriptManager::openLibraries()
 
   ScriptBindings::registerMath(m_state);
   ScriptBindings::registerObjects(m_state);
+  ScriptBindings::registerInput(m_state);
 }
 
 /*
@@ -376,6 +409,20 @@ ScriptManager::createInstance(const ScriptClassInfo& scriptClass, GameObject& ow
 /*
  */
 void
+ScriptManager::captureNextKey(const int32 callback)
+{
+  CH_ASSERT(m_input);
+  const SPtr<ScriptKeyCapture> capture = chMakeShared<ScriptKeyCapture>(m_state, callback);
+  m_keyCapture = capture;
+  m_input->captureNextKey([this, capture](const InputKey key) {
+    // An error is already logged; there is nothing to stop.
+    static_cast<void>(callFunction(capture->callback, static_cast<int64>(key)));
+  });
+}
+
+/*
+ */
+void
 ScriptManager::releaseReference(const int32 reference) noexcept
 {
   luaL_unref(m_state, LUA_REGISTRYINDEX, reference);
@@ -402,6 +449,17 @@ ScriptManager::callMethod(const int32 function, const int32 instance, const floa
   lua_rawgeti(m_state, LUA_REGISTRYINDEX, instance);
   lua_pushnumber(m_state, static_cast<lua_Number>(deltaTime));
   return protectedCall(2);
+}
+
+/*
+ */
+bool
+ScriptManager::callFunction(const int32 function, const int64 argument)
+{
+  lua_pushcfunction(m_state, &traceback);
+  lua_rawgeti(m_state, LUA_REGISTRYINDEX, function);
+  lua_pushinteger(m_state, static_cast<lua_Integer>(argument));
+  return protectedCall(1);
 }
 
 /*
