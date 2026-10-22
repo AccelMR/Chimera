@@ -95,6 +95,16 @@ class CH_CORE_EXPORT Scene : public Object
   setParent(GameObject& gameObject, GameObject* newParent);
 
   /**
+   * A scene plays once a game runs it (the game, or Play in the editor). One that does not
+   * play only updates the components that update while editing.
+   */
+  FORCEINLINE void
+  setPlaying(bool bPlaying) { m_bPlaying = bPlaying; }
+
+  NODISCARD FORCEINLINE bool
+  isPlaying() const { return m_bPlaying; }
+
+  /**
    * Runs the fixed step of the components of every object; the application calls it zero or
    * more times per frame at a fixed rate.
    */
@@ -254,6 +264,7 @@ class CH_CORE_EXPORT Scene : public Object
   Vector<CameraComponent*> m_cameras;
   DebugDraw m_debugDraw;
   DebugDraw m_fixedDebugDraw;
+  bool m_bPlaying = false;
 };
 
 } // namespace chEngineSDK

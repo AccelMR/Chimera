@@ -54,6 +54,14 @@ class CH_CORE_EXPORT GameObjectSerializer
   readCopies(DataStream& stream, Scene& scene, GameObject* parent);
 
   /**
+   * Makes every object of source again in target, an empty scene, with the same UUIDs, so an
+   * object of one can be found in the other (Play in the editor). False when something could
+   * not be read; what was read stays in target.
+   */
+  NODISCARD static bool
+  copyScene(const Scene& source, Scene& target);
+
+  /**
    * Reads one object written by write() into target (which must be in a scene), replacing its
    * name, transform, prefab link, components and children; target keeps its UUID and place.
    * The children get their saved UUIDs. False for broken data.

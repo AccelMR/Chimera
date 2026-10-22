@@ -191,7 +191,7 @@ Scene::fixedUpdate(float deltaTime)
 {
   m_fixedDebugDraw.clear();
   for (const SPtr<GameObject>& root : m_rootGameObjects) {
-    root->fixedUpdate(deltaTime);
+    root->fixedUpdate(deltaTime, m_bPlaying);
   }
 }
 
@@ -202,7 +202,7 @@ Scene::update(float deltaTime)
 {
   m_debugDraw.clear();
   for (const SPtr<GameObject>& root : m_rootGameObjects) {
-    root->update(deltaTime);
+    root->update(deltaTime, m_bPlaying);
   }
 }
 

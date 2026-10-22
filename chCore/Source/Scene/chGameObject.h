@@ -63,11 +63,14 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD FORCEINLINE const Vector<UniquePtr<Component>>&
   getComponents() const { return m_components; }
 
+  /**
+   * With bPlaying false only the components that update while editing run.
+   */
   void
-  fixedUpdate(float deltaTime);
+  fixedUpdate(float deltaTime, bool bPlaying);
 
   void
-  update(float deltaTime);
+  update(float deltaTime, bool bPlaying);
 
   NODISCARD FORCEINLINE Transform&
   getTransform() { return m_transform; }

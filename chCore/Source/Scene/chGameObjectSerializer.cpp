@@ -222,6 +222,18 @@ GameObjectSerializer::readCopies(DataStream& stream, Scene& scene, GameObject* p
 /*
  */
 bool
+GameObjectSerializer::copyScene(const Scene& source, Scene& target)
+{
+  MemoryDataStream written;
+  write(written, source.getRootGameObjects());
+  // Only read, so the bytes are never changed through the stream.
+  MemoryDataStream reader(written.getStartPtr(), written.size(), false);
+  return read(reader, target, nullptr);
+}
+
+/*
+ */
+bool
 GameObjectSerializer::readStream(DataStream& stream,
                                  Scene& scene,
                                  GameObject* parent,

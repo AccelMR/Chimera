@@ -39,7 +39,7 @@ class ModelAsset;
 class CH_CORE_EXPORT ModelComponent : public Component
 {
  public:
-  ModelComponent() = default;
+  ModelComponent();
 
   explicit ModelComponent(const SPtr<ModelAsset>& modelAsset);
 

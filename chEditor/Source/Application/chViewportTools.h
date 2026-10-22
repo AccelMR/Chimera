@@ -57,10 +57,11 @@ class ViewportTools
   /**
    * Draws the tools over the scene image and applies what the user did to the scene and the
    * camera. Call it inside the viewport panel, after its image; bHovered says whether the
-   * mouse is over the image and not over a window in front of it.
+   * mouse is over the image and not over a window in front of it. Without bEditTools (the
+   * viewport shows the game's camera) only the Play controls are drawn.
    */
   void
-  render(Scene& scene, const ViewportArea& area, bool bHovered);
+  render(Scene& scene, const ViewportArea& area, bool bHovered, bool bEditTools);
 
   /**
    * True while a gizmo or the view cube is dragged; the camera must leave the mouse alone.
@@ -127,7 +128,10 @@ class ViewportTools
   handleShortcuts();
 
   void
-  renderToolbar();
+  renderToolbar(bool bEditTools);
+
+  void
+  renderPlayControls();
 
   void
   renderCameraSettings();

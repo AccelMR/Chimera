@@ -475,13 +475,15 @@ MainMenuBarUI::renderFileMenu()
   }
   ImGui::Separator();
   const bool bEditingPrefab = EditorScene::getPrefab() != nullptr;
+  // What changes while playing is thrown away, so there is nothing to save until Stop.
+  const bool bPlaying = EditorScene::isPlaying();
   const ANSICHAR* saveLabel =
       bEditingPrefab ? ICON_FA_SAVE "  Save Prefab" : ICON_FA_SAVE "  Save Scene";
-  if (ImGui::MenuItem(saveLabel, "Ctrl+S")) {
+  if (ImGui::MenuItem(saveLabel, "Ctrl+S", false, !bPlaying)) {
     EditorScene::requestSave();
   }
   if (ImGui::MenuItem(ICON_FA_SAVE "  Save Scene As...", "Ctrl+Shift+S", false,
-                      !bEditingPrefab)) {
+                      !bEditingPrefab && !bPlaying)) {
     EditorScene::requestSaveAs();
   }
   if (bEditingPrefab && ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Back to Scene")) {
@@ -543,6 +545,28 @@ MainMenuBarUI::renderEditMenu()
   if (ImGui::MenuItem(ICON_FA_CHECK_DOUBLE "  Select All", "Ctrl+A", false,
                       EditorScene::getScene() != nullptr)) {
     EditorSelection::selectAll(*EditorScene::getScene(), EditorScene::getPrefabRoot().get());
+  }
+
+  ImGui::Separator();
+  const bool bPlaying = EditorScene::isPlaying();
+  if (!bPlaying) {
+    if (ImGui::MenuItem(ICON_FA_PLAY "  Play", "Alt+P", false, EditorScene::canPlay())) {
+      EditorScene::requestPlay();
+    }
+  }
+  else {
+    if (ImGui::MenuItem(ICON_FA_PAUSE "  Pause", "Pause", EditorScene::isPaused())) {
+      EditorScene::setPaused(!EditorScene::isPaused());
+    }
+    if (ImGui::MenuItem(ICON_FA_STEP_FORWARD "  Step", "F10")) {
+      EditorScene::requestStep();
+    }
+    if (ImGui::MenuItem(ICON_FA_EJECT "  Eject Camera", "F8", EditorScene::isEjected())) {
+      EditorScene::setEjected(!EditorScene::isEjected());
+    }
+    if (ImGui::MenuItem(ICON_FA_STOP "  Stop", "Esc")) {
+      EditorScene::requestStop();
+    }
   }
   ImGui::EndMenu();
 }

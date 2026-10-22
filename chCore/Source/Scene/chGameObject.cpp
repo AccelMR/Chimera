@@ -34,30 +34,30 @@ GameObject::~GameObject()
 /*
  */
 void
-GameObject::fixedUpdate(float deltaTime)
+GameObject::fixedUpdate(float deltaTime, bool bPlaying)
 {
   for (const UniquePtr<Component>& component : m_components) {
-    if (component->isEnabled()) {
+    if (component->isEnabled() && (bPlaying || component->updatesWhileEditing())) {
       component->fixedUpdate(deltaTime);
     }
   }
   for (const SPtr<GameObject>& child : m_children) {
-    child->fixedUpdate(deltaTime);
+    child->fixedUpdate(deltaTime, bPlaying);
   }
 }
 
 /*
  */
 void
-GameObject::update(float deltaTime)
+GameObject::update(float deltaTime, bool bPlaying)
 {
   for (const UniquePtr<Component>& component : m_components) {
-    if (component->isEnabled()) {
+    if (component->isEnabled() && (bPlaying || component->updatesWhileEditing())) {
       component->update(deltaTime);
     }
   }
   for (const SPtr<GameObject>& child : m_children) {
-    child->update(deltaTime);
+    child->update(deltaTime, bPlaying);
   }
 }
 

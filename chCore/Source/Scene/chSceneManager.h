@@ -54,6 +54,13 @@ class CH_CORE_EXPORT SceneManager : public Module<SceneManager>
   loadScene(WeakPtr<SceneAsset> asset);
 
   /**
+   * Keeps a scene made elsewhere (the copy Play in the editor runs), so it can be made
+   * active. False when a scene with its UUID is already kept.
+   */
+  NODISCARD bool
+  addScene(const SPtr<Scene>& scene);
+
+  /**
    * Forgets the scene; it is destroyed once nothing else holds it. Unloading the active
    * scene leaves no active scene.
    */

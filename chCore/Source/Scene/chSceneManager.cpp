@@ -87,6 +87,18 @@ SceneManager::loadScene(WeakPtr<SceneAsset> asset){
 
 /*
  */
+bool
+SceneManager::addScene(const SPtr<Scene>& scene)
+{
+  if (!scene || !m_loadedScenes.try_emplace(scene->getUUID(), scene).second) {
+    CH_LOG_ERROR(SceneManagerLog, "Cannot keep the scene: it is null or its UUID is taken.");
+    return false;
+  }
+  return true;
+}
+
+/*
+ */
 void
 SceneManager::unloadScene(const Scene& scene)
 {

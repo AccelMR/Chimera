@@ -100,6 +100,18 @@ struct EditorSceneState
   bool bOpenUnsavedPopup = false;
   bool bOpenSaveAsPopup = false;
   bool bQuit = false;
+
+  // Set while playing: the scene being edited, put aside while scene is its copy.
+  SPtr<Scene> editScene;
+  bool bPlayRequested = false;
+  bool bStopRequested = false;
+  bool bPaused = false;
+  bool bStepRequested = false;
+  bool bEjected = false;
+  // An action asked for while playing waits for Stop, then asks about unsaved changes.
+  bool bActionAfterStop = false;
+  // Reused when the selection moves between the scene and its copy.
+  Vector<UUID> selectionIds;
   ANSICHAR saveAsName[sizeof(AssetMetadata::name)] = "";
   Event<void(const SPtr<IAsset>&)> onAssetCreated;
 };
@@ -356,7 +368,8 @@ saveAsNew(EditorSceneState& state, const Path& folder)
 }
 
 /*
- * Runs at once when there is nothing to lose; otherwise asks first.
+ * Runs at once when there is nothing to lose; otherwise asks first. While playing it stops
+ * first, so the question is about the scene, not its copy.
  */
 void
 requestAction(PendingAction action,
@@ -367,7 +380,11 @@ requestAction(PendingAction action,
   state.action = action;
   state.actionAsset = asset;
   state.actionPrefab = prefab;
-  if (state.bDirty) {
+  if (state.editScene) {
+    state.bStopRequested = true;
+    state.bActionAfterStop = true;
+  }
+  else if (state.bDirty) {
     state.bOpenUnsavedPopup = true;
   }
   else {
@@ -794,6 +811,92 @@ applyPaste(EditorSceneState& state)
   }
   nameGroupEntry(state, "Paste", state.targets.size());
 }
+
+/*
+ * The scene and its copy share UUIDs, so the selection is looked up again in the scene now
+ * shown; objects made while playing have no counterpart and drop out.
+ */
+void
+rememberSelection(EditorSceneState& state)
+{
+  state.selectionIds.clear();
+  for (const SPtr<GameObject>& object : EditorSelection::getSelection()) {
+    state.selectionIds.push_back(object->getUUID());
+  }
+}
+
+/*
+ */
+void
+restoreSelection(EditorSceneState& state)
+{
+  EditorSelection::clear();
+  for (const UUID& id : state.selectionIds) {
+    EditorSelection::add(state.scene->findGameObject(id));
+  }
+}
+
+/*
+ */
+void
+startPlaying(EditorSceneState& state)
+{
+  if (!state.scene || state.prefab || state.editScene) {
+    return;
+  }
+  // A change still going on belongs to the scene, not to the copy.
+  if (state.history.isEntryOpen()) {
+    state.history.commit(*state.scene);
+    setDirty(state, !state.history.isAtSavedState());
+  }
+
+  // Its own UUID, because the scene manager keeps scenes by UUID and the scene stays kept.
+  const SPtr<Scene> playScene =
+      chMakeShared<Scene>(state.scene->getName(), UUID::createRandom());
+  if (!GameObjectSerializer::copyScene(*state.scene, *playScene)) {
+    CH_LOG_WARNING(EditorSceneLog, "Some objects could not be copied for Play.");
+  }
+  SceneManager& sceneManager = SceneManager::instance();
+  if (!sceneManager.addScene(playScene) || !sceneManager.setActiveScene(playScene)) {
+    sceneManager.unloadScene(*playScene);
+    CH_LOG_ERROR(EditorSceneLog, "Could not start playing.");
+    return;
+  }
+  playScene->setPlaying(true);
+
+  rememberSelection(state);
+  state.editScene = std::move(state.scene);
+  state.scene = playScene;
+  restoreSelection(state);
+  state.bPaused = false;
+  state.bStepRequested = false;
+  state.bEjected = false;
+  ++state.revision;
+  CH_LOG_INFO(EditorSceneLog, "Playing {0}.", state.scene->getName());
+}
+
+/*
+ */
+void
+stopPlaying(EditorSceneState& state)
+{
+  if (!state.editScene) {
+    return;
+  }
+  rememberSelection(state);
+  SceneManager& sceneManager = SceneManager::instance();
+  sceneManager.unloadScene(*state.scene);
+  state.scene = std::move(state.editScene);
+  if (!sceneManager.setActiveScene(state.scene)) {
+    CH_LOG_ERROR(EditorSceneLog, "Could not make the scene active again.");
+  }
+  restoreSelection(state);
+  state.bPaused = false;
+  state.bStepRequested = false;
+  state.bEjected = false;
+  ++state.revision;
+  CH_LOG_INFO(EditorSceneLog, "Stopped playing {0}.", state.scene->getName());
+}
 } // namespace
 
 /*
@@ -825,6 +928,7 @@ EditorScene::shutDown()
 {
   EditorSceneState& state = getState();
   state.scene.reset();
+  state.editScene.reset();
   state.asset.reset();
   state.prefab.reset();
   state.prefabRoot.reset();
@@ -882,7 +986,11 @@ EditorScene::getDefaultParent()
 void
 EditorScene::recordChange(GameObject& gameObject, StringView action)
 {
+  // What changes while playing is thrown away at Stop.
   EditorSceneState& state = getState();
+  if (state.editScene) {
+    return;
+  }
   state.history.recordChange(gameObject, action);
   setDirty(state, true);
 }
@@ -893,6 +1001,9 @@ void
 EditorScene::recordCreated(GameObject& gameObject, StringView action)
 {
   EditorSceneState& state = getState();
+  if (state.editScene) {
+    return;
+  }
   state.history.recordCreated(gameObject, action);
   setDirty(state, true);
 }
@@ -902,7 +1013,8 @@ EditorScene::recordCreated(GameObject& gameObject, StringView action)
 bool
 EditorScene::canUndo()
 {
-  return getState().history.canUndo();
+  const EditorSceneState& state = getState();
+  return !state.editScene && state.history.canUndo();
 }
 
 /*
@@ -910,7 +1022,8 @@ EditorScene::canUndo()
 bool
 EditorScene::canRedo()
 {
-  return getState().history.canRedo();
+  const EditorSceneState& state = getState();
+  return !state.editScene && state.history.canRedo();
 }
 
 /*
@@ -1058,6 +1171,9 @@ EditorScene::getDisplayName()
   if (state.bDirty) {
     name += '*';
   }
+  if (state.editScene) {
+    name += state.bPaused ? " [Paused]" : " [Playing]";
+  }
   return name;
 }
 
@@ -1087,6 +1203,10 @@ void
 EditorScene::requestSave()
 {
   EditorSceneState& state = getState();
+  if (state.editScene) {
+    CH_LOG_WARNING(EditorSceneLog, "Stop playing to save the scene.");
+    return;
+  }
   if (state.asset || state.prefab) {
     saveCurrent(state);
   }
@@ -1101,6 +1221,10 @@ void
 EditorScene::requestSaveAs()
 {
   EditorSceneState& state = getState();
+  if (state.editScene) {
+    CH_LOG_WARNING(EditorSceneLog, "Stop playing to save the scene.");
+    return;
+  }
   if (state.prefab) {
     CH_LOG_WARNING(EditorSceneLog, "A prefab is saved with Save; go back to the scene first.");
     return;
@@ -1155,6 +1279,104 @@ EditorScene::createPrefab(GameObject& gameObject, const Path& folder)
   getState().onAssetCreated(prefab);
   CH_LOG_INFO(EditorSceneLog, "Made prefab {0}.", name);
   return prefab;
+}
+
+/*
+ */
+bool
+EditorScene::canPlay()
+{
+  const EditorSceneState& state = getState();
+  return state.scene && !state.prefab && !state.editScene;
+}
+
+/*
+ */
+bool
+EditorScene::isPlaying()
+{
+  return getState().editScene != nullptr;
+}
+
+/*
+ */
+void
+EditorScene::requestPlay()
+{
+  EditorSceneState& state = getState();
+  state.bPlayRequested = canPlay();
+  state.bStopRequested = false;
+}
+
+/*
+ */
+void
+EditorScene::requestStop()
+{
+  EditorSceneState& state = getState();
+  state.bStopRequested = state.editScene != nullptr;
+  state.bPlayRequested = false;
+}
+
+/*
+ */
+bool
+EditorScene::isPaused()
+{
+  return getState().bPaused;
+}
+
+/*
+ */
+void
+EditorScene::setPaused(bool bPaused)
+{
+  EditorSceneState& state = getState();
+  bPaused = bPaused && state.editScene != nullptr;
+  if (state.bPaused != bPaused) {
+    state.bPaused = bPaused;
+    ++state.revision;
+  }
+}
+
+/*
+ */
+void
+EditorScene::requestStep()
+{
+  EditorSceneState& state = getState();
+  if (state.editScene) {
+    setPaused(true);
+    state.bStepRequested = true;
+  }
+}
+
+/*
+ */
+bool
+EditorScene::takeStep()
+{
+  EditorSceneState& state = getState();
+  const bool bStep = state.bStepRequested;
+  state.bStepRequested = false;
+  return bStep;
+}
+
+/*
+ */
+bool
+EditorScene::isEjected()
+{
+  return getState().bEjected;
+}
+
+/*
+ */
+void
+EditorScene::setEjected(bool bEjected)
+{
+  EditorSceneState& state = getState();
+  state.bEjected = bEjected && state.editScene != nullptr;
 }
 
 /*
@@ -1230,10 +1452,33 @@ EditorScene::applyPending(bool bEditing)
     state.bDeleteRequested = false;
     // Clear keeps the capacity; holding the objects would keep deleted ones alive.
     state.targets.clear();
-    applyHistory(state, bEditing);
+    if (!state.editScene) {
+      applyHistory(state, bEditing);
+    }
+    state.bUndoRequested = false;
+    state.bRedoRequested = false;
     // An undo may have replaced selected objects with new ones.
     EditorSelection::removeDetached();
   }
+
+  if (state.bStopRequested) {
+    state.bStopRequested = false;
+    stopPlaying(state);
+  }
+  if (state.bPlayRequested) {
+    state.bPlayRequested = false;
+    startPlaying(state);
+  }
+  if (state.bActionAfterStop && !state.editScene) {
+    state.bActionAfterStop = false;
+    if (state.bDirty) {
+      state.bOpenUnsavedPopup = true;
+    }
+    else {
+      state.bActionReady = true;
+    }
+  }
+
   if (!state.bActionReady) {
     return;
   }

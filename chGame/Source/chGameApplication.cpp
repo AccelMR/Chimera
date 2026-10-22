@@ -77,6 +77,7 @@ GameApplication::openStartupScene()
   if (const SPtr<SceneAsset> asset = AssetManager::instance().findScene(sceneName)) {
     const SPtr<Scene> scene = sceneManager.loadScene(asset).lock();
     if (scene && sceneManager.setActiveScene(scene)) {
+      scene->setPlaying(true);
       m_scene = scene;
       CH_LOG_INFO(GameApp, "Playing scene {0}.", sceneName);
       return;
@@ -88,6 +89,7 @@ GameApplication::openStartupScene()
                "project's Config/Game.ini or pass -Scene=<path>. Showing an empty scene.",
                sceneName, EnginePaths::getProjectDirectory());
   m_scene = chMakeShared<Scene>("Empty", UUID::createRandom());
+  m_scene->setPlaying(true);
 }
 
 /*

@@ -11,6 +11,7 @@
 #include "chEditorApplication.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
+#include "chCameraComponent.h"
 #include "chEditorCamera.h"
 #include "chEditorScene.h"
 #include "chEditorTheme.h"
@@ -88,6 +89,14 @@ constexpr float kLayoutRightFraction = 0.25f;
 constexpr float kLayoutBottomFraction = 0.3f;
 // A texture needs some pixels even while its panel is squeezed to nothing.
 constexpr uint32 kMinViewportSize = 16;
+constexpr ImVec4 kPlayingBorderColor(0.35f, 0.8f, 0.35f, 1.0f);
+constexpr ImVec4 kPausedBorderColor(0.95f, 0.75f, 0.2f, 1.0f);
+
+ConsoleVariable<float> g_cvarPlayBorderThickness(
+    "Editor.PlayBorderThickness",
+    3.0f,
+    "Width in pixels of the border around the viewport while playing (green) or paused "
+    "(yellow); 0 draws none.");
 } // namespace
 
 
@@ -185,7 +194,10 @@ EditorApplication::destroyModules()
 void
 EditorApplication::fixedUpdate(const float deltaTime)
 {
-  SceneManager::instance().fixedUpdate(deltaTime);
+  m_fixedStep = deltaTime;
+  if (!EditorScene::isPaused()) {
+    SceneManager::instance().fixedUpdate(deltaTime);
+  }
 }
 
 /*
@@ -236,8 +248,10 @@ EditorApplication::update(const float deltaTime)
   // A flight only starts with the mouse over the scene image. The keyboard is not checked: a
   // panel keeps the keyboard focus after any click, and the camera only reads keys while
   // flying.
-  m_editorCamera->setFocused(!UIHelpers::bRenderImGui ||
-                             (m_bViewportHovered && !m_viewportTools->isUsingMouse()));
+  // Looking through the game's camera, the editor camera stays where it is.
+  m_editorCamera->setFocused(!m_bGameView &&
+                             (!UIHelpers::bRenderImGui ||
+                              (m_bViewportHovered && !m_viewportTools->isUsingMouse())));
   const bool bWasFlying = m_editorCamera->isFlying();
   m_editorCamera->update(deltaTime);
   if (m_editorCamera->isFlying() != bWasFlying) {
@@ -246,7 +260,16 @@ EditorApplication::update(const float deltaTime)
 
   {
     CH_PROFILE_SCOPE("SceneUpdate");
-    SceneManager::instance().update(deltaTime);
+    // A step runs the paused game as one fixed step, so stepping gives the same frames
+    // whatever the editor's frame rate.
+    SceneManager& sceneManager = SceneManager::instance();
+    if (EditorScene::takeStep()) {
+      sceneManager.fixedUpdate(m_fixedStep);
+      sceneManager.update(m_fixedStep);
+    }
+    else if (!EditorScene::isPaused()) {
+      sceneManager.update(deltaTime);
+    }
   }
 
   // After the UI and the scene update, which may have moved or added objects.
@@ -254,18 +277,19 @@ EditorApplication::update(const float deltaTime)
     CH_PROFILE_SCOPE("UpdateTransforms");
     scene.updateTransforms();
   }
+  updateViewCamera(scene);
 
-  // Like the grid, the editor's lines hide with the rest of the UI.
+  // Like the grid, the editor's lines hide with the rest of the UI, and while the viewport
+  // shows the game.
   m_bFrameHasUI = UIHelpers::bRenderImGui;
   m_bFrameDrawsViewport = bPanel;
   m_editorLines.clear();
-  if (m_bFrameHasUI) {
+  if (m_bFrameHasUI && !m_bGameView) {
     ViewportTools::addSelectionBounds(scene, m_editorLines);
     ViewportTools::addSelectionSkeletons(m_editorLines);
   }
 
-  m_sceneRenderer->extract(scene, m_editorCamera->getCamera(), UIHelpers::rendererColor,
-                           &m_editorLines);
+  m_sceneRenderer->extract(scene, getViewCamera(), UIHelpers::rendererColor, &m_editorLines);
   AnimationPreviewUI::update(deltaTime);
   AssetThumbnails::update();
 }
@@ -300,7 +324,7 @@ EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapCha
         graph.importTexture("Viewport", *m_viewportTarget, *m_viewportTargetView,
                             ResourceState::Undefined, ResourceState::ShaderRead);
     const RGTextureHandle sceneDepth = m_sceneRenderer->addScenePasses(sceneImage);
-    if (ViewportGrid::isVisible()) {
+    if (ViewportGrid::isVisible() && !m_bGameView) {
       m_viewportGrid->addPass(graph, m_sceneRenderer->getFrame().getCamera(), sceneImage,
                               sceneDepth);
     }
@@ -426,8 +450,11 @@ EditorApplication::bindEvents() {
   EventDispatcherManager& eventDispatcher = EventDispatcherManager::instance();
 
   m_onKeyDownEvent = eventDispatcher.OnKeyDown.connect([this](const KeyBoardData& data) {
-    if (data.hasModifier(KeyBoardModifier::LCTRL) ||
-        data.hasModifier(KeyBoardModifier::RCTRL)) {
+    if (!data.hasModifier(KeyBoardModifier::LCTRL) &&
+        !data.hasModifier(KeyBoardModifier::RCTRL)) {
+      handlePlayShortcut(data);
+    }
+    else {
       const bool bShift = data.hasModifier(KeyBoardModifier::LSHIFT) ||
                           data.hasModifier(KeyBoardModifier::RSHIFT);
       if (data.key == chKeyBoard::Key::S) {
@@ -693,7 +720,18 @@ EditorApplication::renderViewportPanel()
     m_bViewportDrawn = true;
   }
 
-  m_viewportTools->render(*EditorScene::getScene(), m_viewportArea, m_bViewportHovered);
+  if (EditorScene::isPlaying() && g_cvarPlayBorderThickness.get() > 0.0f) {
+    const ImVec4 color = EditorScene::isPaused() ? kPausedBorderColor : kPlayingBorderColor;
+    const float thickness = g_cvarPlayBorderThickness.get();
+    const float inset = thickness * 0.5f;
+    ImGui::GetWindowDrawList()->AddRect(
+        ImVec2(min.x + inset, min.y + inset),
+        ImVec2(min.x + size.x - inset, min.y + size.y - inset),
+        ImGui::ColorConvertFloat4ToU32(color), 0.0f, ImDrawFlags_None, thickness);
+  }
+
+  m_viewportTools->render(*EditorScene::getScene(), m_viewportArea, m_bViewportHovered,
+                          !m_bGameView);
   // The scene of this frame is drawn after the UI, so these are the last frame's numbers.
   ProfilerUI::renderOverlay(m_sceneRenderer->getLastFrameStats(), min.x + size.x, min.y);
   ImGui::End();
@@ -740,7 +778,7 @@ EditorApplication::placeAtMouse(const SPtr<GameObject>& gameObject)
   const ImVec2 mouse = ImGui::GetMousePos();
   const Vector2 screenPoint((mouse.x - m_viewportArea.x) / m_viewportArea.width,
                             (mouse.y - m_viewportArea.y) / m_viewportArea.height);
-  const Camera& camera = m_editorCamera->getCamera();
+  const Camera& camera = getViewCamera();
   const Ray ray = camera.screenToWorldRay(screenPoint);
 
   // Models land on the ground (Z = 0) under the mouse. When the ray misses the ground, or
@@ -752,6 +790,90 @@ EditorApplication::placeAtMouse(const SPtr<GameObject>& gameObject)
     distance = lookAtDistance;
   }
   gameObject->getTransform().setLocalPosition(ray.origin + ray.direction * distance);
+}
+
+/*
+ */
+void
+EditorApplication::updateViewCamera(const Scene& scene)
+{
+  // As in Unreal, Stop puts the editor camera back where it was before Play, whatever it
+  // did while ejected.
+  const bool bPlaying = EditorScene::isPlaying();
+  const Camera& editorCamera = m_editorCamera->getCamera();
+  if (bPlaying && !m_bWasPlaying) {
+    m_positionBeforePlay = editorCamera.getPosition();
+    m_lookAtBeforePlay = editorCamera.getLookAt();
+  }
+  else if (!bPlaying && m_bWasPlaying) {
+    m_editorCamera->setView(m_positionBeforePlay, m_lookAtBeforePlay);
+  }
+  m_bWasPlaying = bPlaying;
+
+  const CameraComponent* gameCamera =
+      bPlaying && !EditorScene::isEjected() ? scene.getActiveCamera() : nullptr;
+  const bool bGameView = gameCamera != nullptr;
+  if (bGameView) {
+    gameCamera->fillCamera(m_gameCamera, static_cast<float>(m_viewportWidth),
+                           static_cast<float>(m_viewportHeight));
+  }
+  else if (m_bGameView && bPlaying) {
+    // Ejected: the editor camera starts where the game's was.
+    m_editorCamera->setView(m_gameCamera.getPosition(), m_gameCamera.getLookAt());
+  }
+  m_bGameView = bGameView;
+}
+
+/*
+ */
+const Camera&
+EditorApplication::getViewCamera() const
+{
+  return m_bGameView ? m_gameCamera : m_editorCamera->getCamera();
+}
+
+/*
+ * Plain keys without Ctrl, from the window's events, so they also work while F11 hides the
+ * editor. Escape is left to popups and text fields that have it.
+ */
+void
+EditorApplication::handlePlayShortcut(const KeyBoardData& data)
+{
+  const bool bAlt =
+      data.hasModifier(KeyBoardModifier::LALT) || data.hasModifier(KeyBoardModifier::RALT);
+  const bool bPlaying = EditorScene::isPlaying();
+  if (bAlt && data.key == chKeyBoard::Key::P) {
+    if (bPlaying) {
+      EditorScene::requestStop();
+    }
+    else {
+      EditorScene::requestPlay();
+    }
+    return;
+  }
+  if (!bPlaying) {
+    return;
+  }
+
+  switch (data.key) {
+  case chKeyBoard::Key::Escape:
+    if (!ImGui::GetIO().WantTextInput &&
+        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+      EditorScene::requestStop();
+    }
+    break;
+  case chKeyBoard::Key::Pause:
+    EditorScene::setPaused(!EditorScene::isPaused());
+    break;
+  case chKeyBoard::Key::F10:
+    EditorScene::requestStep();
+    break;
+  case chKeyBoard::Key::F8:
+    EditorScene::setEjected(!EditorScene::isEjected());
+    break;
+  default:
+    break;
+  }
 }
 
 /*

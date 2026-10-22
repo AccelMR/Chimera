@@ -161,7 +161,7 @@ class EditorScene
   getRevision();
 
   /**
-   * The scene's name, with "*" when it has unsaved changes.
+   * The scene's name, with "*" when it has unsaved changes, and whether it is playing.
    */
   NODISCARD static String
   getDisplayName();
@@ -197,6 +197,53 @@ class EditorScene
    */
   static SPtr<PrefabAsset>
   createPrefab(GameObject& gameObject, const Path& folder);
+
+  /**
+   * Play runs a copy of the scene, so nothing done while playing stays: Stop throws the copy
+   * away and the scene is shown as it was, with the same objects selected. Both run in
+   * applyPending. While playing getScene() is the copy, edits are not recorded for undo and
+   * saving waits for Stop; New, Open and the other scene requests stop first. There is no
+   * Play in prefab mode.
+   */
+  NODISCARD static bool
+  canPlay();
+
+  NODISCARD static bool
+  isPlaying();
+
+  static void
+  requestPlay();
+
+  static void
+  requestStop();
+
+  /**
+   * A paused game does not update; requestStep lets it run one frame.
+   */
+  NODISCARD static bool
+  isPaused();
+
+  static void
+  setPaused(bool bPaused);
+
+  static void
+  requestStep();
+
+  /**
+   * True once after requestStep, for the frame that runs the paused game one step.
+   */
+  NODISCARD static bool
+  takeStep();
+
+  /**
+   * While playing the viewport looks through the scene's camera; ejected (F8), the editor
+   * camera flies around the game instead and the viewport tools work.
+   */
+  NODISCARD static bool
+  isEjected();
+
+  static void
+  setEjected(bool bEjected);
 
   /**
    * True when the editor can close now. Otherwise it asks about the unsaved changes first,

@@ -87,6 +87,14 @@ class CH_CORE_EXPORT Component
   NODISCARD FORCEINLINE bool
   isRegistered() const { return m_registered; }
 
+  /**
+   * A scene that is not playing (the one the editor edits) only updates the components that
+   * return true here, so game logic waits for Play while previews such as animation still
+   * move.
+   */
+  NODISCARD FORCEINLINE bool
+  updatesWhileEditing() const { return m_bUpdatesWhileEditing; }
+
   NODISCARD FORCEINLINE GameObject*
   getOwner() const { return m_owner; }
 
@@ -109,6 +117,9 @@ class CH_CORE_EXPORT Component
   virtual void
   onTransformChanged() {}
 
+  FORCEINLINE void
+  setUpdatesWhileEditing(bool bUpdates) { m_bUpdatesWhileEditing = bUpdates; }
+
  private:
   friend class GameObject;
 
@@ -120,6 +131,7 @@ class CH_CORE_EXPORT Component
   UUID m_typeId = UUID::null();
   bool m_enabled = true;
   bool m_registered = false;
+  bool m_bUpdatesWhileEditing = false;
 };
 
 } // namespace chEngineSDK

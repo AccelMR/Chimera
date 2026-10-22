@@ -39,6 +39,8 @@
 #include "imgui.h"
 #include "ImGuizmo.h"
 
+#include "../../Content/Fonts/IconsFontAwsome5.h"
+
 namespace chEngineSDK {
 
 namespace {
@@ -186,7 +188,7 @@ ViewportTools::beginFrame()
 /*
  */
 void
-ViewportTools::render(Scene& scene, const ViewportArea& area, bool bHovered)
+ViewportTools::render(Scene& scene, const ViewportArea& area, bool bHovered, bool bEditTools)
 {
   const Camera& camera = m_editorCamera.getCamera();
   m_area = area;
@@ -194,8 +196,12 @@ ViewportTools::render(Scene& scene, const ViewportArea& area, bool bHovered)
   // ImGuizmo draws on the panel and counts as hovered only while the panel is.
   ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 
+  renderToolbar(bEditTools);
+  // The editor camera's gizmos and picking would not match what the game's camera shows.
+  if (!bEditTools) {
+    return;
+  }
   handleShortcuts();
-  renderToolbar();
   renderLights(camera);
   renderCameras(scene, camera);
   manipulateSelection(scene, camera);
@@ -245,7 +251,8 @@ ViewportTools::handleShortcuts()
   if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
     focusSelection();
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+  // While playing, Escape stops the game instead.
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !EditorScene::isPlaying()) {
     EditorSelection::clear();
   }
   if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
@@ -256,7 +263,7 @@ ViewportTools::handleShortcuts()
 /*
  */
 void
-ViewportTools::renderToolbar()
+ViewportTools::renderToolbar(bool bEditTools)
 {
   // A child of the panel, so it always draws over the scene image; centered with last
   // frame's width, the first one it has.
@@ -268,6 +275,16 @@ ViewportTools::renderToolbar()
     chUIHelpers::UIHelpers::endOverlayChild();
     return;
   }
+
+  renderPlayControls();
+  if (!bEditTools) {
+    chUIHelpers::UIHelpers::endOverlayChild();
+    m_toolbarWidth = ImGui::GetItemRectSize().x;
+    return;
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled("|");
+  ImGui::SameLine();
 
   const auto operationButton = [this](const ANSICHAR* label, Operation operation) {
     const bool bActive = m_operation == operation;
@@ -368,6 +385,69 @@ ViewportTools::renderToolbar()
   ImGui::SetItemTooltip("Frame time, draws and triangles in the corner of the viewport");
   chUIHelpers::UIHelpers::endOverlayChild();
   m_toolbarWidth = ImGui::GetItemRectSize().x;
+}
+
+/*
+ * One button plays, pauses and resumes; the rest only work while playing.
+ */
+void
+ViewportTools::renderPlayControls()
+{
+  const bool bPlaying = EditorScene::isPlaying();
+  const bool bPaused = EditorScene::isPaused();
+  const auto activeButton = [](const ANSICHAR* label, bool bActive, bool bEnabled) {
+    ImGui::BeginDisabled(!bEnabled);
+    if (bActive) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    }
+    const bool bPressed = ImGui::Button(label);
+    if (bActive) {
+      ImGui::PopStyleColor();
+    }
+    ImGui::EndDisabled();
+    return bPressed;
+  };
+
+  if (!bPlaying || bPaused) {
+    if (activeButton(ICON_FA_PLAY "###PlayPause", false,
+                     bPlaying || EditorScene::canPlay())) {
+      if (bPlaying) {
+        EditorScene::setPaused(false);
+      }
+      else {
+        EditorScene::requestPlay();
+      }
+    }
+    ImGui::SetItemTooltip("%s", bPlaying
+                                    ? "Resume (Pause)"
+                                    : "Play a copy of the scene (Alt+P); not in prefab mode");
+  }
+  else {
+    if (activeButton(ICON_FA_PAUSE "###PlayPause", false, true)) {
+      EditorScene::setPaused(true);
+    }
+    ImGui::SetItemTooltip("Pause (Pause)");
+  }
+
+  ImGui::SameLine();
+  if (activeButton(ICON_FA_STEP_FORWARD, false, bPlaying)) {
+    EditorScene::requestStep();
+  }
+  ImGui::SetItemTooltip("Run one frame and pause (F10)");
+
+  ImGui::SameLine();
+  if (activeButton(ICON_FA_STOP, false, bPlaying)) {
+    EditorScene::requestStop();
+  }
+  ImGui::SetItemTooltip("Stop and go back to the scene as it was (Esc)");
+
+  ImGui::SameLine();
+  const bool bEjected = EditorScene::isEjected();
+  if (activeButton(ICON_FA_EJECT, bEjected, bPlaying)) {
+    EditorScene::setEjected(!bEjected);
+  }
+  ImGui::SetItemTooltip("Fly the editor camera around the game instead of looking through "
+                        "the scene's camera (F8)");
 }
 
 /*

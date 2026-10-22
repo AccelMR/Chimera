@@ -57,6 +57,7 @@
 #include "chRotator.h"
 #include "chScene.h"
 #include "chSceneHistory.h"
+#include "chSceneManager.h"
 #include "chShadowRenderer.h"
 #include "chShapeComponent.h"
 #include "chSkeleton.h"
@@ -3538,6 +3539,131 @@ TEST_CASE("chCore - Texture mips")
     REQUIRE(readHalf(data, 9) == 2.0f);
     REQUIRE(readHalf(data, 10) == 0.25f);
     REQUIRE(readHalf(data, 11) == 1.0f);
+  }
+}
+
+namespace chEngineSDK {
+/**
+ * Exists so the tests can count which updates a scene runs.
+ */
+class TestCounterComponent : public Component
+{
+ public:
+  explicit TestCounterComponent(bool bUpdatesWhileEditing = false)
+  {
+    setUpdatesWhileEditing(bUpdatesWhileEditing);
+  }
+
+  void
+  fixedUpdate(float deltaTime) override
+  {
+    CH_PARAMETER_UNUSED(deltaTime);
+    ++fixedUpdates;
+  }
+
+  void
+  update(float deltaTime) override
+  {
+    CH_PARAMETER_UNUSED(deltaTime);
+    ++updates;
+  }
+
+  uint32 fixedUpdates = 0;
+  uint32 updates = 0;
+};
+DECLARE_TYPE_TRAITS(TestCounterComponent)
+} // namespace chEngineSDK
+
+TEST_CASE("chCore - Scene play")
+{
+  SECTION("A scene that does not play only updates what updates while editing")
+  {
+    Scene scene("Edit", chEngineSDK::UUID::createRandom());
+    REQUIRE_FALSE(scene.isPlaying());
+    const SPtr<GameObject> parent = scene.createGameObject("Parent");
+    const SPtr<GameObject> child = scene.createGameObject("Child", parent.get());
+    TestCounterComponent& game = child->addComponent<TestCounterComponent>();
+    TestCounterComponent& preview = parent->addComponent<TestCounterComponent>(true);
+
+    scene.fixedUpdate(1.0f);
+    scene.update(1.0f);
+    REQUIRE(game.updates == 0);
+    REQUIRE(game.fixedUpdates == 0);
+    REQUIRE(preview.updates == 1);
+    REQUIRE(preview.fixedUpdates == 1);
+
+    scene.setPlaying(true);
+    scene.fixedUpdate(1.0f);
+    scene.update(1.0f);
+    REQUIRE(game.updates == 1);
+    REQUIRE(game.fixedUpdates == 1);
+    REQUIRE(preview.updates == 2);
+
+    // Disabled components never update, playing or not.
+    game.setEnabled(false);
+    scene.update(1.0f);
+    REQUIRE(game.updates == 1);
+  }
+
+  SECTION("Models animate while editing")
+  {
+    const ModelComponent model;
+    REQUIRE(model.updatesWhileEditing());
+    const TestCounterComponent counter;
+    REQUIRE_FALSE(counter.updatesWhileEditing());
+  }
+
+  SECTION("The copy has the same objects and changing it leaves the source alone")
+  {
+    Scene source("Source", chEngineSDK::UUID::createRandom());
+    const SPtr<GameObject> sun = source.createGameObject("Sun");
+    sun->addComponent<DirectionalLightComponent>().setIntensity(4.0f);
+    const SPtr<GameObject> parent = source.createGameObject("Parent");
+    parent->getTransform().setLocalPosition(Vector3(1.0f, 2.0f, 3.0f));
+    const SPtr<GameObject> child = source.createGameObject("Child", parent.get());
+    child->addComponent<PointLightComponent>().setRange(7.0f);
+
+    Scene copy("Source", chEngineSDK::UUID::createRandom());
+    REQUIRE(GameObjectSerializer::copyScene(source, copy));
+    REQUIRE(copy.getRootGameObjects().size() == 2);
+    REQUIRE(copy.getLightCount() == 2);
+
+    const SPtr<GameObject> copiedParent = copy.findGameObject(parent->getUUID());
+    REQUIRE(copiedParent);
+    REQUIRE(copiedParent != parent);
+    REQUIRE(copiedParent->getName() == "Parent");
+    REQUIRE(copiedParent->getTransform().getLocalPosition().nearEqual(
+        Vector3(1.0f, 2.0f, 3.0f)));
+    const SPtr<GameObject> copiedChild = copy.findGameObject(child->getUUID());
+    REQUIRE(copiedChild);
+    REQUIRE(copiedChild->getParent() == copiedParent.get());
+    const PointLightComponent* light = copiedChild->getComponent<PointLightComponent>();
+    REQUIRE(light);
+    REQUIRE(light->getRange() == 7.0f);
+    REQUIRE(copy.findGameObject(sun->getUUID())
+                ->getComponent<DirectionalLightComponent>()
+                ->getIntensity() == 4.0f);
+
+    copiedParent->getTransform().setLocalPosition(Vector3(9.0f, 9.0f, 9.0f));
+    copy.destroyGameObject(*copy.findGameObject(sun->getUUID()));
+    REQUIRE(copy.getLightCount() == 1);
+    REQUIRE(source.getLightCount() == 2);
+    REQUIRE(source.getRootGameObjects().size() == 2);
+    REQUIRE(parent->getTransform().getLocalPosition().nearEqual(Vector3(1.0f, 2.0f, 3.0f)));
+  }
+
+  SECTION("The scene manager keeps a copy until it is unloaded")
+  {
+    SceneManager::startUp();
+    SceneManager& sceneManager = SceneManager::instance();
+    const SPtr<Scene> copy = chMakeShared<Scene>("Copy", chEngineSDK::UUID::createRandom());
+    REQUIRE(sceneManager.addScene(copy));
+    REQUIRE_FALSE(sceneManager.addScene(copy));
+    REQUIRE(sceneManager.setActiveScene(copy));
+    REQUIRE(sceneManager.getActiveScene().lock() == copy);
+    sceneManager.unloadScene(*copy);
+    REQUIRE(sceneManager.getActiveScene().expired());
+    SceneManager::shutDown();
   }
 }
 

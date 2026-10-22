@@ -11,6 +11,7 @@
 
 #include "chWindowedApplication.h"
 
+#include "chCamera.h"
 #include "chDebugDraw.h"
 #include "chSceneRenderer.h"
 #include "chViewportTools.h"
@@ -118,6 +119,19 @@ class EditorApplication : public WindowedApplication
   placeAtMouse(const SPtr<GameObject>& gameObject);
 
   /**
+   * Picks the camera the viewport shows this frame: the scene's while playing (unless
+   * ejected or the scene has none), else the editor's.
+   */
+  void
+  updateViewCamera(const Scene& scene);
+
+  NODISCARD const Camera&
+  getViewCamera() const;
+
+  void
+  handlePlayShortcut(const KeyBoardData& data);
+
+  /**
    * Shows the scene name, and whether it has unsaved changes, after the window title.
    */
   void
@@ -143,6 +157,16 @@ class EditorApplication : public WindowedApplication
   // Copied in the update, so drawing does not read UI state.
   bool m_bFrameDrawsViewport = false;
   UniquePtr<EditorCamera> m_editorCamera;
+  // While playing and not ejected, the view of the scene's active camera.
+  Camera m_gameCamera;
+  // The viewport looked through m_gameCamera in the last update.
+  bool m_bGameView = false;
+  bool m_bWasPlaying = false;
+  // The editor camera's view when Play started, given back at Stop.
+  Vector3 m_positionBeforePlay = Vector3::ZERO;
+  Vector3 m_lookAtBeforePlay = Vector3::ZERO;
+  // Time of one fixed step, which also runs a paused game one frame.
+  float m_fixedStep = 1.0f / 60.0f;
   UniquePtr<ViewportTools> m_viewportTools;
   // Lines of the editor (selection bounds), filled again every frame; kept so it does not
   // allocate.

@@ -120,8 +120,17 @@ forEachDrawnMesh(const Model& model,
 } // namespace
 
 /*
+ * An animation is seen in the editor without pressing Play, as in a preview.
+ */
+ModelComponent::ModelComponent()
+{
+  setUpdatesWhileEditing(true);
+}
+
+/*
  */
 ModelComponent::ModelComponent(const SPtr<ModelAsset>& modelAsset)
+  : ModelComponent()
 {
   setModel(modelAsset);
 }
@@ -132,6 +141,7 @@ ModelComponent::ModelComponent(const SPtr<ModelAsset>& modelAsset,
                                uint32 nodeIndex,
                                uint32 meshIndex,
                                const Vector3& pivot)
+  : ModelComponent()
 {
   setModelPart(modelAsset, nodeIndex, meshIndex, pivot);
 }
