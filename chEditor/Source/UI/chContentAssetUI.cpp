@@ -640,11 +640,6 @@ ContentAssetUI::renderDeleteConfirmationPopup()
       if (ImGui::Button("Delete", ImVec2(120, 0))) {
         const Path assetFile = m_assetToDelete->getFilePath();
         const bool bRemovedCorrectly = FileSystem::removeFile(assetFile);
-        const Path metaFile = AssetMeta::getPath(assetFile);
-        if (bRemovedCorrectly && FileSystem::isFile(metaFile) &&
-            !FileSystem::removeFile(metaFile)) {
-          CH_LOG_WARNING(ContentAssetUILog, "Failed to delete {0}", metaFile);
-        }
 
         if (bRemovedCorrectly) {
           AssetInspectorUI::close(*m_assetToDelete);

@@ -22,9 +22,9 @@ namespace chEngineSDK {
 struct AssetFileHeader
 {
   static constexpr uint32 MAGIC = 0x53414843; // "CHAS" as the bytes appear in the file
-  // Version 1 also stored the name, the folder and the editor data, which now come from
-  // where the file is and from its .meta file; it is no longer read.
-  static constexpr uint32 FORMAT_VERSION = 2;
+  // Nothing has shipped yet, so earlier layouts were dropped instead of read: files saved
+  // before 2026-10-22 must be imported again.
+  static constexpr uint32 FORMAT_VERSION = 1;
 
   uint32 magic = MAGIC;
   uint32 formatVersion = FORMAT_VERSION;
@@ -43,17 +43,22 @@ struct AssetFileInfo
 
 /**
  * Exists so every reader and writer of asset files agrees on how they start: the header, the
- * asset's UUID and type, then the UUIDs of the assets it references. The data of each asset
- * type follows. It also writes and reads strings with their length, for the asset types.
+ * asset's UUID and type, the UUIDs of the assets it references, then the editor data (text
+ * with its length, which the game skips without reading). The data of each asset type
+ * follows. It also writes and reads strings with their length, for the asset types.
  */
 class CH_CORE_EXPORT AssetFile
 {
  public:
+  /**
+   * editorData is empty in builds without the editor and in packaged games.
+   */
   static void
   writeStart(DataStream& stream,
              const UUID& uuid,
              const UUID& assetType,
-             Span<const UUID> references);
+             Span<const UUID> references,
+             StringView editorData = StringView());
 
   /**
    * Reads the header and the asset's identity. Fails on a wrong magic number or a format
@@ -67,6 +72,21 @@ class CH_CORE_EXPORT AssetFile
    */
   NODISCARD static bool
   readReferences(DataStream& stream, Vector<UUID>& outReferences);
+
+  /**
+   * Call right after readReferences. Reads the editor data into outText, or only moves past
+   * it when outText is null.
+   */
+  NODISCARD static bool
+  readEditorData(DataStream& stream, String* outText);
+
+  /**
+   * Writes source again into destination (which may be the same file) with editorData
+   * instead of its own, keeping the asset's data byte for byte. Package Project passes no
+   * editor data.
+   */
+  NODISCARD static bool
+  rewriteWithEditorData(const Path& source, const Path& destination, StringView editorData);
 
   static void
   writeString(DataStream& stream, StringView text);
@@ -98,6 +118,7 @@ class CH_CORE_EXPORT AssetFile
 
   // Above any real asset; only a broken file asks for more.
   static constexpr uint32 MAX_REFERENCES = 65536;
+  static constexpr uint32 MAX_EDITOR_DATA_SIZE = 1024 * 1024;
 };
 
 } // namespace chEngineSDK

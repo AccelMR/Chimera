@@ -99,7 +99,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   removeAsset(const UUID& assetUUID);
 
   /**
-   * The asset imported from this source file and part (as stored in its .meta file), or
+   * The asset imported from this source file and part (as stored in its editor data), or
    * null. Lets an import reuse what an earlier one made instead of making a copy. Walks
    * every asset.
    */
@@ -154,7 +154,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   lazyLoadAssetFile(const Path& file);
 
   /**
-   * A script is its .lua file; its UUID comes from the .meta file next to it.
+   * A script is its .lua file; its UUID is the first line of the file.
    */
   SPtr<IAsset>
   lazyLoadScriptFile(const Path& file);

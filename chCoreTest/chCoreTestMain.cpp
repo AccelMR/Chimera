@@ -1541,12 +1541,14 @@ TEST_CASE("chCore - Asset file start")
   const chEngineSDK::UUID assetType = AssetTypeTraits<MaterialAsset>::getTypeId();
   const chEngineSDK::UUID references[] = {chEngineSDK::UUID::createRandom(),
                                           chEngineSDK::UUID::createRandom()};
+  const String editorText = "[Asset]\nCreated=1\n";
 
   MemoryDataStream stream(4096);
-  AssetFile::writeStart(stream, uuid, assetType, references);
-  const SIZE_T referenceCountOffset = stream.tell() - sizeof(references) - sizeof(uint32);
+  AssetFile::writeStart(stream, uuid, assetType, references, editorText);
   // Only the identity follows the header; the name and folder come from the file's place.
-  REQUIRE(referenceCountOffset == sizeof(AssetFileHeader) + 2 * sizeof(chEngineSDK::UUID));
+  const SIZE_T referenceCountOffset = sizeof(AssetFileHeader) + 2 * sizeof(chEngineSDK::UUID);
+  const SIZE_T editorDataOffset = referenceCountOffset + sizeof(uint32) + sizeof(references);
+  REQUIRE(stream.tell() == editorDataOffset + sizeof(uint32) + editorText.size());
   AssetFile::writeString(stream, "Slot");
   stream.seek(0);
 
@@ -1560,9 +1562,20 @@ TEST_CASE("chCore - Asset file start")
   REQUIRE(readReferences.size() == 2);
   REQUIRE(readReferences[0] == references[0]);
   REQUIRE(readReferences[1] == references[1]);
+  String editorData;
+  REQUIRE(AssetFile::readEditorData(stream, &editorData));
+  REQUIRE(editorData == editorText);
   String text;
   REQUIRE(AssetFile::readString(stream, text, 64));
   REQUIRE(text == "Slot");
+
+  SECTION("The game moves past the editor data without reading it")
+  {
+    stream.seek(editorDataOffset);
+    REQUIRE(AssetFile::readEditorData(stream, nullptr));
+    REQUIRE(AssetFile::readString(stream, text, 64));
+    REQUIRE(text == "Slot");
+  }
 
   SECTION("A file without the magic number is rejected")
   {
@@ -1573,22 +1586,16 @@ TEST_CASE("chCore - Asset file start")
     REQUIRE_FALSE(AssetFile::readInfo(other, info));
   }
 
-  SECTION("A newer format version is rejected")
+  SECTION("Other format versions are rejected")
   {
-    MemoryDataStream other(64);
-    const uint32 header[2] = {AssetFileHeader::MAGIC, AssetFileHeader::FORMAT_VERSION + 1};
-    other.write(header, sizeof(header));
-    other.seek(0);
-    REQUIRE_FALSE(AssetFile::readInfo(other, info));
-  }
-
-  SECTION("Format version 1 is rejected")
-  {
-    MemoryDataStream other(64);
-    const uint32 header[2] = {AssetFileHeader::MAGIC, 1};
-    other.write(header, sizeof(header));
-    other.seek(0);
-    REQUIRE_FALSE(AssetFile::readInfo(other, info));
+    for (const uint32 version : {AssetFileHeader::FORMAT_VERSION - 1,
+                                 AssetFileHeader::FORMAT_VERSION + 1}) {
+      MemoryDataStream other(64);
+      const uint32 header[2] = {AssetFileHeader::MAGIC, version};
+      other.write(header, sizeof(header));
+      other.seek(0);
+      REQUIRE_FALSE(AssetFile::readInfo(other, info));
+    }
   }
 
   SECTION("Broken lengths are rejected")
@@ -1600,13 +1607,80 @@ TEST_CASE("chCore - Asset file start")
     REQUIRE_FALSE(AssetFile::readReferences(stream, readReferences));
     REQUIRE(readReferences.empty());
 
-    stream.seek(referenceCountOffset + sizeof(uint32) + sizeof(references));
-    REQUIRE_FALSE(AssetFile::readString(stream, text, 3));
+    stream.seek(editorDataOffset);
+    const uint32 tooLong = AssetFile::MAX_EDITOR_DATA_SIZE + 1;
+    stream.write(&tooLong, sizeof(tooLong));
+    stream.seek(editorDataOffset);
+    REQUIRE_FALSE(AssetFile::readEditorData(stream, &editorData));
+  }
+
+  SECTION("Rewriting replaces only the editor data")
+  {
+    const Path root = FileSystem::absolutePath(Path("AssetFileTestDir"));
+    FileSystem::removeAll(root);
+    const Path source = root.join(Path("Rock.chAss"));
+    const Path stripped = root.join(Path("Out/Rock.chAss"));
+    SPtr<DataStream> file = FileSystem::createAndOpenFile(source);
+    REQUIRE(file);
+    stream.seek(0);
+    Vector<uint8> bytes(stream.size());
+    REQUIRE(stream.read(bytes.data(), bytes.size()) == bytes.size());
+    file->write(bytes.data(), bytes.size());
+    file->close();
+
+    REQUIRE(AssetFile::rewriteWithEditorData(source, stripped, StringView()));
+    SPtr<DataStream> result = FileSystem::openFile(stripped);
+    REQUIRE(result);
+    REQUIRE(AssetFile::readInfo(*result, info));
+    REQUIRE(info.uuid == uuid);
+    REQUIRE(AssetFile::readReferences(*result, readReferences));
+    REQUIRE(readReferences.size() == 2);
+    REQUIRE(AssetFile::readEditorData(*result, &editorData));
+    REQUIRE(editorData.empty());
+    REQUIRE(AssetFile::readString(*result, text, 64));
+    REQUIRE(text == "Slot");
+    result->close();
+
+    // In place, as the editor would.
+    REQUIRE(AssetFile::rewriteWithEditorData(stripped, stripped, "[Asset]\nCreated=2\n"));
+    result = FileSystem::openFile(stripped);
+    REQUIRE(AssetFile::readInfo(*result, info));
+    REQUIRE(AssetFile::readReferences(*result, readReferences));
+    REQUIRE(AssetFile::readEditorData(*result, &editorData));
+    REQUIRE(editorData == "[Asset]\nCreated=2\n");
+    REQUIRE(AssetFile::readString(*result, text, 64));
+    REQUIRE(text == "Slot");
+    result->close();
+    FileSystem::removeAll(root);
   }
 }
 
+TEST_CASE("chCore - Script UUID line")
+{
+  const chEngineSDK::UUID uuid = chEngineSDK::UUID::createRandom();
+  chEngineSDK::UUID read = chEngineSDK::UUID::null();
+  REQUIRE_FALSE(ScriptAsset::readUUIDLine("local A = {}\n", read));
+  REQUIRE(read.isNull());
+
+  const String added = ScriptAsset::withUUIDLine("local A = {}\nreturn A\n", uuid);
+  REQUIRE(added == "-- chimera-uuid: " + uuid.toString() + "\nlocal A = {}\nreturn A\n");
+  REQUIRE(ScriptAsset::readUUIDLine(added, read));
+  REQUIRE(read == uuid);
+
+  // An old UUID line is replaced, and the file keeps its line endings.
+  const chEngineSDK::UUID other = chEngineSDK::UUID::createRandom();
+  const String crlf = ScriptAsset::withUUIDLine("local A = {}\r\nreturn A\r\n", uuid);
+  const String replaced = ScriptAsset::withUUIDLine(crlf, other);
+  REQUIRE(replaced == "-- chimera-uuid: " + other.toString() + "\r\nlocal A = {}\r\nreturn A\r\n");
+  REQUIRE(ScriptAsset::readUUIDLine(replaced, read));
+  REQUIRE(read == other);
+
+  REQUIRE(ScriptAsset::withUUIDLine("", uuid) == "-- chimera-uuid: " + uuid.toString() + "\n");
+  REQUIRE_FALSE(ScriptAsset::readUUIDLine("-- chimera-uuid: not-a-uuid\n", read));
+}
+
 #if USING(CH_EDITOR)
-TEST_CASE("chCore - Asset meta file")
+TEST_CASE("chCore - Asset editor data")
 {
   const Path project = FileSystem::absolutePath(Path("MetaTestProject"));
   ImportSettings settings;
@@ -1654,8 +1728,6 @@ TEST_CASE("chCore - Asset meta file")
     REQUIRE(defaults.importSettings.expandMode == ModelExpandMode::Single);
     REQUIRE_FALSE(defaults.importSettings.splitParts);
   }
-
-  REQUIRE(AssetMeta::getPath(Path("/Game/Rock.chAss")) == Path("/Game/Rock.chAss.meta"));
 }
 
 namespace {
@@ -1665,6 +1737,18 @@ writeTestFile(const Path& path, StringView text)
   SPtr<DataStream> stream = FileSystem::createAndOpenFile(path);
   REQUIRE(stream);
   stream->write(text.data(), text.size());
+  stream->close();
+}
+
+// An asset file start with editorData, then data as the asset's own bytes.
+void
+writeTestAsset(const Path& path, StringView editorData, StringView data)
+{
+  SPtr<DataStream> stream = FileSystem::createAndOpenFile(path);
+  REQUIRE(stream);
+  AssetFile::writeStart(*stream, chEngineSDK::UUID::createRandom(),
+                        AssetTypeTraits<SceneAsset>::getTypeId(), {}, editorData);
+  stream->write(data.data(), data.size());
   stream->close();
 }
 } // namespace
@@ -1768,7 +1852,7 @@ TEST_CASE("chCore - Project packager")
   writeTestFile(project.join(Path("Config/Editor.ini")), "[Editor]\nGrid=false\n");
   writeTestFile(project.join(Path("Config/Package.ini")), "[Package]\nScenes=/Game/Maps/Main\n");
   const Path mainScene = project.join(Path("Assets/Maps/Main.chAss"));
-  writeTestFile(mainScene, "scene");
+  writeTestAsset(mainScene, "[Import]\nSource=C:/Users/Someone/Art/Main.fbx\n", "scene");
   writeTestFile(project.join(Path("Assets/Unused.chAss")), "unused");
 
   const Path output = root.join(Path("Out/MyGame"));
@@ -1801,6 +1885,21 @@ TEST_CASE("chCore - Project packager")
     REQUIRE_FALSE(FileSystem::exists(output.join(Path("Config/Package.ini"))));
     REQUIRE(FileSystem::isFile(output.join(Path("Assets/Maps/Main.chAss"))));
     REQUIRE_FALSE(FileSystem::exists(output.join(Path("Assets/Unused.chAss"))));
+    // The editor data (paths of this machine) stays out of the package; the data is kept.
+    SPtr<DataStream> packagedScene =
+        FileSystem::openFile(output.join(Path("Assets/Maps/Main.chAss")));
+    REQUIRE(packagedScene);
+    AssetFileInfo sceneInfo;
+    Vector<chEngineSDK::UUID> sceneReferences;
+    String sceneEditorData;
+    REQUIRE(AssetFile::readInfo(*packagedScene, sceneInfo));
+    REQUIRE(AssetFile::readReferences(*packagedScene, sceneReferences));
+    REQUIRE(AssetFile::readEditorData(*packagedScene, &sceneEditorData));
+    REQUIRE(sceneEditorData.empty());
+    ANSICHAR sceneBytes[5] = {};
+    REQUIRE(packagedScene->read(sceneBytes, sizeof(sceneBytes)) == sizeof(sceneBytes));
+    REQUIRE(StringView(sceneBytes, sizeof(sceneBytes)) == "scene");
+    packagedScene->close();
     REQUIRE(FileSystem::isFile(output.join(Path("MyGame.chproject"))));
     ProjectDescriptor packagedProject;
     REQUIRE(packagedProject.load(output.join(Path("MyGame.chproject"))));

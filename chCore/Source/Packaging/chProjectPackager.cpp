@@ -10,6 +10,7 @@
 #include "chProjectPackager.h"
 
 #if USING(CH_EDITOR)
+#include "chAssetFile.h"
 #include "chConfigFile.h"
 #include "chDynamicLibrary.h"
 #include "chEnginePaths.h"
@@ -299,7 +300,15 @@ ProjectPackager::package(const PackageDesc& desc, PackageProgress* progress)
       result.error = "Cancelled.";
       return result;
     }
-    if (!FileSystem::copyFile(copy.source, copy.destination)) {
+    // The editor data of an asset holds paths of this machine and means nothing to a game.
+    const bool bStripEditorData =
+        copy.kind == CopyKind::Asset &&
+        copy.source.getExtension() == EnginePaths::getEngineAssetExtension();
+    const bool bCopied =
+        bStripEditorData
+            ? AssetFile::rewriteWithEditorData(copy.source, copy.destination, StringView())
+            : FileSystem::copyFile(copy.source, copy.destination);
+    if (!bCopied) {
       result.error = "Could not copy " + copy.source.toString() + " to " +
                      copy.destination.toString() + ".";
       return result;

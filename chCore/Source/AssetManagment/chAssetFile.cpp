@@ -11,6 +11,8 @@
 
 #include "chAssetManager.h"
 #include "chFileStream.h"
+#include "chFileSystem.h"
+#include "chPath.h"
 #include "chLogger.h"
 
 namespace chEngineSDK {
@@ -20,7 +22,8 @@ void
 AssetFile::writeStart(DataStream& stream,
                       const UUID& uuid,
                       const UUID& assetType,
-                      Span<const UUID> references)
+                      Span<const UUID> references,
+                      StringView editorData)
 {
   const AssetFileHeader header;
   stream.write(&header, sizeof(header));
@@ -32,6 +35,7 @@ AssetFile::writeStart(DataStream& stream,
   if (referenceCount > 0) {
     stream.write(references.data(), references.size_bytes());
   }
+  writeString(stream, editorData);
 }
 
 /*
@@ -43,7 +47,7 @@ AssetFile::readInfo(DataStream& stream, AssetFileInfo& outInfo)
   if (stream.read(&header, sizeof(header)) != sizeof(header) ||
       header.magic != AssetFileHeader::MAGIC) {
     CH_LOG_ERROR(AssetSystem,
-                 "Not an asset file, or saved before format version 1; import it again.");
+                 "Not an asset file; import it again.");
     return false;
   }
   if (header.formatVersion != AssetFileHeader::FORMAT_VERSION) {
@@ -84,6 +88,69 @@ AssetFile::readReferences(DataStream& stream, Vector<UUID>& outReferences)
     return false;
   }
   return true;
+}
+
+/*
+ */
+bool
+AssetFile::readEditorData(DataStream& stream, String* outText)
+{
+  if (outText) {
+    outText->clear();
+  }
+
+  uint32 length = 0;
+  if (!readValue(stream, length) || length > MAX_EDITOR_DATA_SIZE ||
+      length > getBytesLeft(stream)) {
+    CH_LOG_ERROR(AssetSystem, "Asset file has broken editor data.");
+    return false;
+  }
+  if (!outText) {
+    stream.seek(stream.tell() + length);
+    return true;
+  }
+  outText->resize(length);
+  return readBytes(stream, outText->data(), length);
+}
+
+/*
+ */
+bool
+AssetFile::rewriteWithEditorData(const Path& source,
+                                 const Path& destination,
+                                 StringView editorData)
+{
+  // Read whole first, so the destination may be the source.
+  Vector<uint8> bytes = FileSystem::fastRead(source);
+  if (bytes.empty()) {
+    CH_LOG_ERROR(AssetSystem, "Could not read {0}", source);
+    return false;
+  }
+
+  MemoryDataStream input(bytes.data(), bytes.size(), false);
+  AssetFileInfo info;
+  Vector<UUID> references;
+  if (!readInfo(input, info) || !readReferences(input, references) ||
+      !readEditorData(input, nullptr)) {
+    CH_LOG_ERROR(AssetSystem, "Could not read the asset file {0}", source);
+    return false;
+  }
+  const SIZE_T dataStart = input.tell();
+
+  SPtr<DataStream> output = FileSystem::createAndOpenFile(destination);
+  if (!output) {
+    CH_LOG_ERROR(AssetSystem, "Could not write {0}", destination);
+    return false;
+  }
+  writeStart(*output, info.uuid, info.assetType, references, editorData);
+  const SIZE_T dataSize = bytes.size() - dataStart;
+  const bool bWritten =
+      dataSize == 0 || output->write(bytes.data() + dataStart, dataSize) == dataSize;
+  output->close();
+  if (!bWritten) {
+    CH_LOG_ERROR(AssetSystem, "Could not write {0}", destination);
+  }
+  return bWritten;
 }
 
 /*

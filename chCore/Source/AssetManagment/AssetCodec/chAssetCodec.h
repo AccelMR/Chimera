@@ -52,8 +52,8 @@ class CH_CORE_EXPORT IAssetCodec {
 
   /**
    * Same for a file already in memory (a texture inside a model file); data must stay
-   * valid until readSource returns. sourceFile and sourcePart name where the data came from
-   * in the .meta file, so a later import can find the asset. Codecs that cannot read memory
+   * valid until readSource returns. sourceFile and sourcePart name where the data came from;
+   * they are kept in the asset's editor data, so a later import can find the asset. Codecs that cannot read memory
    * return null.
    */
   NODISCARD virtual UniquePtr<IImportTask>
@@ -115,7 +115,7 @@ class CH_CORE_EXPORT IAssetCodec {
   }
 
   /**
-   * Records where the asset came from and how (its .meta file), saves it and adds it to the
+   * Records where the asset came from and how (its editor data), saves it and adds it to the
    * AssetManager.
    */
   NODISCARD static bool

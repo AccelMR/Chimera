@@ -11,10 +11,7 @@
 
 #include "chFileStream.h"
 #include "chLogger.h"
-
-#if USING(CH_EDITOR)
-#include "chConfigFile.h"
-#endif // USING(CH_EDITOR)
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 CH_LOG_DECLARE_STATIC(ScriptAssetLog, All);
@@ -55,6 +52,11 @@ ScriptAsset::serialize(SPtr<DataStream> stream)
   if (!stream) {
     return false;
   }
+  // Kept in the text too, so the lines Lua reports match the file.
+  UUID storedUUID = UUID::null();
+  if (!readUUIDLine(m_source, storedUUID) || storedUUID != m_metadata.uuid) {
+    m_source = withUUIDLine(m_source, m_metadata.uuid);
+  }
   return stream->write(m_source.data(), m_source.size()) == m_source.size();
 }
 
@@ -80,14 +82,40 @@ ScriptAsset::clearAssetData()
   m_source = String();
 }
 
-#if USING(CH_EDITOR)
 /*
  */
-void
-ScriptAsset::writeEditorValues(ConfigFile& file) const
+bool
+ScriptAsset::readUUIDLine(StringView text, UUID& outUUID)
 {
-  file.setValue(META_SECTION, META_UUID_KEY, m_metadata.uuid.toString());
+  if (!text.starts_with(UUID_LINE_PREFIX)) {
+    return false;
+  }
+  StringView rest = text.substr(UUID_LINE_PREFIX.size());
+  const SIZE_T lineEnd = rest.find_first_of("\r\n");
+  if (lineEnd != StringView::npos) {
+    rest = rest.substr(0, lineEnd);
+  }
+  return UUID::fromString(StringUtils::trimView(rest), outUUID);
 }
-#endif // USING(CH_EDITOR)
+
+/*
+ */
+String
+ScriptAsset::withUUIDLine(StringView text, const UUID& uuid)
+{
+  // The file keeps the line endings it already uses.
+  const StringView newLine = text.find("\r\n") != StringView::npos ? "\r\n" : "\n";
+  UUID oldUUID = UUID::null();
+  if (readUUIDLine(text, oldUUID)) {
+    const SIZE_T lineEnd = text.find('\n');
+    text = lineEnd == StringView::npos ? StringView() : text.substr(lineEnd + 1);
+  }
+
+  String result(UUID_LINE_PREFIX);
+  result += uuid.toString();
+  result += newLine;
+  result += text;
+  return result;
+}
 
 } // namespace chEngineSDK

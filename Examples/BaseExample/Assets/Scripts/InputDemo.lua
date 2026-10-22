@@ -1,3 +1,4 @@
+-- chimera-uuid: 5b40870d-ffad-4477-a1a1-af906c32bf5b
 -- Shows the rest of the Input API in the log:
 --   1: the next key pressed becomes the first key of Jump (captureNextKey).
 --   2: Jump goes back to its default keys.

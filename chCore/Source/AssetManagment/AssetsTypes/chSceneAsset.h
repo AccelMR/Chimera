@@ -43,7 +43,7 @@ class CH_CORE_EXPORT SceneAsset : public IAsset
 
 #if USING(CH_EDITOR)
   /**
-   * Where the editor camera was when the scene was saved, kept in the .meta file. False
+   * Where the editor camera was when the scene was saved, kept in its editor data. False
    * when it was never saved with one.
    */
   NODISCARD bool

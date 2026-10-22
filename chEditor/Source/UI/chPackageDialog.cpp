@@ -486,12 +486,7 @@ startPackage(DialogState& state, const Path& binaryDirectory, bool bDevelopment)
   desc.assetFiles.reserve(assets.size());
   for (const UUID& uuid : assets) {
     const SPtr<IAsset> asset = assetManager.getAsset(uuid);
-    const Path assetFile = FileSystem::absolutePath(asset->getFilePath());
-    // A plain file (a script) keeps its UUID in its .meta file, so the game needs it too.
-    if (asset->isPlainFile()) {
-      desc.assetFiles.push_back(AssetMeta::getPath(assetFile));
-    }
-    desc.assetFiles.push_back(assetFile);
+    desc.assetFiles.push_back(FileSystem::absolutePath(asset->getFilePath()));
   }
 
   // Kept only when it is not the default, so the default follows the project.

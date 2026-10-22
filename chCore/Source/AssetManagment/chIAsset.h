@@ -135,8 +135,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
   /**
    * True when the file is the source itself (a script), so other tools can edit it: it has no
-   * asset file start and no references, and its UUID lives in its .meta file, which the game
-   * needs too.
+   * asset file start and no references; the asset type keeps the UUID inside the text.
    */
   NODISCARD virtual bool
   isPlainFile() const { return false; }
@@ -169,16 +168,16 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
 #if USING(CH_EDITOR)
   /**
-   * Writes only the .meta file next to the asset file.
+   * The editor data as the text save() puts in the asset file.
    */
-  NODISCARD bool
-  saveMetaFile() const;
+  NODISCARD String
+  makeEditorDataText() const;
 #endif // USING(CH_EDITOR)
 
  protected:
 
   /**
-   * Renames the asset file (and its .meta file in the editor).
+   * Renames the asset file.
    */
   NODISCARD bool
   rename(const ANSICHAR* newName);
@@ -209,7 +208,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
 
 #if USING(CH_EDITOR)
   /**
-   * Adds what only this asset type keeps in its .meta file, called when it is saved.
+   * Adds what only this asset type keeps in its editor data, called when it is saved.
    */
   virtual void
   writeEditorValues(ConfigFile& file) const
@@ -237,7 +236,7 @@ class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
   Vector<UUID> m_referencedAssets; ///< Filled by collectReferences on save, read on load
 
 #if USING(CH_EDITOR)
-  AssetEditorData m_editorData; ///< Saved in the .meta file, never in the asset file
+  AssetEditorData m_editorData; ///< Saved as text in the asset file; packages drop it
 #endif // USING(CH_EDITOR)
 }; // class IAsset
 

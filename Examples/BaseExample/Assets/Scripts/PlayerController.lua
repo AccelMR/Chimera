@@ -1,3 +1,4 @@
+-- chimera-uuid: 710a2454-6aca-4b0e-9de9-b9c8e573fe0f
 -- Moves its object with the Move action (WASD, arrows, left stick) along the ground,
 -- relative to where the camera looks. Sprint runs faster and Jump hops with gravity.
 local Input = Input

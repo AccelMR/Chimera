@@ -335,18 +335,18 @@ AssetManager::makeUniqueAssetName(const Path& folder, StringView name) const
 SPtr<IAsset>
 AssetManager::lazyLoadScriptFile(const Path& file)
 {
-  // AssetMeta is editor only, so the name of the .meta file is built here.
-  String metaText = file.toString();
-  metaText += ".meta";
-  const Path metaPath(std::move(metaText));
-  ConfigFile metaFile;
-  const bool bHasMeta = FileSystem::isFile(metaPath) && metaFile.load(metaPath);
+  SPtr<DataStream> stream = FileSystem::openFile(file, true);
+  if (!stream || !stream->isReadable()) {
+    CH_LOG_ERROR(AssetSystem, "Failed to open script file: {0}", file);
+    return nullptr;
+  }
+  // As text, so a file saved as UTF-16 or with a byte order mark reads the same.
+  String source = stream->getAsString();
+  stream->close();
+
   UUID uuid = UUID::null();
-  if (bHasMeta) {
-    const String* text = metaFile.getValue(ScriptAsset::META_SECTION, ScriptAsset::META_UUID_KEY);
-    if (text && !UUID::fromString(*text, uuid)) {
-      uuid = UUID::null();
-    }
+  if (!ScriptAsset::readUUIDLine(source, uuid)) {
+    uuid = UUID::null();
   }
 
   const Path virtualFile = FileSystem::toVirtualPath(file);
@@ -357,7 +357,7 @@ AssetManager::lazyLoadScriptFile(const Path& file)
       if (it->second->getFilePath() == virtualFile) {
         return it->second;
       }
-      // A copied script brings the .meta of the original along.
+      // A copied script brings the UUID line of the original along.
       bTaken = true;
     }
   }
@@ -374,8 +374,8 @@ AssetManager::lazyLoadScriptFile(const Path& file)
 #else
   if (uuid.isNull() || bTaken) {
     CH_LOG_ERROR(AssetSystem,
-                 "Script {0} has no UUID of its own in its .meta file and is skipped. Open the "
-                 "project in the editor, which writes one.",
+                 "Script {0} has no UUID line of its own and is skipped. Open the project in "
+                 "the editor, which writes one.",
                  virtualFile);
     return nullptr;
   }
@@ -389,24 +389,25 @@ AssetManager::lazyLoadScriptFile(const Path& file)
     CH_LOG_ERROR(AssetSystem, "Script file name or folder is too long: {0}", file);
     return nullptr;
   }
-  SPtr<ScriptAsset> asset = chMakeShared<ScriptAsset>(metadata);
 
 #if USING(CH_EDITOR)
-  if (bHasMeta) {
-    AssetMeta::read(metaFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
-    asset->readEditorValues(metaFile);
-  }
-  else {
+  if (bNeedsUUID) {
+    // Saving writes the UUID line into the file.
+    SPtr<ScriptAsset> asset = chMakeShared<ScriptAsset>(metadata, std::move(source));
     asset->m_editorData = AssetMeta::makeNew(Path(), StringView(), ImportSettings{});
-  }
-  if (bNeedsUUID && !asset->saveMetaFile()) {
-    CH_LOG_WARNING(AssetSystem, "Could not write the .meta file of script {0}", virtualFile);
+    if (!asset->save()) {
+      CH_LOG_WARNING(AssetSystem, "Could not write the UUID line of script {0}", virtualFile);
+    }
+    return asset;
   }
 #endif // USING(CH_EDITOR)
 
+  SPtr<ScriptAsset> asset = chMakeShared<ScriptAsset>(metadata);
+#if USING(CH_EDITOR)
+  asset->m_editorData = AssetMeta::makeNew(Path(), StringView(), ImportSettings{});
+#endif // USING(CH_EDITOR)
   return asset;
 }
-
 /*
  */
 SPtr<IAsset>
@@ -419,8 +420,15 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
 
   AssetFileInfo info;
   Vector<UUID> references;
-  const bool bReadInfo =
-      AssetFile::readInfo(*stream, info) && AssetFile::readReferences(*stream, references);
+  // Only the editor reads its data; the game moves past it.
+  String editorData;
+  String* editorDataTarget = nullptr;
+#if USING(CH_EDITOR)
+  editorDataTarget = &editorData;
+#endif // USING(CH_EDITOR)
+  const bool bReadInfo = AssetFile::readInfo(*stream, info) &&
+                         AssetFile::readReferences(*stream, references) &&
+                         AssetFile::readEditorData(*stream, editorDataTarget);
   stream->close();
   if (!bReadInfo) {
     return nullptr;
@@ -460,11 +468,10 @@ AssetManager::lazyLoadAssetFile(const Path& file) {
   asset->m_referencedAssets = std::move(references);
 
 #if USING(CH_EDITOR)
-  ConfigFile metaFile;
-  if (metaFile.load(AssetMeta::getPath(file))) {
-    AssetMeta::read(metaFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
-    asset->readEditorValues(metaFile);
-  }
+  ConfigFile editorFile;
+  editorFile.parse(editorData, file.toString());
+  AssetMeta::read(editorFile, EnginePaths::getProjectDirectory(), asset->m_editorData);
+  asset->readEditorValues(editorFile);
 #endif // USING(CH_EDITOR)
 
   return asset;

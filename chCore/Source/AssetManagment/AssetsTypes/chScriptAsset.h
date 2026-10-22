@@ -18,8 +18,9 @@ namespace chEngineSDK {
 
 /**
  * Exists so a script is an asset that scenes reference by UUID while its file stays a plain
- * .lua that any editor opens. The UUID lives in the .lua.meta file next to it; the editor
- * writes one for a script that has none.
+ * .lua that any editor opens. The UUID is a comment on the first line of the file
+ * ("-- chimera-uuid: ..."), which Lua ignores; saving writes it, and the editor adds one to
+ * a script that has none.
  */
 class CH_CORE_EXPORT ScriptAsset : public IAsset
 {
@@ -53,10 +54,21 @@ class CH_CORE_EXPORT ScriptAsset : public IAsset
   NODISCARD bool
   isPlainFile() const override { return true; }
 
+  /**
+   * Reads the UUID from the first line of text; false when that line is not a UUID line.
+   */
+  NODISCARD static bool
+  readUUIDLine(StringView text, UUID& outUUID);
+
+  /**
+   * text with its first line set to the UUID line of uuid: an old UUID line is replaced,
+   * otherwise one is added before the first line.
+   */
+  NODISCARD static String
+  withUUIDLine(StringView text, const UUID& uuid);
+
   static constexpr StringView EXTENSION = ".lua";
-  // Where the .meta file keeps the UUID.
-  static constexpr StringView META_SECTION = "Asset";
-  static constexpr StringView META_UUID_KEY = "UUID";
+  static constexpr StringView UUID_LINE_PREFIX = "-- chimera-uuid: ";
 
  protected:
   bool
@@ -67,11 +79,6 @@ class CH_CORE_EXPORT ScriptAsset : public IAsset
 
   void
   clearAssetData() override;
-
-#if USING(CH_EDITOR)
-  void
-  writeEditorValues(ConfigFile& file) const override;
-#endif // USING(CH_EDITOR)
 
  private:
   String m_source;

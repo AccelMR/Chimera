@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/14
  * @brief
- *  Editor data of an asset, kept in a .meta file next to the asset file.
+ *  Editor data of an asset, kept as text inside the asset file.
  */
 /************************************************************************/
 #pragma once
@@ -20,7 +20,7 @@ class ConfigFile;
 
 /**
  * Exists so the editor knows when and from what an asset was made while the game never reads
- * it: it is saved in the asset's .meta file, not in the asset file.
+ * it: it is saved as text in the asset file, which the game skips and packages drop.
  */
 struct AssetEditorData
 {
@@ -36,19 +36,13 @@ struct AssetEditorData
 };
 
 /**
- * Exists so the .meta file is written and read in one place. It is a text config file, so it
- * reads well in a diff. The source path is stored relative to the project, so a project moved
- * together with its source files keeps it.
+ * Exists so the editor data is written and read in one place. It is config file text, so it
+ * can still be read when debugging a file. The source path is stored relative to the project,
+ * so a project moved together with its source files keeps it.
  */
 class CH_CORE_EXPORT AssetMeta
 {
  public:
-  /**
-   * "<folder>/<Name>.chAss.meta" for "<folder>/<Name>.chAss".
-   */
-  NODISCARD static Path
-  getPath(const Path& assetFile);
-
   /**
    * The source path is written relative to baseFolder when it can be.
    */
@@ -61,9 +55,6 @@ class CH_CORE_EXPORT AssetMeta
   static void
   read(const ConfigFile& file, const Path& baseFolder, AssetEditorData& outData);
 
-  NODISCARD static bool
-  save(const Path& assetFile, const AssetEditorData& data);
-
   /**
    * Editor data of an asset made now from that source.
    */
@@ -75,8 +66,6 @@ class CH_CORE_EXPORT AssetMeta
 
   NODISCARD static StringView
   getExpandModeName(ModelExpandMode mode) noexcept;
-
-  static constexpr StringView EXTENSION = ".meta";
 };
 
 } // namespace chEngineSDK

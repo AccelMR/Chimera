@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/14
  * @brief
- *  Editor data of an asset, kept in a .meta file next to the asset file.
+ *  Editor data of an asset, kept as text inside the asset file.
  */
 /************************************************************************/
 #include "chAssetMeta.h"
@@ -54,16 +54,6 @@ readBool(const ConfigFile& file, StringView key, bool& value)
   }
 }
 } // namespace
-
-/*
- */
-Path
-AssetMeta::getPath(const Path& assetFile)
-{
-  String text = assetFile.toString();
-  text += EXTENSION;
-  return Path(std::move(text));
-}
 
 /*
  */
@@ -166,16 +156,6 @@ AssetMeta::read(const ConfigFile& file, const Path& baseFolder, AssetEditorData&
       settings.skeletonMode = ImportSkeletonMode::Existing;
     }
   }
-}
-
-/*
- */
-bool
-AssetMeta::save(const Path& assetFile, const AssetEditorData& data)
-{
-  ConfigFile file;
-  write(data, EnginePaths::getProjectDirectory(), file);
-  return file.save(getPath(assetFile));
 }
 
 /*

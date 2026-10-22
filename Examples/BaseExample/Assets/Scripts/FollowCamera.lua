@@ -1,3 +1,4 @@
+-- chimera-uuid: 5e190b1d-6fa7-41e3-8275-f267b564b3ea
 -- Keeps its object (the camera) orbiting a target. Hold the right mouse button and move the
 -- mouse, or use the right stick, to turn around it (Look action); the wheel or the triggers
 -- zoom (Zoom action).

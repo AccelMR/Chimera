@@ -79,7 +79,12 @@ IAsset::save() {
   m_referencedAssets.clear();
   if (!isPlainFile()) {
     collectReferences(m_referencedAssets);
-    AssetFile::writeStart(*stream, m_metadata.uuid, m_metadata.assetType, m_referencedAssets);
+    String editorData;
+#if USING(CH_EDITOR)
+    editorData = makeEditorDataText();
+#endif // USING(CH_EDITOR)
+    AssetFile::writeStart(*stream, m_metadata.uuid, m_metadata.assetType, m_referencedAssets,
+                          editorData);
   }
 
   const bool success = serialize(stream);
@@ -90,13 +95,6 @@ IAsset::save() {
 
   stream->close();
 
-#if USING(CH_EDITOR)
-  if (!saveMetaFile()) {
-    CH_LOG(AssetSystem, Warning, "Failed to write the .meta file of asset {0}",
-           m_metadata.name);
-  }
-#endif // USING(CH_EDITOR)
-
   CH_LOG(AssetSystem, Debug, "Asset {0} saved successfully to {1}", m_metadata.name,
          assetPath.toString());
   return true;
@@ -105,13 +103,13 @@ IAsset::save() {
 #if USING(CH_EDITOR)
 /*
  */
-bool
-IAsset::saveMetaFile() const
+String
+IAsset::makeEditorDataText() const
 {
-  ConfigFile metaFile;
-  AssetMeta::write(m_editorData, EnginePaths::getProjectDirectory(), metaFile);
-  writeEditorValues(metaFile);
-  return metaFile.save(AssetMeta::getPath(getFilePath()));
+  ConfigFile editorFile;
+  AssetMeta::write(m_editorData, EnginePaths::getProjectDirectory(), editorFile);
+  writeEditorValues(editorFile);
+  return editorFile.toText();
 }
 #endif // USING(CH_EDITOR)
 
@@ -144,15 +142,6 @@ IAsset::rename(const ANSICHAR* newName) {
     CH_LOG(AssetSystem, Error, "Failed to rename asset {0} to {1}", m_metadata.name, newName);
     return false;
   }
-
-#if USING(CH_EDITOR)
-  const Path oldMeta = AssetMeta::getPath(oldFile);
-  if (FileSystem::isFile(oldMeta) &&
-      !FileSystem::renameFile(oldMeta, AssetMeta::getPath(newFile))) {
-    CH_LOG(AssetSystem, Warning, "Failed to rename the .meta file of asset {0}",
-           m_metadata.name);
-  }
-#endif // USING(CH_EDITOR)
 
   StringUtils::copyToBuffer(m_metadata.name, newName);
   return true;
@@ -187,7 +176,8 @@ IAsset::load() {
   if (!isPlainFile() &&
       (!AssetFile::readInfo(*stream, info) || info.uuid != m_metadata.uuid ||
        info.assetType != m_metadata.assetType ||
-       !AssetFile::readReferences(*stream, m_referencedAssets))) {
+       !AssetFile::readReferences(*stream, m_referencedAssets) ||
+       !AssetFile::readEditorData(*stream, nullptr))) {
     CH_LOG(AssetSystem, Error, "Invalid asset file {0}", m_metadata.name);
     m_state = AssetState::Failed;
     return false;

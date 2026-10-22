@@ -4,7 +4,7 @@
  * @author AccelMR
  * @date 2026/10/14
  * @brief
- *  The options an asset was imported with, kept in its .meta file.
+ *  The options an asset was imported with, kept in its editor data.
  */
 /************************************************************************/
 #pragma once
@@ -18,7 +18,7 @@
 namespace chEngineSDK {
 
 /**
- * How a model with bones gets its skeleton. Fixed values, because the .meta file stores
+ * How a model with bones gets its skeleton. Fixed values, because the editor data stores
  * them by name and old names must keep meaning the same.
  */
 enum class ImportSkeletonMode : uint32
