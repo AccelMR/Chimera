@@ -11,6 +11,8 @@
 
 #include "chAlgorithm.h"
 #include "chBox.h"
+#include "chScriptManager.h"
+#include "chScriptObjectTypes.h"
 
 namespace chEngineSDK {
 
@@ -28,6 +30,9 @@ GameObject::~GameObject()
   // Children kept alive elsewhere must not stay registered in a scene they left.
   if (m_scene) {
     setRegisteredRecursive(false);
+  }
+  if (m_scriptHandle != ScriptClassInfo::NO_REFERENCE) {
+    ScriptTraits<GameObject>::release(*this);
   }
 }
 

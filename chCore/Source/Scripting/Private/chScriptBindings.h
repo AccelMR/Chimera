@@ -27,6 +27,12 @@ class ScriptBindings
    */
   static void
   registerMath(lua_State* state);
+
+  /**
+   * GameObject, Transform and Scene.find.
+   */
+  static void
+  registerObjects(lua_State* state);
 };
 
 } // namespace chEngineSDK

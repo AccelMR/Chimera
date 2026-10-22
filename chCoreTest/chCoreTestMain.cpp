@@ -65,6 +65,7 @@
 #include "chScriptBinder.h"
 #include "chScriptComponent.h"
 #include "chScriptManager.h"
+#include "chScriptObjectTypes.h"
 #include "chShadowRenderer.h"
 #include "chShapeComponent.h"
 #include "chSkeleton.h"
@@ -5191,4 +5192,156 @@ TEST_CASE("chCore - Script steering benchmark", "[.benchmark]")
               std::chrono::duration<double, std::milli>(end - start).count() /
                   (kWarmUpFrames + kFrames));
   REQUIRE(agents[0].position.magnitude() < 50.0f);
+}
+
+TEST_CASE("chCore - Script objects")
+{
+  ScriptManager& scripts = getTestScriptManager();
+  REQUIRE(scripts.runString("Found = {}"));
+  const SPtr<ScriptAsset> probe = createTestScriptAsset("Probe", R"lua(
+    local Probe = {}
+    function Probe:onStart()
+      Found.self = self
+      Found.object = self.gameObject
+      Found.transform = self.transform
+    end
+    return Probe
+  )lua");
+
+  Scene scene("Objects", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+  const SPtr<GameObject> parent = scene.createGameObject("Parent");
+  const SPtr<GameObject> child = scene.createGameObject("Child", parent.get());
+  const SPtr<GameObject> grandChild = scene.createGameObject("GrandChild", child.get());
+  parent->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+  parent->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  child->getTransform().setLocalPosition(Vector3(1.0f, 0.0f, 0.0f));
+  child->addComponent<ScriptComponent>(probe);
+  scene.update(0.1f);
+  REQUIRE(scripts.runString("assert(Found.object and Found.transform)"));
+
+  SECTION("Handles are the same value for the same object")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      local object = Found.object
+      assert(object == Scene.find("Child"))
+      assert(object:getTransform() == Found.transform)
+      assert(Found.transform:getGameObject() == object)
+      assert(object:getName() == "Child" and object:isValid())
+      assert(tostring(object) == "GameObject(Child)")
+      assert(object:getParent():getName() == "Parent")
+      assert(object:getParent():getParent() == nil)
+      assert(object:getChildCount() == 1 and object:getChild(1):getName() == "GrandChild")
+      assert(object:getChild(2) == nil)
+      assert(Scene.find("Parent"):findChild("GrandChild") == nil)
+      assert(Scene.find("Parent"):findDescendant("GrandChild"):getName() == "GrandChild")
+      assert(Scene.find("Nobody") == nil)
+    )lua"));
+  }
+
+  SECTION("Local and world placement")
+  {
+    // The parent stands at x = 10 turned 90 degrees right, so the child's local +X is world +Y.
+    REQUIRE(scripts.runString(R"lua(
+      local t = Found.transform
+      assert(t:getLocalPosition() == Vector3(1, 0, 0))
+      assert(t:getWorldPosition():nearEqual(Vector3(10, 1, 0)))
+      assert(t:getForward():nearEqual(Vector3.RIGHT))
+
+      local out = Vector3()
+      assert(rawequal(t:getWorldPosition(out), out))
+      assert(out:nearEqual(Vector3(10, 1, 0)))
+
+      t:setWorldPosition(10, 5, 2)
+      assert(t:getWorldPosition():nearEqual(Vector3(10, 5, 2)))
+      assert(t:getLocalPosition():nearEqual(Vector3(5, 0, 2)))
+
+      t:setLocalPosition(Vector3(1, 0, 0))
+      t:translateLocal(2, 0, 0)
+      assert(t:getWorldPosition():nearEqual(Vector3(10, 3, 0)))
+      t:translateWorld(0, 0, 4)
+      assert(t:getWorldPosition():nearEqual(Vector3(10, 3, 4)))
+
+      t:setWorldRotation(Quaternion.IDENTITY)
+      assert(t:getForward():nearEqual(Vector3.FORWARD))
+      t:rotateLocal(0, 90, 0)
+      assert(t:getForward():nearEqual(Vector3.RIGHT))
+
+      t:lookAt(Vector3(10, 3, 10))
+      assert(t:getForward():nearEqual(Vector3.UP))
+      t:lookAt(Vector3(20, 3, 4))
+      assert(t:getForward():nearEqual(Vector3.FORWARD))
+
+      t:setLocalScale(2, 2, 2)
+      assert(t:getLocalScale() == Vector3(2, 2, 2))
+    )lua"));
+    scene.updateTransforms();
+    REQUIRE(child->getTransform().getWorldPosition().nearEqual(Vector3(10.0f, 3.0f, 4.0f),
+                                                               0.001f));
+  }
+
+  SECTION("A destroyed object is an error, and isValid says so")
+  {
+    scene.destroyGameObject(*grandChild);
+    REQUIRE(scripts.runString(R"lua(
+      Found.gone = Found.object:getChild(1)
+    )lua"));
+    REQUIRE(scripts.runString("assert(Found.gone == nil)"));
+
+    REQUIRE(scripts.runString("Found.parent = Found.object:getParent()"));
+    scene.destroyGameObject(*parent);
+    REQUIRE(scripts.runString(R"lua(
+      assert(not Found.parent:isValid() and not Found.object:isValid())
+      assert(tostring(Found.object) == "GameObject(destroyed)")
+    )lua"));
+    REQUIRE_FALSE(scripts.runString("return Found.object:getName()"));
+    REQUIRE_FALSE(scripts.runString("return Found.transform:getWorldPosition()"));
+  }
+
+  SECTION("A handle outlives its object without dangling")
+  {
+    {
+      const SPtr<GameObject> temporary = scene.createGameObject("Temporary");
+      ScriptTraits<GameObject>::push(scripts.getState(), *temporary);
+      lua_setglobal(scripts.getState(), "Temporary");
+      scene.destroyGameObject(*temporary);
+    }
+    REQUIRE(scripts.runString("assert(not Temporary:isValid())"));
+    REQUIRE(scripts.runString("assert(tostring(Temporary) == 'GameObject(destroyed)')"));
+    REQUIRE_FALSE(scripts.runString("return Temporary:getName()"));
+  }
+
+  SECTION("Scripts reach each other through getScript")
+  {
+    const SPtr<ScriptAsset> health = createTestScriptAsset("Health", R"lua(
+      local Health = { points = 100 }
+      function Health:onStart() self.started = true end
+      function Health:damage(amount) self.points = self.points - amount end
+      return Health
+    )lua");
+    const SPtr<ScriptAsset> attacker = createTestScriptAsset("Attacker", R"lua(
+      local Attacker = {}
+      function Attacker:onStart()
+        local target = Scene.find("GrandChild"):getScript("Health")
+        assert(target and target.started)
+        target:damage(30)
+        Found.points = target.points
+        assert(self.gameObject:getScript("Nope") == nil)
+      end
+      return Attacker
+    )lua");
+    // The parent updates before its descendants, so the attacker starts the target itself.
+    parent->addComponent<ScriptComponent>(attacker);
+    grandChild->addComponent<ScriptComponent>(health);
+    scene.update(0.1f);
+    REQUIRE(scripts.runString("assert(Found.points == 70)"));
+
+    REQUIRE(scripts.runString(R"lua(
+      local holder = Scene.find("GrandChild")
+      assert(holder:isScriptEnabled("Health"))
+      holder:setScriptEnabled("Health", false)
+      assert(not holder:isScriptEnabled("Health") and holder:getScript("Health") == nil)
+    )lua"));
+    REQUIRE_FALSE(scripts.runString("Scene.find('Parent'):setScriptEnabled('Nope', true)"));
+  }
 }

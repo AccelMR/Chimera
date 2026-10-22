@@ -61,6 +61,20 @@ class CH_CORE_EXPORT ScriptComponent : public Component
   isRunning() const noexcept { return m_instance != ScriptClassInfo::NO_REFERENCE; }
 
   /**
+   * Makes the instance and runs onStart now if that did not happen yet, so another script
+   * can use this one before its first update. False when it cannot run: the script fails,
+   * the component is not in a playing scene or is disabled.
+   */
+  NODISCARD bool
+  start();
+
+  /**
+   * Registry reference of the instance (self) while running.
+   */
+  NODISCARD FORCEINLINE int32
+  getInstance() const noexcept { return m_instance; }
+
+  /**
    * True after an error, until the component is registered again.
    */
   NODISCARD FORCEINLINE bool

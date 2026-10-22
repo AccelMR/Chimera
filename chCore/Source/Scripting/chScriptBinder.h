@@ -59,6 +59,45 @@ struct ScriptValueType
 template<typename T>
 concept ScriptValue = ScriptValueType<T>::DECLARED;
 
+/**
+ * Exists to mark engine objects that scripts reach through a handle instead of a copy (a
+ * GameObject): the userdata only points at the object, which may die first, so its
+ * ScriptTraits checks the object is still alive. Declare one with
+ * CH_SCRIPT_HANDLE_TYPE(Type, "Name") and write its ScriptTraits by hand.
+ */
+template<typename T>
+struct ScriptHandleType
+{
+  static constexpr bool DECLARED = false;
+};
+
+#define CH_SCRIPT_HANDLE_TYPE(Type, ScriptName)                                               \
+  template<>                                                                                  \
+  struct ScriptHandleType<Type>                                                               \
+  {                                                                                           \
+    static constexpr bool DECLARED = true;                                                    \
+    static constexpr const ANSICHAR* NAME = ScriptName;                                       \
+  }
+
+template<typename T>
+concept ScriptHandle = ScriptHandleType<T>::DECLARED;
+
+/*
+ * The name scripts know a value or handle type by.
+ */
+template<typename T>
+  requires(ScriptValue<T> || ScriptHandle<T>)
+consteval const ANSICHAR*
+getScriptTypeName()
+{
+  if constexpr (ScriptValue<T>) {
+    return ScriptValueType<T>::NAME;
+  }
+  else {
+    return ScriptHandleType<T>::NAME;
+  }
+}
+
 template<ScriptValue T>
 struct ScriptTraits<T>
 {
@@ -657,7 +696,8 @@ beginValueClass(lua_State* state, const ANSICHAR* name);
  * default arguments are invisible to templates: wrap them in a free function. The tables
  * stay on the Lua stack while the object lives, so make it, chain the calls and drop it.
  */
-template<ScriptValue T>
+template<typename T>
+  requires(ScriptValue<T> || ScriptHandle<T>)
 class ScriptClass
 {
  public:
@@ -665,7 +705,7 @@ class ScriptClass
     : m_state(state),
       m_base(lua_gettop(state) + 1)
   {
-    ScriptDetail::beginValueClass(state, ScriptValueType<T>::NAME);
+    ScriptDetail::beginValueClass(state, getScriptTypeName<T>());
   }
 
   ~ScriptClass() { lua_settop(m_state, m_base - 1); }
@@ -682,6 +722,7 @@ class ScriptClass
   ScriptClass&
   constructor()
   {
+    static_assert(ScriptValue<T>, "Only value types are made by scripts.");
     lua_pushcfunction(m_state, (&ScriptDetail::construct<T, A...>));
     lua_rawseti(m_state, slot(Slot::Constructors), static_cast<lua_Integer>(sizeof...(A)));
     return *this;
@@ -718,6 +759,7 @@ class ScriptClass
   ScriptClass&
   field(const ANSICHAR* name)
   {
+    static_assert(ScriptValue<T>, "Handle types have methods only: their object may be gone.");
     ScriptDetail::pushAccessor(m_state, &ScriptDetail::getField<Member>);
     lua_setfield(m_state, slot(Slot::Members), name);
     ScriptDetail::pushAccessor(m_state, &ScriptDetail::setField<Member>);
@@ -743,6 +785,26 @@ class ScriptClass
   }
 
   /**
+   * A Lua C function as it is, for what the generated wrappers cannot express (optional or
+   * varying arguments). It reads the value at index 1.
+   */
+  ScriptClass&
+  rawMethod(const ANSICHAR* name, const lua_CFunction function)
+  {
+    lua_pushcfunction(m_state, function);
+    lua_setfield(m_state, slot(Slot::Members), name);
+    return *this;
+  }
+
+  ScriptClass&
+  rawStaticFunction(const ANSICHAR* name, const lua_CFunction function)
+  {
+    lua_pushcfunction(m_state, function);
+    lua_setfield(m_state, slot(Slot::Class), name);
+    return *this;
+  }
+
+  /**
    * Called on the class: Name.function(args...).
    */
   template<auto Function>
@@ -761,6 +823,7 @@ class ScriptClass
   ScriptClass&
   constant(const ANSICHAR* name, const T& value)
   {
+    static_assert(ScriptValue<T>, "Only value types have value constants.");
     ScriptTraits<T>::push(m_state, value);
     lua_setfield(m_state, slot(Slot::Constants), name);
     return *this;

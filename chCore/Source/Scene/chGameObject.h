@@ -17,6 +17,8 @@
 #include "chTypeTraits.h"
 
 namespace chEngineSDK {
+template<typename T>
+struct ScriptTraits;
 
 /**
  * Exists as the node of a scene hierarchy: it has a transform relative to its parent, owns
@@ -118,6 +120,8 @@ class CH_CORE_EXPORT GameObject : public Object
  private:
   friend class Scene;
   friend class GameObjectSerializer;
+  // Keeps the script handle of the object (m_scriptHandle).
+  friend struct ScriptTraits<GameObject>;
 
   Component&
   attachComponent(UniquePtr<Component>&& component, const UUID& typeId);
@@ -138,6 +142,10 @@ class CH_CORE_EXPORT GameObject : public Object
   GameObject* m_parent = nullptr;
   Scene* m_scene = nullptr;
   UUID m_prefab = UUID::null();
+  // Registry reference of the handle scripts see this object through (LUA_NOREF until a
+  // script first does). It is cleared when the object dies, so scripts get an error instead
+  // of a dangling pointer.
+  int32 m_scriptHandle = -2;
 };
 
 /*

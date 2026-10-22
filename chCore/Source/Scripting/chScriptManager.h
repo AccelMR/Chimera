@@ -18,6 +18,8 @@
 struct lua_State;
 
 namespace chEngineSDK {
+class GameObject;
+class Scene;
 class ScriptAllocator;
 class ScriptAsset;
 
@@ -97,10 +99,21 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   reloadScripts();
 
   /**
-   * A new table whose missing fields are read from the class, as a registry reference.
+   * A new table whose missing fields are read from the class, with self.gameObject and
+   * self.transform set to owner, as a registry reference.
    */
   NODISCARD int32
-  createInstance(const ScriptClassInfo& scriptClass);
+  createInstance(const ScriptClassInfo& scriptClass, GameObject& owner);
+
+  /**
+   * The scene Scene.find looks in: the scene of the script that runs. Script components set
+   * it before each call.
+   */
+  FORCEINLINE void
+  setCurrentScene(Scene* scene) noexcept { m_currentScene = scene; }
+
+  NODISCARD FORCEINLINE Scene*
+  getCurrentScene() const noexcept { return m_currentScene; }
 
   void
   releaseReference(int32 reference) noexcept;
@@ -166,6 +179,7 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   UniquePtr<ScriptAllocator> m_allocator;
   lua_State* m_state = nullptr;
   UnorderedMap<UUID, ScriptClassInfo> m_classes;
+  Scene* m_currentScene = nullptr;
   int32 m_timeTable = ScriptClassInfo::NO_REFERENCE;
   double m_time = 0.0;
   float m_deltaTime = 0.0f;

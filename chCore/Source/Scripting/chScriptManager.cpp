@@ -15,6 +15,7 @@
 #include "chScriptAsset.h"
 #include "chScriptBinder.h"
 #include "chScriptBindings.h"
+#include "chScriptObjectTypes.h"
 
 #include "lualib.h"
 
@@ -250,6 +251,7 @@ ScriptManager::openLibraries()
   writeTime();
 
   ScriptBindings::registerMath(m_state);
+  ScriptBindings::registerObjects(m_state);
 }
 
 /*
@@ -359,11 +361,15 @@ ScriptManager::reloadScripts()
 /*
  */
 int32
-ScriptManager::createInstance(const ScriptClassInfo& scriptClass)
+ScriptManager::createInstance(const ScriptClassInfo& scriptClass, GameObject& owner)
 {
   lua_createtable(m_state, 0, 4);
   lua_rawgeti(m_state, LUA_REGISTRYINDEX, scriptClass.instanceMetatable);
   lua_setmetatable(m_state, -2);
+  ScriptTraits<GameObject>::push(m_state, owner);
+  lua_setfield(m_state, -2, "gameObject");
+  ScriptTraits<Transform>::pushOf(m_state, owner);
+  lua_setfield(m_state, -2, "transform");
   return luaL_ref(m_state, LUA_REGISTRYINDEX);
 }
 

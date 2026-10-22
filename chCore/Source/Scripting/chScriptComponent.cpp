@@ -12,6 +12,7 @@
 #include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chGameObject.h"
+#include "chScene.h"
 #include "chScriptAsset.h"
 
 namespace chEngineSDK {
@@ -53,7 +54,9 @@ ScriptComponent::fixedUpdate(const float deltaTime)
   if (!ensureStarted() || m_class->fixedUpdate == ScriptClassInfo::NO_REFERENCE) {
     return;
   }
-  if (!ScriptManager::instance().callMethod(m_class->fixedUpdate, m_instance, deltaTime)) {
+  ScriptManager& scriptManager = ScriptManager::instance();
+  scriptManager.setCurrentScene(getOwner()->getScene());
+  if (!scriptManager.callMethod(m_class->fixedUpdate, m_instance, deltaTime)) {
     fail();
   }
 }
@@ -66,9 +69,23 @@ ScriptComponent::update(const float deltaTime)
   if (!ensureStarted() || m_class->update == ScriptClassInfo::NO_REFERENCE) {
     return;
   }
-  if (!ScriptManager::instance().callMethod(m_class->update, m_instance, deltaTime)) {
+  ScriptManager& scriptManager = ScriptManager::instance();
+  scriptManager.setCurrentScene(getOwner()->getScene());
+  if (!scriptManager.callMethod(m_class->update, m_instance, deltaTime)) {
     fail();
   }
+}
+
+/*
+ */
+bool
+ScriptComponent::start()
+{
+  const Scene* scene = getOwner() ? getOwner()->getScene() : nullptr;
+  if (!isRegistered() || !scene || !scene->isPlaying()) {
+    return false;
+  }
+  return ensureStarted();
 }
 
 /*
@@ -84,6 +101,7 @@ ScriptComponent::ensureStarted()
   }
 
   ScriptManager& scriptManager = ScriptManager::instance();
+  scriptManager.setCurrentScene(getOwner()->getScene());
   m_class = scriptManager.getClass(*m_script);
   if (!m_class || !m_class->bValid) {
     if (!m_class) {
@@ -95,7 +113,7 @@ ScriptComponent::ensureStarted()
     return false;
   }
 
-  m_instance = scriptManager.createInstance(*m_class);
+  m_instance = scriptManager.createInstance(*m_class, *getOwner());
   if (m_class->onStart != ScriptClassInfo::NO_REFERENCE &&
       !scriptManager.callMethod(m_class->onStart, m_instance)) {
     fail();
@@ -111,6 +129,7 @@ ScriptComponent::stop()
 {
   if (isRunning() && ScriptManager::isStarted()) {
     ScriptManager& scriptManager = ScriptManager::instance();
+    scriptManager.setCurrentScene(getOwner()->getScene());
     if (m_class->onDestroy != ScriptClassInfo::NO_REFERENCE) {
       // An error here is logged; the instance goes anyway.
       static_cast<void>(scriptManager.callMethod(m_class->onDestroy, m_instance));
