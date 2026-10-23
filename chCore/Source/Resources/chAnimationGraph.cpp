@@ -27,21 +27,24 @@ constexpr uint32 kMaxSamples = 256;
 constexpr uint32 kMaxMaskBones = 1024;
 constexpr uint32 kMaxNameLength = 1024;
 
-struct GraphFileData {
+struct GraphFileData
+{
   uint32 parameterCount;
   uint32 clipCount;
   uint32 layerCount;
 };
 static_assert(sizeof(GraphFileData) == 12, "GraphFileData must have no padding");
 
-struct ParameterFileData {
+struct ParameterFileData
+{
   uint32 type;
   float floatValue;
   int32 intValue;
 };
 static_assert(sizeof(ParameterFileData) == 12, "ParameterFileData must have no padding");
 
-struct LayerFileData {
+struct LayerFileData
+{
   float weight;
   uint32 defaultState;
   uint32 stateCount;
@@ -50,7 +53,8 @@ struct LayerFileData {
 };
 static_assert(sizeof(LayerFileData) == 20, "LayerFileData must have no padding");
 
-struct StateFileData {
+struct StateFileData
+{
   uint32 kind;
   uint32 clip;
   uint32 parameterX;
@@ -62,14 +66,16 @@ struct StateFileData {
 };
 static_assert(sizeof(StateFileData) == 32, "StateFileData must have no padding");
 
-struct SampleFileData {
+struct SampleFileData
+{
   uint32 clip;
   float x;
   float y;
 };
 static_assert(sizeof(SampleFileData) == 12, "SampleFileData must have no padding");
 
-struct TransitionFileData {
+struct TransitionFileData
+{
   uint32 source;
   uint32 target;
   float duration;
@@ -82,7 +88,8 @@ struct TransitionFileData {
 };
 static_assert(sizeof(TransitionFileData) == 36, "TransitionFileData must have no padding");
 
-struct ConditionFileData {
+struct ConditionFileData
+{
   uint32 parameter;
   uint32 op;
   float floatValue;
@@ -93,7 +100,7 @@ static_assert(sizeof(ConditionFileData) == 16, "ConditionFileData must have no p
 /*
  * Writes the error when the caller wants it; always returns false so checks can return it.
  */
-template <typename... Args>
+template<typename... Args>
 bool
 fail(String* outError, FormatString<std::type_identity_t<Args>...> format, Args&&... args)
 {
@@ -119,7 +126,7 @@ isValidName(StringView name)
  * Index of the first name equal to an earlier one (ignoring case), or NOT_FOUND. Lists are
  * short and this runs once per load, so the quadratic walk is fine.
  */
-template <typename T, typename GetName>
+template<typename T, typename GetName>
 NODISCARD uint32
 findDuplicateName(const Vector<T>& items, GetName&& getName)
 {

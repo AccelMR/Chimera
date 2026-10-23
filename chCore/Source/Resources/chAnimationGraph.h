@@ -59,18 +59,21 @@ enum class AnimationStateKind : uint32 {
  * The value of a parameter: floatValue for Float, intValue for the others (Bool and Trigger
  * are 0 or 1).
  */
-struct AnimationParameterValue {
+struct AnimationParameterValue
+{
   float floatValue = 0.0f;
   int32 intValue = 0;
 };
 
-struct AnimationParameter {
+struct AnimationParameter
+{
   String name{};
   AnimationParameterType type = AnimationParameterType::Float;
   AnimationParameterValue defaultValue{};
 };
 
-struct AnimationCondition {
+struct AnimationCondition
+{
   uint32 parameter = 0;
   AnimationConditionOp op = AnimationConditionOp::IsSet;
   // Unused by IsSet and IsNotSet.
@@ -80,13 +83,15 @@ struct AnimationCondition {
 /**
  * A clip placed in a blend space; y is unused in 1D.
  */
-struct BlendSpaceSample {
+struct BlendSpaceSample
+{
   uint32 clip = 0;
   float x = 0.0f;
   float y = 0.0f;
 };
 
-struct AnimationState {
+struct AnimationState
+{
   String name{};
   AnimationStateKind kind = AnimationStateKind::Clip;
   // Index into the graph's clips; Clip states only.
@@ -101,7 +106,8 @@ struct AnimationState {
   bool bLooping = true;
 };
 
-struct AnimationTransition {
+struct AnimationTransition
+{
   // A state of the same layer, or ANY_STATE.
   uint32 source = 0;
   uint32 target = 0;
@@ -122,7 +128,8 @@ struct AnimationTransition {
   Vector<AnimationCondition> conditions{};
 };
 
-struct AnimationLayer {
+struct AnimationLayer
+{
   String name{};
   // From 0 to 1; the first layer always counts as 1.
   float weight = 1.0f;
@@ -138,7 +145,8 @@ struct AnimationLayer {
  * A clip of the graph. The UUID is kept even when the asset is missing, so saving the
  * graph again does not lose it.
  */
-struct AnimationGraphClip {
+struct AnimationGraphClip
+{
   UUID clipId = UUID::null();
   SPtr<AnimationClipAsset> clip;
 };

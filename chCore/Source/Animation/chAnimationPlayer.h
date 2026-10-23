@@ -129,6 +129,22 @@ class CH_CORE_EXPORT AnimationPlayer
              Span<const float> nodeWeights,
              Span<NodeTransform> out) noexcept;
 
+  /**
+   * Weight of a fade elapsed seconds into duration, eased in and out so neither end shows
+   * as a sudden change of speed; 1 once it is over.
+   */
+  NODISCARD static float
+  getFadeWeight(float elapsed, float duration) noexcept;
+
+  /**
+   * Writes the matrix of every node of model in the model's space from its pose relative to
+   * its parent. Both spans have one entry per node.
+   */
+  static void
+  buildPoseMatrices(const Model& model,
+                    Span<const NodeTransform> localPose,
+                    Span<Matrix4> outMatrices) noexcept;
+
  private:
   /**
    * Finds the node of each track of the clip by name.

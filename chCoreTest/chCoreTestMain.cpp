@@ -15,6 +15,7 @@
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
 #include "chAnimationGraph.h"
+#include "chAnimationGraphInstance.h"
 #include "chAnimationPlayer.h"
 #include "chAnimatorComponent.h"
 #include "chBox.h"
@@ -26,6 +27,7 @@
 #include "chAngle.h"
 #include "chAssetFile.h"
 #include "chAssetMeta.h"
+#include "chBlendSpace.h"
 #include "chComponentRegister.h"
 #include "chConfigFile.h"
 #include "chGraphicsTypes.h"
@@ -3068,6 +3070,502 @@ TEST_CASE("chCore - Animation graph")
   }
 }
 
+namespace {
+/*
+ * Sum of the sample positions times their weights: inside a triangle it gives back the
+ * point asked for.
+ */
+Vector2
+blendedPosition(const AnimationState& state, const BlendSpaceWeights& weights)
+{
+  float sum = 0.0f;
+  Vector2 position(0.0f, 0.0f);
+  for (uint32 i = 0; i < weights.count; ++i) {
+    const BlendSpaceSample& sample = state.samples[weights.items[i].sample];
+    position.x += sample.x * weights.items[i].weight;
+    position.y += sample.y * weights.items[i].weight;
+    sum += weights.items[i].weight;
+  }
+  REQUIRE(sum == Approx(1.0f).margin(1e-5f));
+  return position;
+}
+
+float
+weightOf(const BlendSpaceWeights& weights, uint32 sample)
+{
+  float weight = 0.0f;
+  for (uint32 i = 0; i < weights.count; ++i) {
+    weight += weights.items[i].sample == sample ? weights.items[i].weight : 0.0f;
+  }
+  return weight;
+}
+
+AnimationState
+createBlendState(AnimationStateKind kind, const Vector<Pair<float, float>>& positions)
+{
+  AnimationState state{.name = "Blend", .kind = kind, .parameterX = 0, .parameterY = 1};
+  for (const Pair<float, float>& position : positions) {
+    state.samples.push_back({.clip = static_cast<uint32>(state.samples.size()),
+                             .x = position.first,
+                             .y = position.second});
+  }
+  return state;
+}
+} // namespace
+
+TEST_CASE("chCore - Blend space")
+{
+  SECTION("1D blends the two neighbors and holds the ends")
+  {
+    // Out of order on purpose: build sorts them.
+    const AnimationState state = createBlendState(AnimationStateKind::BlendSpace1D,
+                                                  {{3.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}});
+    BlendSpace space;
+    space.build(state);
+
+    BlendSpaceWeights weights = space.computeWeights(0.5f, 0.0f);
+    REQUIRE(weights.count == 2);
+    REQUIRE(weightOf(weights, 1) == Approx(0.5f));
+    REQUIRE(weightOf(weights, 2) == Approx(0.5f));
+    weights = space.computeWeights(2.5f, 0.0f);
+    REQUIRE(weightOf(weights, 2) == Approx(0.25f));
+    REQUIRE(weightOf(weights, 0) == Approx(0.75f));
+    weights = space.computeWeights(1.0f, 0.0f);
+    REQUIRE(weights.count == 1);
+    REQUIRE(weights.items[0].sample == 2);
+    REQUIRE(space.computeWeights(-4.0f, 0.0f).items[0].sample == 1);
+    REQUIRE(space.computeWeights(9.0f, 0.0f).items[0].sample == 0);
+  }
+
+  SECTION("A single clip always has all the weight")
+  {
+    BlendSpace space;
+    space.build(createBlendState(AnimationStateKind::BlendSpace2D, {{2.0f, 3.0f}}));
+    const BlendSpaceWeights weights = space.computeWeights(-1.0f, 7.0f);
+    REQUIRE(weights.count == 1);
+    REQUIRE(weights.items[0].weight == 1.0f);
+  }
+
+  SECTION("2D gives back the point inside the triangles")
+  {
+    // Axes with different ranges, as speed against direction.
+    const AnimationState state = createBlendState(
+        AnimationStateKind::BlendSpace2D,
+        {{0.0f, 0.0f}, {600.0f, 0.0f}, {0.0f, 1.0f}, {600.0f, 1.0f}, {300.0f, 0.5f}});
+    BlendSpace space;
+    space.build(state);
+    REQUIRE(space.getTriangles().size() == 12);
+
+    for (const Pair<float, float>& point : Vector<Pair<float, float>>{
+             {150.0f, 0.25f}, {450.0f, 0.9f}, {300.0f, 0.5f}, {0.0f, 0.0f}, {600.0f, 0.5f}}) {
+      const Vector2 position =
+          blendedPosition(state, space.computeWeights(point.first, point.second));
+      REQUIRE(position.x == Approx(point.first).margin(1e-2f));
+      REQUIRE(position.y == Approx(point.second).margin(1e-4f));
+    }
+    // A clip's own position gives it all the weight.
+    REQUIRE(weightOf(space.computeWeights(300.0f, 0.5f), 4) == Approx(1.0f));
+  }
+
+  SECTION("2D outside the outline takes its closest point")
+  {
+    const AnimationState state =
+        createBlendState(AnimationStateKind::BlendSpace2D,
+                         {{0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}});
+    BlendSpace space;
+    space.build(state);
+    REQUIRE(space.getTriangles().size() == 6);
+
+    const BlendSpaceWeights weights = space.computeWeights(3.0f, 0.25f);
+    REQUIRE(weights.count == 2);
+    REQUIRE(weightOf(weights, 1) == Approx(0.75f));
+    REQUIRE(weightOf(weights, 3) == Approx(0.25f));
+    const Vector2 corner = blendedPosition(state, space.computeWeights(-5.0f, -5.0f));
+    REQUIRE(corner.x == Approx(0.0f).margin(1e-5f));
+    REQUIRE(corner.y == Approx(0.0f).margin(1e-5f));
+  }
+
+  SECTION("2D samples on one line blend along it")
+  {
+    const AnimationState state = createBlendState(AnimationStateKind::BlendSpace2D,
+                                                  {{2.0f, 2.0f}, {0.0f, 0.0f}, {1.0f, 1.0f}});
+    BlendSpace space;
+    space.build(state);
+    REQUIRE(space.getTriangles().empty());
+
+    const BlendSpaceWeights weights = space.computeWeights(0.5f, 0.5f);
+    REQUIRE(weightOf(weights, 1) == Approx(0.5f));
+    REQUIRE(weightOf(weights, 2) == Approx(0.5f));
+    REQUIRE(weightOf(space.computeWeights(5.0f, 4.0f), 0) == Approx(1.0f));
+  }
+}
+
+namespace {
+// Hips > Spine > Arm, and Hips > Leg, all at rest at the origin.
+constexpr uint32 kHips = 0;
+constexpr uint32 kSpine = 1;
+constexpr uint32 kArm = 2;
+constexpr uint32 kLeg = 3;
+
+SPtr<Model>
+createGraphTestModel()
+{
+  SPtr<Model> model = chMakeShared<Model>();
+  addTestNode(*model, "Hips", ModelNode::NO_PARENT, Matrix4::IDENTITY, {});
+  addTestNode(*model, "Spine", kHips, Matrix4::IDENTITY, {});
+  addTestNode(*model, "Arm", kSpine, Matrix4::IDENTITY, {});
+  addTestNode(*model, "Leg", kHips, Matrix4::IDENTITY, {});
+  return model;
+}
+
+/*
+ * Moves every node of the test model along x from startX to endX over duration seconds.
+ */
+SPtr<AnimationClipAsset>
+createGraphTestClip(float startX, float endX, float duration)
+{
+  constexpr uint32 kFrames = 5;
+  SPtr<AnimationClip> clip =
+      chMakeShared<AnimationClip>(static_cast<float>(kFrames - 1) / duration, kFrames);
+  Vector<Vector3> positions;
+  for (uint32 i = 0; i < kFrames; ++i) {
+    const float alpha = static_cast<float>(i) / static_cast<float>(kFrames - 1);
+    positions.push_back(Vector3(startX + (endX - startX) * alpha, 0.0f, 0.0f));
+  }
+  const Vector<Quaternion> rotations(kFrames, Quaternion::IDENTITY);
+  const Vector<Vector3> scales(kFrames, Vector3::UNIT);
+  for (const ANSICHAR* node : {"Hips", "Spine", "Arm", "Leg"}) {
+    static_cast<void>(clip->addTrack(node, positions, rotations, scales));
+  }
+  return createTestClipAsset(clip);
+}
+
+uint32
+addGraphTestClip(AnimationGraph& graph, float startX, float endX, float duration)
+{
+  const SPtr<AnimationClipAsset> clip = createGraphTestClip(startX, endX, duration);
+  return graph.addClip(clip->getUUID(), clip);
+}
+
+float
+poseX(const AnimationGraphInstance& instance, uint32 node)
+{
+  return instance.getLocalPose()[node].position.x;
+}
+
+/*
+ * Starts in A (still at x = 0); B is still at x = 1 and C at x = 10, all looping and one
+ * second long. Parameters: Go (Bool), Hit (Trigger). Transitions are added by each test.
+ */
+struct SmallGraph
+{
+  SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+  AnimationLayer layer{.name = "Base"};
+  uint32 go = 0;
+  uint32 hit = 0;
+
+  SmallGraph()
+  {
+    go = graph->addParameter({.name = "Go", .type = AnimationParameterType::Bool});
+    hit = graph->addParameter({.name = "Hit", .type = AnimationParameterType::Trigger});
+    layer.states.push_back({.name = "A", .clip = addGraphTestClip(*graph, 0.0f, 0.0f, 1.0f)});
+    layer.states.push_back({.name = "B", .clip = addGraphTestClip(*graph, 1.0f, 1.0f, 1.0f)});
+    layer.states.push_back(
+        {.name = "C", .clip = addGraphTestClip(*graph, 10.0f, 10.0f, 1.0f)});
+  }
+
+  AnimationCondition
+  goIsSet() const
+  {
+    return {.parameter = go, .op = AnimationConditionOp::IsSet};
+  }
+
+  AnimationCondition
+  hitIsSet() const
+  {
+    return {.parameter = hit, .op = AnimationConditionOp::IsSet};
+  }
+
+  void
+  bind(AnimationGraphInstance& instance)
+  {
+    static_cast<void>(graph->addLayer(layer));
+    REQUIRE(graph->validate());
+    instance.setModel(createGraphTestModel());
+    instance.setGraph(graph);
+    REQUIRE(instance.isBound());
+  }
+};
+} // namespace
+
+TEST_CASE("chCore - Animation graph runtime")
+{
+  AnimationGraphInstance instance;
+
+  SECTION("Nothing runs until a model and a graph are set")
+  {
+    REQUIRE_FALSE(instance.advance(0.1f));
+    REQUIRE(instance.getPoseMatrices().empty());
+    instance.setModel(createGraphTestModel());
+    REQUIRE_FALSE(instance.isBound());
+    REQUIRE(instance.getCurrentState(0) == AnimationGraphInstance::NOT_FOUND);
+  }
+
+  SECTION("Locomotion, a jump and an upper body layer")
+  {
+    const SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+    const uint32 speed = graph->addParameter({.name = "Speed"});
+    const uint32 jump =
+        graph->addParameter({.name = "Jump", .type = AnimationParameterType::Trigger});
+    const uint32 idleClip = addGraphTestClip(*graph, 0.0f, 0.0f, 1.0f);
+    const uint32 walkClip = addGraphTestClip(*graph, 1.0f, 1.0f, 1.0f);
+    const uint32 runClip = addGraphTestClip(*graph, 3.0f, 3.0f, 0.5f);
+    const uint32 jumpClip = addGraphTestClip(*graph, 10.0f, 10.0f, 1.0f);
+    const uint32 aimClip = addGraphTestClip(*graph, 5.0f, 5.0f, 1.0f);
+
+    AnimationLayer base{.name = "Base"};
+    base.states.push_back({.name = "Idle", .clip = idleClip});
+    base.states.push_back(
+        {.name = "Move",
+         .kind = AnimationStateKind::BlendSpace1D,
+         .parameterX = speed,
+         .samples = {{.clip = walkClip, .x = 1.0f}, {.clip = runClip, .x = 3.0f}}});
+    base.states.push_back({.name = "Jump", .clip = jumpClip, .bLooping = false});
+    base.transitions.push_back({.source = 0,
+                                .target = 1,
+                                .duration = 0.0f,
+                                .conditions = {{.parameter = speed,
+                                                .op = AnimationConditionOp::Greater,
+                                                .threshold = {.floatValue = 0.1f}}}});
+    base.transitions.push_back({.source = 1,
+                                .target = 0,
+                                .duration = 0.5f,
+                                .conditions = {{.parameter = speed,
+                                                .op = AnimationConditionOp::LessOrEqual,
+                                                .threshold = {.floatValue = 0.1f}}}});
+    base.transitions.push_back({.source = AnimationGraph::ANY_STATE,
+                                .target = 2,
+                                .duration = 0.0f,
+                                .conditions = {{.parameter = jump}}});
+    base.transitions.push_back(
+        {.source = 2, .target = 0, .duration = 0.0f, .bHasExitTime = true, .exitTime = 1.0f});
+    static_cast<void>(graph->addLayer(base));
+
+    AnimationLayer upper{.name = "UpperBody", .maskBones = {"Spine"}};
+    upper.states.push_back({.name = "Aim", .clip = aimClip});
+    static_cast<void>(graph->addLayer(upper));
+    REQUIRE(graph->validate());
+
+    instance.setModel(createGraphTestModel());
+    instance.setGraph(graph);
+    REQUIRE(instance.isBound());
+
+    // The pose is there before the first advance; the mask covers Spine and Arm.
+    REQUIRE(instance.getCurrentState(0) == 0);
+    REQUIRE(poseX(instance, kHips) == 0.0f);
+    REQUIRE(poseX(instance, kLeg) == 0.0f);
+    REQUIRE(poseX(instance, kSpine) == Approx(5.0f));
+    REQUIRE(poseX(instance, kArm) == Approx(5.0f));
+    REQUIRE(instance.getPoseMatrices()[kArm].transformPosition(Vector3::ZERO).x
+            == Approx(10.0f));
+
+    // Parameters only take their own type.
+    REQUIRE_FALSE(instance.setTrigger(speed));
+    REQUIRE_FALSE(instance.setFloat(jump, 1.0f));
+    REQUIRE_FALSE(instance.setFloat(99, 1.0f));
+
+    // Halfway between walk and run; the blend lasts 0.5 * 1 + 0.5 * 0.5 seconds.
+    REQUIRE(instance.setFloat(speed, 2.0f));
+    REQUIRE(instance.advance(0.1f));
+    REQUIRE(instance.getCurrentState(0) == 1);
+    REQUIRE_FALSE(instance.isInTransition(0));
+    REQUIRE(poseX(instance, kHips) == Approx(2.0f));
+    instance.advance(0.075f);
+    REQUIRE(instance.getStateTime(0) == Approx(0.1f));
+
+    // Back to Idle over half a second, fading from Move as it plays (now at walk).
+    instance.setFloat(speed, 0.0f);
+    instance.advance(0.0f);
+    REQUIRE(instance.getCurrentState(0) == 0);
+    REQUIRE(instance.isInTransition(0));
+    REQUIRE(poseX(instance, kHips) == Approx(1.0f));
+    instance.advance(0.25f);
+    REQUIRE(poseX(instance, kHips) == Approx(0.5f));
+
+    // The fade cannot be interrupted, so the jump waits for it and the trigger stays set.
+    REQUIRE(instance.setTrigger(jump));
+    instance.advance(0.1f);
+    REQUIRE(instance.getCurrentState(0) == 0);
+    REQUIRE(instance.getBool(jump));
+    instance.advance(0.2f);
+    REQUIRE(instance.getCurrentState(0) == 2);
+    REQUIRE_FALSE(instance.getBool(jump));
+    REQUIRE(poseX(instance, kHips) == Approx(10.0f));
+    REQUIRE(poseX(instance, kSpine) == Approx(5.0f));
+
+    // The jump does not loop; at its end the exit time takes it back to Idle.
+    instance.advance(0.5f);
+    REQUIRE(instance.getCurrentState(0) == 2);
+    REQUIRE(instance.getStateTime(0) == Approx(0.5f));
+    instance.advance(0.6f);
+    REQUIRE(instance.getCurrentState(0) == 0);
+    REQUIRE(poseX(instance, kHips) == 0.0f);
+
+    // A half weight layer moves its nodes halfway.
+    instance.setLayerWeight(1, 0.5f);
+    instance.advance(0.0f);
+    REQUIRE(poseX(instance, kSpine) == Approx(2.5f));
+    REQUIRE(poseX(instance, kLeg) == 0.0f);
+    instance.setLayerWeight(1, 7.0f);
+    REQUIRE(instance.getLayerWeight(1) == 1.0f);
+
+    // reset goes back to the defaults.
+    instance.setFloat(speed, 2.0f);
+    instance.advance(0.1f);
+    instance.reset();
+    REQUIRE(instance.getFloat(speed) == 0.0f);
+    REQUIRE(instance.getCurrentState(0) == 0);
+    REQUIRE(instance.getLayerWeight(1) == 1.0f);
+  }
+
+  SECTION("Higher priority wins, ties keep the order of the list")
+  {
+    SmallGraph setup;
+    setup.layer.transitions.push_back(
+        {.source = 0, .target = 1, .duration = 0.0f, .conditions = {setup.goIsSet()}});
+    setup.layer.transitions.push_back({.source = 0,
+                                       .target = 2,
+                                       .duration = 0.0f,
+                                       .priority = 5,
+                                       .conditions = {setup.goIsSet()}});
+    setup.layer.transitions.push_back({.source = 0,
+                                       .target = 1,
+                                       .duration = 0.0f,
+                                       .priority = 5,
+                                       .conditions = {setup.goIsSet()}});
+    setup.bind(instance);
+    instance.setBool(setup.go, true);
+    instance.advance(0.0f);
+    REQUIRE(instance.getCurrentState(0) == 2);
+  }
+
+  SECTION("An interrupted fade starts the next one from the pose shown")
+  {
+    SmallGraph setup;
+    setup.layer.transitions.push_back({.source = 0,
+                                       .target = 1,
+                                       .duration = 1.0f,
+                                       .bInterruptible = true,
+                                       .conditions = {setup.goIsSet()}});
+    setup.layer.transitions.push_back(
+        {.source = 1, .target = 2, .duration = 1.0f, .conditions = {setup.hitIsSet()}});
+    setup.bind(instance);
+    instance.setBool(setup.go, true);
+    instance.advance(0.0f);
+    instance.advance(0.5f);
+    REQUIRE(poseX(instance, kHips) == Approx(0.5f));
+
+    instance.setTrigger(setup.hit);
+    instance.advance(0.0f);
+    REQUIRE(instance.getCurrentState(0) == 2);
+    REQUIRE(poseX(instance, kHips) == Approx(0.5f));
+    instance.advance(0.5f);
+    REQUIRE(poseX(instance, kHips) == Approx(5.25f));
+    instance.advance(0.5f);
+    REQUIRE_FALSE(instance.isInTransition(0));
+    REQUIRE(poseX(instance, kHips) == Approx(10.0f));
+  }
+
+  SECTION("Any State restarts its target only when allowed")
+  {
+    SmallGraph setup;
+    setup.layer.transitions.push_back({.source = AnimationGraph::ANY_STATE,
+                                       .target = 1,
+                                       .duration = 0.0f,
+                                       .conditions = {setup.goIsSet()}});
+    setup.bind(instance);
+    instance.setBool(setup.go, true);
+    instance.advance(0.0f);
+    REQUIRE(instance.getCurrentState(0) == 1);
+    instance.advance(0.3f);
+    instance.advance(0.3f);
+    REQUIRE(instance.getStateTime(0) == Approx(0.6f));
+  }
+
+  SECTION("Any State to itself restarts every time its conditions hold")
+  {
+    SmallGraph setup;
+    setup.layer.transitions.push_back({.source = AnimationGraph::ANY_STATE,
+                                       .target = 1,
+                                       .duration = 0.0f,
+                                       .bCanTransitionToSelf = true,
+                                       .conditions = {setup.goIsSet()}});
+    setup.bind(instance);
+    instance.setBool(setup.go, true);
+    instance.advance(0.0f);
+    instance.advance(0.3f);
+    REQUIRE(instance.getCurrentState(0) == 1);
+    REQUIRE(instance.getStateTime(0) == 0.0f);
+  }
+
+  SECTION("A looping state reaches its exit time in every loop")
+  {
+    SmallGraph setup;
+    setup.layer.transitions.push_back(
+        {.source = 0, .target = 1, .duration = 0.0f, .bHasExitTime = true, .exitTime = 0.5f});
+    setup.bind(instance);
+    instance.advance(1.2f);
+    REQUIRE(instance.getCurrentState(0) == 0);
+    instance.advance(0.4f);
+    REQUIRE(instance.getCurrentState(0) == 1);
+  }
+
+  SECTION("Blend space clips stay in step and a parameter scales the speed")
+  {
+    const SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+    const uint32 speed =
+        graph->addParameter({.name = "Speed", .defaultValue = {.floatValue = 2.0f}});
+    const uint32 rate =
+        graph->addParameter({.name = "Rate", .defaultValue = {.floatValue = 1.0f}});
+    // Both go from 0 to 1 over their own length, so in step they match at every moment.
+    const uint32 walkClip = addGraphTestClip(*graph, 0.0f, 1.0f, 1.0f);
+    const uint32 runClip = addGraphTestClip(*graph, 0.0f, 1.0f, 0.5f);
+    AnimationLayer layer{.name = "Base"};
+    layer.states.push_back(
+        {.name = "Move",
+         .kind = AnimationStateKind::BlendSpace1D,
+         .parameterX = speed,
+         .samples = {{.clip = walkClip, .x = 1.0f}, {.clip = runClip, .x = 3.0f}},
+         .speedParameter = rate});
+    static_cast<void>(graph->addLayer(layer));
+    REQUIRE(graph->validate());
+    instance.setModel(createGraphTestModel());
+    instance.setGraph(graph);
+
+    instance.advance(0.1875f);
+    REQUIRE(instance.getStateTime(0) == Approx(0.25f));
+    REQUIRE(poseX(instance, kHips) == Approx(0.25f));
+
+    instance.setFloat(rate, 2.0f);
+    instance.advance(0.1875f);
+    REQUIRE(instance.getStateTime(0) == Approx(0.75f));
+    REQUIRE(poseX(instance, kHips) == Approx(0.75f));
+  }
+
+  SECTION("A missing clip shows the rest pose")
+  {
+    const SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+    const uint32 clip = graph->addClip(chEngineSDK::UUID::createRandom());
+    AnimationLayer layer{.name = "Base"};
+    layer.states.push_back({.name = "Lost", .clip = clip});
+    static_cast<void>(graph->addLayer(layer));
+    instance.setModel(createGraphTestModel());
+    instance.setGraph(graph);
+    REQUIRE(instance.advance(0.5f));
+    REQUIRE(poseX(instance, kHips) == 0.0f);
+    REQUIRE(instance.getStateTime(0) > 1.0f);
+  }
+}
 TEST_CASE("chCore - Model animation")
 {
   // Base (one mesh) > Arm (one mesh, at x + 1); the clip moves Arm and holds Base at z + 1.

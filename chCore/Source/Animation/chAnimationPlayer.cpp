@@ -14,16 +14,6 @@
 #include "chModel.h"
 
 namespace chEngineSDK {
-namespace {
-/*
- * Eases in and out, so neither end of a fade shows as a sudden change of speed.
- */
-NODISCARD FORCEINLINE float
-smoothFade(float alpha) noexcept
-{
-  return alpha * alpha * (3.0f - 2.0f * alpha);
-}
-} // namespace
 
 /*
  */
@@ -195,24 +185,15 @@ AnimationPlayer::computePose()
   }
 
   if (m_fadeElapsed < m_fadeDuration) {
-    const float weight = smoothFade(Math::clamp(m_fadeElapsed / m_fadeDuration, 0.0f, 1.0f));
-    blendPoses(m_fadeFromPose, m_sampledPose, weight, {}, m_localPose);
+    blendPoses(m_fadeFromPose, m_sampledPose, getFadeWeight(m_fadeElapsed, m_fadeDuration),
+               {}, m_localPose);
   }
   else {
     // The sampled pose is rebuilt from rest next time, so swapping costs no copy.
     m_localPose.swap(m_sampledPose);
   }
 
-  const Vector<ModelNode>& nodes = m_model->getNodes();
-  // Parents come first, so each parent's matrix is ready when its children need it.
-  for (SIZE_T i = 0; i < nodes.size(); ++i) {
-    const NodeTransform& local = m_localPose[i];
-    const Matrix4 localMatrix =
-        ScaleRotationTranslationMatrix(local.scale, local.rotation, local.position);
-    m_poseMatrices[i] = nodes[i].parent == ModelNode::NO_PARENT
-                            ? localMatrix
-                            : localMatrix * m_poseMatrices[nodes[i].parent];
-  }
+  buildPoseMatrices(*m_model, m_localPose, m_poseMatrices);
 }
 
 /*
@@ -231,6 +212,38 @@ AnimationPlayer::blendPoses(Span<const NodeTransform> from,
     out[i].position = from[i].position + (to[i].position - from[i].position) * alpha;
     out[i].rotation = Quaternion::nlerp(from[i].rotation, to[i].rotation, alpha);
     out[i].scale = from[i].scale + (to[i].scale - from[i].scale) * alpha;
+  }
+}
+
+/*
+ */
+float
+AnimationPlayer::getFadeWeight(float elapsed, float duration) noexcept
+{
+  if (elapsed >= duration) {
+    return 1.0f;
+  }
+  const float alpha = Math::clamp(elapsed / duration, 0.0f, 1.0f);
+  return alpha * alpha * (3.0f - 2.0f * alpha);
+}
+
+/*
+ */
+void
+AnimationPlayer::buildPoseMatrices(const Model& model,
+                                   Span<const NodeTransform> localPose,
+                                   Span<Matrix4> outMatrices) noexcept
+{
+  const Vector<ModelNode>& nodes = model.getNodes();
+  CH_ASSERT(localPose.size() == nodes.size() && outMatrices.size() == nodes.size());
+  // Parents come first, so each parent's matrix is ready when its children need it.
+  for (SIZE_T i = 0; i < nodes.size(); ++i) {
+    const NodeTransform& local = localPose[i];
+    const Matrix4 localMatrix =
+        ScaleRotationTranslationMatrix(local.scale, local.rotation, local.position);
+    outMatrices[i] = nodes[i].parent == ModelNode::NO_PARENT
+                         ? localMatrix
+                         : localMatrix * outMatrices[nodes[i].parent];
   }
 }
 
