@@ -96,11 +96,20 @@ ScriptComponent::ensureStarted()
   if (isRunning()) {
     return true;
   }
-  if (m_bFailed || !m_script || !ScriptManager::isStarted()) {
+  if (!m_script || !ScriptManager::isStarted()) {
+    return false;
+  }
+  ScriptManager& scriptManager = ScriptManager::instance();
+#if USING(CH_EDITOR)
+  if (m_bFailed) {
+    const ScriptClassInfo* scriptClass = scriptManager.getClass(*m_script);
+    m_bFailed = !scriptClass || scriptClass->revision == m_failedRevision;
+  }
+#endif
+  if (m_bFailed) {
     return false;
   }
 
-  ScriptManager& scriptManager = ScriptManager::instance();
   scriptManager.setCurrentScene(getOwner()->getScene());
   m_class = scriptManager.getClass(*m_script);
   if (!m_class || !m_class->bValid) {
@@ -108,6 +117,9 @@ ScriptComponent::ensureStarted()
       CH_LOG_ERROR(ScriptLog, "Script {0} on {1} is not loaded.", m_script->getName(),
                    getOwner()->getName());
     }
+#if USING(CH_EDITOR)
+    m_failedRevision = m_class ? m_class->revision : 0;
+#endif
     m_class = nullptr;
     m_bFailed = true;
     return false;
@@ -150,10 +162,25 @@ ScriptComponent::fail()
   if (isRunning() && ScriptManager::isStarted()) {
     ScriptManager::instance().releaseReference(m_instance);
   }
+#if USING(CH_EDITOR)
+  m_failedRevision = m_class ? m_class->revision : 0;
+#endif
   m_instance = ScriptClassInfo::NO_REFERENCE;
   m_class = nullptr;
   m_bFailed = true;
 }
+
+#if USING(CH_EDITOR)
+/*
+ */
+bool
+ScriptComponent::restart()
+{
+  stop();
+  m_bFailed = false;
+  return start();
+}
+#endif
 
 /*
  */

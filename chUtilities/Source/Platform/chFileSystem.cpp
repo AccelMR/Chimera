@@ -687,6 +687,15 @@ FileSystem::isDirectory(const Path& path)
   return fs::is_directory(toFsPath(toRealPath(path, Access::Read)), error);
 }
 
+int64
+FileSystem::getLastWriteTime(const Path& path)
+{
+  std::error_code error;
+  const fs::file_time_type time =
+      fs::last_write_time(toFsPath(toRealPath(path, Access::Read)), error);
+  return error ? 0 : static_cast<int64>(time.time_since_epoch().count());
+}
+
 bool
 FileSystem::isSubPath(const Path& basePath, const Path& path)
 {

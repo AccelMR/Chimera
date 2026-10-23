@@ -48,6 +48,7 @@
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chScriptDefinitionsUI.h"
+#include "chScriptHotReload.h"
 #include "chScriptManager.h"
 #include "chStringUtils.h"
 
@@ -121,6 +122,7 @@ EditorApplication::onPostInitialize() {
 
   initializeEditorComponents();
   bindEvents();
+  ScriptHotReload::initialize();
 }
 
 /*
@@ -140,6 +142,7 @@ EditorApplication::destroyModules()
   m_onKeyPressedEvent.disconnect();
   m_onKeyReleasedEvent.disconnect();
   m_updateInjection.disconnect();
+  ScriptHotReload::shutDown();
 
   // The renderer gives its textures back to the ImGui context, and the SDL backend uses the
   // window, which the parent destroys.
@@ -235,6 +238,7 @@ EditorApplication::update(const float deltaTime)
     m_editorCamera->setViewportSize(static_cast<float>(width), static_cast<float>(height));
   }
   ImportDialog::update();
+  ScriptHotReload::update(deltaTime);
   Path chosenProject;
   if (ProjectBrowserUI::takeChosenProject(chosenProject) &&
       !(FileSystem::absolutePath(chosenProject) ==

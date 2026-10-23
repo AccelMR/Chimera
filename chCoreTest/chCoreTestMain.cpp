@@ -5221,6 +5221,101 @@ TEST_CASE("chCore - Script component")
   }
 }
 
+#if USING(CH_EDITOR)
+TEST_CASE("chCore - Script hot reload")
+{
+  ScriptManager& scripts = getTestScriptManager();
+  REQUIRE(scripts.runString("Reload = { starts = 0, destroys = 0 }"));
+  const SPtr<ScriptAsset> counter = createTestScriptAsset("Counter", R"lua(
+    local Counter = { step = 1 }
+    function Counter:onStart()
+      self.count = 0
+      Reload.starts = Reload.starts + 1
+    end
+    function Counter:update(dt)
+      self.count = self.count + self.step
+      Reload.count = self.count
+    end
+    function Counter:onDestroy()
+      Reload.destroys = Reload.destroys + 1
+    end
+    return Counter
+  )lua");
+
+  Scene scene("Reload", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+  const SPtr<GameObject> object = scene.createGameObject("Object");
+  ScriptComponent& component = object->addComponent<ScriptComponent>(counter);
+  scene.update(0.1f);
+  scene.update(0.1f);
+  REQUIRE(scripts.runString("assert(Reload.count == 2)"));
+
+  SECTION("A running instance keeps self and calls the new functions")
+  {
+    counter->setSource(R"lua(
+      local Counter = { step = 10 }
+      function Counter:update(dt)
+        self.count = self.count + self.step
+        Reload.count = self.count
+      end
+      return Counter
+    )lua");
+    REQUIRE(scripts.updateClass(*counter));
+    scene.update(0.1f);
+    REQUIRE(component.isRunning());
+    // The count it had goes on, with the step of the new class; onStart did not run again.
+    REQUIRE(scripts.runString("assert(Reload.count == 12 and Reload.starts == 1)"));
+  }
+
+  SECTION("New text that fails keeps the previous functions")
+  {
+    counter->setSource("local Counter = {");
+    REQUIRE_FALSE(scripts.updateClass(*counter));
+    counter->setSource("return 5");
+    REQUIRE_FALSE(scripts.updateClass(*counter));
+    scene.update(0.1f);
+    REQUIRE(component.isRunning());
+    REQUIRE(scripts.runString("assert(Reload.count == 3)"));
+  }
+
+  SECTION("A component stopped by an error tries the new text")
+  {
+    counter->setSource(R"lua(
+      local Counter = {}
+      function Counter:update(dt) error("broken on purpose") end
+      return Counter
+    )lua");
+    REQUIRE(scripts.updateClass(*counter));
+    scene.update(0.1f);
+    REQUIRE(component.hasFailed());
+    scene.update(0.1f);
+    REQUIRE(component.hasFailed());
+
+    counter->setSource(R"lua(
+      local Counter = {}
+      function Counter:onStart() Reload.starts = Reload.starts + 1 end
+      function Counter:update(dt) Reload.fixed = true end
+      return Counter
+    )lua");
+    REQUIRE(scripts.updateClass(*counter));
+    scene.update(0.1f);
+    REQUIRE(component.isRunning());
+    REQUIRE(scripts.runString("assert(Reload.fixed and Reload.starts == 2)"));
+  }
+
+  SECTION("Restart runs onDestroy and a new onStart")
+  {
+    REQUIRE(component.restart());
+    REQUIRE(scripts.runString("assert(Reload.destroys == 1 and Reload.starts == 2)"));
+    scene.update(0.1f);
+    REQUIRE(scripts.runString("assert(Reload.count == 1)"));
+  }
+
+  scene.destroyGameObject(*object);
+  scripts.forgetClass(counter->getUUID());
+}
+#endif
+
 /*
  * Not run by default (ctest skips hidden tags); run it in Release:
  *   chCoreTest "chCore - Script steering benchmark"

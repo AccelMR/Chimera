@@ -339,6 +339,19 @@ ScriptManager::getClass(const ScriptAsset& script)
   // Kept even when it fails, so a broken script is reported once and not compiled again
   // every frame.
   ScriptClassInfo& info = m_classes[script.getUUID()];
+  if (!compileClass(script, info)) {
+    releaseClass(info);
+    return &info;
+  }
+  info.bValid = true;
+  return &info;
+}
+
+/*
+ */
+bool
+ScriptManager::compileClass(const ScriptAsset& script, ScriptClassInfo& outInfo)
+{
   const String chunkName = script.getChunkName();
   const String& source = script.getSource();
 
@@ -348,12 +361,12 @@ ScriptManager::getClass(const ScriptAsset& script)
       LUA_OK) {
     CH_LOG_ERROR(ScriptLog, "{0}", getErrorText(m_state));
     lua_settop(m_state, base);
-    return &info;
+    return false;
   }
   if (lua_pcall(m_state, 0, 1, base + 1) != LUA_OK) {
     CH_LOG_ERROR(ScriptLog, "{0}", getErrorText(m_state));
     lua_settop(m_state, base);
-    return &info;
+    return false;
   }
   if (!lua_istable(m_state, -1)) {
     CH_LOG_ERROR(ScriptLog,
@@ -361,19 +374,32 @@ ScriptManager::getClass(const ScriptAsset& script)
                  "a {1}.",
                  script.getFilePath(), luaL_typename(m_state, -1));
     lua_settop(m_state, base);
-    return &info;
+    return false;
   }
 
   lua_pushcfunction(m_state, &readClass);
   lua_insert(m_state, -2);
-  lua_pushlightuserdata(m_state, &info);
-  info.bValid = lua_pcall(m_state, 2, 0, base + 1) == LUA_OK;
-  if (!info.bValid) {
+  lua_pushlightuserdata(m_state, &outInfo);
+  const bool bValid = lua_pcall(m_state, 2, 0, base + 1) == LUA_OK;
+  if (!bValid) {
     CH_LOG_ERROR(ScriptLog, "Script {0}: {1}", script.getFilePath(),
                  getErrorText(m_state));
   }
   lua_settop(m_state, base);
-  return &info;
+  return bValid;
+}
+
+/*
+ */
+void
+ScriptManager::releaseClass(ScriptClassInfo& info) noexcept
+{
+  for (int32* reference : {&info.classTable, &info.instanceMetatable, &info.onStart,
+                           &info.update, &info.fixedUpdate, &info.onDestroy}) {
+    releaseReference(*reference);
+    *reference = ScriptClassInfo::NO_REFERENCE;
+  }
+  info.bValid = false;
 }
 
 /*
@@ -385,13 +411,71 @@ ScriptManager::forgetClass(const UUID& scriptId)
   if (it == m_classes.end()) {
     return;
   }
-  const ScriptClassInfo& info = it->second;
-  for (const int32 reference : {info.classTable, info.instanceMetatable, info.onStart,
-                                info.update, info.fixedUpdate, info.onDestroy}) {
-    releaseReference(reference);
-  }
+  releaseClass(it->second);
   m_classes.erase(it);
 }
+
+#if USING(CH_EDITOR)
+/*
+ */
+bool
+ScriptManager::reloadScript(const SPtr<ScriptAsset>& script)
+{
+  if (!script || !script->isLoaded() || !AssetManager::isStarted()) {
+    return false;
+  }
+  AssetManager& assetManager = AssetManager::instance();
+  if (!assetManager.unloadAsset(script) || !assetManager.syncLoadAsset(script)) {
+    CH_LOG_ERROR(ScriptLog, "Could not read script {0} again.", script->getFilePath());
+    return false;
+  }
+  if (!updateClass(*script)) {
+    return false;
+  }
+  CH_LOG_INFO(ScriptLog, "Script {0} reloaded.", script->getFilePath());
+  return true;
+}
+
+/*
+ */
+bool
+ScriptManager::updateClass(const ScriptAsset& script)
+{
+  // Nothing was compiled from it yet, so its first use reads the new text.
+  const auto it = m_classes.find(script.getUUID());
+  if (it == m_classes.end()) {
+    return true;
+  }
+
+  ScriptClassInfo fresh;
+  if (!compileClass(script, fresh)) {
+    releaseClass(fresh);
+    if (it->second.bValid) {
+      CH_LOG_WARNING(ScriptLog, "Script {0} keeps running its previous version.",
+                     script.getFilePath());
+    }
+    return false;
+  }
+
+  // Running instances hold the old metatable, so it stays and reads from the new class.
+  ScriptClassInfo& info = it->second;
+  if (info.instanceMetatable != ScriptClassInfo::NO_REFERENCE) {
+    lua_rawgeti(m_state, LUA_REGISTRYINDEX, info.instanceMetatable);
+    lua_rawgeti(m_state, LUA_REGISTRYINDEX, fresh.classTable);
+    lua_setfield(m_state, -2, "__index");
+    lua_pop(m_state, 1);
+    releaseReference(fresh.instanceMetatable);
+    fresh.instanceMetatable = info.instanceMetatable;
+    info.instanceMetatable = ScriptClassInfo::NO_REFERENCE;
+  }
+  const uint32 revision = info.revision + 1;
+  releaseClass(info);
+  info = fresh;
+  info.bValid = true;
+  info.revision = revision;
+  return true;
+}
+#endif
 
 /*
  */

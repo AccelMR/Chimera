@@ -68,6 +68,15 @@ class CH_CORE_EXPORT ScriptComponent : public Component
   NODISCARD bool
   start();
 
+#if USING(CH_EDITOR)
+  /**
+   * Stops the running instance (onDestroy) and starts a new one (onStart), also after an
+   * error. False when it cannot run, as start.
+   */
+  bool
+  restart();
+#endif
+
   /**
    * Registry reference of the instance (self) while running.
    */
@@ -119,6 +128,10 @@ class CH_CORE_EXPORT ScriptComponent : public Component
   const ScriptClassInfo* m_class = nullptr;
   int32 m_instance = ScriptClassInfo::NO_REFERENCE;
   bool m_bFailed = false;
+#if USING(CH_EDITOR)
+  // Revision of the class when it failed: a newer one is tried again.
+  uint32 m_failedRevision = 0;
+#endif
 };
 
 DECLARE_TYPE_TRAITS(ScriptComponent)

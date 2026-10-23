@@ -138,6 +138,13 @@ class CH_UTILITY_EXPORT FileSystem
   isDirectory(const Path& path);
 
   /**
+   *   Returns when the file was last written, in ticks that only mean something compared
+   *   with other results of this function. 0 when it cannot be read.
+   **/
+  NODISCARD static int64
+  getLastWriteTime(const Path& path);
+
+  /**
    *   Returns true if path is basePath itself or is inside it. Virtual and real
    *   paths can be mixed, as can relative and absolute ones.
    **/

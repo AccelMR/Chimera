@@ -42,6 +42,11 @@ struct ScriptClassInfo
   int32 onDestroy = NO_REFERENCE;
   // False when the script did not compile, failed while it ran or returned no table.
   bool bValid = false;
+#if USING(CH_EDITOR)
+  // Goes up every time the script is read again and compiles, so components that stopped
+  // after an error try the new code.
+  uint32 revision = 0;
+#endif
 
   // LUA_NOREF.
   static constexpr int32 NO_REFERENCE = -2;
@@ -99,6 +104,24 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
    */
   void
   reloadScripts();
+
+#if USING(CH_EDITOR)
+  /**
+   * Reads the script again from its file while its components may be running. A compiled
+   * class keeps its place: running instances keep their fields and call the new functions
+   * from their next call (onStart does not run again). When the new text fails, the error is
+   * logged and the previous functions stay. False when it could not be read or compiled.
+   */
+  NODISCARD bool
+  reloadScript(const SPtr<ScriptAsset>& script);
+
+  /**
+   * The part of reloadScript after the file is read: compiles the script's current text
+   * into its class, in place. True when nothing was compiled from it yet.
+   */
+  NODISCARD bool
+  updateClass(const ScriptAsset& script);
+#endif
 
   /**
    * A new table whose missing fields are read from the class, with self.gameObject and
@@ -196,6 +219,16 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
  private:
   void
   openLibraries();
+
+  /*
+   * Runs the script and reads the class it returns into outInfo. False (logged) when it
+   * fails; outInfo may then hold some references, which releaseClass frees.
+   */
+  NODISCARD bool
+  compileClass(const ScriptAsset& script, ScriptClassInfo& outInfo);
+
+  void
+  releaseClass(ScriptClassInfo& info) noexcept;
 
   void
   writeTime();

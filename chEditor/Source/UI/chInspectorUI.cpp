@@ -660,6 +660,13 @@ InspectorUI::renderScriptComponent(ScriptComponent& scriptComponent)
   const bool bRemove = ImGui::SmallButton(ICON_FA_TRASH "  Remove");
 
   if (EditorScene::isPlaying()) {
+    if (script && scriptComponent.isEnabled()) {
+      ImGui::SameLine();
+      if (ImGui::SmallButton(ICON_FA_REDO "  Restart")) {
+        static_cast<void>(scriptComponent.restart());
+      }
+      ImGui::SetItemTooltip("Runs onDestroy, then a new self and onStart");
+    }
     if (scriptComponent.isRunning()) {
       ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Running");
     }
