@@ -4677,6 +4677,19 @@ TEST_CASE("chCore - Input bindings")
   REQUIRE(roundTrip("GamepadRightStick*4", InputActionType::Axis2D) == "GamepadRightStick*4");
   REQUIRE(roundTrip("space", InputActionType::Button) == "Space");
 
+  for (const InputActionType type :
+       {InputActionType::Button, InputActionType::Axis1D, InputActionType::Axis2D}) {
+    InputActionType parsedType = InputActionType::Button;
+    REQUIRE(InputManager::parseActionType(InputManager::getActionTypeName(type), parsedType));
+    REQUIRE(parsedType == type);
+  }
+  InputActionType parsedType = InputActionType::Axis2D;
+  REQUIRE(InputManager::parseActionType("", parsedType));
+  REQUIRE(parsedType == InputActionType::Button);
+  REQUIRE(InputManager::parseActionType("axis1d", parsedType));
+  REQUIRE(parsedType == InputActionType::Axis1D);
+  REQUIRE_FALSE(InputManager::parseActionType("Trigger", parsedType));
+
   using Type = InputActionType;
   const auto valid = [](StringView text, Type type) {
     InputBinding parsed;

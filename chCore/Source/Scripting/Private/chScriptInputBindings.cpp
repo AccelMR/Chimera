@@ -16,7 +16,6 @@
 namespace chEngineSDK {
 namespace {
 // Indexed by the enums' values.
-const ANSICHAR* const kActionTypeNames[] = {"Button", "Axis1D", "Axis2D"};
 const ANSICHAR* const kGamepadTypeNames[] = {"Unknown", "Standard", "Xbox", "PlayStation",
                                              "Nintendo"};
 const ANSICHAR* const kCursorModeNames[] = {"Normal", "Hidden", "Locked", nullptr};
@@ -184,7 +183,8 @@ getActionType(lua_State* state)
 {
   const InputManager& input = getInput(state);
   const InputActionType type = input.getActionType(checkAction(state, input, 1));
-  lua_pushstring(state, kActionTypeNames[static_cast<SIZE_T>(type)]);
+  const StringView name = InputManager::getActionTypeName(type);
+  lua_pushlstring(state, name.data(), name.size());
   return 1;
 }
 

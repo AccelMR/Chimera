@@ -37,9 +37,6 @@ ConsoleVariable<float> g_cvarAxisButtonThreshold("Input.AxisButtonThreshold", 0.
                                                  "button that is down, in actions and "
                                                  "rebinding.");
 
-constexpr StringView kDefaultContext = "Default";
-constexpr StringView kInputFileName = "Input.ini";
-
 NODISCARD Vector2
 getTargetDirection(InputAxisTarget target) noexcept
 {
@@ -53,24 +50,6 @@ getTargetDirection(InputAxisTarget target) noexcept
   default:
     return Vector2(1.0f, 0.0f);
   }
-}
-
-NODISCARD bool
-parseActionType(StringView text, InputActionType& outType) noexcept
-{
-  if (text.empty() || StringUtils::equalsIgnoreCase(text, "Button")) {
-    outType = InputActionType::Button;
-  }
-  else if (StringUtils::equalsIgnoreCase(text, "Axis1D")) {
-    outType = InputActionType::Axis1D;
-  }
-  else if (StringUtils::equalsIgnoreCase(text, "Axis2D")) {
-    outType = InputActionType::Axis2D;
-  }
-  else {
-    return false;
-  }
-  return true;
 }
 
 /*
@@ -181,7 +160,7 @@ InputManager::InputManager()
 {
   m_players[0].bKeyboardMouse = true;
   m_players[0].gamepadMask = InputState::ALL_GAMEPADS;
-  m_contexts.push_back({.name = String(kDefaultContext), .bEnabled = true});
+  m_contexts.push_back({.name = String(DEFAULT_CONTEXT), .bEnabled = true});
 }
 
 /*
@@ -406,18 +385,19 @@ void
 InputManager::loadBindings()
 {
   ConfigFile defaults;
-  const Path engineFile = Path("/Engine/Config").join(Path(String(kInputFileName)));
+  const Path engineFile = Path("/Engine/Config").join(Path(String(BINDINGS_FILE_NAME)));
   if (defaults.load(engineFile)) {
     CH_LOG_INFO(InputSystem, "Loaded {0}", engineFile);
   }
   const Path projectFile =
-      EnginePaths::getProjectConfigDirectory().join(Path(String(kInputFileName)));
+      EnginePaths::getProjectConfigDirectory().join(Path(String(BINDINGS_FILE_NAME)));
   if (defaults.load(projectFile)) {
     CH_LOG_INFO(InputSystem, "Loaded {0}", projectFile);
   }
 
   ConfigFile user;
-  const Path userFile = EnginePaths::getConfigDirectory().join(Path(String(kInputFileName)));
+  const Path userFile =
+      EnginePaths::getConfigDirectory().join(Path(String(BINDINGS_FILE_NAME)));
   if (user.load(userFile)) {
     CH_LOG_INFO(InputSystem, "Loaded {0}", userFile);
   }
@@ -457,7 +437,7 @@ InputManager::loadBindings(const ConfigFile& defaults, const ConfigFile& user)
     }
     const String* contextText = defaults.getValue(section.name, "Context");
     action.context = findOrAddContext(
-        contextText && !contextText->empty() ? StringView(*contextText) : kDefaultContext);
+        contextText && !contextText->empty() ? StringView(*contextText) : DEFAULT_CONTEXT);
     if (const String* keys = defaults.getValue(section.name, "Keys")) {
       parseBindingList(*keys, action.name, action.type, action.defaultBindings);
     }
@@ -516,7 +496,8 @@ InputManager::saveUserBindings() const
   // binding put back to its default must disappear from it.
   ConfigFile file;
   writeUserBindings(file);
-  const Path path = EnginePaths::getConfigDirectory().join(Path(String(kInputFileName)));
+  const Path path =
+      EnginePaths::getConfigDirectory().join(Path(String(BINDINGS_FILE_NAME)));
   if (!file.save(path)) {
     CH_LOG_ERROR(InputSystem, "Could not save the input bindings to {0}.", path);
     return false;
@@ -1031,6 +1012,41 @@ InputManager::isBindingValid(const InputBinding& binding, InputActionType type) 
     return binding.target != InputAxisTarget::None;
   }
   return false;
+}
+
+/*
+ */
+StringView
+InputManager::getActionTypeName(InputActionType type) noexcept
+{
+  switch (type) {
+  case InputActionType::Axis1D:
+    return "Axis1D";
+  case InputActionType::Axis2D:
+    return "Axis2D";
+  default:
+    return "Button";
+  }
+}
+
+/*
+ */
+bool
+InputManager::parseActionType(StringView text, InputActionType& outType) noexcept
+{
+  if (text.empty() || StringUtils::equalsIgnoreCase(text, "Button")) {
+    outType = InputActionType::Button;
+  }
+  else if (StringUtils::equalsIgnoreCase(text, "Axis1D")) {
+    outType = InputActionType::Axis1D;
+  }
+  else if (StringUtils::equalsIgnoreCase(text, "Axis2D")) {
+    outType = InputActionType::Axis2D;
+  }
+  else {
+    return false;
+  }
+  return true;
 }
 
 } // namespace chEngineSDK

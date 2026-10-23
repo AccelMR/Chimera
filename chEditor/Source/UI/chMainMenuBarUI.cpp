@@ -27,6 +27,7 @@
 #include "chPrefabAsset.h"
 #include "chProfilerUI.h"
 #include "chProjectBrowserUI.h"
+#include "chProjectSettingsUI.h"
 #include "chAnimationPreviewUI.h"
 #include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
@@ -579,6 +580,9 @@ MainMenuBarUI::renderEditMenu()
   if (ImGui::BeginMenu(ICON_FA_FILE_CODE "  Script Editor")) {
     UIHelpers::renderScriptEditorSettings();
     ImGui::EndMenu();
+  }
+  if (ImGui::MenuItem(ICON_FA_COGS "  Project Settings...")) {
+    ProjectSettingsUI::setWindowVisible(true);
   }
   ImGui::EndMenu();
 }

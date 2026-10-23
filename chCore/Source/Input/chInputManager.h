@@ -325,8 +325,24 @@ class CH_CORE_EXPORT InputManager : public Module<InputManager>
   NODISCARD static bool
   isBindingValid(const InputBinding& binding, InputActionType type) noexcept;
 
+  /**
+   * The name Input.ini writes for the type: "Button", "Axis1D" or "Axis2D".
+   */
+  NODISCARD static StringView
+  getActionTypeName(InputActionType type) noexcept;
+
+  /**
+   * Reads a type name, ignoring case; an empty text is Button.
+   */
+  NODISCARD static bool
+  parseActionType(StringView text, InputActionType& outType) noexcept;
+
   static constexpr uint32 MAX_PLAYERS = 4;
   static constexpr InputActionId INVALID_ACTION = 0xFFFF;
+  // Read from /Engine/Config, the project's Config folder and /Saved/Config.
+  static constexpr StringView BINDINGS_FILE_NAME = "Input.ini";
+  // Context of an action whose section names none.
+  static constexpr StringView DEFAULT_CONTEXT = "Default";
 
   // A keyboard key went down or up, after the state took it. For shortcuts, where the
   // moment and the modifiers matter; held keys do not repeat it. Not filtered by game input.

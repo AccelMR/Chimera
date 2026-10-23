@@ -45,6 +45,7 @@
 #include "chImportDialog.h"
 #include "chPackageDialog.h"
 #include "chProjectBrowserUI.h"
+#include "chProjectSettingsUI.h"
 #include "chScene.h"
 #include "chSceneManager.h"
 #include "chScriptDefinitionsUI.h"
@@ -151,6 +152,7 @@ EditorApplication::destroyModules()
 
   m_inspectorUI.reset();
   AssetInspectorUI::shutDown();
+  ProjectSettingsUI::shutDown();
   AnimationPreviewUI::shutDown();
   AssetThumbnails::shutDown();
   m_sceneGraphUI.reset();
@@ -568,6 +570,7 @@ EditorApplication::renderUI()
   m_inspectorUI->renderInspectorUI();
   AssetInspectorUI::render();
   AnimationPreviewUI::render();
+  ProjectSettingsUI::render();
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
   PackageDialog::render();
@@ -618,6 +621,7 @@ EditorApplication::renderDockSpace()
                                                        kLayoutBottomFraction, nullptr, &center);
     // Names hash only from ###, so the ids find the panels whatever their titles say.
     ImGui::DockBuilderDockWindow("###Viewport", center);
+    ImGui::DockBuilderDockWindow("###ProjectSettings", center);
     ImGui::DockBuilderDockWindow("###SceneGraph", left);
     ImGui::DockBuilderDockWindow("###Inspector", right);
     ImGui::DockBuilderDockWindow("###AssetInspector", right);
