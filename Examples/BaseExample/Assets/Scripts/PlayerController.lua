@@ -9,6 +9,7 @@ local Input = Input
 ---@field jumpSpeed number
 ---@field gravity number
 ---@field camera GameObject?
+---@field showGroundRay boolean
 local PlayerController = {}
 
 PlayerController.properties = {
@@ -18,7 +19,15 @@ PlayerController.properties = {
   { "gravity", -20 },
   { "camera", type = "GameObject",
     tooltip = "Moves relative to it; the object named Camera when empty" },
+  { "showGroundRay", true,
+    tooltip = "Draws a ray down to the ground and the hit normal (debug lines only)" },
 }
+
+-- Made once and shared by every instance, so drawing makes no new values.
+local kRayColor = Color(1, 1, 0, 1)
+local kHitColor = Color(0, 1, 0, 1)
+local kRayHeight = 3
+local kRayLength = 20
 
 function PlayerController:onStart()
   self.move = Input.findAction("Move")
@@ -32,6 +41,23 @@ function PlayerController:onStart()
   self.verticalSpeed = 0
   self.input = Vector2()
   self.forward = Vector3()
+  self.rayStart = Vector3()
+  -- Scene.raycast fills this table again each frame instead of making a new one.
+  self.hit = {}
+end
+
+-- Casts a ray down from above the player, skipping the player itself, and shows where it
+-- lands. Packaged games draw nothing, but the raycast still runs, so it is behind the flag.
+function PlayerController:drawGroundRay()
+  local start = self.rayStart:copyFrom(self.position)
+  start.z = start.z + kRayHeight
+  local hit = Scene.raycast(start, Vector3.DOWN, kRayLength, self.gameObject, self.hit)
+  if hit then
+    DebugDraw.line(start, hit.point, kRayColor, true)
+    DebugDraw.circle(hit.point, hit.normal, 0.8, kHitColor, true)
+  else
+    DebugDraw.ray(start, Vector3.DOWN, kRayLength, kRayColor, true)
+  end
 end
 
 function PlayerController:update(dt)
@@ -65,6 +91,10 @@ function PlayerController:update(dt)
   end
 
   self.transform:setWorldPosition(p)
+
+  if self.showGroundRay then
+    self:drawGroundRay()
+  end
 end
 
 return PlayerController

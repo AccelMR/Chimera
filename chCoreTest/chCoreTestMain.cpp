@@ -543,6 +543,28 @@ TEST_CASE("chCore - Scene raycast")
   REQUIRE(scene.raycast(Ray(Vector3(3.0f, 0.5f, -5.0f), Vector3::UP), hit));
   REQUIRE(hit.gameObject == front.get());
   REQUIRE(hit.distance == Approx(3.0f));
+  REQUIRE(hit.point.nearEqual(Vector3(3.0f, 0.5f, -2.0f), 0.001f));
+  // Facing the ray, whichever side was hit.
+  REQUIRE(hit.normal.nearEqual(-Vector3::UP, 0.001f));
+  REQUIRE(scene.raycast(Ray(Vector3(3.0f, 0.5f, 5.0f), -Vector3::UP), hit));
+  REQUIRE(hit.normal.nearEqual(Vector3::UP, 0.001f));
+
+  SECTION("Max distance and ignored objects")
+  {
+    const Ray ray(Vector3(3.0f, 0.5f, -5.0f), Vector3::UP);
+    REQUIRE_FALSE(scene.raycast(ray, hit, 2.5f));
+    REQUIRE(scene.raycast(ray, hit, 3.5f));
+    REQUIRE(hit.gameObject == front.get());
+
+    // Ignoring an object skips its children too.
+    const SPtr<GameObject> holder = scene.createGameObject("Holder");
+    REQUIRE(scene.setParent(*front, holder.get()));
+    scene.updateTransforms();
+    REQUIRE_FALSE(scene.raycast(ray, hit, Math::MAX_FLOAT, holder.get()));
+    REQUIRE(scene.raycast(Ray(Vector3(0.0f, 0.5f, -5.0f), Vector3::UP), hit, Math::MAX_FLOAT,
+                          holder.get()));
+    REQUIRE(hit.gameObject == back.get());
+  }
 
   REQUIRE(scene.raycast(Ray(Vector3(0.0f, 0.5f, -5.0f), Vector3::UP), hit));
   REQUIRE(hit.gameObject == back.get());
@@ -5860,6 +5882,71 @@ TEST_CASE("chCore - Script objects")
       assert(not holder:isScriptEnabled("Health") and holder:getScript("Health") == nil)
     )lua"));
     REQUIRE_FALSE(scripts.runString("Scene.find('Parent'):setScriptEnabled('Nope', true)"));
+  }
+
+  SECTION("Raycast")
+  {
+    // The triangle lies flat at z = 0 around x = -20, y 0..2.
+    const SPtr<GameObject> floor = scene.createGameObject("Floor");
+    floor->addComponent<ModelComponent>(createTestModelAsset(createTriangleModel()));
+    floor->getTransform().setLocalPosition(Vector3(-20.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(scripts.runString(R"lua(
+      local origin = Vector3(-20, 0.5, 5)
+      local hit = Scene.raycast(origin, Vector3(0, 0, -2))
+      assert(hit and hit.gameObject == Scene.find("Floor"))
+      assert(math.abs(hit.distance - 5) < 1e-4)
+      assert(hit.point:nearEqual(Vector3(-20, 0.5, 0)))
+      assert(hit.normal:nearEqual(Vector3.UP))
+
+      assert(Scene.raycast(origin, Vector3.DOWN, 4) == nil)
+      assert(Scene.raycast(origin, Vector3.DOWN, 10, hit.gameObject) == nil)
+      assert(Scene.raycast(origin, Vector3.UP) == nil)
+
+      local point = Vector3(0, 0, 0)
+      local out = { point = point }
+      assert(rawequal(Scene.raycast(origin, Vector3.DOWN, nil, nil, out), out))
+      assert(rawequal(out.point, point) and point:nearEqual(Vector3(-20, 0.5, 0)))
+      assert(out.normal:nearEqual(Vector3.UP))
+
+      local below = Scene.raycast(Vector3(-20, 0.5, -5), Vector3.UP)
+      assert(below and below.normal:nearEqual(Vector3.DOWN))
+    )lua"));
+    REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3(0, 0, 0))"));
+    REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3.UP, 1, 5)"));
+  }
+
+  SECTION("DebugDraw draws into the running script's scene")
+  {
+    // Lines drawn in update go to the frame list, those drawn in a fixed step to the other.
+    scripts.beginUpdate(0.0f);
+    REQUIRE(scripts.runString(R"lua(
+      DebugDraw.line(Vector3(0, 0, 0), Vector3(1, 0, 0))
+      DebugDraw.line(Vector3(0, 0, 0), Vector3(1, 0, 0), Color(1, 0, 0, 1), true)
+      DebugDraw.ray(Vector3(0, 0, 0), Vector3(0, 0, 5), 2)
+      DebugDraw.ray(Vector3(0, 0, 0), Vector3(0, 0, 0), 2)
+      DebugDraw.box(Vector3(0, 0, 0), Vector3(1, 1, 1))
+      DebugDraw.orientedBox(Vector3(0, 0, 0), Vector3(1, 2, 3), Quaternion.FromEuler(0, 45, 0))
+      DebugDraw.sphere(Vector3(0, 0, 0), 2)
+      DebugDraw.circle(Vector3(0, 0, 0), Vector3.UP, 2)
+      DebugDraw.capsule(Vector3(0, 0, 0), Vector3(0, 0, 2), 0.5)
+      DebugDraw.axes(Vector3(0, 0, 0), Quaternion(), 1)
+    )lua"));
+    scripts.beginFixedUpdate(1.0f / 60.0f);
+    REQUIRE(scripts.runString("DebugDraw.line(Vector3(0, 0, 0), Vector3(0, 1, 0))"));
+    scripts.beginUpdate(0.0f);
+
+#if USING(CH_DEBUG_DRAW)
+    REQUIRE(scene.getDebugDraw().getVertices(DebugDepth::OnTop).size() == 2);
+    // Two lines, one ray, a box, an oriented box and the three axes, plus the round shapes.
+    REQUIRE(scene.getDebugDraw().getLineCount() > 2 + 1 + 12 + 12 + 3);
+    REQUIRE(scene.getFixedDebugDraw().getLineCount() == 1);
+    REQUIRE_FALSE(scripts.runString("DebugDraw.line(Vector3(0, 0, 0))"));
+#else
+    // Without debug lines the arguments are not even read.
+    REQUIRE(scene.getDebugDraw().getLineCount() == 0);
+    REQUIRE(scripts.runString("DebugDraw.line(Vector3(0, 0, 0))"));
+#endif
   }
 }
 

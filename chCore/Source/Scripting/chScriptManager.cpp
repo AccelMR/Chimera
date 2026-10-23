@@ -681,6 +681,7 @@ ScriptManager::openLibraries()
   ScriptBindings::registerMath(m_state);
   ScriptBindings::registerObjects(m_state);
   ScriptBindings::registerInput(m_state);
+  ScriptBindings::registerDebugDraw(m_state);
 }
 
 /*
@@ -1027,6 +1028,9 @@ ScriptManager::beginUpdate(const float deltaTime)
   m_deltaTime = deltaTime;
   m_time += static_cast<double>(deltaTime);
   ++m_frameCount;
+#if USING(CH_DEBUG_DRAW)
+  m_bInFixedStep = false;
+#endif
   writeTime();
 }
 
@@ -1037,6 +1041,9 @@ ScriptManager::beginFixedUpdate(const float fixedDeltaTime)
 {
   m_deltaTime = fixedDeltaTime;
   m_fixedDeltaTime = fixedDeltaTime;
+#if USING(CH_DEBUG_DRAW)
+  m_bInFixedStep = true;
+#endif
   writeTime();
 }
 

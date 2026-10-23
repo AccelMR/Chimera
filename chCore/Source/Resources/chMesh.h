@@ -271,10 +271,11 @@ class CH_CORE_EXPORT Mesh
 
   /**
    * Nearest triangle the ray hits, from either side; the ray is in the mesh's own space.
+   * outNormal, when given, gets that triangle's unit normal turned toward the ray's origin.
    * Walks every triangle on the CPU, so it is meant for picking, not for every frame.
    */
   NODISCARD bool
-  raycast(const Ray& localRay, float& outDistance) const;
+  raycast(const Ray& localRay, float& outDistance, Vector3* outNormal = nullptr) const;
 
   /**
    * Same as raycast with the vertices moved by the skin first (one matrix per bone of the
@@ -282,7 +283,10 @@ class CH_CORE_EXPORT Mesh
    * Skins every vertex on the CPU, so it is meant for a click.
    */
   NODISCARD bool
-  raycastSkinned(const Ray& ray, Span<const Matrix4> skinMatrices, float& outDistance) const;
+  raycastSkinned(const Ray& ray,
+                 Span<const Matrix4> skinMatrices,
+                 float& outDistance,
+                 Vector3* outNormal = nullptr) const;
 
   /**
    * Copies every vertex position. False, with outPositions empty, when the mesh has no
@@ -367,7 +371,10 @@ class CH_CORE_EXPORT Mesh
    */
   template<typename PositionAt>
   NODISCARD bool
-  raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistance) const;
+  raycastTriangles(const Ray& ray,
+                   PositionAt&& positionAt,
+                   float& outDistance,
+                   Vector3* outNormal) const;
 
   /**
    * The position of vertex 0, or null when the mesh has no Float3 positions.

@@ -119,7 +119,7 @@ Mesh::getBounds() const
 /*
  */
 bool
-Mesh::raycast(const Ray& localRay, float& outDistance) const
+Mesh::raycast(const Ray& localRay, float& outDistance, Vector3* outNormal) const
 {
   const uint8* firstPosition = getFirstPosition();
   if (!firstPosition) {
@@ -131,13 +131,17 @@ Mesh::raycast(const Ray& localRay, float& outDistance) const
       [firstPosition, stride](uint32 index) {
         return readPositionAt(firstPosition, stride, index);
       },
-      outDistance);
+      outDistance,
+      outNormal);
 }
 
 /*
  */
 bool
-Mesh::raycastSkinned(const Ray& ray, Span<const Matrix4> skinMatrices, float& outDistance) const
+Mesh::raycastSkinned(const Ray& ray,
+                     Span<const Matrix4> skinMatrices,
+                     float& outDistance,
+                     Vector3* outNormal) const
 {
   const uint8* firstPosition = getFirstPosition();
   if (!firstPosition || m_skin.vertices.size() != m_vertexCount ||
@@ -163,14 +167,17 @@ Mesh::raycastSkinned(const Ray& ray, Span<const Matrix4> skinMatrices, float& ou
     positions[i] = skinned;
   }
   return raycastTriangles(
-      ray, [&positions](uint32 index) { return positions[index]; }, outDistance);
+      ray, [&positions](uint32 index) { return positions[index]; }, outDistance, outNormal);
 }
 
 /*
  */
 template<typename PositionAt>
 bool
-Mesh::raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistance) const
+Mesh::raycastTriangles(const Ray& ray,
+                       PositionAt&& positionAt,
+                       float& outDistance,
+                       Vector3* outNormal) const
 {
   const bool bHasIndices = m_indexCount > 0;
   const SIZE_T indexSize = m_indexType == IndexType::UInt16 ? sizeof(uint16) : sizeof(uint32);
@@ -194,6 +201,7 @@ Mesh::raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistan
   };
 
   bool bHit = false;
+  uint32 hitCorners[3] = {0, 0, 0};
   for (uint32 corner = 0; corner + 2 < cornerCount; corner += 3) {
     const uint32 a = readIndex(corner);
     const uint32 b = readIndex(corner + 1);
@@ -206,8 +214,25 @@ Mesh::raycastTriangles(const Ray& ray, PositionAt&& positionAt, float& outDistan
     if (RayCast::triangle(ray, positionAt(a), positionAt(b), positionAt(c), distance) &&
         (!bHit || distance < outDistance)) {
       outDistance = distance;
+      hitCorners[0] = a;
+      hitCorners[1] = b;
+      hitCorners[2] = c;
       bHit = true;
     }
+  }
+
+  // Only the nearest triangle needs its normal, so it is found once after the loop.
+  if (bHit && outNormal) {
+    const Vector3 first = positionAt(hitCorners[0]);
+    Vector3 normal =
+        (positionAt(hitCorners[1]) - first).cross(positionAt(hitCorners[2]) - first);
+    if (!normal.normalize()) {
+      normal = -ray.direction;
+    }
+    else if (normal.dot(ray.direction) > 0.0f) {
+      normal = -normal;
+    }
+    *outNormal = normal;
   }
   return bHit;
 }

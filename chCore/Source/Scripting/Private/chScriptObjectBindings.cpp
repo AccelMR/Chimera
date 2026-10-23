@@ -12,7 +12,9 @@
 #include "chGameObject.h"
 #include "chMath.h"
 #include "chMatrix4.h"
+#include "chRay.h"
 #include "chScene.h"
+#include "chScriptApi.h"
 #include "chScriptAsset.h"
 #include "chScriptComponent.h"
 #include "chScriptManager.h"
@@ -475,6 +477,79 @@ findInScene(lua_State* state)
 }
 
 /*
+ * Writes value into the Vector3 the table holds under name, or puts a new one there, so a
+ * hit table passed back every frame keeps its vectors.
+ */
+void
+setVectorField(lua_State* state, const int32 table, const ANSICHAR* name, const Vector3& value)
+{
+  lua_getfield(state, table, name);
+  if (Vector3* existing = static_cast<Vector3*>(
+          luaL_testudata(state, -1, ScriptValueType<Vector3>::NAME))) {
+    *existing = value;
+    lua_pop(state, 1);
+    return;
+  }
+  lua_pop(state, 1);
+  ScriptTraits<Vector3>::push(state, value);
+  lua_setfield(state, table, name);
+}
+
+/*
+ * Scene.raycast(origin, direction, maxDistance?, ignore?, out?): nil on a miss, else a table
+ * with gameObject, distance, point and normal; out is filled instead of a new table. Tests
+ * the triangles on the CPU, so a few rays per frame are fine, not hundreds.
+ */
+int32
+raycastScene(lua_State* state)
+{
+  const Vector3 origin = ScriptTraits<Vector3>::check(state, 1);
+  Vector3 direction = ScriptTraits<Vector3>::check(state, 2);
+  const float maxDistance =
+      static_cast<float>(luaL_optnumber(state, 3, static_cast<lua_Number>(Math::MAX_FLOAT)));
+
+  // A destroyed object has no items left in the scene, so it simply ignores nothing.
+  const GameObject* ignore = nullptr;
+  if (!lua_isnoneornil(state, 4)) {
+    luaL_checkudata(state, 4, ScriptHandleType<GameObject>::NAME);
+    ignore = ScriptTraits<GameObject>::test(state, 4);
+  }
+  const bool bHasOut = !lua_isnoneornil(state, 5);
+  if (bHasOut) {
+    luaL_checktype(state, 5, LUA_TTABLE);
+  }
+
+  if (!direction.normalize()) {
+    return luaL_error(state, "Scene.raycast needs a direction that is not zero");
+  }
+  const Scene* scene = ScriptManager::instance().getCurrentScene();
+  if (!scene) {
+    return luaL_error(state, "Scene.raycast needs a running script's scene");
+  }
+
+  SceneRayHit hit;
+  if (!scene->raycast(Ray(origin, direction), hit, maxDistance, ignore) || !hit.gameObject) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  if (bHasOut) {
+    lua_pushvalue(state, 5);
+  }
+  else {
+    lua_createtable(state, 0, 4);
+  }
+  const int32 table = lua_gettop(state);
+  ScriptTraits<GameObject>::push(state, *hit.gameObject);
+  lua_setfield(state, table, "gameObject");
+  lua_pushnumber(state, static_cast<lua_Number>(hit.distance));
+  lua_setfield(state, table, "distance");
+  setVectorField(state, table, "point", hit.point);
+  setVectorField(state, table, "normal", hit.normal);
+  return 1;
+}
+
+/*
  * The first enabled script component of the object whose script has that name.
  */
 ScriptComponent*
@@ -725,8 +800,20 @@ ScriptBindings::registerObjects(lua_State* state)
       .rawMethod("getUp", &getUp, kGetVector);
   setToString(state, ScriptHandleType<Transform>::NAME, &transformToString);
 
+  if (ScriptApiDescription* const api = ScriptApiDescription::find(state)) {
+    ScriptApiType& hit = api->addType("RaycastHit", ScriptApiTypeKind::Shape);
+    hit.description = "What Scene.raycast hit. Pass one back as out to reuse it.";
+    hit.fields = {{"gameObject", "GameObject"},
+                  {"distance", "number"},
+                  {"point", "Vector3"},
+                  {"normal", "Vector3"}};
+  }
+
   ScriptTable(state, "Scene", "The scene of the running script.")
-      .rawFunction("find", &findInScene, "fun(name: string): GameObject?");
+      .rawFunction("find", &findInScene, "fun(name: string): GameObject?")
+      .rawFunction("raycast", &raycastScene,
+                   "fun(origin: Vector3, direction: Vector3, maxDistance?: number, "
+                   "ignore?: GameObject, out?: RaycastHit): RaycastHit?");
 }
 
 } // namespace chEngineSDK

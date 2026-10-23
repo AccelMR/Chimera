@@ -179,6 +179,15 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   NODISCARD FORCEINLINE Scene*
   getCurrentScene() const noexcept { return m_currentScene; }
 
+#if USING(CH_DEBUG_DRAW)
+  /**
+   * Between beginFixedUpdate and the next beginUpdate, so lines drawn by scripts go to the
+   * scene's fixed step list and stay on screen until the next step.
+   */
+  NODISCARD FORCEINLINE bool
+  isInFixedStep() const noexcept { return m_bInFixedStep; }
+#endif
+
   /**
    * The input the Input table reads: the InputManager module when it runs while this starts;
    * tests give a local one. Without one, Input functions raise an error.
@@ -292,6 +301,9 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
   float m_deltaTime = 0.0f;
   float m_fixedDeltaTime = 0.0f;
   uint64 m_frameCount = 0;
+#if USING(CH_DEBUG_DRAW)
+  bool m_bInFixedStep = false;
+#endif
 };
 
 } // namespace chEngineSDK

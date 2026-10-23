@@ -27,6 +27,20 @@ toVector3(const Vector4& vector)
 }
 
 /*
+ * True when gameObject is ancestor or anywhere below it.
+ */
+NODISCARD bool
+isUnder(const GameObject* gameObject, const GameObject* ancestor)
+{
+  for (const GameObject* current = gameObject; current; current = current->getParent()) {
+    if (current == ancestor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
  */
 SPtr<GameObject>
 findInList(const Vector<SPtr<GameObject>>& gameObjects, const UUID& id)
@@ -257,7 +271,10 @@ Scene::gatherRenderItems(const Frustum& frustum, Vector<const RenderItem*>& outI
 /*
  */
 bool
-Scene::raycast(const Ray& ray, SceneRayHit& outHit) const
+Scene::raycast(const Ray& ray,
+               SceneRayHit& outHit,
+               const float maxDistance,
+               const GameObject* ignore) const
 {
   bool bHit = false;
   for (const RenderItem& item : m_renderItems) {
@@ -268,7 +285,12 @@ Scene::raycast(const Ray& ray, SceneRayHit& outHit) const
     const AABox worldBox(item.worldBounds.center - item.worldBounds.boxExtent,
                          item.worldBounds.center + item.worldBounds.boxExtent);
     float boxDistance = 0.0f;
-    if (!RayCast::box(ray, worldBox, boxDistance) || (bHit && boxDistance > outHit.distance)) {
+    if (!RayCast::box(ray, worldBox, boxDistance) || boxDistance > maxDistance ||
+        (bHit && boxDistance > outHit.distance)) {
+      continue;
+    }
+    // Walked only for items the ray reaches, so it costs nothing for the rest.
+    if (ignore && isUnder(item.owner, ignore)) {
       continue;
     }
 
@@ -285,23 +307,40 @@ Scene::raycast(const Ray& ray, SceneRayHit& outHit) const
     // A skinned item's matrix only places the model; its triangles are where the pose put
     // them.
     float localDistance = 0.0f;
+    Vector3 localNormal;
     const bool bLocalHit =
         item.skinMatrices
             ? item.mesh->raycastSkinned(
                   localRay,
                   Span<const Matrix4>(item.skinMatrices, item.mesh->getSkin().boneNodes.size()),
-                  localDistance)
-            : item.mesh->raycast(localRay, localDistance);
+                  localDistance,
+                  &localNormal)
+            : item.mesh->raycast(localRay, localDistance, &localNormal);
     if (!bLocalHit) {
       continue;
     }
     const Vector3 worldPoint =
         toVector3(item.worldMatrix.transformPosition(localRay.getPoint(localDistance)));
     const float distance = worldPoint.distance(ray.origin);
-    if (!bHit || distance < outHit.distance) {
-      outHit = {.gameObject = item.owner, .item = &item, .distance = distance};
-      bHit = true;
+    if (distance > maxDistance || (bHit && distance >= outHit.distance)) {
+      continue;
     }
+
+    // Normals go through the inverse transpose, so non-uniform scale keeps them square to
+    // the surface.
+    Vector3 worldNormal = toVector3(worldToLocal.getTransposed().transformVector(localNormal));
+    if (!worldNormal.normalize()) {
+      worldNormal = -ray.direction;
+    }
+    else if (worldNormal.dot(ray.direction) > 0.0f) {
+      worldNormal = -worldNormal;
+    }
+    outHit = {.gameObject = item.owner,
+              .item = &item,
+              .distance = distance,
+              .point = worldPoint,
+              .normal = worldNormal};
+    bHit = true;
   }
   return bHit;
 }

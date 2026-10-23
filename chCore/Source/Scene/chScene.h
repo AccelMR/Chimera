@@ -15,6 +15,7 @@
 #include "chGameObject.h"
 #include "chObject.h"
 #include "chLightItem.h"
+#include "chMath.h"
 #include "chSkyLightItem.h"
 #include "chRenderItem.h"
 
@@ -31,6 +32,9 @@ struct SceneRayHit
   const RenderItem* item = nullptr;
   // Along the ray, in world units.
   float distance = 0.0f;
+  Vector3 point = Vector3::ZERO;
+  // Unit normal of the triangle hit, in world space, turned toward the ray's origin.
+  Vector3 normal = Vector3::ZERO;
 };
 
 /**
@@ -161,10 +165,14 @@ class CH_CORE_EXPORT Scene : public Object
   /**
    * Nearest render item the ray hits, by its triangles. Tests every item's bounds first,
    * then the triangles of those the ray reaches, all on the CPU: meant for picking, not
-   * for every frame. ray.direction must be unit length.
+   * for every frame. ray.direction must be unit length. Hits farther than maxDistance and
+   * the items of ignore and of every object under it are skipped.
    */
   NODISCARD bool
-  raycast(const Ray& ray, SceneRayHit& outHit) const;
+  raycast(const Ray& ray,
+          SceneRayHit& outHit,
+          float maxDistance = Math::MAX_FLOAT,
+          const GameObject* ignore = nullptr) const;
 
   /**
    * Returns an id that stays valid until removeLight.

@@ -253,6 +253,7 @@ class PlatformMath
   static constexpr float DEG2RAD = 0.01745329251994329577f;
   static constexpr float SMALL_NUMBER = 1.e-6f;
   static constexpr float KINDA_SMALL_NUMBER = 1.e-4f;
+  static constexpr float MAX_FLOAT = 3.402823466e+38f;
 
  private:
 #if !USING(CH_MATH_SQRT_BUILTIN) && !USING(CH_MATH_SQRT_SSE)

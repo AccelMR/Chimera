@@ -29,7 +29,7 @@ class ScriptBindings
   registerMath(lua_State* state);
 
   /**
-   * GameObject, Transform and Scene.find.
+   * GameObject, Transform, Scene.find and Scene.raycast.
    */
   static void
   registerObjects(lua_State* state);
@@ -39,6 +39,12 @@ class ScriptBindings
    */
   static void
   registerInput(lua_State* state);
+
+  /**
+   * DebugDraw, which draws nothing in builds without debug lines.
+   */
+  static void
+  registerDebugDraw(lua_State* state);
 };
 
 } // namespace chEngineSDK
