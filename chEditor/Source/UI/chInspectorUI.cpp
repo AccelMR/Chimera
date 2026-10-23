@@ -13,6 +13,7 @@
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
 #include "chAnimationTimelineUI.h"
+#include "chAnimatorComponent.h"
 #include "chAssetDragDrop.h"
 #include "chCameraComponent.h"
 #include "chEditorScene.h"
@@ -158,6 +159,12 @@ InspectorUI::renderInspectorUI()
   ImGui::BeginDisabled(instance != nullptr);
   if (ModelComponent* modelComponent = selected->getComponent<ModelComponent>()) {
     renderModelComponent(*modelComponent);
+  }
+  if (AnimatorComponent* animator = selected->getComponent<AnimatorComponent>()) {
+    if (renderAnimatorComponent(*animator)) {
+      EditorScene::recordChange(*selected, "Remove Animator");
+      selected->removeComponent(*animator);
+    }
   }
   if (ShapeComponent* shapeComponent = selected->getComponent<ShapeComponent>()) {
     renderShapeComponent(*shapeComponent);
@@ -330,8 +337,9 @@ InspectorUI::renderModelComponent(ModelComponent& modelComponent)
     }
   }
 
-  if (modelComponent.isWholeModel()) {
-    renderAnimation(modelComponent);
+  if (modelComponent.isWholeModel() &&
+      !modelComponent.getOwner()->getComponent<AnimatorComponent>()) {
+    renderAddAnimator(modelComponent);
   }
 
   const Vector<uint32>& usedSlots = modelComponent.getUsedMaterialSlots();
@@ -803,42 +811,74 @@ InspectorUI::renderCameraComponent(CameraComponent& camera)
 /*
  */
 void
-InspectorUI::renderAnimation(ModelComponent& modelComponent)
+InspectorUI::renderAddAnimator(ModelComponent& modelComponent)
 {
-  if (!ImGui::TreeNodeEx(ICON_FA_FILM "  Animation###Animation",
-                         ImGuiTreeNodeFlags_DefaultOpen)) {
-    return;
+  GameObject& gameObject = *modelComponent.getOwner();
+  const auto addAnimator = [&gameObject](const SPtr<AnimationClipAsset>& clip) {
+    EditorScene::recordChange(gameObject, "Add Animator");
+    gameObject.addComponent<AnimatorComponent>(clip);
+  };
+
+  if (ImGui::Button(ICON_FA_PLUS "  Add Animator", ImVec2(-FLT_MIN, 0.0f))) {
+    addAnimator(nullptr);
+  }
+  ImGui::SetItemTooltip("Animates this model; drop an animation here to add one playing it");
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<AnimationClipAsset> dropped = AssetDragDrop::acceptAnimation()) {
+      addAnimator(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+}
+
+/*
+ */
+bool
+InspectorUI::renderAnimatorComponent(AnimatorComponent& animator)
+{
+  if (!ImGui::CollapsingHeader(ICON_FA_FILM "  Animator###Animator",
+                               ImGuiTreeNodeFlags_DefaultOpen)) {
+    return false;
   }
 
-  GameObject& gameObject = *modelComponent.getOwner();
-  const SPtr<AnimationClipAsset>& clipAsset = modelComponent.getAnimationAsset();
+  GameObject& gameObject = *animator.getOwner();
+  bool bEnabled = animator.isEnabled();
+  if (ImGui::Checkbox("Enabled", &bEnabled)) {
+    EditorScene::recordChange(gameObject, "Edit Enabled");
+    animator.setEnabled(bEnabled);
+  }
+  ImGui::SameLine();
+  const bool bRemove = ImGui::SmallButton(ICON_FA_TRASH "  Remove");
+
+  const SPtr<AnimationClipAsset>& clipAsset = animator.getClipAsset();
   ImGui::Button(clipAsset ? clipAsset->getName() : "None (drop an animation)",
                 ImVec2(-FLT_MIN, 0.0f));
   if (ImGui::BeginDragDropTarget()) {
     if (SPtr<AnimationClipAsset> dropped = AssetDragDrop::acceptAnimation()) {
       EditorScene::recordChange(gameObject, "Set Animation");
-      modelComponent.setAnimation(dropped);
+      animator.play(dropped);
     }
     ImGui::EndDragDropTarget();
   }
 
-  const SPtr<AnimationClip>& clip = modelComponent.getAnimation();
-  if (!clip) {
-    ImGui::TreePop();
-    return;
+  const ModelComponent* model = gameObject.getComponent<ModelComponent>();
+  if (!model || !model->isWholeModel()) {
+    ImGui::TextDisabled("Needs a whole model on this object.");
   }
-  if (ImGui::SmallButton("Clear")) {
-    EditorScene::recordChange(gameObject, "Clear Animation");
-    modelComponent.setAnimation(nullptr);
-    ImGui::TreePop();
-    return;
-  }
-  if (!modelComponent.isAnimating()) {
-    ImGui::TextDisabled("No node of this model has the name of a track.");
+  if (animator.getClip()) {
+    if (ImGui::SmallButton("Clear")) {
+      EditorScene::recordChange(gameObject, "Clear Animation");
+      animator.play(nullptr);
+    }
+    else {
+      if (model && model->isWholeModel() && !animator.hasBoundTracks()) {
+        ImGui::TextDisabled("No node of this model has the name of a track.");
+      }
+      AnimationTimelineUI::render(animator, true);
+    }
   }
 
-  AnimationTimelineUI::render(modelComponent, true);
-  ImGui::TreePop();
+  return bRemove;
 }
 
 /*

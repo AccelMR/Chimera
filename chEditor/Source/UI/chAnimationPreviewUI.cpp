@@ -12,6 +12,7 @@
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
 #include "chAnimationTimelineUI.h"
+#include "chAnimatorComponent.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chBox.h"
@@ -104,6 +105,7 @@ struct PreviewState
   SPtr<GameObject> fillLight;
   SPtr<GameObject> modelObject;
   ModelComponent* component = nullptr;
+  AnimatorComponent* animator = nullptr;
   Camera camera;
   bool bFrameCamera = false;
 
@@ -247,6 +249,7 @@ rebuildModel(PreviewState& state)
     state.scene->destroyGameObject(*state.modelObject);
     state.modelObject.reset();
     state.component = nullptr;
+    state.animator = nullptr;
   }
   if (!state.model || !state.model->getModel()) {
     return;
@@ -254,7 +257,7 @@ rebuildModel(PreviewState& state)
 
   state.modelObject = state.scene->createGameObject(state.model->getName());
   state.component = &state.modelObject->addComponent<ModelComponent>(state.model);
-  state.component->setAnimation(state.clip);
+  state.animator = &state.modelObject->addComponent<AnimatorComponent>(state.clip);
   state.bFrameCamera = true;
 }
 
@@ -273,9 +276,9 @@ void
 setClip(PreviewState& state, const SPtr<IAsset>& asset)
 {
   state.clip = asset && ensureLoaded(asset) ? asset->as<AnimationClipAsset>() : nullptr;
-  if (state.component) {
-    state.component->setAnimation(state.clip);
-    state.component->setPlaying(true);
+  if (state.animator) {
+    state.animator->play(state.clip);
+    state.animator->setPlaying(true);
   }
 }
 
@@ -513,7 +516,7 @@ renderView(PreviewState& state)
 {
   // The timeline stays under the view, so the view takes what is left above it.
   const ImGuiStyle& style = ImGui::GetStyle();
-  const bool bTimeline = state.component && state.component->getAnimation();
+  const bool bTimeline = state.animator && state.animator->getClip();
   const float timelineHeight =
       bTimeline ? ImGui::GetFrameHeightWithSpacing() * 3.0f +
                       ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y
@@ -548,10 +551,10 @@ renderView(PreviewState& state)
   }
 
   if (bTimeline) {
-    AnimationTimelineUI::render(*state.component, false);
-  }
-  else if (state.clip) {
-    ImGui::TextDisabled("No node of this model has the name of a track of the clip.");
+    AnimationTimelineUI::render(*state.animator, false);
+    if (!state.animator->hasBoundTracks()) {
+      ImGui::TextDisabled("No node of this model has the name of a track of the clip.");
+    }
   }
 }
 } // namespace
@@ -776,6 +779,7 @@ AnimationPreviewUI::shutDown()
   state.targetView.reset();
   state.target.reset();
   state.component = nullptr;
+  state.animator = nullptr;
   state.modelObject.reset();
   state.keyLight.reset();
   state.fillLight.reset();

@@ -28,6 +28,7 @@ constexpr StringView kExpandModeNames[] = {"Single", "PerNode", "PerMesh"};
 // The Skeleton value, unless it is the UUID of an existing skeleton.
 constexpr StringView kSkeletonAuto = "Auto";
 constexpr StringView kSkeletonNew = "New";
+constexpr StringView kSkeletonNone = "None";
 
 /*
  */
@@ -93,10 +94,14 @@ AssetMeta::write(const AssetEditorData& data, const Path& baseFolder, ConfigFile
   if (settings.skeletonMode == ImportSkeletonMode::Existing && !settings.skeleton.isNull()) {
     outFile.setValue(kImportSection, "Skeleton", settings.skeleton.toString());
   }
+  else if (settings.skeletonMode == ImportSkeletonMode::CreateNew) {
+    outFile.setValue(kImportSection, "Skeleton", kSkeletonNew);
+  }
+  else if (settings.skeletonMode == ImportSkeletonMode::None) {
+    outFile.setValue(kImportSection, "Skeleton", kSkeletonNone);
+  }
   else {
-    outFile.setValue(kImportSection, "Skeleton",
-                     settings.skeletonMode == ImportSkeletonMode::CreateNew ? kSkeletonNew
-                                                                            : kSkeletonAuto);
+    outFile.setValue(kImportSection, "Skeleton", kSkeletonAuto);
   }
 }
 
@@ -151,6 +156,9 @@ AssetMeta::read(const ConfigFile& file, const Path& baseFolder, AssetEditorData&
   if (const String* text = file.getValue(kImportSection, "Skeleton")) {
     if (StringUtils::equalsIgnoreCase(*text, kSkeletonNew)) {
       settings.skeletonMode = ImportSkeletonMode::CreateNew;
+    }
+    else if (StringUtils::equalsIgnoreCase(*text, kSkeletonNone)) {
+      settings.skeletonMode = ImportSkeletonMode::None;
     }
     else if (UUID::fromString(*text, settings.skeleton)) {
       settings.skeletonMode = ImportSkeletonMode::Existing;

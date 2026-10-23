@@ -14,6 +14,8 @@
 #include "chAlgorithm.h"
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationPlayer.h"
+#include "chAnimatorComponent.h"
 #include "chBox.h"
 #include "chCamera.h"
 #include "chCameraComponent.h"
@@ -1740,6 +1742,22 @@ TEST_CASE("chCore - Asset editor data")
   REQUIRE_FALSE(read.importSettings.autoAlphaMask);
   REQUIRE_FALSE(read.importSettings.importModel);
 
+  SECTION("Skeleton modes read back")
+  {
+    for (const ImportSkeletonMode mode :
+         {ImportSkeletonMode::Auto, ImportSkeletonMode::CreateNew, ImportSkeletonMode::None}) {
+      AssetEditorData withMode = data;
+      withMode.importSettings.skeletonMode = mode;
+      ConfigFile written;
+      AssetMeta::write(withMode, project, written);
+      ConfigFile reparsed;
+      reparsed.parse(written.toText());
+      AssetEditorData modeRead;
+      AssetMeta::read(reparsed, project, modeRead);
+      REQUIRE(modeRead.importSettings.skeletonMode == mode);
+    }
+  }
+
   SECTION("Missing and broken values keep the defaults")
   {
     ConfigFile broken;
@@ -2778,7 +2796,7 @@ TEST_CASE("chCore - Model animation")
   ModelComponent& component =
       gameObject->addComponent<ModelComponent>(createTestModelAsset(model));
   scene.updateTransforms();
-  REQUIRE_FALSE(component.isAnimating());
+  REQUIRE(component.getPose().empty());
   REQUIRE(component.getNodeMatrix(armNode) == model->getNodeRestMatrix(armNode));
 
   const auto armItemCenter = [&scene]() {
@@ -2788,16 +2806,17 @@ TEST_CASE("chCore - Model animation")
   REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
 
   const SPtr<AnimationClipAsset> clipAsset = createTestClipAsset(createTestClip());
-  component.setAnimation(clipAsset);
-  REQUIRE(component.isAnimating());
-  REQUIRE(component.isPlaying());
+  AnimatorComponent& animator = gameObject->addComponent<AnimatorComponent>(clipAsset);
+  REQUIRE(animator.hasBoundTracks());
+  REQUIRE(animator.isPlaying());
+  REQUIRE(component.getPose().size() == model->getNodeCount());
   // At time 0 the arm stands at the clip's first key, under the base lifted by the clip.
   REQUIRE(armItemCenter().nearEqual(Vector3(0.0f, 1.0f, 1.0f)));
 
   SECTION("Update moves the nodes and their render items")
   {
     scene.update(1.0f);
-    REQUIRE(component.getAnimationTime() == 1.0f);
+    REQUIRE(animator.getTime() == 1.0f);
     // Arm at x + 2, turned 90 degrees: the triangle's (0, 1, 0) center goes to (-1, 0, 0).
     REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 0.0f, 1.0f), 1e-5f));
     gameObject->getTransform().setLocalPosition(Vector3(0.0f, 10.0f, 0.0f));
@@ -2808,30 +2827,37 @@ TEST_CASE("chCore - Model animation")
   SECTION("Looping wraps the time; without it the clip stops at its end")
   {
     scene.update(2.5f);
-    REQUIRE(Math::abs(component.getAnimationTime() - 0.5f) < 1e-5f);
-    component.setLooping(false);
+    REQUIRE(Math::abs(animator.getTime() - 0.5f) < 1e-5f);
+    animator.setLooping(false);
     scene.update(5.0f);
-    REQUIRE(component.getAnimationTime() == 2.0f);
-    REQUIRE_FALSE(component.isPlaying());
-    component.setPlaying(true);
-    REQUIRE(component.getAnimationTime() == 0.0f);
+    REQUIRE(animator.getTime() == 2.0f);
+    REQUIRE_FALSE(animator.isPlaying());
+    animator.setPlaying(true);
+    REQUIRE(animator.getTime() == 0.0f);
   }
 
   SECTION("Paused clips only follow the time they are given")
   {
-    component.setPlaying(false);
+    animator.setPlaying(false);
     scene.update(1.0f);
-    REQUIRE(component.getAnimationTime() == 0.0f);
-    component.setAnimationTime(1.0f);
+    REQUIRE(animator.getTime() == 0.0f);
+    animator.setTime(1.0f);
     scene.update(0.0f);
     REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 0.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("Playing the clip that plays does not start it again")
+  {
+    scene.update(1.0f);
+    animator.play(clipAsset, 0.5f);
+    REQUIRE(animator.getTime() == 1.0f);
   }
 
   SECTION("Clearing the clip goes back to the rest pose")
   {
     scene.update(1.0f);
-    component.setAnimation(nullptr);
-    REQUIRE_FALSE(component.isAnimating());
+    animator.play(nullptr);
+    REQUIRE(component.getPose().empty());
     REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
   }
 
@@ -2841,27 +2867,134 @@ TEST_CASE("chCore - Model animation")
     static_cast<void>(other->addTrack("Missing", Vector<Vector3>{Vector3::UNIT},
                                       Vector<Quaternion>{Quaternion::IDENTITY},
                                       Vector<Vector3>{Vector3::UNIT}));
-    component.setAnimation(createTestClipAsset(other));
-    REQUIRE_FALSE(component.isAnimating());
+    animator.play(createTestClipAsset(other));
+    REQUIRE_FALSE(animator.hasBoundTracks());
     REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("A crossfade blends from the pose shown to the new clip")
+  {
+    // Holds Arm at x + 5; Base, which it does not name, goes back to rest.
+    SPtr<AnimationClip> reach = chMakeShared<AnimationClip>(1.0f, 1);
+    static_cast<void>(reach->addTrack("Arm", Vector<Vector3>{Vector3(5.0f, 0.0f, 0.0f)},
+                                      Vector<Quaternion>{Quaternion::IDENTITY},
+                                      Vector<Vector3>{Vector3::UNIT}));
+    animator.play(createTestClipAsset(reach), 1.0f);
+    // The fade has not moved yet.
+    REQUIRE(armItemCenter().nearEqual(Vector3(0.0f, 1.0f, 1.0f), 1e-5f));
+    scene.update(0.5f);
+    // Half way, which the eased weight keeps at half.
+    REQUIRE(armItemCenter().nearEqual(Vector3(2.5f, 1.0f, 0.5f), 1e-5f));
+
+    SECTION("It ends on the new clip")
+    {
+      scene.update(0.6f);
+      REQUIRE(armItemCenter().nearEqual(Vector3(5.0f, 1.0f, 0.0f), 1e-5f));
+    }
+
+    SECTION("Another clip during the fade starts from the blended pose")
+    {
+      animator.play(clipAsset, 1.0f);
+      REQUIRE(armItemCenter().nearEqual(Vector3(2.5f, 1.0f, 0.5f), 1e-5f));
+      scene.update(1.0f);
+      // Fully on the first clip, which started again: time 1.
+      REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 0.0f, 1.0f), 1e-5f));
+    }
+
+    SECTION("Fading to no clip ends at rest")
+    {
+      animator.play(nullptr, 0.5f);
+      scene.update(0.6f);
+      REQUIRE(component.getPose().empty());
+      REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f), 1e-5f));
+    }
+  }
+
+  SECTION("Removing the animator leaves the model at rest")
+  {
+    scene.update(1.0f);
+    gameObject->removeComponent(animator);
+    REQUIRE(component.getPose().empty());
+    REQUIRE(armItemCenter().nearEqual(Vector3(1.0f, 1.0f, 0.0f)));
+  }
+
+  SECTION("Setting the model again keeps the clip and its time")
+  {
+    scene.update(1.0f);
+    component.setModel(createTestModelAsset(model));
+    scene.update(0.0f);
+    REQUIRE(animator.getTime() == 1.0f);
+    // The render items were made again, so their slots may differ: read the node instead.
+    const float* armOrigin = component.getNodeMatrix(armNode).getRow(3);
+    REQUIRE(Vector3(armOrigin[0], armOrigin[1], armOrigin[2])
+                .nearEqual(Vector3(2.0f, 0.0f, 1.0f), 1e-5f));
+  }
+
+  SECTION("A part is not animated")
+  {
+    component.setModelPart(createTestModelAsset(model), armNode, ModelComponent::ALL,
+                           Vector3::ZERO);
+    scene.update(1.0f);
+    REQUIRE(component.getPose().empty());
+    REQUIRE_FALSE(animator.hasBoundTracks());
   }
 
   SECTION("The clip and how it plays are saved")
   {
-    component.setLooping(false);
-    component.setPlaybackSpeed(-0.5f);
+    animator.setLooping(false);
+    animator.setSpeed(-0.5f);
     MemoryDataStream stream;
-    component.serialize(stream);
+    animator.serialize(stream);
     stream.seek(0);
     // Without an AssetManager the clip is not found, but its id is kept.
-    ModelComponent read;
+    AnimatorComponent read;
     REQUIRE(read.deserialize(stream));
     REQUIRE_FALSE(read.isLooping());
     REQUIRE(read.isPlaying());
-    REQUIRE(read.getPlaybackSpeed() == -0.5f);
+    REQUIRE(read.getSpeed() == -0.5f);
     Vector<chEngineSDK::UUID> references;
     read.collectReferences(references);
     REQUIRE(Algorithm::contains(references, clipAsset->getUUID()));
+  }
+
+  SECTION("Clips are not found without assets")
+  {
+    String error;
+    REQUIRE_FALSE(animator.findClip("Run", error));
+    REQUIRE_FALSE(error.empty());
+  }
+}
+
+TEST_CASE("chCore - Animation pose blend")
+{
+  const NodeTransform rest{
+      .position = Vector3::ZERO, .rotation = Quaternion::IDENTITY, .scale = Vector3::UNIT};
+  const Vector<NodeTransform> from{rest, rest};
+  const Quaternion turned(Vector3::UP, Degree(90.0f));
+  const Vector<NodeTransform> to{
+      {.position = Vector3(2.0f, 0.0f, 0.0f),
+       .rotation = turned,
+       .scale = Vector3(3.0f, 3.0f, 3.0f)},
+      {.position = Vector3(2.0f, 0.0f, 0.0f),
+       .rotation = turned * -1.0f,
+       .scale = Vector3::UNIT}};
+  Vector<NodeTransform> out(2);
+
+  SECTION("Every node blends by the weight, rotations the short way")
+  {
+    AnimationPlayer::blendPoses(from, to, 0.5f, {}, out);
+    REQUIRE(out[0].position.nearEqual(Vector3(1.0f, 0.0f, 0.0f)));
+    REQUIRE(out[0].scale.nearEqual(Vector3(2.0f, 2.0f, 2.0f)));
+    REQUIRE(out[0].rotation.isRotationEqual(Quaternion(Vector3::UP, Degree(45.0f)), 1e-5f));
+    REQUIRE(out[1].rotation.isRotationEqual(Quaternion(Vector3::UP, Degree(45.0f)), 1e-5f));
+  }
+
+  SECTION("Node weights keep some nodes on the first pose")
+  {
+    const Vector<float> nodeWeights{1.0f, 0.0f};
+    AnimationPlayer::blendPoses(from, to, 1.0f, nodeWeights, out);
+    REQUIRE(out[0].position.nearEqual(Vector3(2.0f, 0.0f, 0.0f)));
+    REQUIRE(out[1].position.nearEqual(Vector3::ZERO));
   }
 }
 
@@ -2911,7 +3044,8 @@ TEST_CASE("chCore - Skinned model")
 
   // At time 0 the clip lifts Base by z + 1 and puts Arm at Base's origin, so the third
   // vertex moves from (0, 2, 0) to (-1, 2, 1).
-  component.setAnimation(createTestClipAsset(createTestClip()));
+  AnimatorComponent& animator =
+      gameObject->addComponent<AnimatorComponent>(createTestClipAsset(createTestClip()));
   const uint64 posedRevision = item.skinRevision;
   REQUIRE(item.skinMatrices[0].nearEqual(TranslationMatrix(Vector3(0.0f, 0.0f, 1.0f))));
   REQUIRE(item.skinMatrices[1].nearEqual(TranslationMatrix(Vector3(-1.0f, 0.0f, 1.0f))));
@@ -2936,7 +3070,7 @@ TEST_CASE("chCore - Skinned model")
   {
     scene.update(1.0f);
     REQUIRE(item.skinRevision != posedRevision);
-    component.setPlaying(false);
+    animator.setPlaying(false);
     const uint64 pausedRevision = item.skinRevision;
     scene.update(1.0f);
     REQUIRE(item.skinRevision == pausedRevision);
@@ -3798,10 +3932,10 @@ TEST_CASE("chCore - Scene play")
     REQUIRE(game.updates == 1);
   }
 
-  SECTION("Models animate while editing")
+  SECTION("Animators animate while editing")
   {
-    const ModelComponent model;
-    REQUIRE(model.updatesWhileEditing());
+    const AnimatorComponent animator;
+    REQUIRE(animator.updatesWhileEditing());
     const TestCounterComponent counter;
     REQUIRE_FALSE(counter.updatesWhileEditing());
   }
@@ -5914,6 +6048,49 @@ TEST_CASE("chCore - Script objects")
     )lua"));
     REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3(0, 0, 0))"));
     REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3.UP, 1, 5)"));
+  }
+
+  SECTION("Animator")
+  {
+    const SPtr<Model> model = chMakeShared<Model>();
+    const uint32 baseNode =
+        addTestNode(*model, "Base", ModelNode::NO_PARENT, Matrix4::IDENTITY, {});
+    static_cast<void>(addTestNode(*model, "Arm", baseNode, Matrix4::IDENTITY, {}));
+    const SPtr<GameObject> robot = scene.createGameObject("Robot");
+    robot->addComponent<ModelComponent>(createTestModelAsset(model));
+    REQUIRE(scripts.runString("assert(Scene.find('Robot'):getAnimator() == nil)"));
+
+    AnimatorComponent& animator =
+        robot->addComponent<AnimatorComponent>(createTestClipAsset(createTestClip()));
+    REQUIRE(scripts.runString(R"lua(
+      local animator = Scene.find("Robot"):getAnimator()
+      assert(animator == Scene.find("Robot"):getAnimator())
+      assert(animator:getGameObject() == Scene.find("Robot"))
+      assert(tostring(animator) == "Animator(Robot)")
+      assert(animator:getClipName() == "A_Test" and animator:isPlaying())
+      assert(animator:getDuration() == 2)
+      animator:pause()
+      assert(not animator:isPlaying())
+      animator:setTime(1.5)
+      animator:setSpeed(-1)
+      animator:setLooping(false)
+      assert(animator:getTime() == 1.5 and animator:getSpeed() == -1)
+      assert(not animator:isLooping())
+      animator:resume()
+      assert(animator:isPlaying())
+      animator:stop(0.25)
+      assert(animator:getClipName() == nil)
+      Found.animator = animator
+    )lua"));
+    REQUIRE(animator.getSpeed() == -1.0f);
+    REQUIRE_FALSE(animator.getClip());
+    // Names are looked up in the project's assets, which the tests have none of.
+    REQUIRE_FALSE(scripts.runString("Found.animator:play('Run')"));
+    REQUIRE(scripts.runString("Found.animator:play(nil)"));
+
+    robot->removeComponent(animator);
+    REQUIRE_FALSE(scripts.runString("Found.animator:isPlaying()"));
+    REQUIRE(scripts.runString("assert(Scene.find('Robot'):getAnimator() == nil)"));
   }
 
   SECTION("DebugDraw draws into the running script's scene")

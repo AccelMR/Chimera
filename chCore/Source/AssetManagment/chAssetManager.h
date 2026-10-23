@@ -88,6 +88,18 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   NODISCARD SPtr<SceneAsset>
   findScene(StringView pathOrName) const;
 
+  /**
+   * Same as findScene for any asset type.
+   */
+  NODISCARD SPtr<IAsset>
+  findAsset(const UUID& typeId, StringView pathOrName) const;
+
+  /**
+   * Appends every asset of that type to outAssets. Walks every asset.
+   */
+  void
+  getAssetsOfType(const UUID& typeId, Vector<SPtr<IAsset>>& outAssets) const;
+
 #if USING(CH_EDITOR)
   bool
   renameAsset(const UUID& assetUUID, const ANSICHAR* newName);

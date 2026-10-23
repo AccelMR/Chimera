@@ -14,12 +14,14 @@
 #include <cstring>
 #include <type_traits>
 
+#include "chAnimatorComponent.h"
 #include "chAssetManager.h"
 #include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chLogger.h"
 #include "chMaterialAsset.h"
+#include "chModel.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelExpand.h"
@@ -310,6 +312,10 @@ AssetDragDrop::createModelObject(Scene& scene,
                                    : modelAsset->getEditorData().importSettings.expandMode;
   if (mode != ModelExpandMode::Single) {
     ModelExpand::expand(scene, *gameObject, mode);
+  }
+  // A model with bones is there to be animated, so it comes ready for a clip.
+  else if (modelAsset->getModel()->hasSkeleton()) {
+    gameObject->addComponent<AnimatorComponent>();
   }
   EditorSelection::setSelectedGameObject(gameObject);
   EditorScene::recordCreated(*gameObject, "Place");

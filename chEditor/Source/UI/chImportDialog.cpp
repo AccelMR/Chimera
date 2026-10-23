@@ -40,6 +40,7 @@ constexpr const ANSICHAR* kPopupName = "Import###ImportDialog";
 
 constexpr const ANSICHAR* kSkeletonAuto = "Auto (reuse a compatible one)";
 constexpr const ANSICHAR* kSkeletonCreateNew = "Create new";
+constexpr const ANSICHAR* kSkeletonNone = "None (import as static)";
 // Indexed by ModelExpandMode.
 constexpr const ANSICHAR* kExpandModeLabels[] = {"Whole model", "One object per node",
                                                  "One object per mesh"};
@@ -96,10 +97,16 @@ renderSkeletonOption(ImportSettings& settings)
   if (settings.skeletonMode == ImportSkeletonMode::Existing) {
     existing = AssetManager::instance().getAsset(settings.skeleton);
   }
-  const ANSICHAR* preview = settings.skeletonMode == ImportSkeletonMode::CreateNew
-                                ? kSkeletonCreateNew
-                            : existing ? existing->getName()
-                                       : kSkeletonAuto;
+  const ANSICHAR* preview = kSkeletonAuto;
+  if (settings.skeletonMode == ImportSkeletonMode::CreateNew) {
+    preview = kSkeletonCreateNew;
+  }
+  else if (settings.skeletonMode == ImportSkeletonMode::None) {
+    preview = kSkeletonNone;
+  }
+  else if (existing) {
+    preview = existing->getName();
+  }
   if (ImGui::BeginCombo("Skeleton", preview)) {
     if (ImGui::Selectable(kSkeletonAuto, settings.skeletonMode == ImportSkeletonMode::Auto)) {
       settings.skeletonMode = ImportSkeletonMode::Auto;
@@ -107,6 +114,9 @@ renderSkeletonOption(ImportSettings& settings)
     if (ImGui::Selectable(kSkeletonCreateNew,
                           settings.skeletonMode == ImportSkeletonMode::CreateNew)) {
       settings.skeletonMode = ImportSkeletonMode::CreateNew;
+    }
+    if (ImGui::Selectable(kSkeletonNone, settings.skeletonMode == ImportSkeletonMode::None)) {
+      settings.skeletonMode = ImportSkeletonMode::None;
     }
     for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
       if (!asset->isTypeOf<SkeletonAsset>()) {
@@ -122,12 +132,13 @@ renderSkeletonOption(ImportSettings& settings)
     }
     ImGui::EndCombo();
   }
-  ImGui::SetItemTooltip("For models with bones. Auto reuses the skeleton an earlier import "
+  ImGui::SetItemTooltip("Ignored when the file has no skin. Auto reuses the skeleton an earlier import "
                         "of this file made, or any skeleton every bone of the file fits, so "
                         "they share animations; else a new one is made. A chosen skeleton "
                         "that does not fit also makes a new one. Animations imported without "
                         "their model never make one: they take the chosen skeleton or, with "
-                        "Auto or New, any that fits, else none.");
+                        "Auto or New, any that fits, else none. None imports skinned meshes "
+                        "as static meshes in their bind pose, without bones.");
 }
 
 /*

@@ -945,7 +945,8 @@ MeshImportTask::readSource(ImportProgress& progress)
       continue;
     }
     // A skinned mesh stays whole: its pieces would all follow the same bones anyway.
-    const bool bSkinned = m_scene->mMeshes[i]->HasBones();
+    const bool bSkinned = m_settings.skeletonMode != ImportSkeletonMode::None &&
+                          m_scene->mMeshes[i]->HasBones();
     const Vector<SPtr<Mesh>> parts = m_settings.splitParts && !bSkinned
                                          ? MeshSplit::splitParts(mesh)
                                          : Vector<SPtr<Mesh>>{mesh};
@@ -1253,6 +1254,9 @@ MeshImportTask::createAssets(const Path& assetFolder)
 UUID
 MeshImportTask::findAnimationSkeleton() const
 {
+  if (m_settings.skeletonMode == ImportSkeletonMode::None) {
+    return UUID::null();
+  }
   if (!m_skeleton) {
     CH_LOG_WARNING(MeshSystem, "The animations of {0} move no node of the file",
                    m_assetName);

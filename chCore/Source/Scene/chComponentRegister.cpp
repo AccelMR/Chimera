@@ -7,6 +7,7 @@
  *  Makes components from the type id saved in a file.
  */
 /************************************************************************/
+#include "chAnimatorComponent.h"
 #include "chCameraComponent.h"
 #include "chComponentRegister.h"
 
@@ -40,6 +41,7 @@ getTypes()
           .creator = []() { return UniquePtr<Component>(new T()); }};
     };
     addBuiltIn.operator()<ModelComponent>();
+    addBuiltIn.operator()<AnimatorComponent>();
     addBuiltIn.operator()<DirectionalLightComponent>();
     addBuiltIn.operator()<PointLightComponent>();
     addBuiltIn.operator()<SpotLightComponent>();

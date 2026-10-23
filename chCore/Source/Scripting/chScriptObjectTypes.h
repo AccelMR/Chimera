@@ -14,11 +14,13 @@
 #include "chScriptBinder.h"
 
 namespace chEngineSDK {
+class AnimatorComponent;
 class GameObject;
 class Transform;
 
 CH_SCRIPT_HANDLE_TYPE(GameObject, "GameObject");
 CH_SCRIPT_HANDLE_TYPE(Transform, "Transform");
+CH_SCRIPT_HANDLE_TYPE(AnimatorComponent, "Animator");
 
 /**
  * Each GameObject has one handle, made the first time a script sees it and kept until the
@@ -65,6 +67,30 @@ struct CH_CORE_EXPORT ScriptTraits<Transform>
 
   /**
    * The object whose transform is at index.
+   */
+  NODISCARD static GameObject&
+  checkOwner(lua_State* state, int32 index);
+};
+
+/**
+ * The animator of a GameObject: a handle that shares the object's like the transform, and
+ * finds the component each time it is used, so removing the component never leaves it
+ * dangling. check raises a script error when the object has no animator any more.
+ */
+template<>
+struct CH_CORE_EXPORT ScriptTraits<AnimatorComponent>
+{
+  /**
+   * Pushes the animator handle of gameObject, which must have an AnimatorComponent.
+   */
+  static void
+  pushOf(lua_State* state, GameObject& gameObject);
+
+  NODISCARD static AnimatorComponent&
+  check(lua_State* state, int32 index);
+
+  /**
+   * The object whose animator is at index.
    */
   NODISCARD static GameObject&
   checkOwner(lua_State* state, int32 index);

@@ -29,7 +29,7 @@ class ScriptBindings
   registerMath(lua_State* state);
 
   /**
-   * GameObject, Transform, Scene.find and Scene.raycast.
+   * GameObject, Transform, Animator, Scene.find and Scene.raycast.
    */
   static void
   registerObjects(lua_State* state);

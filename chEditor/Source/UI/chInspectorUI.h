@@ -14,6 +14,7 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
+class AnimatorComponent;
 class CameraComponent;
 class ScriptComponent;
 class ShapeComponent;
@@ -75,7 +76,13 @@ class InspectorUI
   renderAddScript(GameObject& gameObject);
 
   void
-  renderAnimation(ModelComponent& modelComponent);
+  renderAddAnimator(ModelComponent& modelComponent);
+
+  /**
+   * True when its Remove button was pressed.
+   */
+  NODISCARD bool
+  renderAnimatorComponent(AnimatorComponent& animator);
 
   void
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);

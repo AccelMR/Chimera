@@ -238,21 +238,41 @@ AssetManager::lazyLoadAssetsFromDirectory(const Path& directory) {
 SPtr<SceneAsset>
 AssetManager::findScene(StringView pathOrName) const
 {
+  return std::static_pointer_cast<SceneAsset>(
+      findAsset(AssetTypeTraits<SceneAsset>::getTypeId(), pathOrName));
+}
+
+/*
+ */
+SPtr<IAsset>
+AssetManager::findAsset(const UUID& typeId, StringView pathOrName) const
+{
   const SIZE_T nameStart = pathOrName.rfind('/');
   const bool bHasFolder = nameStart != StringView::npos;
   const StringView name = bHasFolder ? pathOrName.substr(nameStart + 1) : pathOrName;
   const StringView folder = bHasFolder ? pathOrName.substr(0, nameStart) : StringView();
 
   for (const auto& [uuid, asset] : m_assets) {
-    if (asset->getAssetTypeId() != AssetTypeTraits<SceneAsset>::getTypeId() ||
-        StringView(asset->getName()) != name) {
+    if (asset->getAssetTypeId() != typeId || StringView(asset->getName()) != name) {
       continue;
     }
     if (!bHasFolder || StringView(asset->getAssetPath()) == folder) {
-      return std::static_pointer_cast<SceneAsset>(asset);
+      return asset;
     }
   }
   return nullptr;
+}
+
+/*
+ */
+void
+AssetManager::getAssetsOfType(const UUID& typeId, Vector<SPtr<IAsset>>& outAssets) const
+{
+  for (const auto& [uuid, asset] : m_assets) {
+    if (asset->getAssetTypeId() == typeId) {
+      outAssets.push_back(asset);
+    }
+  }
 }
 
 

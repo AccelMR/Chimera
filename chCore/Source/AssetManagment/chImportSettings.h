@@ -18,7 +18,7 @@
 namespace chEngineSDK {
 
 /**
- * How a model with bones gets its skeleton. Fixed values, because the editor data stores
+ * How a model with bones gets its skeleton, or whether it gets one. Fixed values, because the editor data stores
  * them by name and old names must keep meaning the same.
  */
 enum class ImportSkeletonMode : uint32
@@ -27,7 +27,9 @@ enum class ImportSkeletonMode : uint32
   Auto = 0,
   CreateNew = 1,
   // ImportSettings::skeleton, or a new one when it does not fit.
-  Existing = 2
+  Existing = 2,
+  // No skeleton: skinned meshes become static meshes drawn in their bind pose.
+  None = 3
 };
 
 /**

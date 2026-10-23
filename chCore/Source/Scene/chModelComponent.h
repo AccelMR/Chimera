@@ -11,7 +11,6 @@
 
 #include "chPrerequisitesCore.h"
 
-#include "chAnimationClip.h"
 #include "chBox.h"
 #include "chComponent.h"
 #include "chMatrix4.h"
@@ -19,7 +18,6 @@
 #include "chVector3.h"
 
 namespace chEngineSDK {
-class AnimationClipAsset;
 class Material;
 class MaterialAsset;
 class ModelAsset;
@@ -30,11 +28,11 @@ class ModelAsset;
  * registered it adds one render item per mesh it draws to the scene, and moves them when
  * the GameObject moves, so the renderer never looks at components.
  *
- * A whole model can also play an animation clip: update() moves the nodes the clip's
- * tracks name (matched by name when the clip is set) and the render items of their meshes.
- * The pose lives here, never in GameObjects, so bones stay out of the scene graph. Skinned
- * meshes of a whole model give their render items the bone matrices of the pose, which the
- * renderer uses to move the vertices, and bounds made from the boxes of their posed bones.
+ * A whole model can also be posed by whoever animates it (an AnimatorComponent on the same
+ * GameObject): setPose moves the render items of the nodes' meshes. The pose never becomes
+ * GameObjects, so bones stay out of the scene graph. Skinned meshes of a whole model give
+ * their render items the bone matrices of the pose, which the renderer uses to move the
+ * vertices, and bounds made from the boxes of their posed bones.
  */
 class CH_CORE_EXPORT ModelComponent : public Component
 {
@@ -115,69 +113,26 @@ class CH_CORE_EXPORT ModelComponent : public Component
   getMaterial(uint32 slot) const;
 
   /**
-   * Plays clip from its start (null stops animating and goes back to the rest pose). Only a
-   * whole model is animated; a part keeps the clip but stands still.
+   * One matrix per node of the model, in the model's space, that the meshes follow until
+   * the next call; empty goes back to the rest pose. The matrices are not copied, so they
+   * must live until the pose is set again or cleared. Ignored by a part and when the count
+   * is not the model's node count. Call it after each change of the matrices.
    */
   void
-  setAnimation(const SPtr<AnimationClipAsset>& clip);
-
-  NODISCARD FORCEINLINE const SPtr<AnimationClipAsset>&
-  getAnimationAsset() const { return m_animationAsset; }
+  setPose(Span<const Matrix4> nodeMatrices);
 
   /**
-   * The clip of the asset, kept while the component uses it, even if the asset unloads.
+   * The matrices setPose was given; empty at rest.
    */
-  NODISCARD FORCEINLINE const SPtr<AnimationClip>&
-  getAnimation() const { return m_animation; }
-
-  /**
-   * True when the clip moves at least one node of the model.
-   */
-  NODISCARD FORCEINLINE bool
-  isAnimating() const { return !m_poseMatrices.empty(); }
-
-  /**
-   * Playing a clip that does not loop and already reached its end starts it again.
-   */
-  void
-  setPlaying(bool bPlaying);
-
-  NODISCARD FORCEINLINE bool
-  isPlaying() const { return m_bPlaying; }
-
-  void
-  setLooping(bool bLooping) { m_bLooping = bLooping; }
-
-  NODISCARD FORCEINLINE bool
-  isLooping() const { return m_bLooping; }
-
-  /**
-   * Seconds of the clip per second of play; negative plays backwards.
-   */
-  void
-  setPlaybackSpeed(float speed) { m_playbackSpeed = speed; }
-
-  NODISCARD FORCEINLINE float
-  getPlaybackSpeed() const { return m_playbackSpeed; }
-
-  /**
-   * Jumps to a time of the clip (clamped to it); the pose follows on the next update.
-   */
-  void
-  setAnimationTime(float time);
-
-  NODISCARD FORCEINLINE float
-  getAnimationTime() const { return m_animationTime; }
+  NODISCARD FORCEINLINE Span<const Matrix4>
+  getPose() const noexcept { return m_pose; }
 
   /**
    * Where the node stands in the model's space in the current pose: the rest pose when
-   * nothing is animated.
+   * nothing poses it.
    */
   NODISCARD const Matrix4&
   getNodeMatrix(uint32 nodeIndex) const;
-
-  void
-  update(float deltaTime) override;
 
   NODISCARD bool
   getWorldBounds(AABox& outBounds) const override;
@@ -216,19 +171,6 @@ class CH_CORE_EXPORT ModelComponent : public Component
     // Skinned meshes of a whole model: their first matrix in m_skinMatrices, else ALL.
     uint32 firstSkinMatrix = ALL;
   };
-
-  /**
-   * Finds the node of each track of the clip and starts the pose at rest; leaves nothing to
-   * animate when the clip moves no node of a whole model.
-   */
-  void
-  bindAnimation();
-
-  /**
-   * Samples the clip at the current time and rebuilds the pose matrices.
-   */
-  void
-  computePose();
 
   /**
    * Gives each part drawn by a node its matrix in the current pose, then moves the render
@@ -281,22 +223,8 @@ class CH_CORE_EXPORT ModelComponent : public Component
   Vector<SPtr<MaterialAsset>> m_materialOverrides;
   Vector<MeshPart> m_parts;
 
-  SPtr<AnimationClipAsset> m_animationAsset;
-  SPtr<AnimationClip> m_animation;
-  // Kept when the asset is missing, so saving again keeps the reference.
-  UUID m_animationAssetId = UUID::null();
-  float m_animationTime = 0.0f;
-  float m_playbackSpeed = 1.0f;
-  bool m_bPlaying = true;
-  bool m_bLooping = true;
-  // The time changed without the pose following yet.
-  bool m_bPoseDirty = false;
-  // Per track of the clip, the model node it moves, or AnimationClip::NO_TARGET.
-  Vector<uint32> m_trackNodes;
-  // Per model node, only while a clip moves the model: where it stands relative to its
-  // parent, and in the model's space.
-  Vector<NodeTransform> m_localPose;
-  Vector<Matrix4> m_poseMatrices;
+  // Owned by whoever animates the model; one per node, or empty at rest.
+  Span<const Matrix4> m_pose;
   // The skin matrices of every skinned part one after the other; their render items point
   // here, so it is sized once when the items are added and never grows while they exist.
   Vector<Matrix4> m_skinMatrices;

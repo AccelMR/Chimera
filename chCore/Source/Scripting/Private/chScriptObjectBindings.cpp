@@ -9,6 +9,8 @@
 /************************************************************************/
 #include "chScriptBindings.h"
 
+#include "chAnimationClipAsset.h"
+#include "chAnimatorComponent.h"
 #include "chGameObject.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -32,13 +34,19 @@ struct GameObjectHandle
 };
 
 /*
- * Points at the object pointer inside the GameObject handle, which its user value keeps
- * alive, so both handles die with the object at once.
+ * The handle of what belongs to an object (its transform, its animator). Points at the
+ * object pointer inside the GameObject handle, which its user value keeps alive, so both
+ * handles die with the object at once.
  */
-struct TransformHandle
+struct PartHandle
 {
   GameObject* const* object;
 };
+
+// The GameObject handle's user values, each the handle of one part, made on first use.
+constexpr int32 kTransformUserValue = 1;
+constexpr int32 kAnimatorUserValue = 2;
+constexpr int32 kUserValueCount = 2;
 
 /*
  * An object that left its scene but is still held elsewhere (undo, the editor selection) is
@@ -633,13 +641,188 @@ gameObjectToString(lua_State* state)
 int32
 transformToString(lua_State* state)
 {
-  const TransformHandle* handle = static_cast<const TransformHandle*>(
+  const PartHandle* handle = static_cast<const PartHandle*>(
       luaL_checkudata(state, 1, ScriptHandleType<Transform>::NAME));
   if (isAlive(*handle->object)) {
     lua_pushfstring(state, "Transform(%s)", (*handle->object)->getName().c_str());
   }
   else {
     lua_pushliteral(state, "Transform(destroyed)");
+  }
+  return 1;
+}
+
+/*
+ * Pushes the part handle the object handle keeps in userValue, making it on first use.
+ */
+void
+pushPartHandle(lua_State* state,
+               GameObject& gameObject,
+               const int32 userValue,
+               const ANSICHAR* typeName)
+{
+  ScriptTraits<GameObject>::push(state, gameObject);
+  if (lua_getiuservalue(state, -1, userValue) == LUA_TUSERDATA) {
+    lua_remove(state, -2);
+    return;
+  }
+  lua_pop(state, 1);
+
+  GameObjectHandle* const objectHandle =
+      static_cast<GameObjectHandle*>(lua_touserdata(state, -1));
+  PartHandle* const handle =
+      static_cast<PartHandle*>(lua_newuserdatauv(state, sizeof(PartHandle), 1));
+  handle->object = &objectHandle->object;
+  luaL_setmetatable(state, typeName);
+  // The part keeps the object handle alive, which caches the part in turn.
+  lua_pushvalue(state, -2);
+  lua_setiuservalue(state, -2, 1);
+  lua_pushvalue(state, -1);
+  lua_setiuservalue(state, -3, userValue);
+  lua_remove(state, -2);
+}
+
+/*
+ * Nil when the object has no animator.
+ */
+int32
+getAnimator(lua_State* state)
+{
+  GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
+  if (!gameObject.getComponent<AnimatorComponent>()) {
+    lua_pushnil(state);
+    return 1;
+  }
+  ScriptTraits<AnimatorComponent>::pushOf(state, gameObject);
+  return 1;
+}
+
+/*
+ * animator:play(clip, fadeTime?): clip is a path or a name (see AnimatorComponent::findClip),
+ * nil fades back to the rest pose. The clip a text names is remembered per animator, so
+ * calling it every frame costs a short search, not a load.
+ */
+int32
+playAnimation(lua_State* state)
+{
+  AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  const float fadeTime = static_cast<float>(luaL_optnumber(state, 3, 0.0));
+  if (lua_isnoneornil(state, 2)) {
+    animator.play(nullptr, fadeTime);
+    return 0;
+  }
+  const StringView text = ScriptTraits<StringView>::check(state, 2);
+  String error;
+  SPtr<AnimationClipAsset> clip = animator.findClip(text, error);
+  if (!clip) {
+    return luaL_error(state, "Animator.play: %s", error.c_str());
+  }
+  animator.play(clip, fadeTime);
+  return 0;
+}
+
+int32
+stopAnimation(lua_State* state)
+{
+  AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  animator.play(nullptr, static_cast<float>(luaL_optnumber(state, 2, 0.0)));
+  return 0;
+}
+
+void
+pauseAnimation(AnimatorComponent& animator)
+{
+  animator.setPlaying(false);
+}
+
+void
+resumeAnimation(AnimatorComponent& animator)
+{
+  animator.setPlaying(true);
+}
+
+bool
+isAnimationPlaying(const AnimatorComponent& animator)
+{
+  return animator.isPlaying();
+}
+
+void
+setAnimationLooping(AnimatorComponent& animator, const bool bLooping)
+{
+  animator.setLooping(bLooping);
+}
+
+bool
+isAnimationLooping(const AnimatorComponent& animator)
+{
+  return animator.isLooping();
+}
+
+void
+setAnimationSpeed(AnimatorComponent& animator, const float speed)
+{
+  animator.setSpeed(speed);
+}
+
+float
+getAnimationSpeed(const AnimatorComponent& animator)
+{
+  return animator.getSpeed();
+}
+
+void
+setAnimationTime(AnimatorComponent& animator, const float time)
+{
+  animator.setTime(time);
+}
+
+float
+getAnimationTime(const AnimatorComponent& animator)
+{
+  return animator.getTime();
+}
+
+float
+getAnimationDuration(const AnimatorComponent& animator)
+{
+  return animator.getDuration();
+}
+
+/*
+ * The name of the clip's asset; nil without a clip.
+ */
+int32
+getClipName(lua_State* state)
+{
+  const AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  const SPtr<AnimationClipAsset>& clip = animator.getClipAsset();
+  if (clip) {
+    lua_pushstring(state, clip->getName());
+  }
+  else {
+    lua_pushnil(state);
+  }
+  return 1;
+}
+
+int32
+getGameObjectOfAnimator(lua_State* state)
+{
+  ScriptTraits<GameObject>::push(state, ScriptTraits<AnimatorComponent>::checkOwner(state, 1));
+  return 1;
+}
+
+int32
+animatorToString(lua_State* state)
+{
+  const PartHandle* handle = static_cast<const PartHandle*>(
+      luaL_checkudata(state, 1, ScriptHandleType<AnimatorComponent>::NAME));
+  if (isAlive(*handle->object)) {
+    lua_pushfstring(state, "Animator(%s)", (*handle->object)->getName().c_str());
+  }
+  else {
+    lua_pushliteral(state, "Animator(destroyed)");
   }
   return 1;
 }
@@ -663,9 +846,8 @@ ScriptTraits<GameObject>::push(lua_State* state, GameObject& gameObject)
     lua_rawgeti(state, LUA_REGISTRYINDEX, gameObject.m_scriptHandle);
     return;
   }
-  // One user value: the Transform handle, made on first use.
-  GameObjectHandle* handle =
-      static_cast<GameObjectHandle*>(lua_newuserdatauv(state, sizeof(GameObjectHandle), 1));
+  GameObjectHandle* handle = static_cast<GameObjectHandle*>(
+      lua_newuserdatauv(state, sizeof(GameObjectHandle), kUserValueCount));
   handle->object = &gameObject;
   luaL_setmetatable(state, ScriptHandleType<GameObject>::NAME);
   lua_pushvalue(state, -1);
@@ -715,24 +897,7 @@ ScriptTraits<GameObject>::release(GameObject& gameObject) noexcept
 void
 ScriptTraits<Transform>::pushOf(lua_State* state, GameObject& gameObject)
 {
-  ScriptTraits<GameObject>::push(state, gameObject);
-  if (lua_getiuservalue(state, -1, 1) == LUA_TUSERDATA) {
-    lua_remove(state, -2);
-    return;
-  }
-  lua_pop(state, 1);
-
-  GameObjectHandle* const objectHandle = static_cast<GameObjectHandle*>(lua_touserdata(state, -1));
-  TransformHandle* const handle =
-      static_cast<TransformHandle*>(lua_newuserdatauv(state, sizeof(TransformHandle), 1));
-  handle->object = &objectHandle->object;
-  luaL_setmetatable(state, ScriptHandleType<Transform>::NAME);
-  // The transform keeps the object handle alive, which caches the transform in turn.
-  lua_pushvalue(state, -2);
-  lua_setiuservalue(state, -2, 1);
-  lua_pushvalue(state, -1);
-  lua_setiuservalue(state, -3, 1);
-  lua_remove(state, -2);
+  pushPartHandle(state, gameObject, kTransformUserValue, ScriptHandleType<Transform>::NAME);
 }
 
 /*
@@ -748,8 +913,42 @@ ScriptTraits<Transform>::check(lua_State* state, const int32 index)
 GameObject&
 ScriptTraits<Transform>::checkOwner(lua_State* state, const int32 index)
 {
-  const TransformHandle* handle = static_cast<const TransformHandle*>(
+  const PartHandle* handle = static_cast<const PartHandle*>(
       luaL_checkudata(state, index, ScriptHandleType<Transform>::NAME));
+  return checkAlive(state, *handle->object);
+}
+
+/*
+ */
+void
+ScriptTraits<AnimatorComponent>::pushOf(lua_State* state, GameObject& gameObject)
+{
+  pushPartHandle(state, gameObject, kAnimatorUserValue,
+                 ScriptHandleType<AnimatorComponent>::NAME);
+}
+
+/*
+ * The component is looked up each time (a short walk over the object's components), so a
+ * removed animator is an error instead of a dangling pointer.
+ */
+AnimatorComponent&
+ScriptTraits<AnimatorComponent>::check(lua_State* state, const int32 index)
+{
+  GameObject& gameObject = checkOwner(state, index);
+  AnimatorComponent* animator = gameObject.getComponent<AnimatorComponent>();
+  if (!animator) {
+    luaL_error(state, "GameObject '%s' has no Animator", gameObject.getName().c_str());
+  }
+  return *animator;
+}
+
+/*
+ */
+GameObject&
+ScriptTraits<AnimatorComponent>::checkOwner(lua_State* state, const int32 index)
+{
+  const PartHandle* handle = static_cast<const PartHandle*>(
+      luaL_checkudata(state, index, ScriptHandleType<AnimatorComponent>::NAME));
   return checkAlive(state, *handle->object);
 }
 
@@ -763,6 +962,7 @@ ScriptBindings::registerObjects(lua_State* state)
       .method<&getName>("getName")
       .method<&setName>("setName", "name")
       .rawMethod("getTransform", &getTransform, "fun(): Transform")
+      .rawMethod("getAnimator", &getAnimator, "fun(): Animator?")
       .rawMethod("getParent", &getParent, "fun(): GameObject?")
       .method<&getChildCount>("getChildCount")
       .rawMethod("getChild", &getChild, "fun(index: integer): GameObject?")
@@ -799,6 +999,23 @@ ScriptBindings::registerObjects(lua_State* state)
       .rawMethod("getRight", &getRight, kGetVector)
       .rawMethod("getUp", &getUp, kGetVector);
   setToString(state, ScriptHandleType<Transform>::NAME, &transformToString);
+
+  ScriptClass<AnimatorComponent>(state)
+      .rawMethod("getGameObject", &getGameObjectOfAnimator, "fun(): GameObject")
+      .rawMethod("play", &playAnimation, "fun(clip?: string, fadeTime?: number)")
+      .rawMethod("stop", &stopAnimation, "fun(fadeTime?: number)")
+      .method<&pauseAnimation>("pause")
+      .method<&resumeAnimation>("resume")
+      .method<&isAnimationPlaying>("isPlaying")
+      .method<&setAnimationLooping>("setLooping", "looping")
+      .method<&isAnimationLooping>("isLooping")
+      .method<&setAnimationSpeed>("setSpeed", "speed")
+      .method<&getAnimationSpeed>("getSpeed")
+      .method<&setAnimationTime>("setTime", "time")
+      .method<&getAnimationTime>("getTime")
+      .method<&getAnimationDuration>("getDuration")
+      .rawMethod("getClipName", &getClipName, "fun(): string?");
+  setToString(state, ScriptHandleType<AnimatorComponent>::NAME, &animatorToString);
 
   if (ScriptApiDescription* const api = ScriptApiDescription::find(state)) {
     ScriptApiType& hit = api->addType("RaycastHit", ScriptApiTypeKind::Shape);

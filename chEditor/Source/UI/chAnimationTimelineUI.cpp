@@ -9,9 +9,9 @@
 #include "chAnimationTimelineUI.h"
 
 #include "chAnimationClip.h"
+#include "chAnimatorComponent.h"
 #include "chEditorScene.h"
 #include "chMath.h"
-#include "chModelComponent.h"
 
 #include "imgui.h"
 
@@ -23,7 +23,7 @@ namespace {
 constexpr float kOnKeyTolerance = 1e-3f;
 
 void
-recordChange(ModelComponent& component, bool bRecordUndo, const ANSICHAR* action)
+recordChange(AnimatorComponent& component, bool bRecordUndo, const ANSICHAR* action)
 {
   if (bRecordUndo) {
     EditorScene::recordChange(*component.getOwner(), action);
@@ -34,22 +34,22 @@ recordChange(ModelComponent& component, bool bRecordUndo, const ANSICHAR* action
  * Jumping or stepping stops the clip, as in Unreal, so the chosen key stays on screen.
  */
 void
-jumpTo(ModelComponent& component, bool bRecordUndo, float time)
+jumpTo(AnimatorComponent& component, bool bRecordUndo, float time)
 {
   if (component.isPlaying()) {
     recordChange(component, bRecordUndo, "Pause Animation");
     component.setPlaying(false);
   }
-  component.setAnimationTime(time);
+  component.setTime(time);
 }
 } // namespace
 
 /*
  */
 void
-AnimationTimelineUI::render(ModelComponent& component, bool bRecordUndo)
+AnimationTimelineUI::render(AnimatorComponent& component, bool bRecordUndo)
 {
-  const SPtr<AnimationClip>& clip = component.getAnimation();
+  const SPtr<AnimationClip>& clip = component.getClip();
   if (!clip) {
     return;
   }
@@ -57,7 +57,7 @@ AnimationTimelineUI::render(ModelComponent& component, bool bRecordUndo)
   const float duration = clip->getDuration();
   const float keyTime = clip->getSampleRate() > 0.0f ? 1.0f / clip->getSampleRate() : 0.0f;
   const uint32 lastKey = clip->getFrameCount() > 0 ? clip->getFrameCount() - 1 : 0;
-  const float time = component.getAnimationTime();
+  const float time = component.getTime();
   // The key at or before the time.
   uint32 key = 0;
   if (keyTime > 0.0f) {
@@ -103,16 +103,16 @@ AnimationTimelineUI::render(ModelComponent& component, bool bRecordUndo)
     component.setLooping(bLooping);
   }
 
-  float speed = component.getPlaybackSpeed();
+  float speed = component.getSpeed();
   if (ImGui::DragFloat("Speed", &speed, 0.01f, -10.0f, 10.0f, "%.2fx",
                        ImGuiSliderFlags_AlwaysClamp)) {
     recordChange(component, bRecordUndo, "Edit Speed");
-    component.setPlaybackSpeed(speed);
+    component.setSpeed(speed);
   }
 
   float newTime = time;
   if (ImGui::SliderFloat("Time", &newTime, 0.0f, duration, "%.2f s")) {
-    component.setAnimationTime(newTime);
+    component.setTime(newTime);
   }
   ImGui::TextDisabled("Key %u of %u, %.2f of %.2f s", key, lastKey, time, duration);
 }
