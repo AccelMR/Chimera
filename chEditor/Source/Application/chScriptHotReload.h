@@ -14,16 +14,17 @@
 namespace chEngineSDK {
 
 /**
- * Exists so a script saved in an outside code editor runs at once, also during Play: every
- * Editor.ScriptReloadInterval seconds, and when the editor window gets the focus back, it
- * compares the write time of every loaded script with the last one seen and asks the
- * ScriptManager to read the changed ones again.
+ * Exists so a script saved in an outside code editor runs at once, also during Play: the
+ * system reports changed .lua files under /Game, and each loaded one is read again by the
+ * ScriptManager once Editor.ScriptReloadDelay passed without more changes. When the window
+ * gets the focus back, when the system dropped changes, or every few seconds when the folder
+ * cannot be watched, the write time of every loaded script is compared instead.
  */
 class ScriptHotReload
 {
  public:
   /**
-   * Listens for the window focus. Needs the event dispatcher.
+   * Watches /Game and listens for the window focus. Needs the event dispatcher.
    */
   static void
   initialize();

@@ -16,6 +16,7 @@
 #include "chCommandLine.h"
 #include "chConfigFile.h"
 #include "chConsoleVariable.h"
+#include "chDirectoryWatcher.h"
 #include "chDynamicLibManager.h"
 #include "chEventSystem.h"
 #include "chFileStream.h"
@@ -51,7 +52,9 @@
 #include "chVector4.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 
@@ -2203,6 +2206,88 @@ TEST_CASE("chUtilities - FileDataStream") {
   }
 
   REQUIRE(FileSystem::remove(file));
+}
+
+namespace {
+void
+writeWatchedFile(const Path& file, const ANSICHAR* text)
+{
+  SPtr<DataStream> output = FileSystem::createAndOpenFile(file);
+  REQUIRE(output);
+  REQUIRE(output->write(text, std::strlen(text)) == std::strlen(text));
+}
+
+/*
+ * The system reports a change a moment after it happens, so this polls for up to a second.
+ * changes keeps what every call took, since one poll can bring several changes.
+ */
+bool
+waitForChange(DirectoryWatcher& watcher,
+              Vector<FileChange>& changes,
+              const ANSICHAR* path,
+              const FileChangeType type)
+{
+  const Path expected(path);
+  for (uint32 attempt = 0; attempt < 100; ++attempt) {
+    if (!watcher.poll(changes)) {
+      return false;
+    }
+    if (Algorithm::containsIf(changes, [&](const FileChange& change) {
+          return change.path == expected && change.type == type;
+        })) {
+      return true;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return false;
+}
+} // namespace
+
+TEST_CASE("chUtilities - Directory watcher") {
+  const Path root("chWatcherTest");
+  FileSystem::removeAll(root);
+  REQUIRE(FileSystem::createDirectories(root / Path("Sub")));
+
+  DirectoryWatcher watcher;
+  REQUIRE(watcher.start(root, true));
+  REQUIRE(watcher.isWatching());
+  Vector<FileChange> changes;
+  REQUIRE(watcher.poll(changes));
+  REQUIRE(changes.empty());
+  // Takes what the last step still reports, so the next wait only sees its own changes.
+  const auto settle = [&watcher, &changes]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    REQUIRE(watcher.poll(changes));
+    changes.clear();
+  };
+
+  writeWatchedFile(root / Path("Sub/a.txt"), "one");
+  REQUIRE(waitForChange(watcher, changes, "Sub/a.txt", FileChangeType::Added));
+  settle();
+  writeWatchedFile(root / Path("Sub/a.txt"), "two");
+  REQUIRE(waitForChange(watcher, changes, "Sub/a.txt", FileChangeType::Modified));
+
+  // A rename is the old name removed and the new one added.
+  settle();
+  REQUIRE(FileSystem::renameFile(root / Path("Sub/a.txt"), root / Path("Sub/b.txt")));
+  REQUIRE(waitForChange(watcher, changes, "Sub/a.txt", FileChangeType::Removed));
+  REQUIRE(waitForChange(watcher, changes, "Sub/b.txt", FileChangeType::Added));
+
+  // A folder made after the start is watched too, once its own change was taken.
+  settle();
+  REQUIRE(FileSystem::createDirectory(root / Path("New")));
+  REQUIRE(waitForChange(watcher, changes, "New", FileChangeType::Added));
+  writeWatchedFile(root / Path("New/c.txt"), "three");
+  REQUIRE(waitForChange(watcher, changes, "New/c.txt", FileChangeType::Added));
+
+  settle();
+  REQUIRE(FileSystem::removeFile(root / Path("Sub/b.txt")));
+  REQUIRE(waitForChange(watcher, changes, "Sub/b.txt", FileChangeType::Removed));
+
+  watcher.stop();
+  REQUIRE_FALSE(watcher.isWatching());
+  REQUIRE(watcher.poll(changes));
+  REQUIRE(FileSystem::removeAll(root));
 }
 
 TEST_CASE("chUtilities - Paths outside ASCII") {
