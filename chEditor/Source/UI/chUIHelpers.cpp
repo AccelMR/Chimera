@@ -26,6 +26,7 @@
 #include "chSceneAsset.h"
 #include "chSkeletonAsset.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraphAsset.h"
 #include "chScriptAsset.h"
 #include "chStringUtils.h"
 
@@ -197,6 +198,9 @@ UIHelpers::getIconFromAssetType(const SPtr<IAsset>& asset)
   }
   if (asset->isTypeOf<AnimationClipAsset>()) {
     return {AssetType::Animation, ICON_FA_RUNNING};
+  }
+  if (asset->isTypeOf<AnimationGraphAsset>()) {
+    return {AssetType::AnimationGraph, ICON_FA_PROJECT_DIAGRAM};
   }
   if (asset->isTypeOf<ScriptAsset>()) {
     return {AssetType::Script, ICON_FA_FILE_CODE};

@@ -25,6 +25,7 @@ enum class AssetType
   Scene,
   Skeleton,
   Animation,
+  AnimationGraph,
   Script,
   Unknown
 };

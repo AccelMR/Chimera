@@ -14,6 +14,7 @@
 #include "chAlgorithm.h"
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraph.h"
 #include "chAnimationPlayer.h"
 #include "chAnimatorComponent.h"
 #include "chBox.h"
@@ -2777,6 +2778,292 @@ TEST_CASE("chCore - Animation clip")
       cut.write(bytes.data(), size);
       cut.seek(0);
       REQUIRE_FALSE(AnimationClip::deserialize(cut));
+    }
+  }
+}
+
+namespace {
+/*
+ * Parameters Speed, Grounded, Weapon, Jump, DirX, DirY; four clips; a Base layer with Idle,
+ * Locomotion (1D on Speed), Strafe (2D on DirX, DirY) and Jump, and an UpperBody layer
+ * masked at Spine.
+ */
+struct TestGraphParts
+{
+  Vector<AnimationParameter> parameters;
+  Vector<chEngineSDK::UUID> clips;
+  Vector<AnimationLayer> layers;
+};
+
+TestGraphParts
+createTestGraphParts()
+{
+  TestGraphParts parts;
+  parts.parameters = {
+      {.name = "Speed", .type = AnimationParameterType::Float},
+      {.name = "Grounded",
+       .type = AnimationParameterType::Bool,
+       .defaultValue = {.intValue = 1}},
+      {.name = "Weapon", .type = AnimationParameterType::Int, .defaultValue = {.intValue = 2}},
+      {.name = "Jump", .type = AnimationParameterType::Trigger},
+      {.name = "DirX", .type = AnimationParameterType::Float},
+      {.name = "DirY",
+       .type = AnimationParameterType::Float,
+       .defaultValue = {.floatValue = 0.5f}},
+  };
+  for (uint32 i = 0; i < 4; ++i) {
+    parts.clips.push_back(chEngineSDK::UUID::createRandom());
+  }
+
+  AnimationLayer base{.name = "Base"};
+  base.states.push_back({.name = "Idle", .clip = 0});
+  base.states.push_back(
+      {.name = "Locomotion",
+       .kind = AnimationStateKind::BlendSpace1D,
+       .parameterX = 0,
+       .samples = {{.clip = 0, .x = 0.0f}, {.clip = 1, .x = 1.0f}, {.clip = 2, .x = 3.0f}}});
+  base.states.push_back({.name = "Strafe",
+                         .kind = AnimationStateKind::BlendSpace2D,
+                         .parameterX = 4,
+                         .parameterY = 5,
+                         .samples = {{.clip = 0, .x = 0.0f, .y = 0.0f},
+                                     {.clip = 1, .x = 1.0f, .y = 0.0f},
+                                     {.clip = 2, .x = 0.0f, .y = 1.0f}},
+                         .speed = 1.5f,
+                         .speedParameter = 0});
+  base.states.push_back({.name = "Jump", .clip = 3, .bLooping = false});
+  base.transitions.push_back({.source = 0,
+                              .target = 1,
+                              .conditions = {{.parameter = 0,
+                                              .op = AnimationConditionOp::Greater,
+                                              .threshold = {.floatValue = 0.1f}}}});
+  base.transitions.push_back(
+      {.source = 1,
+       .target = 0,
+       .duration = 0.4f,
+       .bInterruptible = true,
+       .priority = 2,
+       .conditions = {{.parameter = 0,
+                       .op = AnimationConditionOp::LessOrEqual,
+                       .threshold = {.floatValue = 0.1f}},
+                      {.parameter = 1, .op = AnimationConditionOp::IsSet}}});
+  base.transitions.push_back(
+      {.source = AnimationGraph::ANY_STATE,
+       .target = 3,
+       .bCanTransitionToSelf = true,
+       .conditions = {{.parameter = 3, .op = AnimationConditionOp::IsSet}}});
+  base.transitions.push_back(
+      {.source = 3, .target = 0, .bHasExitTime = true, .exitTime = 0.9f});
+  parts.layers.push_back(std::move(base));
+
+  AnimationLayer upper{.name = "UpperBody", .weight = 0.5f, .maskBones = {"Spine"}};
+  upper.states.push_back({.name = "Aim", .clip = 3});
+  upper.states.push_back({.name = "Holster", .clip = 2});
+  upper.transitions.push_back({.source = 0,
+                               .target = 1,
+                               .conditions = {{.parameter = 2,
+                                               .op = AnimationConditionOp::Equal,
+                                               .threshold = {.intValue = 0}}}});
+  parts.layers.push_back(std::move(upper));
+  return parts;
+}
+
+AnimationGraph
+buildTestGraph(const TestGraphParts& parts)
+{
+  AnimationGraph graph;
+  for (const AnimationParameter& parameter : parts.parameters) {
+    static_cast<void>(graph.addParameter(parameter));
+  }
+  for (const chEngineSDK::UUID& clip : parts.clips) {
+    static_cast<void>(graph.addClip(clip));
+  }
+  for (const AnimationLayer& layer : parts.layers) {
+    static_cast<void>(graph.addLayer(layer));
+  }
+  return graph;
+}
+} // namespace
+
+TEST_CASE("chCore - Animation graph")
+{
+  const TestGraphParts parts = createTestGraphParts();
+  const AnimationGraph graph = buildTestGraph(parts);
+  String error;
+  REQUIRE(graph.validate(&error));
+  REQUIRE(error.empty());
+
+  SECTION("Names are found ignoring case")
+  {
+    REQUIRE(graph.findParameter("jump") == 3);
+    REQUIRE(graph.findParameter("Missing") == AnimationGraph::NOT_FOUND);
+    REQUIRE(graph.findLayer("upperbody") == 1);
+    REQUIRE(graph.findState(0, "STRAFE") == 2);
+    REQUIRE(graph.findState(1, "Idle") == AnimationGraph::NOT_FOUND);
+    REQUIRE(graph.findState(5, "Idle") == AnimationGraph::NOT_FOUND);
+  }
+
+  SECTION("Every clip is a reference")
+  {
+    Vector<chEngineSDK::UUID> references;
+    graph.collectReferences(references);
+    REQUIRE(references == parts.clips);
+  }
+
+  SECTION("Save and read")
+  {
+    MemoryDataStream stream;
+    graph.serialize(stream);
+    const Vector<uint8> bytes = readAllBytes(stream);
+    const SPtr<AnimationGraph> read = AnimationGraph::deserialize(stream);
+    REQUIRE(read);
+
+    REQUIRE(read->getParameters().size() == 6);
+    const AnimationParameter& grounded = read->getParameters()[1];
+    REQUIRE(grounded.name == "Grounded");
+    REQUIRE(grounded.type == AnimationParameterType::Bool);
+    REQUIRE(grounded.defaultValue.intValue == 1);
+    REQUIRE(read->getParameters()[5].defaultValue.floatValue == 0.5f);
+    REQUIRE(read->getClips().size() == 4);
+    REQUIRE(read->getClips()[2].clipId == parts.clips[2]);
+    REQUIRE_FALSE(read->getClips()[2].clip);
+
+    REQUIRE(read->getLayers().size() == 2);
+    const AnimationLayer& base = read->getLayers()[0];
+    REQUIRE(base.states.size() == 4);
+    const AnimationState& strafe = base.states[2];
+    REQUIRE(strafe.kind == AnimationStateKind::BlendSpace2D);
+    REQUIRE(strafe.parameterX == 4);
+    REQUIRE(strafe.parameterY == 5);
+    REQUIRE(strafe.samples.size() == 3);
+    REQUIRE(strafe.samples[2].clip == 2);
+    REQUIRE(strafe.samples[2].y == 1.0f);
+    REQUIRE(strafe.speed == 1.5f);
+    REQUIRE(strafe.speedParameter == 0);
+    REQUIRE(base.states[1].speedParameter == AnimationGraph::NO_PARAMETER);
+    REQUIRE_FALSE(base.states[3].bLooping);
+
+    REQUIRE(base.transitions.size() == 4);
+    const AnimationTransition& toIdle = base.transitions[1];
+    REQUIRE(toIdle.duration == 0.4f);
+    REQUIRE(toIdle.bInterruptible);
+    REQUIRE(toIdle.priority == 2);
+    REQUIRE(toIdle.conditions.size() == 2);
+    REQUIRE(toIdle.conditions[0].op == AnimationConditionOp::LessOrEqual);
+    REQUIRE(toIdle.conditions[0].threshold.floatValue == 0.1f);
+    REQUIRE(base.transitions[2].source == AnimationGraph::ANY_STATE);
+    REQUIRE(base.transitions[2].bCanTransitionToSelf);
+    REQUIRE(base.transitions[3].bHasExitTime);
+    REQUIRE(base.transitions[3].exitTime == 0.9f);
+
+    const AnimationLayer& upper = read->getLayers()[1];
+    REQUIRE(upper.weight == 0.5f);
+    REQUIRE(upper.maskBones == Vector<String>{"Spine"});
+    REQUIRE(upper.transitions[0].conditions[0].op == AnimationConditionOp::Equal);
+
+    // Saving what was read gives the same bytes.
+    MemoryDataStream again;
+    read->serialize(again);
+    REQUIRE(readAllBytes(again) == bytes);
+
+    for (const SIZE_T size : {SIZE_T(0), SIZE_T(10), bytes.size() / 2, bytes.size() - 1}) {
+      MemoryDataStream cut;
+      cut.write(bytes.data(), size);
+      cut.seek(0);
+      REQUIRE_FALSE(AnimationGraph::deserialize(cut));
+    }
+  }
+
+  SECTION("A newer version is refused")
+  {
+    MemoryDataStream stream;
+    graph.serialize(stream);
+    Vector<uint8> bytes = readAllBytes(stream);
+    const uint32 newer = AnimationGraph::SERIALIZATION_VERSION + 1;
+    std::memcpy(bytes.data(), &newer, sizeof(newer));
+    MemoryDataStream changed;
+    changed.write(bytes.data(), bytes.size());
+    changed.seek(0);
+    REQUIRE_FALSE(AnimationGraph::deserialize(changed));
+  }
+
+  SECTION("Broken graphs are refused with a reason")
+  {
+    struct BrokenCase
+    {
+      const ANSICHAR* expected;
+      Function<void(TestGraphParts&)> breakIt;
+    };
+    const Vector<BrokenCase> cases{
+        {"Two parameters", [](TestGraphParts& p) { p.parameters[4].name = "speed"; }},
+        {"no valid name", [](TestGraphParts& p) { p.parameters[0].name.clear(); }},
+        {"must start off",
+         [](TestGraphParts& p) { p.parameters[3].defaultValue.intValue = 1; }},
+        {"not 0 or 1", [](TestGraphParts& p) { p.parameters[1].defaultValue.intValue = 2; }},
+        {"unknown type",
+         [](TestGraphParts& p) {
+           p.parameters[0].type = static_cast<AnimationParameterType>(9);
+         }},
+        {"no layers", [](TestGraphParts& p) { p.layers.clear(); }},
+        {"Two layers", [](TestGraphParts& p) { p.layers[1].name = "BASE"; }},
+        {"weight outside", [](TestGraphParts& p) { p.layers[1].weight = 1.5f; }},
+        {"cannot have a mask", [](TestGraphParts& p) { p.layers[0].maskBones = {"Hips"}; }},
+        {"default state", [](TestGraphParts& p) { p.layers[1].defaultState = 2; }},
+        {"two states named", [](TestGraphParts& p) { p.layers[0].states[3].name = "idle"; }},
+        {"clip that does not exist",
+         [](TestGraphParts& p) { p.layers[0].states[0].clip = 4; }},
+        {"unknown kind",
+         [](TestGraphParts& p) {
+           p.layers[0].states[0].kind = static_cast<AnimationStateKind>(3);
+         }},
+        {"Float or Int parameters",
+         [](TestGraphParts& p) { p.layers[0].states[1].parameterX = 1; }},
+        {"Float or Int parameters",
+         [](TestGraphParts& p) { p.layers[0].states[2].parameterY = 4; }},
+        {"has no clips", [](TestGraphParts& p) { p.layers[0].states[1].samples.clear(); }},
+        {"same position",
+         [](TestGraphParts& p) { p.layers[0].states[2].samples[2].y = 0.0f; }},
+        {"speed parameter",
+         [](TestGraphParts& p) { p.layers[0].states[2].speedParameter = 1; }},
+        {"do not exist", [](TestGraphParts& p) { p.layers[0].transitions[0].target = 9; }},
+        {"to itself", [](TestGraphParts& p) { p.layers[0].transitions[0].target = 0; }},
+        {"invalid time",
+         [](TestGraphParts& p) { p.layers[0].transitions[0].duration = -1.0f; }},
+        {"cannot have an exit time",
+         [](TestGraphParts& p) { p.layers[0].transitions[2].bHasExitTime = true; }},
+        {"needs a condition or an exit time",
+         [](TestGraphParts& p) { p.layers[0].transitions[3].bHasExitTime = false; }},
+        {"needs a condition or an exit time",
+         [](TestGraphParts& p) { p.layers[0].transitions[2].conditions.clear(); }},
+        {"parameter that does not exist",
+         [](TestGraphParts& p) { p.layers[0].transitions[0].conditions[0].parameter = 6; }},
+        // Floats are never compared for equality, triggers are only tested as set.
+        {"does not allow",
+         [](TestGraphParts& p) {
+           p.layers[0].transitions[0].conditions[0].op = AnimationConditionOp::Equal;
+         }},
+        {"does not allow",
+         [](TestGraphParts& p) {
+           p.layers[0].transitions[2].conditions[0].op = AnimationConditionOp::IsNotSet;
+         }},
+    };
+
+    for (const BrokenCase& brokenCase : cases) {
+      INFO(brokenCase.expected);
+      TestGraphParts broken = createTestGraphParts();
+      brokenCase.breakIt(broken);
+      const AnimationGraph brokenGraph = buildTestGraph(broken);
+      String reason;
+      REQUIRE_FALSE(brokenGraph.validate(&reason));
+      REQUIRE(StringUtils::containsIgnoreCase(reason, brokenCase.expected));
+
+      // A file holding it reads as broken and says why.
+      MemoryDataStream stream;
+      brokenGraph.serialize(stream);
+      stream.seek(0);
+      String readReason;
+      REQUIRE_FALSE(AnimationGraph::deserialize(stream, &readReason));
+      REQUIRE(readReason == reason);
     }
   }
 }
