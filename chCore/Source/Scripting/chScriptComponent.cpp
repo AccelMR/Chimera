@@ -9,6 +9,8 @@
 /************************************************************************/
 #include "chScriptComponent.h"
 
+#include "chAlgorithm.h"
+#include "chAssetFile.h"
 #include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chGameObject.h"
@@ -41,9 +43,92 @@ void
 ScriptComponent::setScript(const SPtr<ScriptAsset>& script)
 {
   stop();
+  const UUID scriptId = script ? script->getUUID() : UUID::null();
+  // Values of another script would only show as unused.
+  if (scriptId != m_scriptId) {
+    m_overrides.clear();
+  }
   m_script = script;
-  m_scriptId = script ? script->getUUID() : UUID::null();
+  m_scriptId = scriptId;
   m_bFailed = false;
+}
+
+/*
+ */
+const ScriptPropertyValue*
+ScriptComponent::findOverride(const StringView name) const
+{
+  for (const ScriptPropertyOverride& entry : m_overrides) {
+    if (entry.name == name) {
+      return &entry.value;
+    }
+  }
+  return nullptr;
+}
+
+/*
+ */
+void
+ScriptComponent::setOverride(const StringView name, const ScriptPropertyValue& value)
+{
+  bool bFound = false;
+  for (ScriptPropertyOverride& entry : m_overrides) {
+    if (entry.name == name) {
+      entry.value = value;
+      bFound = true;
+      break;
+    }
+  }
+  if (!bFound) {
+    m_overrides.push_back({.name = String(name), .value = value});
+  }
+  writeToInstance(name);
+}
+
+/*
+ */
+bool
+ScriptComponent::removeOverride(const StringView name)
+{
+  const bool bRemoved = Algorithm::removeFirstIf(
+      m_overrides, [name](const ScriptPropertyOverride& entry) { return entry.name == name; });
+  if (bRemoved) {
+    writeToInstance(name);
+  }
+  return bRemoved;
+}
+
+/*
+ */
+const ScriptClassInfo*
+ScriptComponent::getScriptClass() const
+{
+  if (!m_script || !ScriptManager::isStarted()) {
+    return nullptr;
+  }
+  return ScriptManager::instance().getClass(*m_script);
+}
+
+/*
+ */
+void
+ScriptComponent::writeToInstance(const StringView name)
+{
+  if (!isRunning() || !ScriptManager::isStarted()) {
+    return;
+  }
+  for (const ScriptProperty& property : m_class->properties) {
+    if (property.name != name) {
+      continue;
+    }
+    const ScriptPropertyValue* value = findOverride(name);
+    if (!value || value->type != property.defaultValue.type) {
+      value = &property.defaultValue;
+    }
+    ScriptManager::instance().setInstanceProperty(m_instance, name, *value,
+                                                  getOwner()->getScene());
+    return;
+  }
 }
 
 /*
@@ -94,6 +179,13 @@ bool
 ScriptComponent::ensureStarted()
 {
   if (isRunning()) {
+#if USING(CH_EDITOR)
+    if (m_class->revision != m_instanceRevision) {
+      m_instanceRevision = m_class->revision;
+      ScriptManager::instance().addMissingProperties(m_instance, *m_class, m_overrides,
+                                                     getOwner()->getScene());
+    }
+#endif
     return true;
   }
   if (!m_script || !ScriptManager::isStarted()) {
@@ -125,7 +217,10 @@ ScriptComponent::ensureStarted()
     return false;
   }
 
-  m_instance = scriptManager.createInstance(*m_class, *getOwner());
+  m_instance = scriptManager.createInstance(*m_class, *getOwner(), m_overrides);
+#if USING(CH_EDITOR)
+  m_instanceRevision = m_class->revision;
+#endif
   if (m_class->onStart != ScriptClassInfo::NO_REFERENCE &&
       !scriptManager.callMethod(m_class->onStart, m_instance)) {
     fail();
@@ -199,6 +294,12 @@ ScriptComponent::serialize(DataStream& stream) const
   const uint32 version = SERIALIZATION_VERSION;
   stream.write(&version, sizeof(version));
   stream.write(&m_scriptId, sizeof(m_scriptId));
+  const uint32 count = static_cast<uint32>(m_overrides.size());
+  stream.write(&count, sizeof(count));
+  for (const ScriptPropertyOverride& entry : m_overrides) {
+    AssetFile::writeString(stream, entry.name);
+    ScriptPropertyUtils::writeValue(stream, entry.value);
+  }
 }
 
 /*
@@ -208,10 +309,18 @@ ScriptComponent::deserialize(DataStream& stream)
 {
   uint32 version = 0;
   UUID scriptId = UUID::null();
-  if (stream.read(&version, sizeof(version)) != sizeof(version) || version == 0 ||
-      version > SERIALIZATION_VERSION ||
-      stream.read(&scriptId, sizeof(scriptId)) != sizeof(scriptId)) {
+  uint32 count = 0;
+  if (!AssetFile::readValue(stream, version) || version != SERIALIZATION_VERSION ||
+      !AssetFile::readValue(stream, scriptId) || !AssetFile::readValue(stream, count) ||
+      count > ScriptPropertyUtils::MAX_PROPERTIES) {
     return false;
+  }
+  Vector<ScriptPropertyOverride> overrides(count);
+  for (ScriptPropertyOverride& entry : overrides) {
+    if (!AssetFile::readString(stream, entry.name, ScriptPropertyUtils::MAX_NAME_LENGTH) ||
+        !ScriptPropertyUtils::readValue(stream, entry.value)) {
+      return false;
+    }
   }
 
   SPtr<ScriptAsset> script;
@@ -221,6 +330,7 @@ ScriptComponent::deserialize(DataStream& stream)
   }
   setScript(script);
   m_scriptId = scriptId;
+  m_overrides = std::move(overrides);
   if (!script && !scriptId.isNull()) {
     CH_LOG_WARNING(ScriptLog, "A script component lost its script {0}.", scriptId);
   }
@@ -234,6 +344,22 @@ ScriptComponent::collectReferences(Vector<UUID>& outReferences) const
 {
   if (!m_scriptId.isNull()) {
     outReferences.push_back(m_scriptId);
+  }
+}
+
+/*
+ */
+void
+ScriptComponent::remapObjectReferences(const UnorderedMap<UUID, UUID>& newIds)
+{
+  for (ScriptPropertyOverride& entry : m_overrides) {
+    if (entry.value.type != ScriptPropertyType::GameObject) {
+      continue;
+    }
+    const auto it = newIds.find(entry.value.object);
+    if (it != newIds.end()) {
+      entry.value.object = it->second;
+    }
   }
 }
 

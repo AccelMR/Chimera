@@ -13,6 +13,7 @@
 
 #include "chLogger.h"
 #include "chModule.h"
+#include "chScriptProperty.h"
 #include "chUUID.h"
 
 struct lua_State;
@@ -40,6 +41,8 @@ struct ScriptClassInfo
   int32 update = NO_REFERENCE;
   int32 fixedUpdate = NO_REFERENCE;
   int32 onDestroy = NO_REFERENCE;
+  // In the order the script lists them.
+  Vector<ScriptProperty> properties;
   // False when the script did not compile, failed while it ran or returned no table.
   bool bValid = false;
 #if USING(CH_EDITOR)
@@ -125,10 +128,46 @@ class CH_CORE_EXPORT ScriptManager : public Module<ScriptManager>
 
   /**
    * A new table whose missing fields are read from the class, with self.gameObject and
-   * self.transform set to owner, as a registry reference.
+   * self.transform set to owner and every property of the class set to its override (same
+   * name and type) or its default, as a registry reference. GameObject properties are looked
+   * up in the owner's scene; a missing object is nil.
    */
   NODISCARD int32
-  createInstance(const ScriptClassInfo& scriptClass, GameObject& owner);
+  createInstance(const ScriptClassInfo& scriptClass,
+                 GameObject& owner,
+                 Span<const ScriptPropertyOverride> overrides = {});
+
+  /**
+   * self[name] = value on a running instance.
+   */
+  void
+  setInstanceProperty(int32 instance,
+                      StringView name,
+                      const ScriptPropertyValue& value,
+                      const Scene* scene);
+
+#if USING(CH_EDITOR)
+
+  /**
+   * The value self holds for name, read as type. False when self holds nothing or a value of
+   * another type.
+   */
+  NODISCARD bool
+  getInstanceProperty(int32 instance,
+                      StringView name,
+                      ScriptPropertyType type,
+                      ScriptPropertyValue& outValue);
+
+  /**
+   * Sets the properties the class declares that self does not hold yet, so a property added
+   * to a running script reaches its instances. The others keep what the script made of them.
+   */
+  void
+  addMissingProperties(int32 instance,
+                       const ScriptClassInfo& scriptClass,
+                       Span<const ScriptPropertyOverride> overrides,
+                       const Scene* scene);
+#endif
 
   /**
    * The scene Scene.find looks in: the scene of the script that runs. Script components set

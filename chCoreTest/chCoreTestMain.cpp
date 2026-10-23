@@ -5316,6 +5316,248 @@ TEST_CASE("chCore - Script hot reload")
 }
 #endif
 
+TEST_CASE("chCore - Script properties")
+{
+  ScriptManager& scripts = getTestScriptManager();
+  REQUIRE(scripts.runString("Props = { starts = 0 }"));
+  const SPtr<ScriptAsset> tuner = createTestScriptAsset("Tuner", R"lua(
+    local Tuner = {}
+    Tuner.properties = {
+      { "speed", 5 },
+      { "count", 3, type = "integer", min = 0, max = 10, tooltip = "How many" },
+      { "label", "hello" },
+      { "enabled", true },
+      { "offset", Vector3(1, 2, 3) },
+      { "tint", type = "Color" },
+      { "target", type = "GameObject" },
+    }
+    function Tuner:onStart()
+      Props.starts = Props.starts + 1
+      Props[self.gameObject:getName()] = {
+        speed = self.speed, count = self.count, label = self.label, enabled = self.enabled,
+        offsetX = self.offset.x, tintR = self.tint.r, target = self.target,
+        countIsInteger = math.type(self.count) == "integer",
+      }
+      -- In place: must reach neither the class nor other instances.
+      self.offset.x = 100
+    end
+    return Tuner
+  )lua");
+
+  const auto makeNumber = [](const double number) {
+    ScriptPropertyValue value = ScriptPropertyValue::makeDefault(ScriptPropertyType::Number);
+    value.number = number;
+    return value;
+  };
+  const auto makeObject = [](const chEngineSDK::UUID& id) {
+    ScriptPropertyValue value =
+        ScriptPropertyValue::makeDefault(ScriptPropertyType::GameObject);
+    value.object = id;
+    return value;
+  };
+
+  SECTION("The list is read in order with its types and defaults")
+  {
+    const ScriptClassInfo* scriptClass = scripts.getClass(*tuner);
+    REQUIRE(scriptClass);
+    REQUIRE(scriptClass->bValid);
+    const Vector<ScriptProperty>& properties = scriptClass->properties;
+    REQUIRE(properties.size() == 7);
+    REQUIRE(properties[0].name == "speed");
+    REQUIRE(properties[0].defaultValue.type == ScriptPropertyType::Number);
+    REQUIRE(properties[0].defaultValue.number == 5.0);
+    REQUIRE(properties[1].defaultValue.type == ScriptPropertyType::Integer);
+    REQUIRE(properties[1].defaultValue.integer == 3);
+    REQUIRE(properties[2].defaultValue.text == "hello");
+    REQUIRE(properties[3].defaultValue.boolean);
+    REQUIRE(properties[4].defaultValue.type == ScriptPropertyType::Vector3);
+    REQUIRE(properties[4].defaultValue.components[2] == 3.0f);
+    // A color without a default is white.
+    REQUIRE(properties[5].defaultValue.type == ScriptPropertyType::Color);
+    REQUIRE(properties[5].defaultValue.components[0] == 1.0f);
+    REQUIRE(properties[6].defaultValue.type == ScriptPropertyType::GameObject);
+    REQUIRE(properties[6].defaultValue.object.isNull());
+#if USING(CH_EDITOR)
+    REQUIRE(properties[1].minimum == 0.0);
+    REQUIRE(properties[1].maximum == 10.0);
+    REQUIRE(properties[1].tooltip == "How many");
+#endif
+  }
+
+  SECTION("A list written wrong stops the script")
+  {
+    constexpr const ANSICHAR* kBroken[] = {
+        "return { properties = 5 }",
+        "return { properties = { 5 } }",
+        "return { properties = { { 5, 1 } } }",
+        "return { properties = { { \"a\", 1, mni = 0 } } }",
+        "return { properties = { { \"a\", 1 }, { \"a\", 2 } } }",
+        "return { properties = { { \"update\", 1 } } }",
+        "return { properties = { { \"a\" } } }",
+        "return { properties = { { \"a\", {} } } }",
+        "return { properties = { { \"a\", \"text\", type = \"number\" } } }",
+        "return { properties = { { \"a\", 2.5, type = \"integer\" } } }",
+        "return { properties = { { \"a\", 1, type = \"Vector9\" } } }",
+        "return { properties = { { \"a\", 1, type = \"GameObject\" } } }",
+        "return { properties = { { \"a\", 1, min = \"low\" } } }",
+    };
+    for (const ANSICHAR* source : kBroken) {
+      const SPtr<ScriptAsset> broken = createTestScriptAsset("Broken", source);
+      const ScriptClassInfo* scriptClass = scripts.getClass(*broken);
+      INFO(source);
+      REQUIRE(scriptClass);
+      REQUIRE_FALSE(scriptClass->bValid);
+      scripts.forgetClass(broken->getUUID());
+    }
+  }
+
+  Scene scene("Properties", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+  const SPtr<GameObject> first = scene.createGameObject("First");
+  const SPtr<GameObject> second = scene.createGameObject("Second");
+  const SPtr<GameObject> enemy = scene.createGameObject("Enemy");
+  ScriptComponent& firstScript = first->addComponent<ScriptComponent>(tuner);
+  ScriptComponent& secondScript = second->addComponent<ScriptComponent>(tuner);
+
+  SECTION("self holds the overrides or the defaults before onStart")
+  {
+    firstScript.setOverride("speed", makeNumber(9.0));
+    firstScript.setOverride("target", makeObject(enemy->getUUID()));
+    // Another type than the script lists: ignored.
+    ScriptPropertyValue wrongType = ScriptPropertyValue::makeDefault(ScriptPropertyType::String);
+    wrongType.text = "fast";
+    secondScript.setOverride("count", wrongType);
+    scene.update(0.1f);
+    REQUIRE(scripts.runString(R"lua(
+      assert(Props.starts == 2)
+      local first, second = Props.First, Props.Second
+      assert(first.speed == 9 and second.speed == 5)
+      assert(first.count == 3 and second.count == 3 and first.countIsInteger)
+      assert(first.label == "hello" and first.enabled == true)
+      assert(first.offsetX == 1 and second.offsetX == 1)
+      assert(first.tintR == 1)
+      assert(first.target ~= nil and first.target:getName() == "Enemy")
+      assert(second.target == nil)
+    )lua"));
+  }
+
+#if USING(CH_EDITOR)
+  SECTION("Changes while running reach self")
+  {
+    scene.update(0.1f);
+    REQUIRE(firstScript.isRunning());
+    firstScript.setOverride("speed", makeNumber(42.0));
+    ScriptPropertyValue live;
+    REQUIRE(scripts.getInstanceProperty(firstScript.getInstance(), "speed",
+                                        ScriptPropertyType::Number, live));
+    REQUIRE(live.number == 42.0);
+    REQUIRE(firstScript.removeOverride("speed"));
+    REQUIRE(scripts.getInstanceProperty(firstScript.getInstance(), "speed",
+                                        ScriptPropertyType::Number, live));
+    REQUIRE(live.number == 5.0);
+    REQUIRE_FALSE(firstScript.removeOverride("speed"));
+    // The vector the script changed in place is read back as it is now.
+    REQUIRE(scripts.getInstanceProperty(firstScript.getInstance(), "offset",
+                                        ScriptPropertyType::Vector3, live));
+    REQUIRE(live.components[0] == 100.0f);
+    REQUIRE_FALSE(scripts.getInstanceProperty(firstScript.getInstance(), "offset",
+                                              ScriptPropertyType::Number, live));
+  }
+#endif
+
+  SECTION("Overrides are saved, also those the script no longer lists")
+  {
+    firstScript.setOverride("speed", makeNumber(7.5));
+    firstScript.setOverride("gone", makeObject(enemy->getUUID()));
+    ScriptPropertyValue color = ScriptPropertyValue::makeDefault(ScriptPropertyType::Color);
+    color.components[1] = 0.25f;
+    firstScript.setOverride("tint", color);
+
+    MemoryDataStream stream;
+    firstScript.serialize(stream);
+    MemoryDataStream reader(stream.getStartPtr(), stream.size(), false);
+    ScriptComponent loaded;
+    REQUIRE(loaded.deserialize(reader));
+    REQUIRE(loaded.getScriptId() == tuner->getUUID());
+    REQUIRE(loaded.getOverrides().size() == 3);
+    REQUIRE(*loaded.findOverride("speed") == makeNumber(7.5));
+    REQUIRE(*loaded.findOverride("gone") == makeObject(enemy->getUUID()));
+    REQUIRE(*loaded.findOverride("tint") == color);
+
+    // Cut anywhere inside the overrides, the data is refused.
+    MemoryDataStream cut(stream.getStartPtr(), stream.size() - 3, false);
+    ScriptComponent broken;
+    REQUIRE_FALSE(broken.deserialize(cut));
+  }
+
+  SECTION("Copies point at the copies of the objects copied with them")
+  {
+    // Holder > Weapon, Holder's script points at Weapon and at Enemy (not copied).
+    const SPtr<GameObject> holder = scene.createGameObject("Holder");
+    const SPtr<GameObject> weapon = scene.createGameObject("Weapon", holder.get());
+    ScriptComponent& holderScript = holder->addComponent<ScriptComponent>(tuner);
+    holderScript.setOverride("target", makeObject(weapon->getUUID()));
+    holderScript.setOverride("other", makeObject(enemy->getUUID()));
+
+    const SPtr<GameObject> copy = GameObjectSerializer::duplicate(*holder);
+    REQUIRE(copy);
+    REQUIRE(copy->getChildren().size() == 1);
+    const SPtr<GameObject>& weaponCopy = copy->getChildren()[0];
+    REQUIRE(weaponCopy->getUUID() != weapon->getUUID());
+    const ScriptComponent* copyScript = copy->getComponent<ScriptComponent>();
+    REQUIRE(copyScript);
+    REQUIRE(copyScript->findOverride("target")->object == weaponCopy->getUUID());
+    REQUIRE(copyScript->findOverride("other")->object == enemy->getUUID());
+    // The source keeps its own.
+    REQUIRE(holderScript.findOverride("target")->object == weapon->getUUID());
+
+    // Instances of a prefab point inside themselves, also at their root.
+    AssetMetadata metadata;
+    metadata.uuid = chEngineSDK::UUID::createRandom();
+    metadata.assetType = AssetTypeTraits<PrefabAsset>::getTypeId();
+    StringUtils::copyToBuffer(metadata.name, "PF_Holder");
+    PrefabAsset prefab(metadata);
+    holderScript.setOverride("self", makeObject(holder->getUUID()));
+    REQUIRE(prefab.setContent(*holder));
+    const SPtr<GameObject> instance = GameObjectSerializer::instantiate(prefab, scene, nullptr);
+    REQUIRE(instance->getChildren().size() == 1);
+    const ScriptComponent* instanceScript = instance->getComponent<ScriptComponent>();
+    REQUIRE(instanceScript);
+    REQUIRE(instanceScript->findOverride("target")->object ==
+            instance->getChildren()[0]->getUUID());
+    REQUIRE(instanceScript->findOverride("self")->object == instance->getUUID());
+    REQUIRE(instanceScript->findOverride("other")->object == enemy->getUUID());
+  }
+
+#if USING(CH_EDITOR)
+  SECTION("A property added to a running script reaches its instances")
+  {
+    scene.update(0.1f);
+    tuner->setSource(R"lua(
+      local Tuner = {}
+      Tuner.properties = { { "speed", 5 }, { "jump", 2.5 } }
+      function Tuner:update(dt)
+        Props[self.gameObject:getName() .. "Jump"] = self.jump
+        Props[self.gameObject:getName() .. "Speed"] = self.speed
+      end
+      return Tuner
+    )lua");
+    firstScript.setOverride("speed", makeNumber(8.0));
+    REQUIRE(scripts.updateClass(*tuner));
+    scene.update(0.1f);
+    // The new property arrives; the one self already held keeps its value.
+    REQUIRE(scripts.runString(R"lua(
+      assert(Props.FirstJump == 2.5 and Props.FirstSpeed == 8)
+      assert(Props.SecondJump == 2.5 and Props.SecondSpeed == 5)
+    )lua"));
+  }
+#endif
+
+  scene.destroyGameObject(*first);
+  scene.destroyGameObject(*second);
+  scripts.forgetClass(tuner->getUUID());
+}
+
 /*
  * Not run by default (ctest skips hidden tags); run it in Release:
  *   chCoreTest "chCore - Script steering benchmark"

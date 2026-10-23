@@ -89,6 +89,9 @@ class InspectorUI
   // The rotation the angles were last read from or written to.
   Quaternion m_rotationShown = Quaternion::IDENTITY;
 
+  // The object shown, kept while the left button is held (see renderInspectorUI).
+  WeakPtr<GameObject> m_shownObject;
+
   // Read again from the object whenever the field is not being typed in.
   const GameObject* m_nameOwner = nullptr;
   ANSICHAR m_nameBuffer[256] = "";

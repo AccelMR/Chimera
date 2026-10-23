@@ -35,6 +35,7 @@
 #include "chSkeletonAsset.h"
 #include "chScriptAsset.h"
 #include "chScriptComponent.h"
+#include "chScriptPropertiesUI.h"
 #include "chSkyLightComponent.h"
 #include "chStringUtils.h"
 #include "chTextureAsset.h"
@@ -116,7 +117,16 @@ InspectorUI::renderInspectorUI()
 {
   // The id stays "Inspector", so layouts saved before the rename keep the panel's place.
   ImGui::Begin(ICON_FA_INFO_CIRCLE "  Object Inspector###Inspector", nullptr);
-  const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
+  SPtr<GameObject> selected = EditorSelection::getSelectedGameObject();
+  // Dragging a Scene Graph row selects it as the drag starts, so while the button is held
+  // the object shown when it went down stays, and the drag can end on one of its fields.
+  // The drop arrives on the frame the button is released, while the payload still exists.
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetDragDropPayload()) {
+    m_shownObject = selected;
+  }
+  else if (SPtr<GameObject> shown = m_shownObject.lock(); shown && shown->getScene()) {
+    selected = std::move(shown);
+  }
   if (!selected) {
     m_rotationOwner = nullptr;
     ImGui::TextDisabled("Select an object in the scene or the Scene Graph.");
@@ -678,6 +688,7 @@ InspectorUI::renderScriptComponent(ScriptComponent& scriptComponent)
       ImGui::TextDisabled("Not started");
     }
   }
+  ScriptPropertiesUI::render(scriptComponent);
   return bRemove;
 }
 

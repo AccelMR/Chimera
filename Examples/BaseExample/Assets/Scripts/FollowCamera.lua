@@ -5,7 +5,13 @@
 local Input = Input
 
 ---@class FollowCamera : Script
+---@field target GameObject?
 local FollowCamera = {}
+
+FollowCamera.properties = {
+  { "target", type = "GameObject",
+    tooltip = "What it orbits; the object named Sphere when empty" },
+}
 
 local TARGET_NAME = "Sphere"
 local MIN_PITCH, MAX_PITCH = -10, 80
@@ -18,7 +24,7 @@ local START_DISTANCE = 8
 function FollowCamera:onStart()
   self.look = Input.findAction("Look")
   self.zoom = Input.findAction("Zoom")
-  self.target = Scene.find(TARGET_NAME)
+  self.target = self.target or Scene.find(TARGET_NAME)
   if not self.target then
     Log.warning("FollowCamera: no object named", TARGET_NAME)
     return

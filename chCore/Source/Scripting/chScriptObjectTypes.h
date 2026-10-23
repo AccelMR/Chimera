@@ -35,6 +35,12 @@ struct CH_CORE_EXPORT ScriptTraits<GameObject>
   check(lua_State* state, int32 index);
 
   /**
+   * The object at index, or null when it is not a GameObject or was destroyed. Never raises.
+   */
+  NODISCARD static GameObject*
+  test(lua_State* state, int32 index);
+
+  /**
    * Called when the object dies: scripts that still hold its handle get an error from then
    * on instead of a dangling pointer.
    */

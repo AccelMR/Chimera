@@ -26,6 +26,8 @@ class ScriptAsset;
  * onDestroy(self) runs when the component leaves the scene (object destroyed, component
  * disabled, scene closed, Play stopped). Scripts only run while the scene plays. An error
  * is logged with its traceback and stops this component until it is registered again.
+ * The values the script lists in its properties are set in self before onStart, from this
+ * component's overrides or else the script's defaults.
  */
 class CH_CORE_EXPORT ScriptComponent : public Component
 {
@@ -78,6 +80,39 @@ class CH_CORE_EXPORT ScriptComponent : public Component
 #endif
 
   /**
+   * The values this component gives to properties of its script, instead of their defaults.
+   * Saved by name, so a property the script no longer lists keeps its value until removed.
+   */
+  NODISCARD FORCEINLINE const Vector<ScriptPropertyOverride>&
+  getOverrides() const noexcept { return m_overrides; }
+
+  /**
+   * Null when the component does not override name.
+   */
+  NODISCARD const ScriptPropertyValue*
+  findOverride(StringView name) const;
+
+  /**
+   * Adds or replaces the override of name. A running instance gets the value in self.
+   */
+  void
+  setOverride(StringView name, const ScriptPropertyValue& value);
+
+  /**
+   * Back to the default: a running instance gets the default in self. False when name had
+   * no override.
+   */
+  bool
+  removeOverride(StringView name);
+
+  /**
+   * The class of the script, compiled when needed (also outside Play, so the editor can list
+   * its properties). Null without a script or when it is not loaded.
+   */
+  NODISCARD const ScriptClassInfo*
+  getScriptClass() const;
+
+  /**
    * Registry reference of the instance (self) while running.
    */
   NODISCARD FORCEINLINE int32
@@ -104,6 +139,9 @@ class CH_CORE_EXPORT ScriptComponent : public Component
   void
   collectReferences(Vector<UUID>& outReferences) const override;
 
+  void
+  remapObjectReferences(const UnorderedMap<UUID, UUID>& newIds) override;
+
   static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  protected:
@@ -123,14 +161,24 @@ class CH_CORE_EXPORT ScriptComponent : public Component
   void
   fail();
 
+  /*
+   * Gives the running instance the current value of name (override or default).
+   */
+  void
+  writeToInstance(StringView name);
+
   SPtr<ScriptAsset> m_script;
   UUID m_scriptId = UUID::null();
+  Vector<ScriptPropertyOverride> m_overrides;
   const ScriptClassInfo* m_class = nullptr;
   int32 m_instance = ScriptClassInfo::NO_REFERENCE;
   bool m_bFailed = false;
 #if USING(CH_EDITOR)
   // Revision of the class when it failed: a newer one is tried again.
   uint32 m_failedRevision = 0;
+  // Revision of the class the instance was made with: after a reload it gets the
+  // properties that were added.
+  uint32 m_instanceRevision = 0;
 #endif
 };
 

@@ -141,6 +141,21 @@ collectObjectReferences(const GameObject& gameObject,
 }
 
 /*
+ * Points the references the components of gameObject and its children hold at the copies
+ * read with them.
+ */
+void
+remapReferences(GameObject& gameObject, const UnorderedMap<UUID, UUID>& newIds)
+{
+  for (const UniquePtr<Component>& component : gameObject.getComponents()) {
+    component->remapObjectReferences(newIds);
+  }
+  for (const SPtr<GameObject>& child : gameObject.getChildren()) {
+    remapReferences(*child, newIds);
+  }
+}
+
+/*
  * Null when there is no such prefab or it cannot load. Without an AssetManager (tests)
  * nothing is found.
  */
@@ -166,6 +181,8 @@ struct GameObjectSerializer::ReadContext
   Scene& scene;
   // Objects read from a prefab get new UUIDs, so instances do not share them.
   bool bNewUuids;
+  // With bNewUuids, the saved UUID of each object read to its new one.
+  UnorderedMap<UUID, UUID>* newIds = nullptr;
 };
 
 struct GameObjectSerializer::ObjectHeader
@@ -244,8 +261,21 @@ GameObjectSerializer::readStream(DataStream& stream,
       stream.read(&count, sizeof(count)) != sizeof(count)) {
     return false;
   }
-  ReadContext context{.stream = stream, .scene = scene, .bNewUuids = bNewUuids};
-  return readList(context, parent, count, 0);
+  UnorderedMap<UUID, UUID> newIds;
+  ReadContext context{.stream = stream,
+                      .scene = scene,
+                      .bNewUuids = bNewUuids,
+                      .newIds = bNewUuids ? &newIds : nullptr};
+  const Vector<SPtr<GameObject>>& siblings =
+      parent ? parent->getChildren() : scene.getRootGameObjects();
+  const SIZE_T firstNew = siblings.size();
+  const bool bRead = readList(context, parent, count, 0);
+  if (bNewUuids) {
+    for (SIZE_T i = firstNew; i < siblings.size(); ++i) {
+      remapReferences(*siblings[i], newIds);
+    }
+  }
+  return bRead;
 }
 
 /*
@@ -388,6 +418,9 @@ GameObjectSerializer::readObject(ReadContext& context, GameObject* parent, uint3
   if (!context.bNewUuids) {
     // The saved UUID, so whatever points at the object by its id finds it again.
     gameObject->m_uuid = header.data.uuid;
+  }
+  else if (context.newIds) {
+    (*context.newIds)[header.data.uuid] = gameObject->getUUID();
   }
   return fillObject(context, *gameObject, header, depth);
 }
@@ -540,15 +573,20 @@ GameObjectSerializer::readPrefabInto(const PrefabAsset& prefab,
     return nested ? readPrefabInto(*nested, target, depth + 1, false) : true;
   }
 
+  // The root's components land on target, so references to the root point at it.
+  UnorderedMap<UUID, UUID> newIds;
+  newIds[data.uuid] = target.getUUID();
   ReadContext context{.stream = stream,
                       .scene = *target.getScene(),
-                      .bNewUuids = true};
-  for (uint32 i = 0; i < data.componentCount; ++i) {
-    if (!readComponent(context, target)) {
-      return false;
-    }
+                      .bNewUuids = true,
+                      .newIds = &newIds};
+  bool bRead = true;
+  for (uint32 i = 0; i < data.componentCount && bRead; ++i) {
+    bRead = readComponent(context, target);
   }
-  return readList(context, &target, data.childCount, depth + 1);
+  bRead = bRead && readList(context, &target, data.childCount, depth + 1);
+  remapReferences(target, newIds);
+  return bRead;
 }
 
 } // namespace chEngineSDK

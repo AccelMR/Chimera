@@ -69,6 +69,14 @@ class CH_CORE_EXPORT Component
   collectReferences(Vector<UUID>& outReferences) const;
 
   /**
+   * Called after objects were read again with new UUIDs (duplicate, paste, prefab instances),
+   * with the old UUID of each to its new one: a reference to an object of the copy should
+   * point at the copy. References to objects outside it stay as they are.
+   */
+  virtual void
+  remapObjectReferences(const UnorderedMap<UUID, UUID>& newIds);
+
+  /**
    * Box around what the component draws, in world space as of the last transform update.
    * False when it draws nothing.
    */

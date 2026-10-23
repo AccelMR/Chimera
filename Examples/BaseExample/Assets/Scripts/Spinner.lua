@@ -1,13 +1,15 @@
 -- chimera-uuid: 0eda3483-e362-4a89-ad86-f2afb2337093
--- Turns its object around the up axis. Change SPEED (degrees per second) to try a hot
--- reload: the editor reads scripts again every time Play starts.
+-- Turns its object around the up axis. Each object can set its own speed in the Inspector.
 ---@class Spinner : Script
+---@field speed number
 local Spinner = {}
 
-local SPEED = 90
+Spinner.properties = {
+  { "speed", 90, tooltip = "Degrees per second" },
+}
 
 function Spinner:update(dt)
-  self.transform:rotateLocal(0, SPEED * dt, 0)
+  self.transform:rotateLocal(0, self.speed * dt, 0)
 end
 
 return Spinner

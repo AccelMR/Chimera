@@ -609,6 +609,16 @@ ScriptTraits<GameObject>::check(lua_State* state, const int32 index)
 
 /*
  */
+GameObject*
+ScriptTraits<GameObject>::test(lua_State* state, const int32 index)
+{
+  const GameObjectHandle* handle = static_cast<const GameObjectHandle*>(
+      luaL_testudata(state, index, ScriptHandleType<GameObject>::NAME));
+  return handle && isAlive(handle->object) ? handle->object : nullptr;
+}
+
+/*
+ */
 void
 ScriptTraits<GameObject>::release(GameObject& gameObject) noexcept
 {

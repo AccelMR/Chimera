@@ -4,19 +4,27 @@
 local Input = Input
 
 ---@class PlayerController : Script
+---@field walkSpeed number
+---@field sprintSpeed number
+---@field jumpSpeed number
+---@field gravity number
+---@field camera GameObject?
 local PlayerController = {}
 
-local WALK_SPEED = 4
-local SPRINT_SPEED = 9
-local JUMP_SPEED = 7
-local GRAVITY = -20
-local CAMERA_NAME = "Camera"
+PlayerController.properties = {
+  { "walkSpeed", 4 },
+  { "sprintSpeed", 9 },
+  { "jumpSpeed", 7 },
+  { "gravity", -20 },
+  { "camera", type = "GameObject",
+    tooltip = "Moves relative to it; the object named Camera when empty" },
+}
 
 function PlayerController:onStart()
   self.move = Input.findAction("Move")
   self.jump = Input.findAction("Jump")
   self.sprint = Input.findAction("Sprint")
-  self.camera = Scene.find(CAMERA_NAME)
+  self.camera = self.camera or Scene.find("Camera")
 
   -- Values kept between frames, so update makes no new vectors.
   self.position = self.transform:getWorldPosition()
@@ -28,7 +36,7 @@ end
 
 function PlayerController:update(dt)
   local input = Input.getActionValue2D(self.move, self.input)
-  local speed = Input.isActionDown(self.sprint) and SPRINT_SPEED or WALK_SPEED
+  local speed = Input.isActionDown(self.sprint) and self.sprintSpeed or self.walkSpeed
 
   -- Forward and right of the camera, flat on the ground (X forward, Y right, Z up).
   local fx, fy = 1, 0
@@ -47,9 +55,9 @@ function PlayerController:update(dt)
 
   local grounded = p.z <= self.groundZ
   if grounded and Input.wasActionPressed(self.jump) then
-    self.verticalSpeed = JUMP_SPEED
+    self.verticalSpeed = self.jumpSpeed
   end
-  self.verticalSpeed = self.verticalSpeed + GRAVITY * dt
+  self.verticalSpeed = self.verticalSpeed + self.gravity * dt
   p.z = p.z + self.verticalSpeed * dt
   if p.z < self.groundZ then
     p.z = self.groundZ

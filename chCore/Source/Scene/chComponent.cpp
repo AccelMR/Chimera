@@ -56,6 +56,14 @@ Component::collectReferences(Vector<UUID>& outReferences) const
 
 /*
  */
+void
+Component::remapObjectReferences(const UnorderedMap<UUID, UUID>& newIds)
+{
+  CH_PARAMETER_UNUSED(newIds);
+}
+
+/*
+ */
 bool
 Component::getWorldBounds(AABox& outBounds) const
 {
