@@ -4946,14 +4946,14 @@ TEST_CASE("chCore - Camera component")
     REQUIRE(loaded.getOrthographicSize() == Approx(12.0f));
 
     // A cut file and an unknown projection are refused.
-    MemoryDataStream cut(256);
+    MemoryDataStream cut;
     const uint32 version = CameraComponent::SERIALIZATION_VERSION;
     cut.write(&version, sizeof(version));
     cut.seek(0);
     CameraComponent fromCut;
     REQUIRE_FALSE(fromCut.deserialize(cut));
 
-    MemoryDataStream badProjection(256);
+    MemoryDataStream badProjection;
     const uint32 projection = 7;
     const float values[4] = {90.0f, 0.1f, 100.0f, 5.0f};
     badProjection.write(&version, sizeof(version));
