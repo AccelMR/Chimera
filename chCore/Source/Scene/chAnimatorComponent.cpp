@@ -10,9 +10,11 @@
 #include "chAnimatorComponent.h"
 
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraphAsset.h"
 #include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chGameObject.h"
+#include "chMath.h"
 #include "chModel.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
@@ -24,10 +26,11 @@ namespace {
 struct AnimatorFileData
 {
   UUID clip;
+  UUID graph;
   float speed;
   uint32 flags;
 };
-static_assert(sizeof(AnimatorFileData) == 24, "AnimatorFileData must have no padding");
+static_assert(sizeof(AnimatorFileData) == 40, "AnimatorFileData must have no padding");
 
 constexpr uint32 kPlaying = 1u << 0;
 constexpr uint32 kLooping = 1u << 1;
@@ -66,14 +69,100 @@ AnimatorComponent::AnimatorComponent(const SPtr<AnimationClipAsset>& clip)
 void
 AnimatorComponent::play(const SPtr<AnimationClipAsset>& clip, float fadeTime)
 {
+  if (m_graph && !clip) {
+    stop(fadeTime);
+    return;
+  }
+
   m_clipAsset = clip;
   m_clip = clip ? clip->getClip() : nullptr;
   m_clipAssetId = clip ? clip->getUUID() : UUID::null();
-  m_player.play(m_clip, fadeTime);
+  if (m_graph) {
+    // The player only crossfades between clips; the fade from the graph is the weight's.
+    m_player.play(m_clip, m_clipWeight > 0.0f ? fadeTime : 0.0f);
+    m_bClipOverGraph = true;
+    m_clipFadeTime = fadeTime;
+    if (fadeTime <= 0.0f) {
+      m_clipWeight = 1.0f;
+    }
+  }
+  else {
+    m_player.play(m_clip, fadeTime);
+  }
   // The first pose of the clip shows at once, not one frame later.
   if (isRegistered()) {
     update(0.0f);
   }
+}
+
+/*
+ */
+void
+AnimatorComponent::stop(float fadeTime)
+{
+  if (!m_graph) {
+    play(nullptr, fadeTime);
+    return;
+  }
+  m_bClipOverGraph = false;
+  m_clipFadeTime = fadeTime;
+  if (fadeTime <= 0.0f) {
+    m_clipWeight = 0.0f;
+  }
+  if (isRegistered()) {
+    update(0.0f);
+  }
+}
+
+/*
+ */
+void
+AnimatorComponent::setPlaying(bool bPlaying)
+{
+  if (m_graph) {
+    m_bGraphPaused = !bPlaying;
+  }
+  else {
+    m_player.setPlaying(bPlaying);
+  }
+}
+
+/*
+ */
+bool
+AnimatorComponent::isPlaying() const noexcept
+{
+  return m_graph ? !m_bGraphPaused : m_player.isPlaying();
+}
+
+/*
+ */
+void
+AnimatorComponent::setGraph(const SPtr<AnimationGraphAsset>& graph)
+{
+  m_graphAsset = graph;
+  m_graph = graph ? graph->getGraph() : nullptr;
+  m_graphAssetId = graph ? graph->getUUID() : UUID::null();
+  m_graphInstance.setModel(m_player.getModel());
+  m_graphInstance.setGraph(m_graph);
+  m_bGraphPaused = false;
+  m_bClipOverGraph = false;
+  m_clipWeight = 0.0f;
+  clearClip();
+  if (isRegistered()) {
+    update(0.0f);
+  }
+}
+
+/*
+ */
+void
+AnimatorComponent::clearClip()
+{
+  m_clipAsset = nullptr;
+  m_clip = nullptr;
+  m_clipAssetId = UUID::null();
+  m_player.play(nullptr, 0.0f);
 }
 
 /*
@@ -90,6 +179,10 @@ AnimatorComponent::bindModel()
     m_player.play(m_clip, 0.0f);
     m_player.setTime(time);
     m_player.setPlaying(bPlaying);
+    m_graphInstance.setModel(target);
+    const SIZE_T nodeCount = target ? target->getNodeCount() : 0;
+    m_blendedPose.resize(nodeCount);
+    m_blendedMatrices.resize(nodeCount);
   }
   return model;
 }
@@ -103,11 +196,75 @@ AnimatorComponent::update(float deltaTime)
   if (!model) {
     return;
   }
+  if (m_graph) {
+    updateGraph(*model, deltaTime);
+    return;
+  }
   // The model forgets the pose when its own model is set again (undo, a new asset).
   const bool bChanged = m_player.advance(deltaTime);
   if (bChanged || model->getPose().data() != m_player.getPoseMatrices().data()) {
     model->setPose(m_player.getPoseMatrices());
   }
+}
+
+/*
+ */
+void
+AnimatorComponent::updateGraph(ModelComponent& model, float deltaTime)
+{
+  if (!m_graphInstance.isBound()) {
+    return;
+  }
+  const float step = m_bGraphPaused ? 0.0f : deltaTime;
+  bool bChanged = !m_bGraphPaused && m_graphInstance.advance(step);
+
+  if (m_bClipOverGraph || m_clipWeight > 0.0f) {
+    bChanged = m_player.advance(step) || bChanged;
+    // A clip that does not loop gives the pose back to the graph once it ends.
+    if (m_bClipOverGraph && m_clip && !m_player.isPlaying()) {
+      m_bClipOverGraph = false;
+    }
+    const float target = m_bClipOverGraph ? 1.0f : 0.0f;
+    if (m_clipFadeTime <= 0.0f) {
+      m_clipWeight = target;
+    }
+    else if (m_clipWeight != target) {
+      const float move = step / m_clipFadeTime;
+      m_clipWeight = m_bClipOverGraph ? Math::min(m_clipWeight + move, 1.0f)
+                                      : Math::max(m_clipWeight - move, 0.0f);
+    }
+    bChanged = true;
+
+    if (m_clipWeight > 0.0f) {
+      AnimationPlayer::blendPoses(m_graphInstance.getLocalPose(), m_player.getLocalPose(),
+                                  AnimationPlayer::getFadeWeight(m_clipWeight, 1.0f), {},
+                                  m_blendedPose);
+      AnimationPlayer::buildPoseMatrices(*m_player.getModel(), m_blendedPose,
+                                         m_blendedMatrices);
+    }
+    else if (!m_bClipOverGraph) {
+      clearClip();
+    }
+  }
+
+  const Span<const Matrix4> pose = getShownPose();
+  if (bChanged || model.getPose().data() != pose.data()) {
+    model.setPose(pose);
+  }
+}
+
+/*
+ */
+Span<const Matrix4>
+AnimatorComponent::getShownPose() const noexcept
+{
+  if (!m_graph) {
+    return m_player.getPoseMatrices();
+  }
+  if (m_clipWeight > 0.0f) {
+    return m_blendedMatrices;
+  }
+  return m_graphInstance.getPoseMatrices();
 }
 
 /*
@@ -125,8 +282,8 @@ void
 AnimatorComponent::onUnregister()
 {
   ModelComponent* model = getOwner()->getComponent<ModelComponent>();
-  if (model && !model->getPose().empty() &&
-      model->getPose().data() == m_player.getPoseMatrices().data()) {
+  const Span<const Matrix4> pose = getShownPose();
+  if (model && !model->getPose().empty() && model->getPose().data() == pose.data()) {
     model->setPose({});
   }
 }
@@ -222,10 +379,12 @@ void
 AnimatorComponent::serialize(DataStream& stream) const
 {
   const uint32 version = SERIALIZATION_VERSION;
+  // A clip over a graph only lasts until it ends, so it is not saved.
   const AnimatorFileData data{
-      .clip = m_clipAssetId,
+      .clip = m_graphAssetId.isNull() ? m_clipAssetId : UUID::null(),
+      .graph = m_graphAssetId,
       .speed = m_player.getSpeed(),
-      .flags = (m_player.isPlaying() ? kPlaying : 0u) | (m_player.isLooping() ? kLooping : 0u)};
+      .flags = (isPlaying() ? kPlaying : 0u) | (m_player.isLooping() ? kLooping : 0u)};
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
 }
@@ -242,6 +401,17 @@ AnimatorComponent::deserialize(DataStream& stream)
     return false;
   }
 
+  SPtr<AnimationGraphAsset> graph;
+  if (!data.graph.isNull() && AssetManager::isStarted()) {
+    const SPtr<IAsset> asset = AssetManager::instance().getAsset(data.graph);
+    graph = asset ? asset->as<AnimationGraphAsset>() : nullptr;
+  }
+  setGraph(graph);
+  m_graphAssetId = data.graph;
+  if (!graph && !data.graph.isNull()) {
+    CH_LOG_WARNING(SceneManagerLog, "An animator lost its animation graph {0}.", data.graph);
+  }
+
   SPtr<AnimationClipAsset> clip;
   if (!data.clip.isNull() && AssetManager::isStarted()) {
     const SPtr<IAsset> asset = AssetManager::instance().getAsset(data.clip);
@@ -255,7 +425,7 @@ AnimatorComponent::deserialize(DataStream& stream)
   // No model yet: bindModel keeps these when the model is bound.
   m_player.setSpeed(data.speed);
   m_player.setLooping((data.flags & kLooping) != 0);
-  m_player.setPlaying((data.flags & kPlaying) != 0);
+  setPlaying((data.flags & kPlaying) != 0);
   return true;
 }
 
@@ -266,6 +436,9 @@ AnimatorComponent::collectReferences(Vector<UUID>& outReferences) const
 {
   if (!m_clipAssetId.isNull()) {
     outReferences.push_back(m_clipAssetId);
+  }
+  if (!m_graphAssetId.isNull()) {
+    outReferences.push_back(m_graphAssetId);
   }
 }
 

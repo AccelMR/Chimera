@@ -41,6 +41,18 @@ class CH_CORE_EXPORT AnimationGraphAsset : public IAsset
     return m_graph;
   }
 
+#if USING(CH_EDITOR)
+  /**
+   * Replaces the graph; save writes it. Objects already using the old graph keep it until
+   * they are given the asset again.
+   */
+  FORCEINLINE void
+  setGraph(const SPtr<AnimationGraph>& graph)
+  {
+    m_graph = graph;
+  }
+#endif
+
  protected:
   bool
   serialize(SPtr<DataStream> stream) override;

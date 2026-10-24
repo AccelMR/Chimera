@@ -118,6 +118,17 @@ class CH_CORE_EXPORT AnimationPlayer
   }
 
   /**
+   * One per node of the model, relative to its parent: the pose shown, or the rest pose
+   * while nothing animates. Valid until the next setModel.
+   */
+  NODISCARD FORCEINLINE Span<const NodeTransform>
+  getLocalPose() const noexcept
+  {
+    return m_bAnimating ? Span<const NodeTransform>(m_localPose)
+                        : Span<const NodeTransform>(m_restPose);
+  }
+
+  /**
    * Writes the blend of from and to into out (all the same size): weight 0 is from, 1 is
    * to. nodeWeights, when not empty, scales weight per node, so a layer can move only some
    * bones. Positions and scales are lerped and rotations nlerped on the shorter way.

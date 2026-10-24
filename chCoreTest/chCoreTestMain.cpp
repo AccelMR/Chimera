@@ -15,6 +15,7 @@
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
 #include "chAnimationGraph.h"
+#include "chAnimationGraphAsset.h"
 #include "chAnimationGraphInstance.h"
 #include "chAnimationPlayer.h"
 #include "chAnimatorComponent.h"
@@ -3566,6 +3567,149 @@ TEST_CASE("chCore - Animation graph runtime")
     REQUIRE(instance.getStateTime(0) > 1.0f);
   }
 }
+namespace {
+SPtr<AnimationGraphAsset>
+createTestGraphAsset(const SPtr<AnimationGraph>& graph)
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<AnimationGraphAsset>::getTypeId();
+  StringUtils::copyToBuffer(metadata.name, "AG_Test");
+  return chMakeShared<AnimationGraphAsset>(metadata, graph);
+}
+
+/*
+ * Idle (x = 0) goes to Walk (x = 1) at once when Speed is above 0.5.
+ */
+SPtr<AnimationGraph>
+createWalkGraph()
+{
+  SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+  const uint32 speed = graph->addParameter({.name = "Speed"});
+  AnimationLayer layer{.name = "Base"};
+  layer.states.push_back({.name = "Idle", .clip = addGraphTestClip(*graph, 0.0f, 0.0f, 1.0f)});
+  layer.states.push_back({.name = "Walk", .clip = addGraphTestClip(*graph, 1.0f, 1.0f, 1.0f)});
+  layer.transitions.push_back({.source = 0,
+                               .target = 1,
+                               .duration = 0.0f,
+                               .conditions = {{.parameter = speed,
+                                               .op = AnimationConditionOp::Greater,
+                                               .threshold = {.floatValue = 0.5f}}}});
+  static_cast<void>(graph->addLayer(layer));
+  return graph;
+}
+} // namespace
+
+TEST_CASE("chCore - Animator graph")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> walker = scene.createGameObject("Walker");
+  ModelComponent& model =
+      walker->addComponent<ModelComponent>(createTestModelAsset(createGraphTestModel()));
+  AnimatorComponent& animator = walker->addComponent<AnimatorComponent>();
+  const SPtr<AnimationGraphAsset> graphAsset = createTestGraphAsset(createWalkGraph());
+  const auto hipsX = [&model]() {
+    return model.getNodeMatrix(kHips).transformPosition(Vector3::ZERO).x;
+  };
+
+  animator.setGraph(graphAsset);
+  REQUIRE(animator.hasGraph());
+  REQUIRE(animator.getGraphInstance().isBound());
+  REQUIRE_FALSE(model.getPose().empty());
+  REQUIRE(hipsX() == 0.0f);
+
+  // The graph runs in the scene's update, also while the scene is not playing.
+  AnimationGraphInstance& instance = animator.getGraphInstance();
+  instance.setFloat(0, 1.0f);
+  scene.update(0.1f);
+  REQUIRE(instance.getCurrentState(0) == 1);
+  REQUIRE(hipsX() == Approx(1.0f));
+
+  SECTION("A clip that does not loop shows over the graph until it ends")
+  {
+    animator.setLooping(false);
+    animator.play(createGraphTestClip(20.0f, 20.0f, 1.0f), 0.4f);
+    REQUIRE(animator.isClipOverGraph());
+    REQUIRE(hipsX() == Approx(1.0f));
+    scene.update(0.2f);
+    REQUIRE(hipsX() == Approx(10.5f));
+    scene.update(0.2f);
+    REQUIRE(hipsX() == Approx(20.0f));
+    scene.update(0.5f);
+    REQUIRE(hipsX() == Approx(20.0f));
+    // It ends at 1 second and fades back out.
+    scene.update(0.2f);
+    REQUIRE(animator.isClipOverGraph());
+    REQUIRE(hipsX() == Approx(10.5f));
+    scene.update(0.2f);
+    REQUIRE_FALSE(animator.isClipOverGraph());
+    REQUIRE_FALSE(animator.getClipAsset());
+    REQUIRE(hipsX() == Approx(1.0f));
+  }
+
+  SECTION("A looping clip stays until stop")
+  {
+    animator.play(createGraphTestClip(20.0f, 20.0f, 1.0f));
+    REQUIRE(hipsX() == Approx(20.0f));
+    scene.update(5.0f);
+    REQUIRE(hipsX() == Approx(20.0f));
+    animator.stop();
+    REQUIRE_FALSE(animator.isClipOverGraph());
+    REQUIRE(hipsX() == Approx(1.0f));
+  }
+
+  SECTION("Pausing stops the graph")
+  {
+    const float time = instance.getStateTime(0);
+    animator.setPlaying(false);
+    REQUIRE_FALSE(animator.isPlaying());
+    scene.update(0.5f);
+    REQUIRE(instance.getStateTime(0) == time);
+    animator.setPlaying(true);
+    scene.update(0.5f);
+    REQUIRE(instance.getStateTime(0) == Approx(time + 0.5f));
+  }
+
+  SECTION("The graph is saved, a clip over it is not")
+  {
+    animator.play(createGraphTestClip(20.0f, 20.0f, 1.0f));
+    MemoryDataStream stream;
+    animator.serialize(stream);
+    stream.seek(0);
+    AnimatorComponent loaded;
+    REQUIRE(loaded.deserialize(stream));
+    // The tests have no asset manager, so the graph is missing but its id is kept.
+    REQUIRE_FALSE(loaded.hasGraph());
+    Vector<chEngineSDK::UUID> references;
+    loaded.collectReferences(references);
+    REQUIRE(references == Vector<chEngineSDK::UUID>{graphAsset->getUUID()});
+
+    const Vector<uint8> bytes = readAllBytes(stream);
+    for (const SIZE_T size : {SIZE_T(0), SIZE_T(4), bytes.size() - 1}) {
+      MemoryDataStream cut;
+      cut.write(bytes.data(), size);
+      cut.seek(0);
+      AnimatorComponent fromCut;
+      REQUIRE_FALSE(fromCut.deserialize(cut));
+    }
+  }
+
+  SECTION("Without the graph it plays clips again")
+  {
+    animator.setGraph(nullptr);
+    REQUIRE_FALSE(animator.hasGraph());
+    REQUIRE(hipsX() == 0.0f);
+    animator.play(createGraphTestClip(20.0f, 20.0f, 1.0f));
+    REQUIRE(hipsX() == Approx(20.0f));
+
+    // A clip that does not loop keeps playing after the update play runs at once.
+    animator.setLooping(false);
+    animator.play(createGraphTestClip(0.0f, 4.0f, 1.0f));
+    REQUIRE(animator.isPlaying());
+    scene.update(0.5f);
+    REQUIRE(hipsX() == Approx(2.0f));
+  }
+}
 TEST_CASE("chCore - Model animation")
 {
   // Base (one mesh) > Arm (one mesh, at x + 1); the clip moves Arm and holds Base at z + 1.
@@ -6876,6 +7020,98 @@ TEST_CASE("chCore - Script objects")
     robot->removeComponent(animator);
     REQUIRE_FALSE(scripts.runString("Found.animator:isPlaying()"));
     REQUIRE(scripts.runString("assert(Scene.find('Robot'):getAnimator() == nil)"));
+  }
+
+  SECTION("Animator with a graph")
+  {
+    // Speed takes Idle to Walk; Jump goes there from any state; UpperBody moves the Spine.
+    const SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+    const uint32 speed = graph->addParameter({.name = "Speed"});
+    const uint32 jump =
+        graph->addParameter({.name = "Jump", .type = AnimationParameterType::Trigger});
+    static_cast<void>(
+        graph->addParameter({.name = "Armed", .type = AnimationParameterType::Bool}));
+    static_cast<void>(
+        graph->addParameter({.name = "Weapon", .type = AnimationParameterType::Int}));
+    AnimationLayer base{.name = "Base"};
+    base.states.push_back(
+        {.name = "Idle", .clip = addGraphTestClip(*graph, 0.0f, 0.0f, 1.0f)});
+    base.states.push_back(
+        {.name = "Walk", .clip = addGraphTestClip(*graph, 1.0f, 1.0f, 1.0f)});
+    base.states.push_back({.name = "Jump",
+                           .clip = addGraphTestClip(*graph, 9.0f, 9.0f, 1.0f),
+                           .bLooping = false});
+    base.transitions.push_back({.source = 0,
+                                .target = 1,
+                                .duration = 0.0f,
+                                .conditions = {{.parameter = speed,
+                                                .op = AnimationConditionOp::Greater,
+                                                .threshold = {.floatValue = 0.5f}}}});
+    base.transitions.push_back({.source = AnimationGraph::ANY_STATE,
+                                .target = 2,
+                                .duration = 0.0f,
+                                .conditions = {{.parameter = jump}}});
+    static_cast<void>(graph->addLayer(base));
+    AnimationLayer upper{.name = "UpperBody", .weight = 0.25f, .maskBones = {"Spine"}};
+    upper.states.push_back(
+        {.name = "Aim", .clip = addGraphTestClip(*graph, 5.0f, 5.0f, 1.0f)});
+    static_cast<void>(graph->addLayer(upper));
+    REQUIRE(graph->validate());
+
+    const SPtr<GameObject> walker = scene.createGameObject("Walker");
+    walker->addComponent<ModelComponent>(createTestModelAsset(createGraphTestModel()));
+    AnimatorComponent& animator = walker->addComponent<AnimatorComponent>();
+    animator.setGraph(createTestGraphAsset(graph));
+
+    REQUIRE(scripts.runString(R"lua(
+        local animator = Scene.find("Walker"):getAnimator()
+        assert(animator:hasGraph() and animator:getGraphName() == "AG_Test")
+        local speed = animator:findParameter("Speed")
+        assert(speed == 0 and animator:findParameter("Nope") == nil)
+        animator:setFloat(speed, 2)
+        assert(animator:getFloat("speed") == 2)
+        animator:setBool("Armed", true)
+        assert(animator:getBool("Armed"))
+        animator:setInt("Weapon", 3)
+        assert(animator:getInt("Weapon") == 3 and animator:getFloat("Weapon") == 3)
+        animator:setTrigger("Jump")
+        assert(animator:getBool("Jump"))
+        animator:resetTrigger("Jump")
+        assert(not animator:getBool("Jump"))
+        assert(animator:getState() == "Idle" and animator:getState("UpperBody") == "Aim")
+        assert(animator:getState(2) == "Aim" and not animator:isInTransition())
+        assert(animator:getLayerWeight(2) == 0.25)
+        animator:setLayerWeight("UpperBody", 1)
+        assert(animator:getLayerWeight("UpperBody") == 1)
+        assert(not animator:isClipOverGraph())
+        Found.animator = animator
+      )lua"));
+    REQUIRE(animator.getGraphInstance().getFloat(speed) == 2.0f);
+
+    scene.update(0.1f);
+    REQUIRE(scripts.runString(R"lua(
+        local animator = Found.animator
+        assert(animator:getState() == "Walk")
+        assert(animator:getStateTime() == 0)
+        animator:setTrigger(1)
+      )lua"));
+    scene.update(0.1f);
+    REQUIRE(scripts.runString("assert(Found.animator:getState() == 'Jump')"));
+
+    // Wrong names, types and layers raise.
+    REQUIRE_FALSE(scripts.runString("Found.animator:setFloat('Jump', 1)"));
+    REQUIRE_FALSE(scripts.runString("Found.animator:setFloat('Nope', 1)"));
+    REQUIRE_FALSE(scripts.runString("Found.animator:setTrigger(99)"));
+    REQUIRE_FALSE(scripts.runString("Found.animator:getState(3)"));
+    REQUIRE_FALSE(scripts.runString("Found.animator:getState('Legs')"));
+    // Graphs are looked up in the project's assets, which the tests have none of.
+    REQUIRE_FALSE(scripts.runString("Found.animator:setGraph('AG_Walk')"));
+
+    REQUIRE(scripts.runString(R"lua(
+        Found.animator:setGraph(nil)
+        assert(not Found.animator:hasGraph() and Found.animator:getGraphName() == nil)
+      )lua"));
+    REQUIRE_FALSE(scripts.runString("Found.animator:setFloat('Speed', 1)"));
   }
 
   SECTION("DebugDraw draws into the running script's scene")

@@ -12,6 +12,7 @@
 
 #include "chAnimationClip.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraphAsset.h"
 #include "chAnimationTimelineUI.h"
 #include "chAnimatorComponent.h"
 #include "chAssetDragDrop.h"
@@ -850,6 +851,31 @@ InspectorUI::renderAnimatorComponent(AnimatorComponent& animator)
   ImGui::SameLine();
   const bool bRemove = ImGui::SmallButton(ICON_FA_TRASH "  Remove");
 
+  ImGui::TextUnformatted("Graph");
+  const SPtr<AnimationGraphAsset>& graphAsset = animator.getGraphAsset();
+  ImGui::Button(graphAsset ? graphAsset->getName() : "None (drop an animation graph)",
+                ImVec2(-FLT_MIN, 0.0f));
+  if (ImGui::BeginDragDropTarget()) {
+    if (SPtr<AnimationGraphAsset> dropped = AssetDragDrop::acceptAnimationGraph()) {
+      EditorScene::recordChange(gameObject, "Set Animation Graph");
+      animator.setGraph(dropped);
+    }
+    ImGui::EndDragDropTarget();
+  }
+  if (graphAsset) {
+    if (ImGui::SmallButton("Clear Graph")) {
+      EditorScene::recordChange(gameObject, "Clear Animation Graph");
+      animator.setGraph(nullptr);
+    }
+    else if (animator.hasGraph()) {
+      renderAnimationGraphState(animator.getGraphInstance());
+    }
+    else {
+      ImGui::TextDisabled("The graph could not be loaded.");
+    }
+  }
+
+  ImGui::TextUnformatted(animator.hasGraph() ? "Clip over the graph" : "Clip");
   const SPtr<AnimationClipAsset>& clipAsset = animator.getClipAsset();
   ImGui::Button(clipAsset ? clipAsset->getName() : "None (drop an animation)",
                 ImVec2(-FLT_MIN, 0.0f));
@@ -879,6 +905,67 @@ InspectorUI::renderAnimatorComponent(AnimatorComponent& animator)
   }
 
   return bRemove;
+}
+
+/*
+ */
+void
+InspectorUI::renderAnimationGraphState(AnimationGraphInstance& instance)
+{
+  const AnimationGraph& graph = *instance.getGraph();
+  const Vector<AnimationLayer>& layers = graph.getLayers();
+  for (uint32 l = 0; l < layers.size(); ++l) {
+    const AnimationLayer& layer = layers[l];
+    const AnimationState& state = layer.states[instance.getCurrentState(l)];
+    ImGui::TextDisabled("%s: %s%s, time %.2f", layer.name.c_str(), state.name.c_str(),
+                        instance.isInTransition(l) ? " (fading in)" : "",
+                        instance.getStateTime(l));
+  }
+
+  const Vector<AnimationParameter>& parameters = graph.getParameters();
+  if (parameters.empty() ||
+      !ImGui::TreeNodeEx("Parameters (not saved)###GraphParameters",
+                         ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+  for (uint32 i = 0; i < parameters.size(); ++i) {
+    const AnimationParameter& parameter = parameters[i];
+    ImGui::PushID(static_cast<int32>(i));
+    switch (parameter.type) {
+    case AnimationParameterType::Float: {
+      float value = instance.getFloat(i);
+      if (ImGui::DragFloat(parameter.name.c_str(), &value, 0.05f)) {
+        instance.setFloat(i, value);
+      }
+      break;
+    }
+    case AnimationParameterType::Int: {
+      int32 value = instance.getInt(i);
+      if (ImGui::DragInt(parameter.name.c_str(), &value)) {
+        instance.setInt(i, value);
+      }
+      break;
+    }
+    case AnimationParameterType::Bool: {
+      bool bValue = instance.getBool(i);
+      if (ImGui::Checkbox(parameter.name.c_str(), &bValue)) {
+        instance.setBool(i, bValue);
+      }
+      break;
+    }
+    case AnimationParameterType::Trigger:
+      if (ImGui::Button(parameter.name.c_str())) {
+        instance.setTrigger(i);
+      }
+      if (instance.getBool(i)) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("waiting for a transition");
+      }
+      break;
+    }
+    ImGui::PopID();
+  }
+  ImGui::TreePop();
 }
 
 /*

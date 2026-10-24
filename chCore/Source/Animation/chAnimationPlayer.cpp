@@ -155,7 +155,9 @@ AnimationPlayer::advance(float deltaTime)
     if (m_bLooping && duration > 0.0f) {
       time -= Math::floor(time / duration) * duration;
     }
-    else if (time >= duration || time <= 0.0f) {
+    // Only the end it moves toward stops it, so a clip that just started forward from 0
+    // (or backwards from its end) keeps playing.
+    else if ((m_speed > 0.0f && time >= duration) || (m_speed < 0.0f && time <= 0.0f)) {
       time = Math::clamp(time, 0.0f, duration);
       m_bPlaying = false;
     }

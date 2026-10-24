@@ -13,6 +13,7 @@
 
 namespace chEngineSDK {
 class AnimationClipAsset;
+class AnimationGraphAsset;
 class MaterialAsset;
 class ModelAsset;
 class PrefabAsset;
@@ -72,6 +73,12 @@ class AssetDragDrop
    */
   NODISCARD static SPtr<AnimationClipAsset>
   acceptAnimation();
+
+  /**
+   * Same as acceptModel, for animation graphs.
+   */
+  NODISCARD static SPtr<AnimationGraphAsset>
+  acceptAnimationGraph();
 
   /**
    * Same as acceptModel, for scripts.

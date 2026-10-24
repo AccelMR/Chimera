@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chAssetDragDrop.h"
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraphAsset.h"
 #include "chScriptAsset.h"
 
 #include <cstring>
@@ -46,13 +47,14 @@ constexpr const ANSICHAR* kTexturePayload = "CH_TEXTURE";
 constexpr const ANSICHAR* kMaterialPayload = "CH_MATERIAL";
 constexpr const ANSICHAR* kPrefabPayload = "CH_PREFAB";
 constexpr const ANSICHAR* kAnimationPayload = "CH_ANIMATION";
+constexpr const ANSICHAR* kAnimationGraphPayload = "CH_ANIMATION_GRAPH";
 constexpr const ANSICHAR* kScriptPayload = "CH_SCRIPT";
 constexpr const ANSICHAR* kOtherAssetPayload = "CH_ASSET";
 constexpr const ANSICHAR* kGameObjectPayload = "CH_GAMEOBJECT";
 
-constexpr Array<const ANSICHAR*, 7> kAssetPayloads = {
-    kModelPayload,     kTexturePayload, kMaterialPayload,  kPrefabPayload,
-    kAnimationPayload, kScriptPayload,  kOtherAssetPayload};
+constexpr Array<const ANSICHAR*, 8> kAssetPayloads = {
+    kModelPayload,     kTexturePayload,        kMaterialPayload, kPrefabPayload,
+    kAnimationPayload, kAnimationGraphPayload, kScriptPayload,   kOtherAssetPayload};
 
 /*
  * Targets ask for the dragged object every frame of a drag, so the last one found is kept
@@ -107,6 +109,9 @@ getPayloadName(const IAsset& asset)
   }
   if (asset.isTypeOf<AnimationClipAsset>()) {
     return kAnimationPayload;
+  }
+  if (asset.isTypeOf<AnimationGraphAsset>()) {
+    return kAnimationGraphPayload;
   }
   if (asset.isTypeOf<ScriptAsset>()) {
     return kScriptPayload;
@@ -223,6 +228,14 @@ SPtr<AnimationClipAsset>
 AssetDragDrop::acceptAnimation()
 {
   return acceptAsset<AnimationClipAsset>(kAnimationPayload);
+}
+
+/*
+ */
+SPtr<AnimationGraphAsset>
+AssetDragDrop::acceptAnimationGraph()
+{
+  return acceptAsset<AnimationGraphAsset>(kAnimationGraphPayload);
 }
 
 /*

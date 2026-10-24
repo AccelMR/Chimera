@@ -10,7 +10,9 @@
 #include "chScriptBindings.h"
 
 #include "chAnimationClipAsset.h"
+#include "chAnimationGraphAsset.h"
 #include "chAnimatorComponent.h"
+#include "chAssetManager.h"
 #include "chGameObject.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -725,7 +727,7 @@ int32
 stopAnimation(lua_State* state)
 {
   AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
-  animator.play(nullptr, static_cast<float>(luaL_optnumber(state, 2, 0.0)));
+  animator.stop(static_cast<float>(luaL_optnumber(state, 2, 0.0)));
   return 0;
 }
 
@@ -803,6 +805,299 @@ getClipName(lua_State* state)
   else {
     lua_pushnil(state);
   }
+  return 1;
+}
+
+/*
+ * animator:setGraph(graph?): a path or the name of a graph asset; nil goes back to playing
+ * clips. Loads the graph, so it is meant for onStart, not every frame.
+ */
+int32
+setAnimationGraph(lua_State* state)
+{
+  AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  if (lua_isnoneornil(state, 2)) {
+    animator.setGraph(nullptr);
+    return 0;
+  }
+  const StringView text = ScriptTraits<StringView>::check(state, 2);
+  if (!AssetManager::isStarted()) {
+    return luaL_error(state, "Animator.setGraph: there are no assets to search");
+  }
+  AssetManager& assetManager = AssetManager::instance();
+  const SPtr<IAsset> asset =
+      assetManager.findAsset(AssetTypeTraits<AnimationGraphAsset>::getTypeId(), text);
+  if (!asset || !assetManager.syncLoadAsset(asset) ||
+      !asset->as<AnimationGraphAsset>()->getGraph()) {
+    return luaL_error(state, "Animator.setGraph: no animation graph %s could be loaded",
+                      String(text).c_str());
+  }
+  animator.setGraph(asset->as<AnimationGraphAsset>());
+  return 0;
+}
+
+/*
+ * The name of the graph's asset; nil without a graph.
+ */
+int32
+getGraphName(lua_State* state)
+{
+  const AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  const SPtr<AnimationGraphAsset>& graph = animator.getGraphAsset();
+  if (graph) {
+    lua_pushstring(state, graph->getName());
+  }
+  else {
+    lua_pushnil(state);
+  }
+  return 1;
+}
+
+bool
+hasAnimationGraph(const AnimatorComponent& animator)
+{
+  return animator.hasGraph();
+}
+
+bool
+isClipOverGraph(const AnimatorComponent& animator)
+{
+  return animator.isClipOverGraph();
+}
+
+/*
+ * The animator's graph for this object; an error without one, or without a model.
+ */
+AnimationGraphInstance&
+checkGraph(lua_State* state, AnimatorComponent& animator)
+{
+  AnimationGraphInstance& instance = animator.getGraphInstance();
+  if (!animator.hasGraph() || !instance.isBound()) {
+    luaL_error(state, "the Animator of '%s' has no animation graph running",
+               animator.getOwner()->getName().c_str());
+  }
+  return instance;
+}
+
+/*
+ * The id findParameter gave, or the parameter's name (a search, for scripts that do not
+ * keep ids); its type must be one of the two given.
+ */
+uint32
+checkParameter(lua_State* state,
+               const AnimationGraphInstance& instance,
+               const int32 index,
+               const AnimationParameterType type,
+               const AnimationParameterType alsoAccepted)
+{
+  const AnimationGraph& graph = *instance.getGraph();
+  const Vector<AnimationParameter>& parameters = graph.getParameters();
+  uint32 parameter = AnimationGraph::NOT_FOUND;
+  if (lua_type(state, index) == LUA_TNUMBER) {
+    const lua_Integer id = luaL_checkinteger(state, index);
+    luaL_argcheck(state, id >= 0 && id < static_cast<lua_Integer>(parameters.size()), index,
+                  "unknown animation parameter id");
+    parameter = static_cast<uint32>(id);
+  }
+  else {
+    const ANSICHAR* const name = luaL_checkstring(state, index);
+    parameter = graph.findParameter(name);
+    if (parameter == AnimationGraph::NOT_FOUND) {
+      luaL_error(state, "no animation parameter named '%s'", name);
+    }
+  }
+  const AnimationParameter& found = parameters[parameter];
+  if (found.type != type && found.type != alsoAccepted) {
+    luaL_error(state, "animation parameter '%s' is a %s, not a %s", found.name.c_str(),
+               AnimationGraph::getParameterTypeName(found.type),
+               AnimationGraph::getParameterTypeName(type));
+  }
+  return parameter;
+}
+
+/*
+ * A layer by name or by its place from 1 (the base layer); missing means the base layer.
+ */
+uint32
+checkLayer(lua_State* state, const AnimationGraphInstance& instance, const int32 index)
+{
+  if (lua_isnoneornil(state, index)) {
+    return 0;
+  }
+  const AnimationGraph& graph = *instance.getGraph();
+  if (lua_type(state, index) == LUA_TNUMBER) {
+    const lua_Integer layer = luaL_checkinteger(state, index);
+    luaL_argcheck(state,
+                  layer >= 1 && layer <= static_cast<lua_Integer>(graph.getLayers().size()),
+                  index, "no such animation layer");
+    return static_cast<uint32>(layer - 1);
+  }
+  const ANSICHAR* const name = luaL_checkstring(state, index);
+  const uint32 layer = graph.findLayer(name);
+  if (layer == AnimationGraph::NOT_FOUND) {
+    luaL_error(state, "no animation layer named '%s'", name);
+  }
+  return layer;
+}
+
+/*
+ * Nil when the animator has no graph or the graph has no such parameter.
+ */
+int32
+findAnimationParameter(lua_State* state)
+{
+  AnimatorComponent& animator = ScriptTraits<AnimatorComponent>::check(state, 1);
+  const StringView name = ScriptTraits<StringView>::check(state, 2);
+  const uint32 parameter =
+      animator.hasGraph() ? animator.getGraphInstance().getGraph()->findParameter(name)
+                          : AnimationGraph::NOT_FOUND;
+  if (parameter == AnimationGraph::NOT_FOUND) {
+    lua_pushnil(state);
+  }
+  else {
+    lua_pushinteger(state, static_cast<lua_Integer>(parameter));
+  }
+  return 1;
+}
+
+int32
+setAnimationFloat(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Float,
+                                          AnimationParameterType::Float);
+  instance.setFloat(parameter, static_cast<float>(luaL_checknumber(state, 3)));
+  return 0;
+}
+
+int32
+setAnimationInt(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Int,
+                                          AnimationParameterType::Int);
+  instance.setInt(parameter, ScriptTraits<int32>::check(state, 3));
+  return 0;
+}
+
+int32
+setAnimationBool(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Bool,
+                                          AnimationParameterType::Bool);
+  instance.setBool(parameter, lua_toboolean(state, 3) != 0);
+  return 0;
+}
+
+int32
+setAnimationTrigger(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  instance.setTrigger(checkParameter(state, instance, 2, AnimationParameterType::Trigger,
+                                     AnimationParameterType::Trigger));
+  return 0;
+}
+
+int32
+resetAnimationTrigger(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  instance.resetTrigger(checkParameter(state, instance, 2, AnimationParameterType::Trigger,
+                                       AnimationParameterType::Trigger));
+  return 0;
+}
+
+int32
+getAnimationFloat(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Float,
+                                          AnimationParameterType::Int);
+  lua_pushnumber(state, static_cast<lua_Number>(instance.getFloat(parameter)));
+  return 1;
+}
+
+int32
+getAnimationInt(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Int,
+                                          AnimationParameterType::Int);
+  lua_pushinteger(state, static_cast<lua_Integer>(instance.getInt(parameter)));
+  return 1;
+}
+
+int32
+getAnimationBool(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 parameter = checkParameter(state, instance, 2, AnimationParameterType::Bool,
+                                          AnimationParameterType::Trigger);
+  lua_pushboolean(state, instance.getBool(parameter));
+  return 1;
+}
+
+/*
+ * The name of the layer's current state (during a fade, the one it goes to).
+ */
+int32
+getAnimationState(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  const uint32 layer = checkLayer(state, instance, 2);
+  const AnimationState& current =
+      instance.getGraph()->getLayers()[layer].states[instance.getCurrentState(layer)];
+  ScriptTraits<String>::push(state, current.name);
+  return 1;
+}
+
+int32
+getAnimationStateTime(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  lua_pushnumber(state,
+                 static_cast<lua_Number>(instance.getStateTime(checkLayer(state, instance, 2))));
+  return 1;
+}
+
+int32
+isAnimationInTransition(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  lua_pushboolean(state, instance.isInTransition(checkLayer(state, instance, 2)));
+  return 1;
+}
+
+int32
+setAnimationLayerWeight(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  luaL_checkany(state, 2);
+  instance.setLayerWeight(checkLayer(state, instance, 2),
+                          static_cast<float>(luaL_checknumber(state, 3)));
+  return 0;
+}
+
+int32
+getAnimationLayerWeight(lua_State* state)
+{
+  AnimationGraphInstance& instance =
+      checkGraph(state, ScriptTraits<AnimatorComponent>::check(state, 1));
+  lua_pushnumber(
+      state, static_cast<lua_Number>(instance.getLayerWeight(checkLayer(state, instance, 2))));
   return 1;
 }
 
@@ -1014,10 +1309,39 @@ ScriptBindings::registerObjects(lua_State* state)
       .method<&setAnimationTime>("setTime", "time")
       .method<&getAnimationTime>("getTime")
       .method<&getAnimationDuration>("getDuration")
-      .rawMethod("getClipName", &getClipName, "fun(): string?");
+      .rawMethod("getClipName", &getClipName, "fun(): string?")
+      .rawMethod("setGraph", &setAnimationGraph, "fun(graph?: string)")
+      .rawMethod("getGraphName", &getGraphName, "fun(): string?")
+      .method<&hasAnimationGraph>("hasGraph")
+      .method<&isClipOverGraph>("isClipOverGraph")
+      .rawMethod("findParameter", &findAnimationParameter,
+                 "fun(name: string): AnimatorParameter?")
+      .rawMethod("setFloat", &setAnimationFloat,
+                 "fun(parameter: AnimatorParameter, value: number)")
+      .rawMethod("setInt", &setAnimationInt,
+                 "fun(parameter: AnimatorParameter, value: integer)")
+      .rawMethod("setBool", &setAnimationBool,
+                 "fun(parameter: AnimatorParameter, value: boolean)")
+      .rawMethod("setTrigger", &setAnimationTrigger, "fun(parameter: AnimatorParameter)")
+      .rawMethod("resetTrigger", &resetAnimationTrigger, "fun(parameter: AnimatorParameter)")
+      .rawMethod("getFloat", &getAnimationFloat, "fun(parameter: AnimatorParameter): number")
+      .rawMethod("getInt", &getAnimationInt, "fun(parameter: AnimatorParameter): integer")
+      .rawMethod("getBool", &getAnimationBool, "fun(parameter: AnimatorParameter): boolean")
+      .rawMethod("getState", &getAnimationState, "fun(layer?: AnimatorLayer): string")
+      .rawMethod("getStateTime", &getAnimationStateTime, "fun(layer?: AnimatorLayer): number")
+      .rawMethod("isInTransition", &isAnimationInTransition,
+                 "fun(layer?: AnimatorLayer): boolean")
+      .rawMethod("setLayerWeight", &setAnimationLayerWeight,
+                 "fun(layer: AnimatorLayer, weight: number)")
+      .rawMethod("getLayerWeight", &getAnimationLayerWeight,
+                 "fun(layer?: AnimatorLayer): number");
   setToString(state, ScriptHandleType<AnimatorComponent>::NAME, &animatorToString);
 
   if (ScriptApiDescription* const api = ScriptApiDescription::find(state)) {
+    // Parameters: the id findParameter gives, or the name. Layers: the name, or the place
+    // from 1 (the base layer).
+    api->addAlias("AnimatorParameter", "integer|string");
+    api->addAlias("AnimatorLayer", "integer|string");
     ScriptApiType& hit = api->addType("RaycastHit", ScriptApiTypeKind::Shape);
     hit.description = "What Scene.raycast hit. Pass one back as out to reuse it.";
     hit.fields = {{"gameObject", "GameObject"},

@@ -14,6 +14,7 @@
 #include "chQuaternion.h"
 
 namespace chEngineSDK {
+class AnimationGraphInstance;
 class AnimatorComponent;
 class CameraComponent;
 class ScriptComponent;
@@ -83,6 +84,13 @@ class InspectorUI
    */
   NODISCARD bool
   renderAnimatorComponent(AnimatorComponent& animator);
+
+  /**
+   * The state of every layer and the parameters, which can be changed to try the graph in
+   * the editor (they are not saved).
+   */
+  void
+  renderAnimationGraphState(AnimationGraphInstance& instance);
 
   void
   renderMaterialSlot(ModelComponent& modelComponent, uint32 slot);
