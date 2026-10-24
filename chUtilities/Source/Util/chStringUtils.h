@@ -255,6 +255,13 @@ class CH_UTILITY_EXPORT StringUtils
   equalsIgnoreCase(StringView str1, StringView str2) noexcept;
 
   /**
+   * Orders ignoring ASCII case: below 0 when str1 goes first, 0 when equal, above 0 after.
+   * A string that starts another goes first. Does not allocate.
+   */
+  NODISCARD static int32
+  compareIgnoreCase(StringView str1, StringView str2) noexcept;
+
+  /**
    * Writes a number in decimal into buffer without allocating; floats get the shortest
    * text that reads back as the same value. No '\0' is added.
    *

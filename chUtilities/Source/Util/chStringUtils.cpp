@@ -272,6 +272,25 @@ StringUtils::equalsIgnoreCase(StringView str1, StringView str2) noexcept
 
 /*
  */
+int32
+StringUtils::compareIgnoreCase(StringView str1, StringView str2) noexcept
+{
+  const SIZE_T count = str1.size() < str2.size() ? str1.size() : str2.size();
+  for (SIZE_T i = 0; i < count; ++i) {
+    const int32 a = static_cast<uint8>(toLowerASCII(str1[i]));
+    const int32 b = static_cast<uint8>(toLowerASCII(str2[i]));
+    if (a != b) {
+      return a - b;
+    }
+  }
+  if (str1.size() == str2.size()) {
+    return 0;
+  }
+  return str1.size() < str2.size() ? -1 : 1;
+}
+
+/*
+ */
 StringView
 StringUtils::signedToChars(ANSICHAR* buffer, SIZE_T size, int64 value) noexcept
 {

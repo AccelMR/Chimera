@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chAnimationGraph.h"
 
+#include "chAlgorithm.h"
 #include "chAssetFile.h"
 #include "chFileStream.h"
 #include "chMath.h"
@@ -470,6 +471,180 @@ AnimationGraph::setClipAsset(uint32 index, const SPtr<AnimationClipAsset>& clip)
     m_clips[index].clip = clip;
   }
 }
+
+#if USING(CH_EDITOR)
+namespace {
+/*
+ * Indices past a removed item move down one; the "none" values (all ones) stay.
+ */
+FORCEINLINE void
+shiftAfterRemoved(uint32& index, uint32 removed) noexcept
+{
+  if (index != AnimationGraph::NOT_FOUND && index > removed) {
+    --index;
+  }
+}
+} // namespace
+
+/*
+ */
+uint32
+AnimationGraph::countParameterUses(uint32 parameter) const
+{
+  uint32 count = 0;
+  for (const AnimationLayer& layer : m_layers) {
+    for (const AnimationState& state : layer.states) {
+      const bool bBlend = state.kind != AnimationStateKind::Clip;
+      count += bBlend && state.parameterX == parameter ? 1 : 0;
+      count += state.kind == AnimationStateKind::BlendSpace2D && state.parameterY == parameter
+                   ? 1
+                   : 0;
+      count += state.speedParameter == parameter ? 1 : 0;
+    }
+    for (const AnimationTransition& transition : layer.transitions) {
+      for (const AnimationCondition& condition : transition.conditions) {
+        count += condition.parameter == parameter ? 1 : 0;
+      }
+    }
+  }
+  return count;
+}
+
+/*
+ */
+void
+AnimationGraph::removeParameter(uint32 parameter)
+{
+  if (parameter >= m_parameters.size()) {
+    return;
+  }
+  m_parameters.erase(m_parameters.begin() + parameter);
+  for (AnimationLayer& layer : m_layers) {
+    for (AnimationState& state : layer.states) {
+      for (uint32* index : {&state.parameterX, &state.parameterY, &state.speedParameter}) {
+        if (*index == parameter) {
+          *index = NO_PARAMETER;
+        }
+        shiftAfterRemoved(*index, parameter);
+      }
+    }
+    for (AnimationTransition& transition : layer.transitions) {
+      Algorithm::removeAllIf(transition.conditions, [parameter](const AnimationCondition& c) {
+        return c.parameter == parameter;
+      });
+      for (AnimationCondition& condition : transition.conditions) {
+        shiftAfterRemoved(condition.parameter, parameter);
+      }
+    }
+  }
+}
+
+/*
+ */
+uint32
+AnimationGraph::countClipUses(uint32 clip) const
+{
+  uint32 count = 0;
+  for (const AnimationLayer& layer : m_layers) {
+    for (const AnimationState& state : layer.states) {
+      if (state.kind == AnimationStateKind::Clip) {
+        count += state.clip == clip ? 1 : 0;
+        continue;
+      }
+      for (const BlendSpaceSample& sample : state.samples) {
+        count += sample.clip == clip ? 1 : 0;
+      }
+    }
+  }
+  return count;
+}
+
+/*
+ */
+void
+AnimationGraph::removeClip(uint32 clip)
+{
+  if (clip >= m_clips.size()) {
+    return;
+  }
+  m_clips.erase(m_clips.begin() + clip);
+  for (AnimationLayer& layer : m_layers) {
+    for (AnimationState& state : layer.states) {
+      if (state.clip == clip) {
+        state.clip = NOT_FOUND;
+      }
+      shiftAfterRemoved(state.clip, clip);
+      Algorithm::removeAllIf(state.samples,
+                             [clip](const BlendSpaceSample& s) { return s.clip == clip; });
+      for (BlendSpaceSample& sample : state.samples) {
+        shiftAfterRemoved(sample.clip, clip);
+      }
+    }
+  }
+}
+
+/*
+ */
+uint32
+AnimationGraph::findOrAddClip(const UUID& clipId, const SPtr<AnimationClipAsset>& clip)
+{
+  for (SIZE_T i = 0; i < m_clips.size(); ++i) {
+    if (m_clips[i].clipId == clipId) {
+      if (clip) {
+        m_clips[i].clip = clip;
+      }
+      return static_cast<uint32>(i);
+    }
+  }
+  return addClip(clipId, clip);
+}
+
+/*
+ */
+void
+AnimationGraph::removeUnusedClips()
+{
+  // From the end, so the indices still to check do not move.
+  for (uint32 i = static_cast<uint32>(m_clips.size()); i-- > 0;) {
+    if (countClipUses(i) == 0) {
+      removeClip(i);
+    }
+  }
+}
+
+/*
+ */
+void
+AnimationGraph::removeState(uint32 layerIndex, uint32 state)
+{
+  if (layerIndex >= m_layers.size() || state >= m_layers[layerIndex].states.size()) {
+    return;
+  }
+  AnimationLayer& layer = m_layers[layerIndex];
+  layer.states.erase(layer.states.begin() + state);
+  Algorithm::removeAllIf(layer.transitions, [state](const AnimationTransition& t) {
+    return t.source == state || t.target == state;
+  });
+  for (AnimationTransition& transition : layer.transitions) {
+    shiftAfterRemoved(transition.source, state);
+    shiftAfterRemoved(transition.target, state);
+  }
+  if (layer.defaultState == state) {
+    layer.defaultState = 0;
+  }
+  shiftAfterRemoved(layer.defaultState, state);
+}
+
+/*
+ */
+void
+AnimationGraph::removeLayer(uint32 layer)
+{
+  if (layer < m_layers.size()) {
+    m_layers.erase(m_layers.begin() + layer);
+  }
+}
+#endif // USING(CH_EDITOR)
 
 /*
  */

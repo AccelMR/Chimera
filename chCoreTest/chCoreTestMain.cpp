@@ -7500,3 +7500,89 @@ TEST_CASE("chCore - Animation graph layout")
   }
 }
 #endif // USING(CH_EDITOR)
+
+#if USING(CH_EDITOR)
+TEST_CASE("chCore - Animation graph editing")
+{
+  AnimationGraph graph = buildTestGraph(createTestGraphParts());
+  String error;
+
+  SECTION("Removing a parameter keeps the others in place")
+  {
+    REQUIRE(graph.countParameterUses(0) == 4);
+    REQUIRE(graph.countParameterUses(1) == 1);
+    graph.removeParameter(1);
+    REQUIRE(graph.getParameters().size() == 5);
+    const AnimationLayer& base = graph.getLayers()[0];
+    REQUIRE(base.transitions[1].conditions.size() == 1);
+    REQUIRE(base.transitions[1].conditions[0].parameter == 0);
+    REQUIRE(base.states[2].parameterX == 3);
+    REQUIRE(base.states[2].parameterY == 4);
+    REQUIRE(base.transitions[2].conditions[0].parameter == 2);
+    REQUIRE(graph.getLayers()[1].transitions[0].conditions[0].parameter == 1);
+    REQUIRE(graph.validate(&error));
+  }
+
+  SECTION("A removed blend parameter leaves the blend space broken")
+  {
+    graph.removeParameter(0);
+    const AnimationLayer& base = graph.getLayers()[0];
+    REQUIRE(base.states[1].parameterX == AnimationGraph::NO_PARAMETER);
+    REQUIRE(base.states[2].speedParameter == AnimationGraph::NO_PARAMETER);
+    REQUIRE(base.transitions[0].conditions.empty());
+    REQUIRE_FALSE(graph.validate(&error));
+  }
+
+  SECTION("Removing a clip")
+  {
+    REQUIRE(graph.countClipUses(2) == 3);
+    graph.removeClip(2);
+    REQUIRE(graph.getClips().size() == 3);
+    const AnimationLayer& base = graph.getLayers()[0];
+    REQUIRE(base.states[1].samples.size() == 2);
+    REQUIRE(base.states[2].samples.size() == 2);
+    REQUIRE(base.states[3].clip == 2);
+    REQUIRE(graph.getLayers()[1].states[0].clip == 2);
+    REQUIRE(graph.getLayers()[1].states[1].clip == AnimationGraph::NOT_FOUND);
+    REQUIRE_FALSE(graph.validate(&error));
+    REQUIRE(StringUtils::containsIgnoreCase(error, "clip that does not exist"));
+  }
+
+  SECTION("Clips are found or added, and unused ones go")
+  {
+    const chEngineSDK::UUID existing = graph.getClips()[1].clipId;
+    REQUIRE(graph.findOrAddClip(existing, nullptr) == 1);
+    const chEngineSDK::UUID extra = chEngineSDK::UUID::createRandom();
+    REQUIRE(graph.findOrAddClip(extra, nullptr) == 4);
+    REQUIRE(graph.countClipUses(4) == 0);
+    graph.removeUnusedClips();
+    REQUIRE(graph.getClips().size() == 4);
+    REQUIRE(graph.validate(&error));
+  }
+
+  SECTION("Removing a state drops its transitions")
+  {
+    graph.removeState(0, 0);
+    const AnimationLayer& base = graph.getLayers()[0];
+    REQUIRE(base.states.size() == 3);
+    REQUIRE(base.transitions.size() == 1);
+    REQUIRE(base.transitions[0].source == AnimationGraph::ANY_STATE);
+    REQUIRE(base.transitions[0].target == 2);
+    REQUIRE(base.defaultState == 0);
+    REQUIRE(graph.validate(&error));
+
+    AnimationGraph other = buildTestGraph(createTestGraphParts());
+    other.getLayersForEdit()[0].defaultState = 2;
+    other.removeState(0, 1);
+    REQUIRE(other.getLayers()[0].defaultState == 1);
+  }
+
+  SECTION("Removing a layer")
+  {
+    graph.removeLayer(1);
+    REQUIRE(graph.getLayers().size() == 1);
+    graph.removeLayer(5);
+    REQUIRE(graph.getLayers().size() == 1);
+  }
+}
+#endif // USING(CH_EDITOR)

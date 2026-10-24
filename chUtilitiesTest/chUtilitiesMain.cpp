@@ -1868,6 +1868,11 @@ TEST_CASE("chUtilities - ContainsIgnoreCase") {
   REQUIRE(StringUtils::equalsIgnoreCase("PNG", "png"));
   REQUIRE(StringUtils::equalsIgnoreCase("", ""));
   REQUIRE_FALSE(StringUtils::equalsIgnoreCase("png", "pn"));
+  REQUIRE(StringUtils::compareIgnoreCase("apple", "BANANA") < 0);
+  REQUIRE(StringUtils::compareIgnoreCase("Zebra", "apple") > 0);
+  REQUIRE(StringUtils::compareIgnoreCase("PNG", "png") == 0);
+  REQUIRE(StringUtils::compareIgnoreCase("pn", "PNG") < 0);
+  REQUIRE(StringUtils::compareIgnoreCase("", "") == 0);
   REQUIRE_FALSE(StringUtils::equalsIgnoreCase("png", "jpg"));
 }
 

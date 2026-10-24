@@ -180,6 +180,67 @@ class CH_CORE_EXPORT AnimationGraph
   void
   setClipAsset(uint32 index, const SPtr<AnimationClipAsset>& clip);
 
+#if USING(CH_EDITOR)
+  /**
+   * Direct access for the graph editor; validate tells what the edits broke. Removing items
+   * goes through the functions below, which keep every index pointing at the same thing.
+   */
+  NODISCARD FORCEINLINE Vector<AnimationParameter>&
+  getParametersForEdit() noexcept
+  {
+    return m_parameters;
+  }
+
+  NODISCARD FORCEINLINE Vector<AnimationLayer>&
+  getLayersForEdit() noexcept
+  {
+    return m_layers;
+  }
+
+  /**
+   * Conditions, blend axes and speed multipliers that read the parameter.
+   */
+  NODISCARD uint32
+  countParameterUses(uint32 parameter) const;
+
+  /**
+   * Conditions on it go; blend spaces that read it keep NO_PARAMETER (validate then fails)
+   * and speed multipliers on it are dropped.
+   */
+  void
+  removeParameter(uint32 parameter);
+
+  /**
+   * Clip states and blend space samples that play the clip.
+   */
+  NODISCARD uint32
+  countClipUses(uint32 clip) const;
+
+  /**
+   * Clip states that played it keep NOT_FOUND (validate then fails); samples of it go.
+   */
+  void
+  removeClip(uint32 clip);
+
+  /**
+   * The index of the clip, added when the graph does not have it yet.
+   */
+  uint32
+  findOrAddClip(const UUID& clipId, const SPtr<AnimationClipAsset>& clip);
+
+  void
+  removeUnusedClips();
+
+  /**
+   * Its transitions go with it; the default state moves to the first one when it was it.
+   */
+  void
+  removeState(uint32 layer, uint32 state);
+
+  void
+  removeLayer(uint32 layer);
+#endif // USING(CH_EDITOR)
+
   NODISCARD FORCEINLINE const Vector<AnimationParameter>&
   getParameters() const noexcept
   {
