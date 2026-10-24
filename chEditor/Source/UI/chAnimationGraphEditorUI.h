@@ -12,6 +12,7 @@
 
 namespace chEngineSDK {
 class IAsset;
+class ICommandList;
 
 /**
  * Exists so an animation graph is built in the editor instead of in code: each layer is a
@@ -20,13 +21,26 @@ class IAsset;
  * copy of the graph, so nothing changes on disk (or in the objects that use the graph) until
  * Save; every change is an undo step of its own, kept while the graph stays open. A graph
  * with errors can be opened and saved, and says what is wrong, but does not play until
- * fixed. The window stays open between sessions.
+ * fixed. Under the canvas a model plays the graph, with test values for its parameters,
+ * and the canvas marks the state it is in. The window stays open between sessions.
  */
 class AnimationGraphEditorUI
 {
  public:
   static void
   render();
+
+  /**
+   * Plays the model preview and copies its scene for the renderer.
+   */
+  static void
+  update(float deltaTime);
+
+  /**
+   * Draws the model preview into the texture the window showed this frame.
+   */
+  static void
+  recordFrame(ICommandList& commandList);
 
   NODISCARD static bool
   canOpen(const IAsset& asset);
@@ -75,7 +89,8 @@ class AnimationGraphEditorUI
   setWindowVisible(bool bVisible);
 
   /**
-   * Releases the node editor and the open graph. Call before the ImGui context is destroyed.
+   * Releases the node editor, the open graph and the preview. Call after the GPU is idle,
+   * before the ImGui context is destroyed.
    */
   static void
   shutDown();

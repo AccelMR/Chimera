@@ -149,6 +149,9 @@ AnimationGraphAsset::writeEditorValues(ConfigFile& file) const
     file.setValue(kLayoutSection, StringUtils::format("Layer{0}Any", i),
                   positionsText(Span<const Vector2>(&layer.anyStatePosition, 1)));
   }
+  if (!m_layout.previewModel.isNull()) {
+    file.setValue(kLayoutSection, "PreviewModel", m_layout.previewModel.toString());
+  }
 }
 
 /*
@@ -156,7 +159,10 @@ AnimationGraphAsset::writeEditorValues(ConfigFile& file) const
 void
 AnimationGraphAsset::readEditorValues(const ConfigFile& file)
 {
-  m_layout.layers.clear();
+  m_layout = AnimationGraphLayout();
+  if (const String* model = file.getValue(kLayoutSection, "PreviewModel")) {
+    CH_PARAMETER_UNUSED(UUID::fromString(*model, m_layout.previewModel));
+  }
   for (uint32 i = 0;; ++i) {
     const String* states = file.getValue(kLayoutSection, StringUtils::format("Layer{0}", i));
     if (!states) {

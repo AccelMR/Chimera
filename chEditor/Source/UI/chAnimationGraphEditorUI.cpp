@@ -12,6 +12,8 @@
 #include "chAnimationClipAsset.h"
 #include "chAnimationGraph.h"
 #include "chAnimationGraphAsset.h"
+#include "chAnimationGraphInstance.h"
+#include "chAnimationPreviewUI.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chBlendSpace.h"
@@ -19,6 +21,10 @@
 #include "chEngineConfig.h"
 #include "chLogger.h"
 #include "chMath.h"
+#include "chModel.h"
+#include "chModelAsset.h"
+#include "chModelComponent.h"
+#include "chModelPreview.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -37,6 +43,13 @@ ConsoleVariable<bool> g_cvarShowAnimationGraphEditor("Editor.ShowAnimationGraphE
                                                      false,
                                                      "Shows the Animation Graph Editor window.",
                                                      "ShowAnimationGraphEditor");
+ConsoleVariable<bool> g_cvarGraphPreview("Editor.GraphPreview",
+                                         true,
+                                         "Shows the model preview under the animation graph.");
+ConsoleVariable<float> g_cvarGraphPreviewHeight(
+    "Editor.GraphPreviewHeight",
+    280.0f,
+    "Height in pixels of the model preview under the animation graph.");
 
 // Size the window gets the first time it opens; ImGui remembers it after.
 constexpr float kWindowWidth = 1100.0f;
@@ -70,6 +83,25 @@ constexpr float kMinPlotRange = 1e-4f;
 constexpr float kMinGridSpacing = 8.0f;
 constexpr float kMinSnapStep = 0.01f;
 constexpr float kWeightLineWidth = 3.0f;
+
+// The model preview under the canvas.
+constexpr float kSplitterThickness = 6.0f;
+constexpr float kMinPreviewHeight = 80.0f;
+constexpr float kMinCanvasHeight = 80.0f;
+constexpr float kPreviewPanelWidth = 240.0f;
+constexpr float kActiveNodeBorderWidth = 3.0f;
+constexpr float kStateTimeBarHeight = 4.0f;
+
+/**
+ * A test value of the preview, kept by name so it survives parameters being added,
+ * removed or moved.
+ */
+struct PreviewValue
+{
+  String name;
+  AnimationParameterType type = AnimationParameterType::Float;
+  AnimationParameterValue value{};
+};
 
 constexpr ImVec4 kErrorColor(1.0f, 0.4f, 0.4f, 1.0f);
 constexpr ImVec4 kValidColor(0.45f, 0.85f, 0.45f, 1.0f);
@@ -178,6 +210,18 @@ struct GraphEditorState
   bool bSnap = false;
   float snapStep = 0.5f;
   float testPoint[2] = {0.0f, 0.0f};
+
+  // The model preview runs a copy of the graph, made again after every edit.
+  ModelPreview preview{"AnimationGraphPreview"};
+  AnimationGraphInstance instance;
+  SPtr<AnimationGraph> previewGraph;
+  uint32 previewId = kNone;
+  const ModelComponent* previewComponent = nullptr;
+  // Parallel to the graph's parameters once synced.
+  Vector<PreviewValue> previewValues;
+  // The models the combo offers, found from the graph's clips.
+  Vector<SPtr<IAsset>> previewModels;
+  bool bPreviewModelPicked = false;
 
   RemoveTarget removeTarget = RemoveTarget::None;
   uint32 removeIndex = kNone;
@@ -426,6 +470,9 @@ loadDocument(GraphEditorState& state, const SPtr<AnimationGraphAsset>& asset)
   state.layer = 0;
   state.validatedId = kNone;
   state.bTitleDirty = true;
+  state.bPreviewModelPicked = false;
+  state.previewId = kNone;
+  state.previewValues.clear();
   resetView(state);
 }
 
@@ -442,6 +489,15 @@ closeDocument(GraphEditorState& state)
   state.validatedId = kNone;
   state.bTitleDirty = true;
   state.projectClips.clear();
+  state.bPreviewModelPicked = false;
+  state.previewId = kNone;
+  state.previewValues.clear();
+  state.previewModels.clear();
+  state.instance.setGraph(nullptr);
+  state.previewGraph.reset();
+  if (state.preview.getModel()) {
+    state.preview.setModel(nullptr);
+  }
   resetView(state);
 }
 
@@ -961,6 +1017,19 @@ renderToolbar(GraphEditorState& state)
   ImGui::SetItemTooltip("Adds a clip state in the middle of the canvas. Right click the "
                         "canvas for blend spaces, or drop a clip on it.");
   ImGui::EndDisabled();
+  ImGui::SameLine();
+  const bool bPreview = g_cvarGraphPreview.get();
+  if (bPreview) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+  }
+  if (ImGui::Button(ICON_FA_EYE "  Preview")) {
+    g_cvarGraphPreview.set(!bPreview, ConsoleVariableSource::Console);
+    EngineConfig::setUserValue("Editor", "Editor", "GraphPreview", bPreview ? "false" : "true");
+  }
+  if (bPreview) {
+    ImGui::PopStyleColor();
+  }
+  ImGui::SetItemTooltip("Shows the graph running on a model under the canvas");
 
   ImGui::SameLine();
   if (state.bValid) {
@@ -1174,6 +1243,13 @@ void
 renderStateNode(const GraphEditorState& state, const AnimationLayer& layer, uint32 index)
 {
   const AnimationState& animationState = layer.states[index];
+  // The state the preview is in has a green border and a bar with its time.
+  const bool bActive = g_cvarGraphPreview.get() && state.instance.isBound() &&
+                       state.instance.getCurrentState(state.layer) == index;
+  if (bActive) {
+    ed::PushStyleColor(ed::StyleColor_NodeBorder, kValidColor);
+    ed::PushStyleVar(ed::StyleVar_NodeBorderWidth, kActiveNodeBorderWidth);
+  }
   ed::BeginNode(getStateNodeId(index));
   ed::BeginPin(getInputPinId(index), ed::PinKind::Input);
   ImGui::TextUnformatted(ICON_FA_CARET_RIGHT);
@@ -1205,6 +1281,12 @@ renderStateNode(const GraphEditorState& state, const AnimationLayer& layer, uint
                         getParameterName(state.graph, animationState.parameterY));
     break;
   }
+  if (bActive) {
+    const float time = state.instance.getStateTime(state.layer);
+    const float fraction =
+        animationState.bLooping ? time - Math::floor(time) : Math::min(time, 1.0f);
+    ImGui::ProgressBar(fraction, ImVec2(ImGui::GetItemRectSize().x, kStateTimeBarHeight), "");
+  }
   ImGui::EndGroup();
 
   ImGui::SameLine();
@@ -1212,6 +1294,10 @@ renderStateNode(const GraphEditorState& state, const AnimationLayer& layer, uint
   ImGui::TextUnformatted(ICON_FA_CARET_RIGHT);
   ed::EndPin();
   ed::EndNode();
+  if (bActive) {
+    ed::PopStyleVar();
+    ed::PopStyleColor();
+  }
 }
 
 void
@@ -1509,6 +1595,326 @@ renderCanvas(GraphEditorState& state)
 
   ed::SetCurrentEditor(nullptr);
   applyDeletes(state);
+}
+
+/*
+ * The models the graph's clips were made for: the skeleton of the first clip that has
+ * one, or, for rigid clips, the models in the first clip's folder.
+ */
+void
+collectPreviewModels(GraphEditorState& state)
+{
+  UUID skeletonId = UUID::null();
+  String folder;
+  bool bFound = false;
+  for (const AnimationGraphClip& clip : state.graph.getClips()) {
+    if (!clip.clip) {
+      continue;
+    }
+    if (!bFound) {
+      folder = clip.clip->getAssetPath();
+      bFound = true;
+    }
+    if (clip.clip->getClip() && !clip.clip->getClip()->getSkeletonId().isNull()) {
+      skeletonId = clip.clip->getClip()->getSkeletonId();
+      folder = clip.clip->getAssetPath();
+      break;
+    }
+  }
+  state.previewModels.clear();
+  if (bFound) {
+    AnimationPreviewUI::findModels(skeletonId, folder, state.previewModels);
+  }
+}
+
+void
+setPreviewModel(GraphEditorState& state, const SPtr<IAsset>& asset)
+{
+  SPtr<ModelAsset> model;
+  if (asset && (asset->isLoaded() || AssetManager::instance().syncLoadAsset(asset))) {
+    model = asset->as<ModelAsset>();
+  }
+  state.preview.setModel(model);
+}
+
+/*
+ * The model saved with the graph, else the first one that fits; once per opened graph.
+ */
+void
+pickPreviewModel(GraphEditorState& state)
+{
+  if (state.bPreviewModelPicked) {
+    return;
+  }
+  state.bPreviewModelPicked = true;
+  collectPreviewModels(state);
+  SPtr<IAsset> asset;
+  if (!state.layout.previewModel.isNull()) {
+    asset = AssetManager::instance().getAsset(state.layout.previewModel);
+  }
+  if (!asset && !state.previewModels.empty()) {
+    asset = state.previewModels.front();
+  }
+  setPreviewModel(state, asset);
+}
+
+/*
+ * A choice made by hand is saved with the graph, so it is an edit like any other.
+ */
+void
+choosePreviewModel(GraphEditorState& state, const SPtr<IAsset>& asset)
+{
+  beginChange(state, "Set Preview Model");
+  state.layout.previewModel = asset ? asset->getUUID() : UUID::null();
+  setPreviewModel(state, asset);
+}
+
+void
+applyPreviewValues(GraphEditorState& state)
+{
+  for (uint32 i = 0; i < state.previewValues.size(); ++i) {
+    const PreviewValue& value = state.previewValues[i];
+    switch (value.type) {
+    case AnimationParameterType::Float:
+      CH_PARAMETER_UNUSED(state.instance.setFloat(i, value.value.floatValue));
+      break;
+    case AnimationParameterType::Int:
+      CH_PARAMETER_UNUSED(state.instance.setInt(i, value.value.intValue));
+      break;
+    case AnimationParameterType::Bool:
+      CH_PARAMETER_UNUSED(state.instance.setBool(i, value.value.intValue != 0));
+      break;
+    case AnimationParameterType::Trigger:
+      // Fired by its button only.
+      break;
+    }
+  }
+}
+
+void
+pushPreviewPose(GraphEditorState& state)
+{
+  if (ModelComponent* component = state.preview.getModelComponent()) {
+    component->setPose(state.instance.getPoseMatrices());
+  }
+}
+
+/*
+ * After an edit or a model change the preview runs a fresh copy of the graph from its
+ * default states, keeping the test values of parameters that still exist (by name and
+ * type). A graph with errors is not run, so the model stays at rest.
+ */
+void
+syncPreview(GraphEditorState& state)
+{
+  const ModelComponent* component = state.preview.getModelComponent();
+  if (state.previewId == state.id && state.previewComponent == component) {
+    return;
+  }
+  if (state.previewId != state.id) {
+    collectPreviewModels(state);
+  }
+  state.previewId = state.id;
+  state.previewComponent = component;
+
+  const Vector<AnimationParameter>& parameters = state.graph.getParameters();
+  Vector<PreviewValue> values;
+  values.reserve(parameters.size());
+  for (const AnimationParameter& parameter : parameters) {
+    PreviewValue& value = values.emplace_back(PreviewValue{
+        .name = parameter.name, .type = parameter.type, .value = parameter.defaultValue});
+    for (const PreviewValue& old : state.previewValues) {
+      if (old.type == parameter.type && parameter.type != AnimationParameterType::Trigger &&
+          StringUtils::equalsIgnoreCase(old.name, parameter.name)) {
+        value.value = old.value;
+        break;
+      }
+    }
+  }
+  state.previewValues = std::move(values);
+
+  const SPtr<ModelAsset>& model = state.preview.getModel();
+  state.instance.setModel(model ? model->getModel() : nullptr);
+  state.previewGraph = state.bValid ? chMakeShared<AnimationGraph>(state.graph) : nullptr;
+  state.instance.setGraph(state.previewGraph);
+  applyPreviewValues(state);
+  pushPreviewPose(state);
+}
+
+void
+advancePreview(GraphEditorState& state)
+{
+  if (!state.instance.isBound()) {
+    return;
+  }
+  applyPreviewValues(state);
+  if (state.instance.advance(ImGui::GetIO().DeltaTime)) {
+    pushPreviewPose(state);
+  }
+}
+
+void
+renderPreviewPanel(GraphEditorState& state)
+{
+  SPtr<IAsset> picked;
+  bool bPicked = false;
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() * 2.0f -
+                          ImGui::GetStyle().ItemSpacing.x * 2.0f);
+  AnimationPreviewUI::renderAssetCombo(ICON_FA_CUBE "##PreviewModel",
+                                       state.preview.getModel().get(), "No model",
+                                       state.previewModels, picked, bPicked);
+  ImGui::SetItemTooltip("Model the graph plays on; drop any model on the view too. Saved "
+                        "with the graph.");
+  if (bPicked) {
+    choosePreviewModel(state, picked);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(ICON_FA_EXPAND "##Frame")) {
+    state.preview.requestFrame();
+  }
+  ImGui::SetItemTooltip("Frame the model (F over the view)");
+  ImGui::SameLine();
+  if (ImGui::Button(ICON_FA_COG "##Settings")) {
+    ImGui::OpenPopup("PreviewSettings");
+  }
+  ImGui::SetItemTooltip("Preview settings");
+  if (ImGui::BeginPopup("PreviewSettings")) {
+    ModelPreview::renderSettings();
+    ImGui::EndPopup();
+  }
+
+  if (ImGui::Button(ICON_FA_UNDO "  Restart")) {
+    state.instance.reset();
+    applyPreviewValues(state);
+    pushPreviewPose(state);
+  }
+  ImGui::SetItemTooltip("Every layer back to its default state");
+  ImGui::SameLine();
+  if (ImGui::Button("Reset Values")) {
+    const Vector<AnimationParameter>& parameters = state.graph.getParameters();
+    for (uint32 i = 0; i < state.previewValues.size() && i < parameters.size(); ++i) {
+      state.previewValues[i].value = parameters[i].defaultValue;
+    }
+    state.instance.reset();
+    applyPreviewValues(state);
+    pushPreviewPose(state);
+  }
+  ImGui::SetItemTooltip("Test values back to the parameters' defaults");
+
+  ImGui::SeparatorText("Parameters (not saved)");
+  const bool bTable = !state.previewValues.empty() && ImGui::BeginTable("##Values", 2);
+  for (uint32 i = 0; bTable && i < state.previewValues.size(); ++i) {
+    PreviewValue& value = state.previewValues[i];
+    ImGui::PushID(static_cast<int32>(i));
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(value.name.c_str());
+    ImGui::TableNextColumn();
+    ImGui::SetNextItemWidth(-1.0f);
+    switch (value.type) {
+    case AnimationParameterType::Float:
+      ImGui::DragFloat("##Value", &value.value.floatValue, 0.01f);
+      break;
+    case AnimationParameterType::Int:
+      ImGui::DragInt("##Value", &value.value.intValue);
+      break;
+    case AnimationParameterType::Bool: {
+      bool bValue = value.value.intValue != 0;
+      if (ImGui::Checkbox("##Value", &bValue)) {
+        value.value.intValue = bValue ? 1 : 0;
+      }
+      break;
+    }
+    case AnimationParameterType::Trigger:
+      if (ImGui::Button("Fire")) {
+        CH_PARAMETER_UNUSED(state.instance.setTrigger(i));
+      }
+      if (state.instance.isBound() && state.instance.getBool(i)) {
+        ImGui::SameLine();
+        ImGui::TextColored(kValidColor, "set");
+      }
+      break;
+    }
+    ImGui::PopID();
+  }
+  if (bTable) {
+    ImGui::EndTable();
+  }
+  if (state.previewValues.empty()) {
+    ImGui::TextDisabled("No parameters.");
+  }
+
+  ImGui::SeparatorText("Running");
+  if (!state.instance.isBound()) {
+    ImGui::TextDisabled(state.preview.getModel() ? "Not running: the graph has errors."
+                                                 : "Not running: no model.");
+    return;
+  }
+  const Vector<AnimationLayer>& layers = state.previewGraph->getLayers();
+  for (uint32 l = 0; l < layers.size(); ++l) {
+    const uint32 current = state.instance.getCurrentState(l);
+    ImGui::Text("%s: %s%s", layers[l].name.c_str(), getStateName(layers[l], current),
+                state.instance.isInTransition(l) ? " (fading in)" : "");
+  }
+}
+
+/*
+ * The canvas and the preview share the middle column; dragging the bar between them moves
+ * the split, saved when released.
+ */
+void
+renderPreviewSplitter(float& height, float maxHeight)
+{
+  const float width = ImGui::GetContentRegionAvail().x;
+  ImGui::InvisibleButton("##PreviewSplitter", ImVec2(width, kSplitterThickness));
+  if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+  }
+  if (ImGui::IsItemActive()) {
+    height = Math::clamp(height - ImGui::GetIO().MouseDelta.y, kMinPreviewHeight,
+                         Math::max(maxHeight, kMinPreviewHeight));
+    g_cvarGraphPreviewHeight.set(height, ConsoleVariableSource::Console);
+  }
+  if (ImGui::IsItemDeactivated()) {
+    ANSICHAR buffer[StringUtils::MAX_FLOAT_CHARS];
+    EngineConfig::setUserValue("Editor", "Editor", "GraphPreviewHeight",
+                               StringUtils::toChars(buffer, height));
+  }
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  const float middle = (min.y + max.y) * 0.5f;
+  ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, middle), ImVec2(max.x, middle),
+                                      ImGui::GetColorU32(ImGui::IsItemActive()
+                                                             ? ImGuiCol_SeparatorActive
+                                                             : ImGuiCol_Separator));
+}
+
+void
+renderPreview(GraphEditorState& state, float height)
+{
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const float panelWidth = Math::min(kPreviewPanelWidth, ImGui::GetContentRegionAvail().x * 0.5f);
+  const float viewWidth = ImGui::GetContentRegionAvail().x - panelWidth - style.ItemSpacing.x;
+  state.preview.renderView(ImVec2(viewWidth, height), "Drop a model here to preview the graph.");
+  if (ImGui::BeginDragDropTarget()) {
+    if (const SPtr<ModelAsset> model = AssetDragDrop::acceptModel()) {
+      choosePreviewModel(state, model);
+    }
+    ImGui::EndDragDropTarget();
+  }
+  if (state.preview.getModel() && !state.instance.isBound()) {
+    const ImVec2 min = ImGui::GetItemRectMin();
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
+        ImGui::GetColorU32(kErrorColor), "Rest pose: the graph has errors.");
+  }
+
+  ImGui::SameLine();
+  if (ImGui::BeginChild("##PreviewPanel", ImVec2(0.0f, height), ImGuiChildFlags_Borders)) {
+    renderPreviewPanel(state);
+  }
+  ImGui::EndChild();
 }
 
 /*
@@ -2269,8 +2675,31 @@ AnimationGraphEditorUI::render()
           Math::max(ImGui::GetContentRegionAvail().x - kDetailsWidth -
                         ImGui::GetStyle().ItemSpacing.x,
                     1.0f);
-      if (ImGui::BeginChild("##canvas", ImVec2(canvasWidth, 0.0f))) {
-        renderCanvas(state);
+      if (ImGui::BeginChild("##middle", ImVec2(canvasWidth, 0.0f))) {
+        const bool bPreview = g_cvarGraphPreview.get();
+        if (bPreview) {
+          // Before the canvas, which shows the state the preview is in.
+          pickPreviewModel(state);
+          syncPreview(state);
+          advancePreview(state);
+        }
+        const float available = ImGui::GetContentRegionAvail().y;
+        const float maxPreviewHeight = available - kMinCanvasHeight - kSplitterThickness;
+        float previewHeight = Math::clamp(g_cvarGraphPreviewHeight.get(), kMinPreviewHeight,
+                                          Math::max(maxPreviewHeight, kMinPreviewHeight));
+        const float canvasHeight =
+            bPreview ? Math::max(available - previewHeight - kSplitterThickness -
+                                     ImGui::GetStyle().ItemSpacing.y * 2.0f,
+                                 1.0f)
+                     : 0.0f;
+        if (ImGui::BeginChild("##canvas", ImVec2(0.0f, canvasHeight))) {
+          renderCanvas(state);
+        }
+        ImGui::EndChild();
+        if (bPreview) {
+          renderPreviewSplitter(previewHeight, maxPreviewHeight);
+          renderPreview(state, previewHeight);
+        }
       }
       ImGui::EndChild();
 
@@ -2291,6 +2720,22 @@ AnimationGraphEditorUI::render()
   if (!bOpen) {
     requestClose(state, AfterClose::HideWindow);
   }
+}
+
+/*
+ */
+void
+AnimationGraphEditorUI::update(float deltaTime)
+{
+  getState().preview.update(deltaTime);
+}
+
+/*
+ */
+void
+AnimationGraphEditorUI::recordFrame(ICommandList& commandList)
+{
+  getState().preview.recordFrame(commandList);
 }
 
 /*
@@ -2340,9 +2785,13 @@ AnimationGraphEditorUI::close(const IAsset& asset)
   if (state.asset.get() == &asset) {
     closeDocument(state);
   }
-  // The clip lists hold assets too.
-  Algorithm::removeAllIf(state.projectClips,
-                         [&asset](const SPtr<IAsset>& clip) { return clip.get() == &asset; });
+  // The clip and model lists hold assets too.
+  const auto isAsset = [&asset](const SPtr<IAsset>& choice) { return choice.get() == &asset; };
+  Algorithm::removeAllIf(state.projectClips, isAsset);
+  Algorithm::removeAllIf(state.previewModels, isAsset);
+  if (state.preview.getModel().get() == &asset) {
+    setPreviewModel(state, nullptr);
+  }
 }
 
 /*
@@ -2423,6 +2872,8 @@ AnimationGraphEditorUI::shutDown()
 {
   GraphEditorState& state = getState();
   closeDocument(state);
+  state.instance.setModel(nullptr);
+  state.preview.shutDown();
   state.assetToOpen.reset();
   state.callback = nullptr;
   if (state.context) {

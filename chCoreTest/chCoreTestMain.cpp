@@ -7471,6 +7471,7 @@ TEST_CASE("chCore - Animation graph layout")
   layout.layers.push_back({.statePositions = {Vector2(0.0f, 0.0f), Vector2(260.5f, -140.0f)},
                            .anyStatePosition = Vector2(-260.0f, 12.25f)});
   layout.layers.push_back({.anyStatePosition = Vector2(1.0f, 2.0f)});
+  layout.previewModel = chEngineSDK::UUID::createRandom();
   asset.setLayout(layout);
 
   ConfigFile file;
@@ -7487,6 +7488,7 @@ TEST_CASE("chCore - Animation graph layout")
   REQUIRE(readLayout.layers[0].anyStatePosition == Vector2(-260.0f, 12.25f));
   REQUIRE(readLayout.layers[1].statePositions.empty());
   REQUIRE(readLayout.layers[1].anyStatePosition == Vector2(1.0f, 2.0f));
+  REQUIRE(readLayout.previewModel == layout.previewModel);
 
   SECTION("Broken text keeps what it could read")
   {

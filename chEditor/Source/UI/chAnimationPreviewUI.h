@@ -72,6 +72,25 @@ class AnimationPreviewUI
   static void
   findClips(const UUID& skeletonId, StringView folder, Vector<SPtr<IAsset>>& outClips);
 
+  /**
+   * Replaces outModels with the models made for the skeleton, sorted by name; with a null
+   * skeleton, the models in the folder. Reads what the files reference, so it loads nothing.
+   */
+  static void
+  findModels(const UUID& skeletonId, StringView folder, Vector<SPtr<IAsset>>& outModels);
+
+  /**
+   * A combo of the choices with noneLabel first; outbPicked says something was picked
+   * (outPicked is null for noneLabel).
+   */
+  static void
+  renderAssetCombo(const ANSICHAR* label,
+                   const IAsset* current,
+                   const ANSICHAR* noneLabel,
+                   const Vector<SPtr<IAsset>>& choices,
+                   SPtr<IAsset>& outPicked,
+                   bool& outbPicked);
+
   NODISCARD static bool
   isWindowVisible();
 

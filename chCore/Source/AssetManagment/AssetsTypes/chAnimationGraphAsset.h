@@ -36,6 +36,8 @@ struct AnimationGraphLayout
 {
   // One per layer, in the order of the graph's layers.
   Vector<AnimationGraphLayerLayout> layers{};
+  // The model the graph editor previews the graph on; null picks one that fits.
+  UUID previewModel = UUID::null();
 };
 #endif
 

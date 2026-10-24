@@ -310,6 +310,7 @@ EditorApplication::update(const float deltaTime)
 
   m_sceneRenderer->extract(scene, getViewCamera(), UIHelpers::rendererColor, &m_editorLines);
   AnimationPreviewUI::update(deltaTime);
+  AnimationGraphEditorUI::update(deltaTime);
   AssetThumbnails::update();
 }
 
@@ -320,6 +321,7 @@ EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapCha
 {
   // First, so their textures are drawn before the UI pass shows them.
   AnimationPreviewUI::recordFrame(commandList);
+  AnimationGraphEditorUI::recordFrame(commandList);
   AssetThumbnails::recordFrame(commandList);
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
