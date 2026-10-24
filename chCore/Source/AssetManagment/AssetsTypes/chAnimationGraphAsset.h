@@ -14,8 +14,30 @@
 #include "chIAsset.h"
 #include "chTypeTraits.h"
 
+#if USING(CH_EDITOR)
+#include "chVector2.h"
+#endif
+
 namespace chEngineSDK {
 class AnimationGraph;
+
+#if USING(CH_EDITOR)
+/**
+ * Where the graph editor draws the nodes of one layer, in its canvas units.
+ */
+struct AnimationGraphLayerLayout
+{
+  // One per state, in the order of the layer's states.
+  Vector<Vector2> statePositions{};
+  Vector2 anyStatePosition = Vector2::ZERO;
+};
+
+struct AnimationGraphLayout
+{
+  // One per layer, in the order of the graph's layers.
+  Vector<AnimationGraphLayerLayout> layers{};
+};
+#endif
 
 /**
  * Exists to save an AnimationGraph with references to its clips, so every object that uses
@@ -51,6 +73,21 @@ class CH_CORE_EXPORT AnimationGraphAsset : public IAsset
   {
     m_graph = graph;
   }
+
+  /**
+   * Kept in the editor data, so it survives unloading and never reaches a game.
+   */
+  NODISCARD FORCEINLINE const AnimationGraphLayout&
+  getLayout() const noexcept
+  {
+    return m_layout;
+  }
+
+  FORCEINLINE void
+  setLayout(AnimationGraphLayout layout)
+  {
+    m_layout = std::move(layout);
+  }
 #endif
 
  protected:
@@ -66,8 +103,19 @@ class CH_CORE_EXPORT AnimationGraphAsset : public IAsset
   void
   collectReferences(Vector<UUID>& outReferences) const override;
 
+#if USING(CH_EDITOR)
+  void
+  writeEditorValues(ConfigFile& file) const override;
+
+  void
+  readEditorValues(const ConfigFile& file) override;
+#endif
+
  private:
   SPtr<AnimationGraph> m_graph;
+#if USING(CH_EDITOR)
+  AnimationGraphLayout m_layout;
+#endif
 };
 DECLARE_ASSET_TYPE(AnimationGraphAsset);
 

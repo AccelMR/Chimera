@@ -13,10 +13,13 @@
 #include "chAnimationClipAsset.h"
 #include "chAnimationPlayer.h"
 #include "chBlendSpace.h"
+#include "chLogger.h"
 #include "chMath.h"
 #include "chModel.h"
 
 namespace chEngineSDK {
+CH_LOG_DECLARE_STATIC(AnimationGraphLog, All);
+
 namespace {
 // Clips of one frame (a still pose) last zero seconds; their state counts as this long, so
 // its normalized time still moves and exit times are reached.
@@ -97,6 +100,13 @@ void
 AnimationGraphInstance::setGraph(const SPtr<AnimationGraph>& graph)
 {
   m_graph = graph;
+  // Graphs are checked when loaded, except in the editor, which also opens unfinished ones.
+  String error;
+  m_bGraphValid = m_graph && m_graph->validate(&error);
+  if (m_graph && !m_bGraphValid) {
+    CH_LOG_WARNING(AnimationGraphLog, "The animation graph cannot play until fixed: {0}",
+                   error);
+  }
   bind();
 }
 
@@ -105,7 +115,7 @@ AnimationGraphInstance::setGraph(const SPtr<AnimationGraph>& graph)
 void
 AnimationGraphInstance::bind()
 {
-  m_bBound = m_model && m_graph && !m_graph->getLayers().empty();
+  m_bBound = m_model && m_bGraphValid;
   m_values.clear();
   m_clips.clear();
   m_clipTrackNodes.clear();

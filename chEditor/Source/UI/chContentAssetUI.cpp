@@ -21,6 +21,9 @@
 #include "chAssetInspectorUI.h"
 #include "chAnimationClipAsset.h"
 #include "chAnimationPreviewUI.h"
+#include "chAnimationGraph.h"
+#include "chAnimationGraphAsset.h"
+#include "chAnimationGraphEditorUI.h"
 #include "chAssetManager.h"
 #include "chAssetThumbnails.h"
 #include "chConfigFile.h"
@@ -751,6 +754,7 @@ ContentAssetUI::renderDeleteConfirmationPopup()
         if (bRemovedCorrectly) {
           AssetInspectorUI::close(*m_assetToDelete);
           AnimationPreviewUI::close(*m_assetToDelete);
+          AnimationGraphEditorUI::close(*m_assetToDelete);
           if (EditorSelection::getSelectedAsset() == m_assetToDelete) {
             EditorSelection::setSelectedAsset(nullptr);
           }
@@ -803,7 +807,12 @@ ContentAssetUI::renderAssetContextMenu(const SPtr<IAsset>& asset)
     ImGui::Separator();
   }
   else if (!asset->isTypeOf<SceneAsset>()) {
-    if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Inspect")) {
+    if (AnimationGraphEditorUI::canOpen(*asset)) {
+      if (ImGui::MenuItem(ICON_FA_PROJECT_DIAGRAM "  Edit Graph")) {
+        openAsset(asset);
+      }
+    }
+    else if (ImGui::MenuItem(ICON_FA_FILE_ALT "  Inspect")) {
       openAsset(asset);
     }
     if (AnimationPreviewUI::canOpen(*asset) &&
@@ -1406,6 +1415,7 @@ ContentAssetUI::renderDeleteFolderPopup()
       }
       AssetInspectorUI::close(*asset);
       AnimationPreviewUI::close(*asset);
+      AnimationGraphEditorUI::close(*asset);
       AssetThumbnails::forget(*asset);
       if (EditorSelection::getSelectedAsset() == asset) {
         EditorSelection::setSelectedAsset(nullptr);
@@ -1779,6 +1789,9 @@ ContentAssetUI::openAsset(const SPtr<IAsset>& asset)
     // Scripts are edited outside the editor; Play reads them from disk again.
     UIHelpers::openScript(asset->getFilePath());
   }
+  else if (AnimationGraphEditorUI::canOpen(*asset)) {
+    AnimationGraphEditorUI::open(asset);
+  }
   else {
     AssetInspectorUI::open(asset);
     // A clip is watched more than read, so it also starts playing.
@@ -1847,6 +1860,32 @@ ContentAssetUI::createScript()
 }
 
 /*
+ * Saved at once, like a material, so an animator can take it before anything is edited. It
+ * starts with one layer and no states, which the graph editor fills.
+ */
+SPtr<IAsset>
+ContentAssetUI::createAnimationGraph()
+{
+  AssetManager& assetManager = AssetManager::instance();
+  const Path& folder = getCurrentFolderPath();
+  const String name = assetManager.makeUniqueAssetName(folder, "AG_New");
+  const SPtr<AnimationGraphAsset> asset =
+      assetManager.createAsset<AnimationGraphAsset>(name, folder).lock();
+  if (!asset) {
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to create an animation graph.");
+    return nullptr;
+  }
+  const SPtr<AnimationGraph> graph = chMakeShared<AnimationGraph>();
+  graph->addLayer({.name = "Base"});
+  asset->setGraph(graph);
+  if (!assetManager.saveAsset(asset)) {
+    CH_LOG_ERROR(ContentAssetUILog, "Failed to save the animation graph {0}.", name);
+    return nullptr;
+  }
+  return asset;
+}
+
+/*
  */
 void
 ContentAssetUI::renderEmptyAreaContextMenu()
@@ -1911,6 +1950,9 @@ ContentAssetUI::renderEmptyAreaContextMenu()
     }
     if (ImGui::MenuItem(ICON_FA_FILE_CODE "  Script")) {
       onAssetCreated(createScript());
+    }
+    if (ImGui::MenuItem(ICON_FA_PROJECT_DIAGRAM "  Animation Graph")) {
+      onAssetCreated(createAnimationGraph());
     }
     ImGui::EndMenu();
   }

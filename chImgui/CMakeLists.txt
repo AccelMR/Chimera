@@ -19,7 +19,18 @@ add_library(chImGuizmo STATIC ${IMGUIZMO_DIR}/ImGuizmo.cpp ${IMGUIZMO_DIR}/ImGui
 target_include_directories(chImGuizmo PUBLIC ${IMGUIZMO_DIR})
 target_link_libraries(chImGuizmo PUBLIC chImgui)
 
-set(IMGUI_TARGETS chImgui chImguiSDL3 chImGuizmo)
+# Node graphs: the animation graph editor, later visual scripts.
+set(NODE_EDITOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Externals/imgui-node-editor)
+add_library(chImguiNodeEditor STATIC
+  ${NODE_EDITOR_DIR}/imgui_node_editor.cpp
+  ${NODE_EDITOR_DIR}/imgui_node_editor_api.cpp
+  ${NODE_EDITOR_DIR}/imgui_canvas.cpp
+  ${NODE_EDITOR_DIR}/crude_json.cpp
+  ${NODE_EDITOR_DIR}/imgui_node_editor.h)
+target_include_directories(chImguiNodeEditor PUBLIC ${NODE_EDITOR_DIR})
+target_link_libraries(chImguiNodeEditor PUBLIC chImgui)
+
+set(IMGUI_TARGETS chImgui chImguiSDL3 chImGuizmo chImguiNodeEditor)
 
 set_target_properties(${IMGUI_TARGETS} PROPERTIES
   SYSTEM ON

@@ -46,6 +46,10 @@ class CH_CORE_EXPORT AnimationGraphInstance
   void
   setModel(const SPtr<Model>& model);
 
+  /**
+   * A graph that does not pass AnimationGraph::validate is kept but never bound, so nothing
+   * reads its broken indices.
+   */
   void
   setGraph(const SPtr<AnimationGraph>& graph);
 
@@ -62,7 +66,7 @@ class CH_CORE_EXPORT AnimationGraphInstance
   }
 
   /**
-   * True when both a model and a graph are set, so there is a pose.
+   * True when both a model and a valid graph are set, so there is a pose.
    */
   NODISCARD FORCEINLINE bool
   isBound() const noexcept
@@ -247,6 +251,7 @@ class CH_CORE_EXPORT AnimationGraphInstance
 
   SPtr<Model> m_model;
   SPtr<AnimationGraph> m_graph;
+  bool m_bGraphValid = false;
   bool m_bBound = false;
 
   Vector<AnimationParameterValue> m_values;

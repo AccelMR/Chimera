@@ -652,7 +652,7 @@ AnimationGraph::serialize(DataStream& stream) const
 /*
  */
 SPtr<AnimationGraph>
-AnimationGraph::deserialize(DataStream& stream, String* outError)
+AnimationGraph::deserialize(DataStream& stream, String* outError, bool bValidate)
 {
   uint32 version = 0;
   GraphFileData data;
@@ -687,7 +687,7 @@ AnimationGraph::deserialize(DataStream& stream, String* outError)
       return nullptr;
     }
   }
-  return graph->validate(outError) ? graph : nullptr;
+  return !bValidate || graph->validate(outError) ? graph : nullptr;
 }
 
 /*

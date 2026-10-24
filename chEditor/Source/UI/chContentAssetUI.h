@@ -265,6 +265,12 @@ class ContentAssetUI
   createScript();
 
   /**
+   * Makes an empty animation graph in the current folder. Null on failure.
+   */
+  SPtr<IAsset>
+  createAnimationGraph();
+
+  /**
    * Refreshes the list and starts renaming an asset just made.
    */
   void

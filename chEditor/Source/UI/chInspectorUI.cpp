@@ -867,6 +867,10 @@ InspectorUI::renderAnimatorComponent(AnimatorComponent& animator)
       EditorScene::recordChange(gameObject, "Clear Animation Graph");
       animator.setGraph(nullptr);
     }
+    else if (animator.hasGraph() && !animator.getGraphInstance().isBound()) {
+      ImGui::TextDisabled("The graph does not run: the object has no model, or the graph "
+                          "has errors (see the Animation Graph Editor).");
+    }
     else if (animator.hasGraph()) {
       renderAnimationGraphState(animator.getGraphInstance());
     }

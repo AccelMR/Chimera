@@ -10,6 +10,7 @@
 #include "chEditorScene.h"
 
 #include "chAlgorithm.h"
+#include "chAnimationGraphEditorUI.h"
 #include "chAssetManager.h"
 #include "chAssetThumbnails.h"
 #include "chCamera.h"
@@ -1419,6 +1420,11 @@ EditorScene::setEjected(bool bEjected)
 bool
 EditorScene::requestQuit()
 {
+  // An animation graph with unsaved changes asks first, then quits through here again.
+  if (!AnimationGraphEditorUI::askToClose(
+          [] { CH_PARAMETER_UNUSED(EditorScene::requestQuit()); })) {
+    return false;
+  }
   EditorSceneState& state = getState();
   if (!state.bDirty) {
     state.bQuit = true;
@@ -1441,6 +1447,10 @@ EditorScene::shouldQuit()
 void
 EditorScene::requestOpenProject(const Path& projectFile)
 {
+  if (!AnimationGraphEditorUI::askToClose(
+          [projectFile] { EditorScene::requestOpenProject(projectFile); })) {
+    return;
+  }
   getState().actionProject = projectFile;
   requestAction(PendingAction::OpenProject, nullptr);
 }

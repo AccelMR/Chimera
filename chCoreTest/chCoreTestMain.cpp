@@ -3067,6 +3067,10 @@ TEST_CASE("chCore - Animation graph")
       String readReason;
       REQUIRE_FALSE(AnimationGraph::deserialize(stream, &readReason));
       REQUIRE(readReason == reason);
+
+      // The editor reads it anyway, so it can be fixed.
+      stream.seek(0);
+      REQUIRE(AnimationGraph::deserialize(stream, nullptr, false));
     }
   }
 }
@@ -3302,6 +3306,19 @@ struct SmallGraph
 TEST_CASE("chCore - Animation graph runtime")
 {
   AnimationGraphInstance instance;
+
+  SECTION("A graph with errors is kept but never bound")
+  {
+    TestGraphParts parts = createTestGraphParts();
+    parts.layers[0].transitions[0].target = 9;
+    const SPtr<AnimationGraph> broken = chMakeShared<AnimationGraph>(buildTestGraph(parts));
+    instance.setModel(createGraphTestModel());
+    instance.setGraph(broken);
+    REQUIRE(instance.getGraph() == broken);
+    REQUIRE_FALSE(instance.isBound());
+    REQUIRE_FALSE(instance.advance(0.1f));
+    REQUIRE(instance.getCurrentState(0) == AnimationGraphInstance::NOT_FOUND);
+  }
 
   SECTION("Nothing runs until a model and a graph are set")
   {
@@ -3577,6 +3594,19 @@ createTestGraphAsset(const SPtr<AnimationGraph>& graph)
   StringUtils::copyToBuffer(metadata.name, "AG_Test");
   return chMakeShared<AnimationGraphAsset>(metadata, graph);
 }
+
+#if USING(CH_EDITOR)
+/*
+ * Opens the editor data calls the asset manager makes when it saves and scans files.
+ */
+class LayoutTestGraphAsset : public AnimationGraphAsset
+{
+ public:
+  using AnimationGraphAsset::AnimationGraphAsset;
+  using AnimationGraphAsset::readEditorValues;
+  using AnimationGraphAsset::writeEditorValues;
+};
+#endif
 
 /*
  * Idle (x = 0) goes to Walk (x = 1) at once when Speed is above 0.5.
@@ -7428,3 +7458,45 @@ TEST_CASE("chCore - Script definitions")
   CHECK_FALSE(description);
 #endif // USING(CH_EDITOR)
 }
+
+#if USING(CH_EDITOR)
+TEST_CASE("chCore - Animation graph layout")
+{
+  AssetMetadata metadata;
+  metadata.uuid = chEngineSDK::UUID::createRandom();
+  metadata.assetType = AssetTypeTraits<AnimationGraphAsset>::getTypeId();
+  LayoutTestGraphAsset asset(metadata);
+
+  AnimationGraphLayout layout;
+  layout.layers.push_back({.statePositions = {Vector2(0.0f, 0.0f), Vector2(260.5f, -140.0f)},
+                           .anyStatePosition = Vector2(-260.0f, 12.25f)});
+  layout.layers.push_back({.anyStatePosition = Vector2(1.0f, 2.0f)});
+  asset.setLayout(layout);
+
+  ConfigFile file;
+  asset.writeEditorValues(file);
+  ConfigFile parsed;
+  parsed.parse(file.toText());
+  LayoutTestGraphAsset read(metadata);
+  read.readEditorValues(parsed);
+
+  const AnimationGraphLayout& readLayout = read.getLayout();
+  REQUIRE(readLayout.layers.size() == 2);
+  REQUIRE(readLayout.layers[0].statePositions.size() == 2);
+  REQUIRE(readLayout.layers[0].statePositions[1] == Vector2(260.5f, -140.0f));
+  REQUIRE(readLayout.layers[0].anyStatePosition == Vector2(-260.0f, 12.25f));
+  REQUIRE(readLayout.layers[1].statePositions.empty());
+  REQUIRE(readLayout.layers[1].anyStatePosition == Vector2(1.0f, 2.0f));
+
+  SECTION("Broken text keeps what it could read")
+  {
+    ConfigFile broken;
+    broken.parse("[GraphLayout]\nLayer0=1 2 3 x\nLayer0Any=nope\n");
+    LayoutTestGraphAsset partial(metadata);
+    partial.readEditorValues(broken);
+    REQUIRE(partial.getLayout().layers.size() == 1);
+    REQUIRE(partial.getLayout().layers[0].statePositions.size() == 1);
+    REQUIRE(partial.getLayout().layers[0].anyStatePosition == Vector2::ZERO);
+  }
+}
+#endif // USING(CH_EDITOR)

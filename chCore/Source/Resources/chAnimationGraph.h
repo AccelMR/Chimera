@@ -225,11 +225,12 @@ class CH_CORE_EXPORT AnimationGraph
   serialize(DataStream& stream) const;
 
   /**
-   * Null when the data is broken or does not pass validate (outError then says why when
-   * validate failed).
+   * Null when the data is broken or, with bValidate, does not pass validate (outError then
+   * says why when validate failed). Without bValidate an unfinished graph is read too, as
+   * the editor needs; nothing may run it before it passes validate.
    */
   NODISCARD static SPtr<AnimationGraph>
-  deserialize(DataStream& stream, String* outError = nullptr);
+  deserialize(DataStream& stream, String* outError = nullptr, bool bValidate = true);
 
   NODISCARD static const ANSICHAR*
   getParameterTypeName(AnimationParameterType type) noexcept;

@@ -61,6 +61,7 @@
 #include "chInspectorUI.h"
 #include "chAssetInspectorUI.h"
 #include "chAnimationPreviewUI.h"
+#include "chAnimationGraphEditorUI.h"
 #include "chAssetThumbnails.h"
 
 #if USING(CH_CODECS)
@@ -145,6 +146,8 @@ EditorApplication::destroyModules()
   m_updateInjection.disconnect();
   ScriptHotReload::shutDown();
 
+  // Its node editor lives in the ImGui context.
+  AnimationGraphEditorUI::shutDown();
   // The renderer gives its textures back to the ImGui context, and the SDL backend uses the
   // window, which the parent destroys.
   m_imguiRenderer.reset();
@@ -479,6 +482,21 @@ EditorApplication::bindEvents()
     }
 
     const bool bShift = event.hasShift();
+    // The graph editor keeps its own document and undo steps.
+    if (AnimationGraphEditorUI::hasFocus() && !ImGui::GetIO().WantTextInput) {
+      if (event.key == InputKey::S) {
+        AnimationGraphEditorUI::save();
+        return;
+      }
+      if (event.key == InputKey::Z && !bShift) {
+        AnimationGraphEditorUI::undo();
+        return;
+      }
+      if (event.key == InputKey::Y || (event.key == InputKey::Z && bShift)) {
+        AnimationGraphEditorUI::redo();
+        return;
+      }
+    }
     if (event.key == InputKey::S) {
       if (bShift) {
         EditorScene::requestSaveAs();
@@ -570,6 +588,7 @@ EditorApplication::renderUI()
   m_inspectorUI->renderInspectorUI();
   AssetInspectorUI::render();
   AnimationPreviewUI::render();
+  AnimationGraphEditorUI::render();
   ProjectSettingsUI::render();
   ProfilerUI::render(m_sceneRenderer->getLastFrameStats());
   ImportDialog::render();
@@ -622,6 +641,7 @@ EditorApplication::renderDockSpace()
     // Names hash only from ###, so the ids find the panels whatever their titles say.
     ImGui::DockBuilderDockWindow("###Viewport", center);
     ImGui::DockBuilderDockWindow("###ProjectSettings", center);
+    ImGui::DockBuilderDockWindow("###AnimationGraphEditor", center);
     ImGui::DockBuilderDockWindow("###SceneGraph", left);
     ImGui::DockBuilderDockWindow("###Inspector", right);
     ImGui::DockBuilderDockWindow("###AssetInspector", right);
