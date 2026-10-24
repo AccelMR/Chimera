@@ -11,6 +11,7 @@
 #include "chPrerequisitesCore.h"
 
 namespace chEngineSDK {
+class GameObject;
 class IAsset;
 class ICommandList;
 
@@ -22,7 +23,8 @@ class ICommandList;
  * Save; every change is an undo step of its own, kept while the graph stays open. A graph
  * with errors can be opened and saved, and says what is wrong, but does not play until
  * fixed. Under the canvas a model plays the graph, with test values for its parameters,
- * and the canvas marks the state it is in. The window stays open between sessions.
+ * and the canvas marks the state it is in; during Play it can follow an animator of the
+ * game instead. The window stays open between sessions.
  */
 class AnimationGraphEditorUI
 {
@@ -63,6 +65,13 @@ class AnimationGraphEditorUI
    * asks to save them, returns false, and calls then once the answer is Save or Don't Save
    * (never after Cancel).
    */
+  /**
+   * During Play, opens the graph the object's Animator plays and shows that animator on
+   * the canvas (its state, its live parameters) instead of the preview.
+   */
+  static void
+  debugAnimator(const SPtr<GameObject>& object);
+
   NODISCARD static bool
   askToClose(Function<void()> then);
 

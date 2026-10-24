@@ -19,6 +19,7 @@
 #include "chCameraComponent.h"
 #include "chEditorScene.h"
 #include "chAssetManager.h"
+#include "chAnimationGraphEditorUI.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
 #include "chITexture.h"
@@ -863,7 +864,20 @@ InspectorUI::renderAnimatorComponent(AnimatorComponent& animator)
     ImGui::EndDragDropTarget();
   }
   if (graphAsset) {
-    if (ImGui::SmallButton("Clear Graph")) {
+    const bool bClear = ImGui::SmallButton("Clear Graph");
+    ImGui::SameLine();
+    if (EditorScene::isPlaying()) {
+      // The Inspector shows the active selected object, which the editor holds shared.
+      const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
+      if (ImGui::SmallButton(ICON_FA_BUG "  Debug in Graph Editor") &&
+          selected.get() == &gameObject) {
+        AnimationGraphEditorUI::debugAnimator(selected);
+      }
+    }
+    else if (ImGui::SmallButton(ICON_FA_PROJECT_DIAGRAM "  Edit Graph")) {
+      AnimationGraphEditorUI::open(graphAsset);
+    }
+    if (bClear) {
       EditorScene::recordChange(gameObject, "Clear Animation Graph");
       animator.setGraph(nullptr);
     }

@@ -14,17 +14,22 @@
 #include "chAnimationGraphAsset.h"
 #include "chAnimationGraphInstance.h"
 #include "chAnimationPreviewUI.h"
+#include "chAnimatorComponent.h"
 #include "chAssetDragDrop.h"
 #include "chAssetManager.h"
 #include "chBlendSpace.h"
 #include "chConsoleVariable.h"
+#include "chEditorScene.h"
+#include "chEditorSelection.h"
 #include "chEngineConfig.h"
+#include "chGameObject.h"
 #include "chLogger.h"
 #include "chMath.h"
 #include "chModel.h"
 #include "chModelAsset.h"
 #include "chModelComponent.h"
 #include "chModelPreview.h"
+#include "chScene.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -222,6 +227,15 @@ struct GraphEditorState
   // The models the combo offers, found from the graph's clips.
   Vector<SPtr<IAsset>> previewModels;
   bool bPreviewModelPicked = false;
+
+  // During Play the canvas and the panel can follow an animator of the playing scene that
+  // uses this graph instead of the preview. Weak, so the copy of the scene can go at Stop.
+  WeakPtr<GameObject> debugObject;
+  // From the Inspector: debugged once its graph is the one open.
+  WeakPtr<GameObject> pendingDebug;
+  // The selection followed, so only a change of it picks another object.
+  const GameObject* lastSelection = nullptr;
+  Vector<WeakPtr<GameObject>> debugChoices;
 
   RemoveTarget removeTarget = RemoveTarget::None;
   uint32 removeIndex = kNone;
@@ -507,6 +521,196 @@ isDirty(const GraphEditorState& state)
   return state.asset && state.id != state.savedId;
 }
 
+NODISCARD bool
+usesGraph(const GraphEditorState& state, GameObject& object)
+{
+  const AnimatorComponent* animator = object.getComponent<AnimatorComponent>();
+  return animator && state.asset && animator->getGraphAsset() == state.asset;
+}
+
+/*
+ * The debugged animator while Play runs and it still uses this graph; null otherwise.
+ */
+NODISCARD AnimatorComponent*
+getDebugAnimator(GraphEditorState& state)
+{
+  if (!EditorScene::isPlaying()) {
+    state.debugObject.reset();
+    return nullptr;
+  }
+  const SPtr<GameObject> object = state.debugObject.lock();
+  if (!object || !usesGraph(state, *object)) {
+    return nullptr;
+  }
+  return object->getComponent<AnimatorComponent>();
+}
+
+/*
+ * What the canvas marks: the debugged animator's instance, else the preview's.
+ */
+NODISCARD const AnimationGraphInstance*
+getShownInstance(GraphEditorState& state)
+{
+  if (AnimatorComponent* animator = getDebugAnimator(state)) {
+    return &animator->getGraphInstance();
+  }
+  return g_cvarGraphPreview.get() ? &state.instance : nullptr;
+}
+
+/*
+ * The state of the shown layer the instance is in, found by name: a playing animator may
+ * run the saved graph while the canvas has unsaved changes, so indices can differ. kNone
+ * when the canvas has no state of that name.
+ */
+NODISCARD uint32
+findShownState(const GraphEditorState& state,
+               const AnimationGraphInstance& instance,
+               float& outTime)
+{
+  if (!instance.isBound() || state.layer >= state.graph.getLayers().size()) {
+    return kNone;
+  }
+  const AnimationGraph& running = *instance.getGraph();
+  const uint32 layer = running.findLayer(state.graph.getLayers()[state.layer].name);
+  if (layer == AnimationGraph::NOT_FOUND) {
+    return kNone;
+  }
+  const uint32 current = instance.getCurrentState(layer);
+  if (current >= running.getLayers()[layer].states.size()) {
+    return kNone;
+  }
+  outTime = instance.getStateTime(layer);
+  return state.graph.findState(state.layer, running.getLayers()[layer].states[current].name);
+}
+
+/*
+ * Outside Play nothing is debugged. During Play a request from the Inspector waits until
+ * its graph is the one open, and selecting an object that plays this graph debugs it.
+ */
+void
+updateDebugTarget(GraphEditorState& state)
+{
+  if (!EditorScene::isPlaying()) {
+    state.debugObject.reset();
+    state.pendingDebug.reset();
+    state.lastSelection = nullptr;
+    return;
+  }
+  if (const SPtr<GameObject> pending = state.pendingDebug.lock()) {
+    if (usesGraph(state, *pending)) {
+      state.debugObject = pending;
+      state.pendingDebug.reset();
+    }
+  }
+  const SPtr<GameObject>& selected = EditorSelection::getSelectedGameObject();
+  if (selected.get() != state.lastSelection) {
+    state.lastSelection = selected.get();
+    if (selected && usesGraph(state, *selected)) {
+      state.debugObject = selected;
+    }
+  }
+}
+
+/*
+ * Every object of the playing scene whose animator uses this graph, for the Debug combo.
+ */
+void
+collectDebugChoices(GraphEditorState& state)
+{
+  state.debugChoices.clear();
+  const SPtr<Scene>& scene = EditorScene::getScene();
+  if (!scene) {
+    return;
+  }
+  Vector<GameObject*> stack;
+  for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
+    if (usesGraph(state, *root)) {
+      state.debugChoices.push_back(root);
+    }
+    for (const SPtr<GameObject>& child : root->getChildren()) {
+      stack.push_back(child.get());
+    }
+    while (!stack.empty()) {
+      GameObject* object = stack.back();
+      stack.pop_back();
+      for (const SPtr<GameObject>& child : object->getChildren()) {
+        if (usesGraph(state, *child)) {
+          state.debugChoices.push_back(child);
+        }
+        stack.push_back(child.get());
+      }
+    }
+  }
+}
+
+/*
+ * A save during Play reaches the animators that play the graph: each starts the new graph
+ * from its default states, keeping the parameter values it had by name.
+ */
+void
+restartPlayingAnimators(GraphEditorState& state)
+{
+  if (!EditorScene::isPlaying()) {
+    return;
+  }
+  collectDebugChoices(state);
+  for (const WeakPtr<GameObject>& weak : state.debugChoices) {
+    const SPtr<GameObject> object = weak.lock();
+    AnimatorComponent* animator = object ? object->getComponent<AnimatorComponent>() : nullptr;
+    if (!animator) {
+      continue;
+    }
+    AnimationGraphInstance& oldInstance = animator->getGraphInstance();
+    Vector<Pair<String, AnimationParameterValue>> values;
+    if (oldInstance.isBound()) {
+      const Vector<AnimationParameter>& parameters = oldInstance.getGraph()->getParameters();
+      for (uint32 i = 0; i < parameters.size(); ++i) {
+        AnimationParameterValue value;
+        switch (parameters[i].type) {
+        case AnimationParameterType::Float:
+          value.floatValue = oldInstance.getFloat(i);
+          break;
+        case AnimationParameterType::Int:
+          value.intValue = oldInstance.getInt(i);
+          break;
+        case AnimationParameterType::Bool:
+          value.intValue = oldInstance.getBool(i) ? 1 : 0;
+          break;
+        case AnimationParameterType::Trigger:
+          // A trigger waiting when the graph changes is dropped, like at a restart.
+          continue;
+        }
+        values.emplace_back(parameters[i].name, value);
+      }
+    }
+    animator->setGraph(state.asset);
+    AnimationGraphInstance& instance = animator->getGraphInstance();
+    if (!instance.isBound()) {
+      continue;
+    }
+    const AnimationGraph& graph = *instance.getGraph();
+    for (const Pair<String, AnimationParameterValue>& value : values) {
+      const uint32 parameter = graph.findParameter(value.first);
+      if (parameter == AnimationGraph::NOT_FOUND) {
+        continue;
+      }
+      switch (graph.getParameters()[parameter].type) {
+      case AnimationParameterType::Float:
+        CH_PARAMETER_UNUSED(instance.setFloat(parameter, value.second.floatValue));
+        break;
+      case AnimationParameterType::Int:
+        CH_PARAMETER_UNUSED(instance.setInt(parameter, value.second.intValue));
+        break;
+      case AnimationParameterType::Bool:
+        CH_PARAMETER_UNUSED(instance.setBool(parameter, value.second.intValue != 0));
+        break;
+      case AnimationParameterType::Trigger:
+        break;
+      }
+    }
+  }
+}
+
 /*
  * Call before changing the graph or its layout: keeps what they were as one undo step.
  */
@@ -596,6 +800,7 @@ saveDocument(GraphEditorState& state)
   }
   state.savedId = state.id;
   state.bTitleDirty = true;
+  restartPlayingAnimators(state);
   return true;
 }
 
@@ -1031,6 +1236,37 @@ renderToolbar(GraphEditorState& state)
   }
   ImGui::SetItemTooltip("Shows the graph running on a model under the canvas");
 
+  if (EditorScene::isPlaying()) {
+    ImGui::SameLine();
+    const SPtr<GameObject> debugged =
+        getDebugAnimator(state) ? state.debugObject.lock() : nullptr;
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
+    if (ImGui::BeginCombo(ICON_FA_BUG "##Debug",
+                          debugged ? debugged->getName().c_str() : "Preview")) {
+      if (ImGui::IsWindowAppearing()) {
+        collectDebugChoices(state);
+      }
+      if (ImGui::Selectable("Preview", !debugged)) {
+        state.debugObject.reset();
+      }
+      for (const WeakPtr<GameObject>& weak : state.debugChoices) {
+        const SPtr<GameObject> object = weak.lock();
+        if (!object) {
+          continue;
+        }
+        ImGui::PushID(object.get());
+        if (ImGui::Selectable(object->getName().c_str(), object == debugged)) {
+          state.debugObject = object;
+        }
+        ImGui::PopID();
+      }
+      ImGui::EndCombo();
+    }
+    ImGui::SetItemTooltip("What the canvas follows during Play: the preview, or an object of "
+                          "the game whose Animator plays this graph. Selecting such an "
+                          "object picks it too.");
+  }
+
   ImGui::SameLine();
   if (state.bValid) {
     ImGui::TextColored(kValidColor, ICON_FA_CHECK_CIRCLE "  Ready to play");
@@ -1240,12 +1476,16 @@ applyCanvasStyle()
 }
 
 void
-renderStateNode(const GraphEditorState& state, const AnimationLayer& layer, uint32 index)
+renderStateNode(const GraphEditorState& state,
+                const AnimationLayer& layer,
+                uint32 index,
+                uint32 activeState,
+                float activeTime)
 {
   const AnimationState& animationState = layer.states[index];
-  // The state the preview is in has a green border and a bar with its time.
-  const bool bActive = g_cvarGraphPreview.get() && state.instance.isBound() &&
-                       state.instance.getCurrentState(state.layer) == index;
+  // The state the preview (or the debugged animator) is in has a green border and a bar
+  // with its time.
+  const bool bActive = index == activeState;
   if (bActive) {
     ed::PushStyleColor(ed::StyleColor_NodeBorder, kValidColor);
     ed::PushStyleVar(ed::StyleVar_NodeBorderWidth, kActiveNodeBorderWidth);
@@ -1282,9 +1522,8 @@ renderStateNode(const GraphEditorState& state, const AnimationLayer& layer, uint
     break;
   }
   if (bActive) {
-    const float time = state.instance.getStateTime(state.layer);
-    const float fraction =
-        animationState.bLooping ? time - Math::floor(time) : Math::min(time, 1.0f);
+    const float fraction = animationState.bLooping ? activeTime - Math::floor(activeTime)
+                                                   : Math::min(activeTime, 1.0f);
     ImGui::ProgressBar(fraction, ImVec2(ImGui::GetItemRectSize().x, kStateTimeBarHeight), "");
   }
   ImGui::EndGroup();
@@ -1533,9 +1772,14 @@ renderCanvas(GraphEditorState& state)
                                                       layout.statePositions[s].y));
       }
     }
+    float activeTime = 0.0f;
+    uint32 activeState = kNone;
+    if (const AnimationGraphInstance* shown = getShownInstance(state)) {
+      activeState = findShownState(state, *shown, activeTime);
+    }
     renderAnyStateNode();
     for (uint32 s = 0; s < stateCount; ++s) {
-      renderStateNode(state, layer, s);
+      renderStateNode(state, layer, s, activeState, activeTime);
     }
     for (uint32 t = 0; t < transitionCount; ++t) {
       const AnimationTransition& transition = layer.transitions[t];
@@ -1753,9 +1997,95 @@ advancePreview(GraphEditorState& state)
   }
 }
 
+/*
+ * The live values of the debugged animator, which the editor can change while the game
+ * runs (its scripts may set them back).
+ */
+void
+renderDebugPanel(GraphEditorState& state, AnimatorComponent& animator)
+{
+  const SPtr<GameObject> object = state.debugObject.lock();
+  ImGui::TextColored(kValidColor, ICON_FA_BUG "  %s", object ? object->getName().c_str() : "");
+  if (ImGui::Button("Stop Debugging")) {
+    state.debugObject.reset();
+    return;
+  }
+  ImGui::SetItemTooltip("Back to the preview");
+
+  AnimationGraphInstance& instance = animator.getGraphInstance();
+  if (!instance.isBound()) {
+    ImGui::TextDisabled("Its graph is not running.");
+    return;
+  }
+  const AnimationGraph& graph = *instance.getGraph();
+  if (isDirty(state)) {
+    ImGui::TextDisabled("It runs the saved graph; Save to send it the changes.");
+  }
+
+  ImGui::SeparatorText("Parameters (live)");
+  const Vector<AnimationParameter>& parameters = graph.getParameters();
+  if (!parameters.empty() && ImGui::BeginTable("##LiveValues", 2)) {
+    for (uint32 i = 0; i < parameters.size(); ++i) {
+      ImGui::PushID(static_cast<int32>(i));
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted(parameters[i].name.c_str());
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-1.0f);
+      switch (parameters[i].type) {
+      case AnimationParameterType::Float: {
+        float value = instance.getFloat(i);
+        if (ImGui::DragFloat("##Value", &value, 0.01f)) {
+          CH_PARAMETER_UNUSED(instance.setFloat(i, value));
+        }
+        break;
+      }
+      case AnimationParameterType::Int: {
+        int32 value = instance.getInt(i);
+        if (ImGui::DragInt("##Value", &value)) {
+          CH_PARAMETER_UNUSED(instance.setInt(i, value));
+        }
+        break;
+      }
+      case AnimationParameterType::Bool: {
+        bool bValue = instance.getBool(i);
+        if (ImGui::Checkbox("##Value", &bValue)) {
+          CH_PARAMETER_UNUSED(instance.setBool(i, bValue));
+        }
+        break;
+      }
+      case AnimationParameterType::Trigger:
+        if (ImGui::Button("Fire")) {
+          CH_PARAMETER_UNUSED(instance.setTrigger(i));
+        }
+        if (instance.getBool(i)) {
+          ImGui::SameLine();
+          ImGui::TextColored(kValidColor, "set");
+        }
+        break;
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndTable();
+  }
+
+  ImGui::SeparatorText("Running");
+  const Vector<AnimationLayer>& layers = graph.getLayers();
+  for (uint32 l = 0; l < layers.size(); ++l) {
+    ImGui::Text("%s: %s%s", layers[l].name.c_str(),
+                getStateName(layers[l], instance.getCurrentState(l)),
+                instance.isInTransition(l) ? " (fading in)" : "");
+  }
+}
+
 void
 renderPreviewPanel(GraphEditorState& state)
 {
+  if (AnimatorComponent* animator = getDebugAnimator(state)) {
+    renderDebugPanel(state, *animator);
+    return;
+  }
   SPtr<IAsset> picked;
   bool bPicked = false;
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() * 2.0f -
@@ -1903,11 +2233,15 @@ renderPreview(GraphEditorState& state, float height)
     }
     ImGui::EndDragDropTarget();
   }
-  if (state.preview.getModel() && !state.instance.isBound()) {
-    const ImVec2 min = ImGui::GetItemRectMin();
-    ImGui::GetWindowDrawList()->AddText(
-        ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
-        ImGui::GetColorU32(kErrorColor), "Rest pose: the graph has errors.");
+  const ImVec2 noteAt(ImGui::GetItemRectMin().x + style.FramePadding.x,
+                      ImGui::GetItemRectMin().y + style.FramePadding.y);
+  if (getDebugAnimator(state)) {
+    ImGui::GetWindowDrawList()->AddText(noteAt, ImGui::GetColorU32(kValidColor),
+                                        "Paused while an object of the game is debugged.");
+  }
+  else if (state.preview.getModel() && !state.instance.isBound()) {
+    ImGui::GetWindowDrawList()->AddText(noteAt, ImGui::GetColorU32(kErrorColor),
+                                        "Rest pose: the graph has errors.");
   }
 
   ImGui::SameLine();
@@ -2641,6 +2975,7 @@ AnimationGraphEditorUI::render()
     return;
   }
 
+  updateDebugTarget(state);
   if (state.validatedId != state.id) {
     state.validatedId = state.id;
     state.error.clear();
@@ -2681,7 +3016,10 @@ AnimationGraphEditorUI::render()
           // Before the canvas, which shows the state the preview is in.
           pickPreviewModel(state);
           syncPreview(state);
-          advancePreview(state);
+          // The preview waits while the canvas shows an animator of the game.
+          if (!getDebugAnimator(state)) {
+            advancePreview(state);
+          }
         }
         const float available = ImGui::GetContentRegionAvail().y;
         const float maxPreviewHeight = available - kMinCanvasHeight - kSplitterThickness;
@@ -2792,6 +3130,19 @@ AnimationGraphEditorUI::close(const IAsset& asset)
   if (state.preview.getModel().get() == &asset) {
     setPreviewModel(state, nullptr);
   }
+}
+
+/*
+ */
+void
+AnimationGraphEditorUI::debugAnimator(const SPtr<GameObject>& object)
+{
+  AnimatorComponent* animator = object ? object->getComponent<AnimatorComponent>() : nullptr;
+  if (!animator || !animator->getGraphAsset()) {
+    return;
+  }
+  getState().pendingDebug = object;
+  open(animator->getGraphAsset());
 }
 
 /*
