@@ -101,6 +101,9 @@ class Radian
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  private:
   float m_radian;
 };
@@ -181,6 +184,9 @@ class Degree
 
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
+
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
 
  private:
   float m_degree;

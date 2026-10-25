@@ -118,6 +118,9 @@ class Vector3
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   static const Vector3 ZERO;
   static const Vector3 UNIT;

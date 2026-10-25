@@ -58,6 +58,9 @@ class Frustum
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   Plane planes[static_cast<SIZE_T>(FrustumSide::Count)];
 };

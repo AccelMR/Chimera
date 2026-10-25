@@ -108,6 +108,9 @@ class Vector2
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   static const Vector2 ZERO;
   static const Vector2 UNIT;

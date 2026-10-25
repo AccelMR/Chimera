@@ -113,10 +113,23 @@ GameObject::getHierarchyWorldBounds(AABox& outBounds) const
 
 /*
  */
+void
+GameObject::formatTo(String& output, const FormatSpec& spec) const
+{
+  CH_PARAMETER_UNUSED(spec);
+  output += "GameObject(";
+  output += m_name;
+  output += ", ";
+  output += m_uuid.toString();
+  output += ')';
+}
+
+/*
+ */
 String
 GameObject::toString() const
 {
-  return StringUtils::format("GameObject({}, {})", m_name, m_uuid);
+  return StringUtils::toString(*this);
 }
 
 /*

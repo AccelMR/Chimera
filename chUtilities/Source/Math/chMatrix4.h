@@ -159,6 +159,9 @@ class Matrix4
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   static const Matrix4 ZERO;
   static const Matrix4 IDENTITY;

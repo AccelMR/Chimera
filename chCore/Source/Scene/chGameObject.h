@@ -120,6 +120,9 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD String
   toString() const;
 
+  void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  private:
   friend class Scene;
   friend class GameObjectSerializer;

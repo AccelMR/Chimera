@@ -1944,7 +1944,7 @@ TEST_CASE("chUtilities - Math toString") {
           "Ray(origin (0.000, 0.000, 0.000), direction (1.000, 0.000, 0.000))");
   REQUIRE(OrientedBox(Vector3::ZERO, Vector3::UNIT, Quaternion::IDENTITY).toString() ==
           "OrientedBox(center (0.000, 0.000, 0.000), extent (1.000, 1.000, 1.000), "
-          "rotation (pitch 0.00, yaw 0.00, roll 0.00))");
+          "rotation Rotator(pitch 0.00, yaw 0.00, roll 0.00))");
   REQUIRE(Capsule(Vector3::ZERO, Vector3::UP, 0.5f).toString() ==
           "Capsule(start (0.000, 0.000, 0.000), end (0.000, 0.000, 1.000), radius 0.500)");
 
@@ -1953,8 +1953,29 @@ TEST_CASE("chUtilities - Math toString") {
   REQUIRE(frustumText.starts_with("Frustum(left ("));
   REQUIRE(frustumText.find("near (0.000, 0.000, 1.000, ") != String::npos);
 
-  // Logs take them as arguments through toString().
+  // Logs write them in place through formatTo, and a float spec reaches every number.
   REQUIRE(StringUtils::format("at {}", Vector3::UP) == "at Vector3(0.000, 0.000, 1.000)");
+  REQUIRE(StringUtils::format("{:.1f}", Vector3(1.26f, -2.0f, 3.0f)) ==
+          "Vector3(1.3, -2.0, 3.0)");
+  REQUIRE(StringUtils::format("{:.0f}", Rotator(10.0f, 20.0f, 30.0f)) ==
+          "Rotator(pitch 10, yaw 20, roll 30)");
+  REQUIRE(StringUtils::format("{:.2e}", Vector2(1000.0f, 0.5f)) ==
+          "Vector2(1.00e+03, 5.00e-01)");
+  REQUIRE(StringUtils::format("{:.1f}", Degree(45.0f)) == "45.0 deg");
+  REQUIRE(StringUtils::format("{:.1f}", Vector2I(1, 2)) == "Vector2I(1, 2)");
+  REQUIRE(StringUtils::format("{:.1f}", OrientedBox(Vector3::ZERO, Vector3::UNIT,
+                                                    Quaternion::IDENTITY)) ==
+          "OrientedBox(center (0.0, 0.0, 0.0), extent (1.0, 1.0, 1.0), "
+          "rotation Rotator(pitch 0.0, yaw 0.0, roll 0.0))");
+
+  // The width covers the whole text, not each number.
+  REQUIRE(StringUtils::format("[{:>24}]", Vector2(1.0f, 2.0f)) ==
+          "[   Vector2(1.000, 2.000)]");
+  REQUIRE(StringUtils::format("[{:*<24.1f}]|{}", Vector2(1.0f, 2.0f), 7) ==
+          "[Vector2(1.0, 2.0)*******]|7");
+  REQUIRE(StringUtils::format("[{:^20.0f}]", Vector2(1.0f, 2.0f)) == "[   Vector2(1, 2)    ]");
+
+  REQUIRE(StringUtils::toString(Vector3::UNIT) == "Vector3(1.000, 1.000, 1.000)");
 }
 
 TEST_CASE("chUtilities - ToChars") {

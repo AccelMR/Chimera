@@ -42,6 +42,7 @@ class DynamicLibrary;
 
 class StringID;
 class Path;
+struct FormatSpec;
 
 class Logger;
 

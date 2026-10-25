@@ -25,6 +25,7 @@ constexpr StringView kWhitespace = " \n\r\t\f\v";
 // FormatSpec::MAX_PRECISION decimals; a binary uint64 needs 64 digits.
 constexpr SIZE_T kNumberBufferSize = 512;
 constexpr SIZE_T kNumberSizeGuess = 16;
+constexpr SIZE_T kCustomSizeGuess = 48;
 
 NODISCARD constexpr ANSICHAR
 toLowerASCII(ANSICHAR c) noexcept
@@ -316,6 +317,46 @@ StringUtils::floatToChars(ANSICHAR* buffer, SIZE_T size, double value,
 
 /*
  */
+void
+StringUtils::appendFloat(String& output, const float value, const FormatSpec& spec)
+{
+  ANSICHAR numberBuffer[kNumberBufferSize];
+  appendPadded(output, writeFloat(numberBuffer, kNumberBufferSize, value, true, spec), spec,
+               true);
+}
+
+/*
+ */
+void
+StringUtils::appendInteger(String& output, const int64 value, const FormatSpec& spec)
+{
+  ANSICHAR numberBuffer[kNumberBufferSize];
+  appendPadded(output, writeInteger(numberBuffer, kNumberBufferSize, value, spec.type), spec,
+               true);
+}
+
+/*
+ */
+void
+StringUtils::appendCustom(String& output, const FormatArg& arg, const FormatSpec& spec)
+{
+  const SIZE_T start = output.size();
+  arg.formatTo(output, arg.object, spec);
+
+  // The width covers the whole text, so the padding is added around what it wrote.
+  const SIZE_T written = output.size() - start;
+  if (spec.width <= written) {
+    return;
+  }
+  const SIZE_T padding = spec.width - written;
+  const ANSICHAR align = spec.align != '\0' ? spec.align : '<';
+  const SIZE_T before = align == '>' ? padding : (align == '^' ? padding / 2 : 0);
+  output.insert(start, before, spec.fill);
+  output.append(padding - before, spec.fill);
+}
+
+/*
+ */
 String
 StringUtils::toLower(const String& str)
 {
@@ -396,7 +437,17 @@ StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
 {
   SIZE_T size = format.size();
   for (SIZE_T i = 0; i < count; ++i) {
-    size += args[i].type == FormatArgType::Text ? args[i].text.size() : kNumberSizeGuess;
+    switch (args[i].type) {
+    case FormatArgType::Text:
+      size += args[i].text.size();
+      break;
+    case FormatArgType::Custom:
+      size += kCustomSizeGuess;
+      break;
+    default:
+      size += kNumberSizeGuess;
+      break;
+    }
   }
 
   String result;
@@ -461,6 +512,12 @@ StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
     }
 
     const FormatArg& arg = args[index];
+    if (arg.type == FormatArgType::Custom) {
+      appendCustom(result, arg, spec);
+      i = close + 1;
+      continue;
+    }
+
     StringView text;
     bool isNumber = true;
     switch (arg.type) {
@@ -486,6 +543,8 @@ StringUtils::formatArgs(StringView format, const FormatArg* args, SIZE_T count)
     case FormatArgType::Float:
       text = writeFloat(numberBuffer, kNumberBufferSize, arg.floatValue, arg.bSinglePrecision,
                         spec);
+      break;
+    case FormatArgType::Custom:
       break;
     }
     appendPadded(result, text, spec, isNumber);

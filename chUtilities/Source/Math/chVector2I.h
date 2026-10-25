@@ -62,6 +62,9 @@ class Vector2I
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   static const Vector2I ZERO;
   static const Vector2I UNIT;

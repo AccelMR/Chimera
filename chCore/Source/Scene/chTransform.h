@@ -64,6 +64,9 @@ class CH_CORE_EXPORT Transform
   NODISCARD String
   toString() const;
 
+  void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  private:
   friend class GameObject;
 

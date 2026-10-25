@@ -83,6 +83,9 @@ class AABox
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   Vector3 minPoint;
   Vector3 maxPoint;

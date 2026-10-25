@@ -21,7 +21,9 @@ namespace chEngineSDK {
 
 /**
  * How StringUtils::format writes an argument. Decided at compile time from the argument
- * type, so FormatString can check that a spec fits its argument.
+ * type, so FormatString can check that a spec fits its argument. Custom is a type with a
+ * formatTo(String& output, const FormatSpec& spec) const method, which writes itself into
+ * the result without a String of its own.
  */
 enum class FormatArgType : uint8
 {
@@ -30,7 +32,8 @@ enum class FormatArgType : uint8
   Bool,
   Signed,
   Unsigned,
-  Float
+  Float,
+  Custom
 };
 
 template<typename T>
@@ -57,6 +60,11 @@ formatArgTypeOf()
     return std::is_signed_v<std::underlying_type_t<Type>> ? FormatArgType::Signed
                                                           : FormatArgType::Unsigned;
   }
+  else if constexpr (requires(const Type& value, String& output, const FormatSpec& spec) {
+                       value.formatTo(output, spec);
+                     }) {
+    return FormatArgType::Custom;
+  }
   else {
     return FormatArgType::Text;
   }
@@ -69,6 +77,9 @@ formatArgTypeOf()
  *   0          pads numbers with zeros after the sign.
  *   precision  digits after the point (f, e) or significant digits (g, none). Floats only.
  *   type       d x X b o for integers, f e g for floats.
+ *
+ * A Custom argument (see FormatArgType) takes the float specs: width, fill and align apply to
+ * its whole text, precision and type to each number in it.
  */
 struct FormatSpec
 {
@@ -90,6 +101,13 @@ struct FormatSpec
 
   NODISCARD constexpr bool
   fits(FormatArgType argType) const noexcept;
+
+  /**
+   * The spec for each number a formatTo writes: without width, and fixed with
+   * defaultPrecision decimals when this spec names neither precision nor type.
+   */
+  NODISCARD constexpr FormatSpec
+  getComponentSpec(int32 defaultPrecision) const noexcept;
 };
 
 /**
@@ -217,8 +235,9 @@ class CH_UTILITY_EXPORT StringUtils
 
   /**
    * Replaces the placeholders of the format with the arguments. See FormatString.
-   * Arguments can be strings, numbers, enums, anything convertible to String, or any
-   * type with a toString() method.
+   * Arguments can be strings, numbers, enums, anything convertible to String, any type with
+   * a formatTo(output, spec) method (written in place, takes float specs) or with a
+   * toString() method.
    */
   template<typename... Args>
     requires(sizeof...(Args) > 0)
@@ -287,6 +306,16 @@ class CH_UTILITY_EXPORT StringUtils
     }
   }
 
+  /**
+   * Appends a number written with spec, as format would write it. Meant for formatTo
+   * methods, which call it once per number.
+   */
+  static void
+  appendFloat(String& output, float value, const FormatSpec& spec);
+
+  static void
+  appendInteger(String& output, int64 value, const FormatSpec& spec);
+
   NODISCARD static String
   lTrim(const String& str);
 
@@ -326,6 +355,9 @@ class CH_UTILITY_EXPORT StringUtils
       bool boolValue;
     };
     StringView text;
+    // A Custom argument: the object and a function that calls its formatTo.
+    const void* object = nullptr;
+    void (*formatTo)(String& output, const void* object, const FormatSpec& spec) = nullptr;
     // A float written without a spec gets the shortest text of the float, not of the double.
     bool bSinglePrecision = false;
   };
@@ -336,6 +368,9 @@ class CH_UTILITY_EXPORT StringUtils
 
   static String
   formatArgs(StringView format, const FormatArg* args, SIZE_T count);
+
+  static void
+  appendCustom(String& output, const FormatArg& arg, const FormatSpec& spec);
 
   NODISCARD static StringView
   signedToChars(ANSICHAR* buffer, SIZE_T size, int64 value) noexcept;
@@ -426,8 +461,9 @@ FormatSpec::fits(FormatArgType argType) const noexcept
   const bool isInteger = argType == FormatArgType::Signed ||
                          argType == FormatArgType::Unsigned;
   const bool isFloat = argType == FormatArgType::Float;
+  const bool takesFloatSpec = isFloat || argType == FormatArgType::Custom;
 
-  if (precision >= 0 && !isFloat) {
+  if (precision >= 0 && !takesFloatSpec) {
     return false;
   }
   if (zeroPad && !isInteger && !isFloat) {
@@ -444,8 +480,22 @@ FormatSpec::fits(FormatArgType argType) const noexcept
   case 'o':
     return isInteger;
   default:
-    return isFloat;
+    return takesFloatSpec;
   }
+}
+
+/*
+ */
+constexpr FormatSpec
+FormatSpec::getComponentSpec(const int32 defaultPrecision) const noexcept
+{
+  FormatSpec component = *this;
+  component.width = 0;
+  if (component.precision < 0 && component.type == '\0') {
+    component.precision = defaultPrecision;
+    component.type = 'f';
+  }
+  return component;
 }
 
 /*
@@ -548,6 +598,11 @@ StringUtils::toString(T&& value)
   else if constexpr (std::is_convertible_v<T, String>) {
     return String(std::forward<T>(value));
   }
+  else if constexpr (formatArgTypeOf<T>() == FormatArgType::Custom) {
+    String output;
+    value.formatTo(output, FormatSpec());
+    return output;
+  }
   else if constexpr (requires { { value.toString() } -> std::convertible_to<String>; }) {
     return value.toString();
   }
@@ -556,7 +611,7 @@ StringUtils::toString(T&& value)
     // branch is used.
     static_assert(sizeof(Type*) == 0,
                   "StringUtils::toString: the type is not a string, number or enum, is not "
-                  "convertible to String and has no toString() method.");
+                  "convertible to String and has no formatTo() or toString() method.");
   }
 }
 
@@ -586,6 +641,13 @@ StringUtils::makeFormatArg(T&& value, String*& nextString)
   else if constexpr (type == FormatArgType::Float) {
     arg.floatValue = static_cast<double>(value);
     arg.bSinglePrecision = std::is_same_v<Type, float>;
+  }
+  else if constexpr (type == FormatArgType::Custom) {
+    // The arguments live until format returns, so pointing at them is enough.
+    arg.object = &value;
+    arg.formatTo = [](String& output, const void* object, const FormatSpec& spec) {
+      static_cast<const Type*>(object)->formatTo(output, spec);
+    };
   }
   else if constexpr (std::is_array_v<std::remove_reference_t<T>> &&
                      std::is_convertible_v<Type, StringView>) {

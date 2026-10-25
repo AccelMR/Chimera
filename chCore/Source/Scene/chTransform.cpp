@@ -14,6 +14,21 @@
 #include "chStringUtils.h"
 
 namespace chEngineSDK {
+namespace {
+
+constexpr int32 kDecimals = 3;
+
+void
+appendVector(String& output, const Vector3& vector, const FormatSpec& spec)
+{
+  StringUtils::appendFloat(output, vector.x, spec);
+  output += ", ";
+  StringUtils::appendFloat(output, vector.y, spec);
+  output += ", ";
+  StringUtils::appendFloat(output, vector.z, spec);
+}
+
+} // namespace
 
 /*
  */
@@ -60,15 +75,28 @@ Transform::getWorldPosition() const
 
 /*
  */
+void
+Transform::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDecimals);
+  output += "Transform(position (";
+  appendVector(output, m_localPosition, number);
+  // Angles read better than the quaternion when debugging.
+  output += "), rotation ";
+  FormatSpec angleSpec = spec;
+  angleSpec.width = 0;
+  m_localRotation.toRotator().formatTo(output, angleSpec);
+  output += ", scale (";
+  appendVector(output, m_localScale, number);
+  output += "))";
+}
+
+/*
+ */
 String
 Transform::toString() const
 {
-  // Angles read better than the quaternion when debugging.
-  return StringUtils::format("Transform(position ({:.3f}, {:.3f}, {:.3f}), rotation {}, "
-                             "scale ({:.3f}, {:.3f}, {:.3f}))",
-                             m_localPosition.x, m_localPosition.y, m_localPosition.z,
-                             m_localRotation.toRotator(), m_localScale.x, m_localScale.y,
-                             m_localScale.z);
+  return StringUtils::toString(*this);
 }
 
 /*

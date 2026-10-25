@@ -81,6 +81,9 @@ class LinearColor
   NODISCARD CH_UTILITY_EXPORT String
   toString() const;
 
+  CH_UTILITY_EXPORT void
+  formatTo(String& output, const FormatSpec& spec) const;
+
  public:
   // TRANSPARENT is a macro of <wingdi.h>.
   static const LinearColor TRANSPARENT_BLACK;

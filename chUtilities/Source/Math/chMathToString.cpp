@@ -3,7 +3,7 @@
  * @file chMathToString.cpp
  * @author AccelMR
  * @date 2026/10/25
- * @brief toString of the math classes, used by logs and script tostring.
+ * @brief formatTo and toString of the math classes, used by logs and script tostring.
  */
 /************************************************************************/
 
@@ -36,6 +36,23 @@
 namespace chEngineSDK {
 namespace {
 
+constexpr int32 kDefaultDecimals = 3;
+constexpr int32 kQuaternionDecimals = 4;
+constexpr int32 kDegreeDecimals = 2;
+
+void
+appendList(String& output, const FormatSpec& spec, std::initializer_list<float> values)
+{
+  bool bFirst = true;
+  for (const float value : values) {
+    if (!bFirst) {
+      output += ", ";
+    }
+    StringUtils::appendFloat(output, value, spec);
+    bFirst = false;
+  }
+}
+
 // Angles computed from a quaternion are often exactly -0, which would print as -0.00.
 float
 withoutNegativeZero(const Degree angle)
@@ -47,10 +64,30 @@ withoutNegativeZero(const Degree angle)
 
 /*
  */
+void
+Vector2::formatTo(String& output, const FormatSpec& spec) const
+{
+  output += "Vector2(";
+  appendList(output, spec.getComponentSpec(kDefaultDecimals), {x, y});
+  output += ')';
+}
+
+/*
+ */
 String
 Vector2::toString() const
 {
-  return StringUtils::format("Vector2({:.3f}, {:.3f})", x, y);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Vector3::formatTo(String& output, const FormatSpec& spec) const
+{
+  output += "Vector3(";
+  appendList(output, spec.getComponentSpec(kDefaultDecimals), {x, y, z});
+  output += ')';
 }
 
 /*
@@ -58,7 +95,17 @@ Vector2::toString() const
 String
 Vector3::toString() const
 {
-  return StringUtils::format("Vector3({:.3f}, {:.3f}, {:.3f})", x, y, z);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Vector4::formatTo(String& output, const FormatSpec& spec) const
+{
+  output += "Vector4(";
+  appendList(output, spec.getComponentSpec(kDefaultDecimals), {x, y, z, w});
+  output += ')';
 }
 
 /*
@@ -66,7 +113,22 @@ Vector3::toString() const
 String
 Vector4::toString() const
 {
-  return StringUtils::format("Vector4({:.3f}, {:.3f}, {:.3f}, {:.3f})", x, y, z, w);
+  return StringUtils::toString(*this);
+}
+
+/*
+ * Integer vectors ignore the precision of the spec.
+ */
+void
+Vector2I::formatTo(String& output, const FormatSpec& spec) const
+{
+  FormatSpec number = spec;
+  number.width = 0;
+  output += "Vector2I(";
+  StringUtils::appendInteger(output, x, number);
+  output += ", ";
+  StringUtils::appendInteger(output, y, number);
+  output += ')';
 }
 
 /*
@@ -74,7 +136,23 @@ Vector4::toString() const
 String
 Vector2I::toString() const
 {
-  return StringUtils::format("Vector2I({}, {})", x, y);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Vector3I::formatTo(String& output, const FormatSpec& spec) const
+{
+  FormatSpec number = spec;
+  number.width = 0;
+  output += "Vector3I(";
+  StringUtils::appendInteger(output, x, number);
+  output += ", ";
+  StringUtils::appendInteger(output, y, number);
+  output += ", ";
+  StringUtils::appendInteger(output, z, number);
+  output += ')';
 }
 
 /*
@@ -82,7 +160,16 @@ Vector2I::toString() const
 String
 Vector3I::toString() const
 {
-  return StringUtils::format("Vector3I({}, {}, {})", x, y, z);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Radian::formatTo(String& output, const FormatSpec& spec) const
+{
+  StringUtils::appendFloat(output, m_radian, spec.getComponentSpec(kQuaternionDecimals));
+  output += " rad";
 }
 
 /*
@@ -90,7 +177,16 @@ Vector3I::toString() const
 String
 Radian::toString() const
 {
-  return StringUtils::format("{:.4f} rad", m_radian);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Degree::formatTo(String& output, const FormatSpec& spec) const
+{
+  StringUtils::appendFloat(output, m_degree, spec.getComponentSpec(kDegreeDecimals));
+  output += " deg";
 }
 
 /*
@@ -98,7 +194,17 @@ Radian::toString() const
 String
 Degree::toString() const
 {
-  return StringUtils::format("{:.2f} deg", m_degree);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Quaternion::formatTo(String& output, const FormatSpec& spec) const
+{
+  output += "Quaternion(";
+  appendList(output, spec.getComponentSpec(kQuaternionDecimals), {x, y, z, w});
+  output += ')';
 }
 
 /*
@@ -106,7 +212,22 @@ Degree::toString() const
 String
 Quaternion::toString() const
 {
-  return StringUtils::format("Quaternion({:.4f}, {:.4f}, {:.4f}, {:.4f})", x, y, z, w);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Rotator::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDegreeDecimals);
+  output += "Rotator(pitch ";
+  StringUtils::appendFloat(output, withoutNegativeZero(pitch), number);
+  output += ", yaw ";
+  StringUtils::appendFloat(output, withoutNegativeZero(yaw), number);
+  output += ", roll ";
+  StringUtils::appendFloat(output, withoutNegativeZero(roll), number);
+  output += ')';
 }
 
 /*
@@ -114,9 +235,23 @@ Quaternion::toString() const
 String
 Rotator::toString() const
 {
-  return StringUtils::format("Rotator(pitch {:.2f}, yaw {:.2f}, roll {:.2f})",
-                             withoutNegativeZero(pitch), withoutNegativeZero(yaw),
-                             withoutNegativeZero(roll));
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Matrix4::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Matrix4(";
+  for (int32 row = 0; row < 4; ++row) {
+    output += row == 0 ? "[" : ", [";
+    const float* values = m_data[row];
+    appendList(output, number, {values[0], values[1], values[2], values[3]});
+    output += ']';
+  }
+  output += ')';
 }
 
 /*
@@ -124,14 +259,17 @@ Rotator::toString() const
 String
 Matrix4::toString() const
 {
-  return StringUtils::format("Matrix4([{:.3f}, {:.3f}, {:.3f}, {:.3f}], "
-                             "[{:.3f}, {:.3f}, {:.3f}, {:.3f}], "
-                             "[{:.3f}, {:.3f}, {:.3f}, {:.3f}], "
-                             "[{:.3f}, {:.3f}, {:.3f}, {:.3f}])",
-                             m_data[0][0], m_data[0][1], m_data[0][2], m_data[0][3],
-                             m_data[1][0], m_data[1][1], m_data[1][2], m_data[1][3],
-                             m_data[2][0], m_data[2][1], m_data[2][2], m_data[2][3],
-                             m_data[3][0], m_data[3][1], m_data[3][2], m_data[3][3]);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+LinearColor::formatTo(String& output, const FormatSpec& spec) const
+{
+  output += "LinearColor(";
+  appendList(output, spec.getComponentSpec(kDefaultDecimals), {r, g, b, a});
+  output += ')';
 }
 
 /*
@@ -139,7 +277,20 @@ Matrix4::toString() const
 String
 LinearColor::toString() const
 {
-  return StringUtils::format("LinearColor({:.3f}, {:.3f}, {:.3f}, {:.3f})", r, g, b, a);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Plane::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Plane(normal (";
+  appendList(output, number, {normal.x, normal.y, normal.z});
+  output += "), w ";
+  StringUtils::appendFloat(output, w, number);
+  output += ')';
 }
 
 /*
@@ -147,8 +298,20 @@ LinearColor::toString() const
 String
 Plane::toString() const
 {
-  return StringUtils::format("Plane(normal ({:.3f}, {:.3f}, {:.3f}), w {:.3f})", normal.x,
-                             normal.y, normal.z, w);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+AABox::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "AABox(min (";
+  appendList(output, number, {minPoint.x, minPoint.y, minPoint.z});
+  output += "), max (";
+  appendList(output, number, {maxPoint.x, maxPoint.y, maxPoint.z});
+  output += "))";
 }
 
 /*
@@ -156,10 +319,20 @@ Plane::toString() const
 String
 AABox::toString() const
 {
-  return StringUtils::format("AABox(min ({:.3f}, {:.3f}, {:.3f}), "
-                             "max ({:.3f}, {:.3f}, {:.3f}))",
-                             minPoint.x, minPoint.y, minPoint.z, maxPoint.x, maxPoint.y,
-                             maxPoint.z);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Sphere::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Sphere(center (";
+  appendList(output, number, {center.x, center.y, center.z});
+  output += "), radius ";
+  StringUtils::appendFloat(output, radius, number);
+  output += ')';
 }
 
 /*
@@ -167,8 +340,22 @@ AABox::toString() const
 String
 Sphere::toString() const
 {
-  return StringUtils::format("Sphere(center ({:.3f}, {:.3f}, {:.3f}), radius {:.3f})",
-                             center.x, center.y, center.z, radius);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+SphereBoxBounds::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "SphereBoxBounds(center (";
+  appendList(output, number, {center.x, center.y, center.z});
+  output += "), extent (";
+  appendList(output, number, {boxExtent.x, boxExtent.y, boxExtent.z});
+  output += "), radius ";
+  StringUtils::appendFloat(output, sphereRadius, number);
+  output += ')';
 }
 
 /*
@@ -176,10 +363,20 @@ Sphere::toString() const
 String
 SphereBoxBounds::toString() const
 {
-  return StringUtils::format("SphereBoxBounds(center ({:.3f}, {:.3f}, {:.3f}), "
-                             "extent ({:.3f}, {:.3f}, {:.3f}), radius {:.3f})",
-                             center.x, center.y, center.z, boxExtent.x, boxExtent.y,
-                             boxExtent.z, sphereRadius);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Box2D::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Box2D(min (";
+  appendList(output, number, {minPoint.x, minPoint.y});
+  output += "), max (";
+  appendList(output, number, {maxPoint.x, maxPoint.y});
+  output += "))";
 }
 
 /*
@@ -187,8 +384,20 @@ SphereBoxBounds::toString() const
 String
 Box2D::toString() const
 {
-  return StringUtils::format("Box2D(min ({:.3f}, {:.3f}), max ({:.3f}, {:.3f}))", minPoint.x,
-                             minPoint.y, maxPoint.x, maxPoint.y);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Ray::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Ray(origin (";
+  appendList(output, number, {origin.x, origin.y, origin.z});
+  output += "), direction (";
+  appendList(output, number, {direction.x, direction.y, direction.z});
+  output += "))";
 }
 
 /*
@@ -196,10 +405,25 @@ Box2D::toString() const
 String
 Ray::toString() const
 {
-  return StringUtils::format("Ray(origin ({:.3f}, {:.3f}, {:.3f}), "
-                             "direction ({:.3f}, {:.3f}, {:.3f}))",
-                             origin.x, origin.y, origin.z, direction.x, direction.y,
-                             direction.z);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+OrientedBox::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "OrientedBox(center (";
+  appendList(output, number, {center.x, center.y, center.z});
+  output += "), extent (";
+  appendList(output, number, {extent.x, extent.y, extent.z});
+  // Angles read better than the quaternion when debugging.
+  output += "), rotation ";
+  FormatSpec angleSpec = spec;
+  angleSpec.width = 0;
+  rotation.toRotator().formatTo(output, angleSpec);
+  output += ')';
 }
 
 /*
@@ -207,15 +431,22 @@ Ray::toString() const
 String
 OrientedBox::toString() const
 {
-  // Angles read better than the quaternion when debugging.
-  const Rotator angles = rotation.toRotator();
-  return StringUtils::format("OrientedBox(center ({:.3f}, {:.3f}, {:.3f}), "
-                             "extent ({:.3f}, {:.3f}, {:.3f}), "
-                             "rotation (pitch {:.2f}, yaw {:.2f}, roll {:.2f}))",
-                             center.x, center.y, center.z, extent.x, extent.y, extent.z,
-                             withoutNegativeZero(angles.pitch),
-                             withoutNegativeZero(angles.yaw),
-                             withoutNegativeZero(angles.roll));
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Capsule::formatTo(String& output, const FormatSpec& spec) const
+{
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Capsule(start (";
+  appendList(output, number, {start.x, start.y, start.z});
+  output += "), end (";
+  appendList(output, number, {end.x, end.y, end.z});
+  output += "), radius ";
+  StringUtils::appendFloat(output, radius, number);
+  output += ')';
 }
 
 /*
@@ -223,9 +454,32 @@ OrientedBox::toString() const
 String
 Capsule::toString() const
 {
-  return StringUtils::format("Capsule(start ({:.3f}, {:.3f}, {:.3f}), "
-                             "end ({:.3f}, {:.3f}, {:.3f}), radius {:.3f})",
-                             start.x, start.y, start.z, end.x, end.y, end.z, radius);
+  return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Frustum::formatTo(String& output, const FormatSpec& spec) const
+{
+  static constexpr const ANSICHAR* kSideNames[] = {"left", "right", "bottom", "top", "near",
+                                                   "far"};
+  static_assert(sizeof(kSideNames) / sizeof(kSideNames[0]) ==
+                static_cast<SIZE_T>(FrustumSide::Count));
+
+  const FormatSpec number = spec.getComponentSpec(kDefaultDecimals);
+  output += "Frustum(";
+  for (SIZE_T side = 0; side < static_cast<SIZE_T>(FrustumSide::Count); ++side) {
+    const Plane& plane = planes[side];
+    if (side > 0) {
+      output += ", ";
+    }
+    output += kSideNames[side];
+    output += " (";
+    appendList(output, number, {plane.normal.x, plane.normal.y, plane.normal.z, plane.w});
+    output += ')';
+  }
+  output += ')';
 }
 
 /*
@@ -233,21 +487,7 @@ Capsule::toString() const
 String
 Frustum::toString() const
 {
-  const Plane& left = planes[static_cast<SIZE_T>(FrustumSide::Left)];
-  const Plane& right = planes[static_cast<SIZE_T>(FrustumSide::Right)];
-  const Plane& bottom = planes[static_cast<SIZE_T>(FrustumSide::Bottom)];
-  const Plane& top = planes[static_cast<SIZE_T>(FrustumSide::Top)];
-  const Plane& nearPlane = planes[static_cast<SIZE_T>(FrustumSide::Near)];
-  const Plane& farPlane = planes[static_cast<SIZE_T>(FrustumSide::Far)];
-  return StringUtils::format(
-      "Frustum(left ({:.3f}, {:.3f}, {:.3f}, {:.3f}), right ({:.3f}, {:.3f}, {:.3f}, {:.3f}), "
-      "bottom ({:.3f}, {:.3f}, {:.3f}, {:.3f}), top ({:.3f}, {:.3f}, {:.3f}, {:.3f}), "
-      "near ({:.3f}, {:.3f}, {:.3f}, {:.3f}), far ({:.3f}, {:.3f}, {:.3f}, {:.3f}))",
-      left.normal.x, left.normal.y, left.normal.z, left.w, right.normal.x, right.normal.y,
-      right.normal.z, right.w, bottom.normal.x, bottom.normal.y, bottom.normal.z, bottom.w,
-      top.normal.x, top.normal.y, top.normal.z, top.w, nearPlane.normal.x,
-      nearPlane.normal.y, nearPlane.normal.z, nearPlane.w, farPlane.normal.x,
-      farPlane.normal.y, farPlane.normal.z, farPlane.w);
+  return StringUtils::toString(*this);
 }
 
 } // namespace chEngineSDK
