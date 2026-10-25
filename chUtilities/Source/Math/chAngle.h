@@ -98,6 +98,9 @@ class Radian
   FORCEINLINE constexpr Radian&
   operator/=(float scalar) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  private:
   float m_radian;
 };
@@ -175,6 +178,9 @@ class Degree
 
   FORCEINLINE constexpr Degree&
   operator/=(float scalar) noexcept;
+
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
 
  private:
   float m_degree;

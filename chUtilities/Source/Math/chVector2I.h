@@ -59,6 +59,9 @@ class Vector2I
   FORCEINLINE constexpr Vector2I&
   operator*=(int32 scalar) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Vector2I ZERO;
   static const Vector2I UNIT;

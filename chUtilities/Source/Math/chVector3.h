@@ -115,6 +115,9 @@ class Vector3
   FORCEINLINE constexpr Vector3&
   operator*=(float scalar) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Vector3 ZERO;
   static const Vector3 UNIT;

@@ -61,6 +61,9 @@ class CH_CORE_EXPORT Transform
   NODISCARD FORCEINLINE bool
   isDirty() const { return m_dirty; }
 
+  NODISCARD String
+  toString() const;
+
  private:
   friend class GameObject;
 

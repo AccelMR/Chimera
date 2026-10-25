@@ -72,6 +72,8 @@ class SphereBoxBounds
   NODISCARD CH_UTILITY_EXPORT SphereBoxBounds
   getTransformed(const Matrix4& matrix) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
 
  public:
   Vector3 center;

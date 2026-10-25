@@ -117,6 +117,9 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD bool
   getHierarchyWorldBounds(AABox& outBounds) const;
 
+  NODISCARD String
+  toString() const;
+
  private:
   friend class Scene;
   friend class GameObjectSerializer;

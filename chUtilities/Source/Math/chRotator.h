@@ -100,6 +100,9 @@ class Rotator
   NODISCARD static FORCEINLINE Degree
   normalizeAxis(const Degree& angle) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Rotator ZERO;
 

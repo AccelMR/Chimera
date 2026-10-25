@@ -66,6 +66,9 @@ class Box2D
   FORCEINLINE constexpr Box2D&
   operator+=(const Vector2& point) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector2 minPoint;
   Vector2 maxPoint;

@@ -61,6 +61,9 @@ class Plane
   NODISCARD FORCEINLINE constexpr float
   planeDot(const Vector3& point) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 normal;
   float w;

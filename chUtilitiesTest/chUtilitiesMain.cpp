@@ -1913,6 +1913,50 @@ TEST_CASE("chUtilities - Format") {
   }
 }
 
+TEST_CASE("chUtilities - Math toString") {
+  REQUIRE(Vector2(1.0f, -2.5f).toString() == "Vector2(1.000, -2.500)");
+  REQUIRE(Vector3(1.0f, 2.0f, 3.0f).toString() == "Vector3(1.000, 2.000, 3.000)");
+  REQUIRE(Vector4(1.0f, 2.0f, 3.0f, 4.0f).toString() == "Vector4(1.000, 2.000, 3.000, 4.000)");
+  REQUIRE(Vector2I(1, -2).toString() == "Vector2I(1, -2)");
+  REQUIRE(Vector3I(1, 2, 3).toString() == "Vector3I(1, 2, 3)");
+  REQUIRE(Radian(1.5f).toString() == "1.5000 rad");
+  REQUIRE(Degree(90.0f).toString() == "90.00 deg");
+  REQUIRE(Quaternion::IDENTITY.toString() == "Quaternion(0.0000, 0.0000, 0.0000, 1.0000)");
+  REQUIRE(Rotator(10.0f, 20.0f, 30.0f).toString() ==
+          "Rotator(pitch 10.00, yaw 20.00, roll 30.00)");
+  REQUIRE(Matrix4::IDENTITY.toString() ==
+          "Matrix4([1.000, 0.000, 0.000, 0.000], [0.000, 1.000, 0.000, 0.000], "
+          "[0.000, 0.000, 1.000, 0.000], [0.000, 0.000, 0.000, 1.000])");
+  REQUIRE(LinearColor(1.0f, 0.5f, 0.25f).toString() ==
+          "LinearColor(1.000, 0.500, 0.250, 1.000)");
+  REQUIRE(Plane(Vector3::UP, 2.0f).toString() ==
+          "Plane(normal (0.000, 0.000, 1.000), w 2.000)");
+  REQUIRE(AABox(Vector3::ZERO, Vector3::UNIT).toString() ==
+          "AABox(min (0.000, 0.000, 0.000), max (1.000, 1.000, 1.000))");
+  REQUIRE(Sphere(Vector3::UNIT, 2.0f).toString() ==
+          "Sphere(center (1.000, 1.000, 1.000), radius 2.000)");
+  REQUIRE(SphereBoxBounds(Vector3::ZERO, Vector3::UNIT, 1.5f).toString() ==
+          "SphereBoxBounds(center (0.000, 0.000, 0.000), extent (1.000, 1.000, 1.000), "
+          "radius 1.500)");
+  REQUIRE(Box2D(Vector2::ZERO, Vector2::UNIT).toString() ==
+          "Box2D(min (0.000, 0.000), max (1.000, 1.000))");
+  REQUIRE(Ray(Vector3::ZERO, Vector3::FORWARD).toString() ==
+          "Ray(origin (0.000, 0.000, 0.000), direction (1.000, 0.000, 0.000))");
+  REQUIRE(OrientedBox(Vector3::ZERO, Vector3::UNIT, Quaternion::IDENTITY).toString() ==
+          "OrientedBox(center (0.000, 0.000, 0.000), extent (1.000, 1.000, 1.000), "
+          "rotation (pitch 0.00, yaw 0.00, roll 0.00))");
+  REQUIRE(Capsule(Vector3::ZERO, Vector3::UP, 0.5f).toString() ==
+          "Capsule(start (0.000, 0.000, 0.000), end (0.000, 0.000, 1.000), radius 0.500)");
+
+  const Frustum frustum(OrthographicMatrix(10.0f, 10.0f, 1.0f, 100.0f));
+  const String frustumText = frustum.toString();
+  REQUIRE(frustumText.starts_with("Frustum(left ("));
+  REQUIRE(frustumText.find("near (0.000, 0.000, 1.000, ") != String::npos);
+
+  // Logs take them as arguments through toString().
+  REQUIRE(StringUtils::format("at {}", Vector3::UP) == "at Vector3(0.000, 0.000, 1.000)");
+}
+
 TEST_CASE("chUtilities - ToChars") {
   ANSICHAR integer[StringUtils::MAX_INTEGER_CHARS];
   REQUIRE(StringUtils::toChars(integer, 0) == "0");

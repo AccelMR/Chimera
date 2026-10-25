@@ -80,6 +80,9 @@ class AABox
   FORCEINLINE constexpr AABox&
   operator+=(const AABox& other) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 minPoint;
   Vector3 maxPoint;

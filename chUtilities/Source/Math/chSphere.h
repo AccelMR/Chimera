@@ -44,6 +44,9 @@ class Sphere
   FORCEINLINE explicit
   Sphere(const Vector<Vector3>& points) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 center;
   float radius;

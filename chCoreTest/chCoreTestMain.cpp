@@ -482,6 +482,22 @@ TEST_CASE("chCore - Scene transforms")
   REQUIRE(child->getScene() == nullptr);
 }
 
+TEST_CASE("chCore - Scene toString")
+{
+  Scene scene("Test", chEngineSDK::UUID::createRandom());
+  const SPtr<GameObject> gameObject = scene.createGameObject("Player");
+  REQUIRE(gameObject->toString() ==
+          "GameObject(Player, " + gameObject->getUUID().toString() + ")");
+
+  Transform& transform = gameObject->getTransform();
+  transform.setLocalPosition(Vector3(1.0f, 2.0f, 3.0f));
+  transform.setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+  transform.setLocalScale(Vector3(2.0f, 2.0f, 2.0f));
+  REQUIRE(transform.toString() ==
+          "Transform(position (1.000, 2.000, 3.000), "
+          "rotation Rotator(pitch 0.00, yaw 90.00, roll 0.00), scale (2.000, 2.000, 2.000))");
+}
+
 TEST_CASE("chCore - Scene render items")
 {
   Scene scene("Test", chEngineSDK::UUID::createRandom());

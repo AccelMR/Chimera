@@ -164,6 +164,9 @@ class Quaternion
   FORCEINLINE constexpr Quaternion&
   operator*=(const Quaternion& other) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Quaternion IDENTITY;
 

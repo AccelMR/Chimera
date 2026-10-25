@@ -62,6 +62,9 @@ class OrientedBox
   NODISCARD FORCEINLINE constexpr Vector3
   getClosestPoint(const Vector3& worldPoint) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 center;
   Vector3 extent;

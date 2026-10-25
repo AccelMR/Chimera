@@ -156,6 +156,9 @@ class Matrix4
   NODISCARD FORCEINLINE const float*
   operator[](int32 row) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Matrix4 ZERO;
   static const Matrix4 IDENTITY;

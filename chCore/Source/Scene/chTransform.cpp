@@ -10,6 +10,8 @@
 #include "chTransform.h"
 
 #include "chMatrixHelpers.h"
+#include "chRotator.h"
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 
@@ -54,6 +56,19 @@ Vector3
 Transform::getWorldPosition() const
 {
   return Vector3(m_worldMatrix[3][0], m_worldMatrix[3][1], m_worldMatrix[3][2]);
+}
+
+/*
+ */
+String
+Transform::toString() const
+{
+  // Angles read better than the quaternion when debugging.
+  return StringUtils::format("Transform(position ({:.3f}, {:.3f}, {:.3f}), rotation {}, "
+                             "scale ({:.3f}, {:.3f}, {:.3f}))",
+                             m_localPosition.x, m_localPosition.y, m_localPosition.z,
+                             m_localRotation.toRotator(), m_localScale.x, m_localScale.y,
+                             m_localScale.z);
 }
 
 /*

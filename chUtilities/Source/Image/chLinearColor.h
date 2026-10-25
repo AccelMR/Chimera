@@ -78,6 +78,9 @@ class LinearColor
   NODISCARD static FORCEINLINE constexpr LinearColor
   lerp(const LinearColor& from, const LinearColor& to, float t) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   // TRANSPARENT is a macro of <wingdi.h>.
   static const LinearColor TRANSPARENT_BLACK;

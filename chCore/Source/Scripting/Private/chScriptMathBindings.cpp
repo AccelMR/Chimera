@@ -11,7 +11,6 @@
 
 #include "chMath.h"
 #include "chScriptMathTypes.h"
-#include "chStringUtils.h"
 
 namespace chEngineSDK {
 namespace {
@@ -158,7 +157,7 @@ setVector2(Vector2& self, const float x, const float y)
 String
 vector2ToString(const Vector2& self)
 {
-  return StringUtils::format("Vector2({:.3f}, {:.3f})", self.x, self.y);
+  return self.toString();
 }
 
 Vector3&
@@ -199,7 +198,7 @@ squaredDistanceBetween(const Vector3& a, const Vector3& b)
 String
 vector3ToString(const Vector3& self)
 {
-  return StringUtils::format("Vector3({:.3f}, {:.3f}, {:.3f})", self.x, self.y, self.z);
+  return self.toString();
 }
 
 Vector4&
@@ -212,8 +211,7 @@ setVector4(Vector4& self, const float x, const float y, const float z, const flo
 String
 vector4ToString(const Vector4& self)
 {
-  return StringUtils::format("Vector4({:.3f}, {:.3f}, {:.3f}, {:.3f})", self.x, self.y, self.z,
-                             self.w);
+  return self.toString();
 }
 
 Quaternion
@@ -289,8 +287,7 @@ nlerpOf(const Quaternion& a, const Quaternion& b, const float alpha)
 String
 quaternionToString(const Quaternion& self)
 {
-  return StringUtils::format("Quaternion({:.4f}, {:.4f}, {:.4f}, {:.4f})", self.x, self.y,
-                             self.z, self.w);
+  return self.toString();
 }
 
 Rotator
@@ -302,9 +299,7 @@ normalizedRotator(const Rotator& self)
 String
 rotatorToString(const Rotator& self)
 {
-  return StringUtils::format("Rotator(pitch {:.2f}, yaw {:.2f}, roll {:.2f})",
-                             self.pitch.valueDegree(), self.yaw.valueDegree(),
-                             self.roll.valueDegree());
+  return self.toString();
 }
 
 LinearColor&
@@ -323,8 +318,7 @@ lerpColor(const LinearColor& from, const LinearColor& to, const float alpha)
 String
 colorToString(const LinearColor& self)
 {
-  return StringUtils::format("Color({:.3f}, {:.3f}, {:.3f}, {:.3f})", self.r, self.g, self.b,
-                             self.a);
+  return self.toString();
 }
 
 /*

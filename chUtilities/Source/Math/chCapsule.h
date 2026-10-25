@@ -42,6 +42,9 @@ class Capsule
   NODISCARD FORCEINLINE constexpr Vector3
   getClosestAxisPoint(const Vector3& point) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 start;
   Vector3 end;

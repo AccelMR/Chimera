@@ -43,6 +43,9 @@ class Ray
   NODISCARD FORCEINLINE constexpr Vector3
   getPoint(float distance) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Vector3 origin;
   Vector3 direction;

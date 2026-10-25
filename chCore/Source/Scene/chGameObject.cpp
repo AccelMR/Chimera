@@ -13,6 +13,7 @@
 #include "chBox.h"
 #include "chScriptManager.h"
 #include "chScriptObjectTypes.h"
+#include "chStringUtils.h"
 
 namespace chEngineSDK {
 
@@ -108,6 +109,14 @@ GameObject::getHierarchyWorldBounds(AABox& outBounds) const
     }
   }
   return bFound;
+}
+
+/*
+ */
+String
+GameObject::toString() const
+{
+  return StringUtils::format("GameObject({}, {})", m_name, m_uuid);
 }
 
 /*

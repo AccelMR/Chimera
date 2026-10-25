@@ -55,6 +55,9 @@ class Frustum
   NODISCARD FORCEINLINE constexpr const Plane&
   getPlane(FrustumSide side) const noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   Plane planes[static_cast<SIZE_T>(FrustumSide::Count)];
 };

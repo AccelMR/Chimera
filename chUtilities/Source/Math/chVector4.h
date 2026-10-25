@@ -104,6 +104,9 @@ class Vector4
   FORCEINLINE constexpr Vector4&
   operator*=(float scalar) noexcept;
 
+  NODISCARD CH_UTILITY_EXPORT String
+  toString() const;
+
  public:
   static const Vector4 ZERO;
   static const Vector4 UNIT;
