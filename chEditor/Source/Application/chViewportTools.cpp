@@ -12,6 +12,7 @@
 #include "chBox.h"
 #include "chCamera.h"
 #include "chCameraComponent.h"
+#include "chCameraPreviewUI.h"
 #include "chConsoleVariable.h"
 #include "chDebugDraw.h"
 #include "chEditorCamera.h"
@@ -251,9 +252,14 @@ ViewportTools::handleShortcuts()
   if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
     focusSelection();
   }
-  // While playing, Escape stops the game instead.
+  // While playing, Escape stops the game instead; while piloting, it stops piloting.
   if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !EditorScene::isPlaying()) {
-    EditorSelection::clear();
+    if (CameraPreviewUI::getPilotedCamera()) {
+      CameraPreviewUI::stopPiloting();
+    }
+    else {
+      EditorSelection::clear();
+    }
   }
   if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
     EditorScene::requestDelete();
@@ -277,6 +283,18 @@ ViewportTools::renderToolbar(bool bEditTools)
   }
 
   renderPlayControls();
+  if (const CameraComponent* pilot = CameraPreviewUI::getPilotedCamera()) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text(ICON_FA_CROSSHAIRS "  Piloting %s", pilot->getOwner()->getName().c_str());
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_STOP "##StopPiloting")) {
+      CameraPreviewUI::stopPiloting();
+    }
+    ImGui::SetItemTooltip("Stop piloting (Esc)");
+  }
   if (!bEditTools) {
     chUIHelpers::UIHelpers::endOverlayChild();
     m_toolbarWidth = ImGui::GetItemRectSize().x;

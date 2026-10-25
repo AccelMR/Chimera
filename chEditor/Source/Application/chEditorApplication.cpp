@@ -63,6 +63,7 @@
 #include "chAnimationPreviewUI.h"
 #include "chAnimationGraphEditorUI.h"
 #include "chAssetThumbnails.h"
+#include "chCameraPreviewUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -103,6 +104,31 @@ ConsoleVariable<float> g_cvarPlayBorderThickness(
     3.0f,
     "Width in pixels of the border around the viewport while playing (green) or paused "
     "(yellow); 0 draws none.");
+
+constexpr float kMinPilotLookAtDistance = 1.0f;
+
+/*
+ * Quaternions compose right to left, so the parents' rotation goes left.
+ */
+void
+setWorldPlacement(GameObject& gameObject, const Vector3& position, const Quaternion& rotation)
+{
+  Transform& transform = gameObject.getTransform();
+  const GameObject* parent = gameObject.getParent();
+  if (!parent) {
+    transform.setLocalPosition(position);
+    transform.setLocalRotation(rotation);
+    return;
+  }
+  const Vector4 local =
+      parent->getTransform().getWorldMatrix().getInverseAffine().transformPosition(position);
+  transform.setLocalPosition(Vector3(local.x, local.y, local.z));
+  Quaternion parentRotation = Quaternion::IDENTITY;
+  for (const GameObject* current = parent; current; current = current->getParent()) {
+    parentRotation = current->getTransform().getLocalRotation() * parentRotation;
+  }
+  transform.setLocalRotation(parentRotation.getInverse() * rotation);
+}
 } // namespace
 
 
@@ -157,6 +183,7 @@ EditorApplication::destroyModules()
   AssetInspectorUI::shutDown();
   ProjectSettingsUI::shutDown();
   AnimationPreviewUI::shutDown();
+  CameraPreviewUI::shutDown();
   AssetThumbnails::shutDown();
   m_sceneGraphUI.reset();
   m_outputLogUI.reset();
@@ -250,9 +277,13 @@ EditorApplication::update(const float deltaTime)
         FileSystem::absolutePath(EnginePaths::getProjectFile()))) {
     EditorScene::requestOpenProject(chosenProject);
   }
-  // A drag or a text field still going on keeps its changes in one undo step.
-  EditorScene::applyPending(UIHelpers::bRenderImGui &&
-                            (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse()));
+  // A drag or a text field still going on keeps its changes in one undo step, and so does
+  // a flight or a pan that moves a piloted camera.
+  const bool bMovingPilot = m_pilotObject && (m_editorCamera->isFlying() ||
+                                              ImGui::IsMouseDown(ImGuiMouseButton_Middle));
+  EditorScene::applyPending(
+      bMovingPilot || (UIHelpers::bRenderImGui &&
+                       (ImGui::IsAnyItemActive() || m_viewportTools->isUsingMouse())));
   updateGameInput();
   if (EditorScene::shouldQuit()) {
     // Another project opens in a new run, once this one has closed.
@@ -271,11 +302,15 @@ EditorApplication::update(const float deltaTime)
   m_editorCamera->setFocused(!m_bGameView &&
                              (!UIHelpers::bRenderImGui ||
                               (m_bViewportHovered && !m_viewportTools->isUsingMouse())));
+  syncPilotedCamera();
+  const Vector3 positionBefore = m_editorCamera->getCamera().getPosition();
+  const Vector3 lookAtBefore = m_editorCamera->getCamera().getLookAt();
   const bool bWasFlying = m_editorCamera->isFlying();
   m_editorCamera->update(deltaTime);
   if (m_editorCamera->isFlying() != bWasFlying) {
     onCameraFlightChanged(m_editorCamera->isFlying());
   }
+  movePilotedCamera(positionBefore, lookAtBefore);
 
   {
     CH_PROFILE_SCOPE("SceneUpdate");
@@ -311,6 +346,7 @@ EditorApplication::update(const float deltaTime)
   m_sceneRenderer->extract(scene, getViewCamera(), UIHelpers::rendererColor, &m_editorLines);
   AnimationPreviewUI::update(deltaTime);
   AnimationGraphEditorUI::update(deltaTime);
+  CameraPreviewUI::update();
   AssetThumbnails::update();
 }
 
@@ -322,6 +358,7 @@ EditorApplication::onRender(ICommandList& commandList, const ISwapChain& swapCha
   // First, so their textures are drawn before the UI pass shows them.
   AnimationPreviewUI::recordFrame(commandList);
   AnimationGraphEditorUI::recordFrame(commandList);
+  CameraPreviewUI::recordFrame(commandList);
   AssetThumbnails::recordFrame(commandList);
   RenderGraph& graph = m_sceneRenderer->beginFrame();
   const RGTextureHandle backBuffer =
@@ -588,6 +625,8 @@ EditorApplication::renderUI()
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
   m_inspectorUI->renderInspectorUI();
+  // After the Inspector, which reads what the window showed in the last frame.
+  CameraPreviewUI::render();
   AssetInspectorUI::render();
   AnimationPreviewUI::render();
   AnimationGraphEditorUI::render();
@@ -648,6 +687,7 @@ EditorApplication::renderDockSpace()
     ImGui::DockBuilderDockWindow("###Inspector", right);
     ImGui::DockBuilderDockWindow("###AssetInspector", right);
     ImGui::DockBuilderDockWindow("###AnimationPreview", right);
+    ImGui::DockBuilderDockWindow("###CameraPreview", right);
     ImGui::DockBuilderDockWindow("###ContentBrowser", bottom);
     ImGui::DockBuilderDockWindow("###OutputLog", bottom);
     ImGui::DockBuilderDockWindow("###Profiler", bottom);
@@ -840,6 +880,7 @@ EditorApplication::updateViewCamera(const Scene& scene)
   if (bPlaying && !m_bWasPlaying) {
     m_positionBeforePlay = editorCamera.getPosition();
     m_lookAtBeforePlay = editorCamera.getLookAt();
+    CameraPreviewUI::stopPiloting();
   }
   else if (!bPlaying && m_bWasPlaying) {
     m_editorCamera->setView(m_positionBeforePlay, m_lookAtBeforePlay);
@@ -858,6 +899,14 @@ EditorApplication::updateViewCamera(const Scene& scene)
     m_editorCamera->setView(m_gameCamera.getPosition(), m_gameCamera.getLookAt());
   }
   m_bGameView = bGameView;
+
+  const CameraComponent* pilot = bPlaying ? nullptr : CameraPreviewUI::getPilotedCamera();
+  m_bPilotView = pilot != nullptr;
+  if (pilot) {
+    pilot->fillCamera(m_gameCamera, static_cast<float>(m_viewportWidth),
+                      static_cast<float>(m_viewportHeight));
+    m_pilotWorld = pilot->getOwner()->getTransform().getWorldMatrix();
+  }
 }
 
 /*
@@ -865,7 +914,50 @@ EditorApplication::updateViewCamera(const Scene& scene)
 const Camera&
 EditorApplication::getViewCamera() const
 {
-  return m_bGameView ? m_gameCamera : m_editorCamera->getCamera();
+  return m_bGameView || m_bPilotView ? m_gameCamera : m_editorCamera->getCamera();
+}
+
+/*
+ */
+void
+EditorApplication::syncPilotedCamera()
+{
+  CameraComponent* camera =
+      EditorScene::isPlaying() ? nullptr : CameraPreviewUI::getPilotedCamera();
+  GameObject* object = camera ? camera->getOwner() : nullptr;
+  if (object && (object != m_pilotObject ||
+                 !(object->getTransform().getWorldMatrix() == m_pilotWorld))) {
+    Camera view;
+    camera->fillCamera(view, Math::max(static_cast<float>(m_viewportWidth), 1.0f),
+                       Math::max(static_cast<float>(m_viewportHeight), 1.0f));
+    // Keeps the editor camera's look at distance, which sets how fast it pans and dollies.
+    const Camera& editorView = m_editorCamera->getCamera();
+    const float distance =
+        Math::max((editorView.getLookAt() - editorView.getPosition()).magnitude(),
+                  kMinPilotLookAtDistance);
+    m_editorCamera->setView(view.getPosition(),
+                            view.getPosition() + view.getForwardVector() * distance);
+  }
+  m_pilotObject = object;
+}
+
+/*
+ * The camera component drops roll, so the object gets none either.
+ */
+void
+EditorApplication::movePilotedCamera(const Vector3& positionBefore,
+                                     const Vector3& lookAtBefore)
+{
+  const Camera& view = m_editorCamera->getCamera();
+  if (!m_pilotObject ||
+      (view.getPosition() == positionBefore && view.getLookAt() == lookAtBefore)) {
+    return;
+  }
+  const Vector3 forward = view.getForwardVector();
+  const Rotator rotation(Math::asin(forward.z).valueDegree(),
+                         Math::atan2(forward.y, forward.x).valueDegree(), 0.0f);
+  EditorScene::recordChange(*m_pilotObject, "Pilot Camera");
+  setWorldPlacement(*m_pilotObject, view.getPosition(), Quaternion(rotation));
 }
 
 /*

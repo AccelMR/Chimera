@@ -5101,8 +5101,37 @@ TEST_CASE("chCore - Camera component")
     REQUIRE(scene.getActiveCamera() == nullptr);
   }
 
+  SECTION("Priority and a camera picked by code")
+  {
+    const SPtr<GameObject> second = scene.createGameObject("Second Camera");
+    CameraComponent& secondCamera = second->addComponent<CameraComponent>();
+    firstCamera.setPriority(2);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+    secondCamera.setPriority(2);
+    REQUIRE(scene.getActiveCamera() == &secondCamera);
+    secondCamera.setPriority(-1);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+
+    REQUIRE(scene.setActiveCamera(&secondCamera));
+    REQUIRE(scene.getActiveCamera() == &secondCamera);
+    REQUIRE(scene.setActiveCamera(nullptr));
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+
+    // Unregistering the picked camera goes back to the priorities, and a camera that is
+    // not registered cannot be picked.
+    REQUIRE(scene.setActiveCamera(&secondCamera));
+    secondCamera.setEnabled(false);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+    secondCamera.setEnabled(true);
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+    CameraComponent outside;
+    REQUIRE_FALSE(scene.setActiveCamera(&outside));
+    REQUIRE(scene.getActiveCamera() == &firstCamera);
+  }
+
   SECTION("Values are saved")
   {
+    firstCamera.setPriority(-3);
     firstCamera.setProjectionType(CameraProjectionType::Orthographic);
     firstCamera.setFieldOfView(Degree(60.0f));
     firstCamera.setClipPlanes(0.5f, 250.0f);
@@ -5118,6 +5147,7 @@ TEST_CASE("chCore - Camera component")
     REQUIRE(loaded.getNearClipPlane() == Approx(0.5f));
     REQUIRE(loaded.getFarClipPlane() == Approx(250.0f));
     REQUIRE(loaded.getOrthographicSize() == Approx(12.0f));
+    REQUIRE(loaded.getPriority() == -3);
 
     // A cut file and an unknown projection are refused.
     MemoryDataStream cut;
@@ -5130,9 +5160,11 @@ TEST_CASE("chCore - Camera component")
     MemoryDataStream badProjection;
     const uint32 projection = 7;
     const float values[4] = {90.0f, 0.1f, 100.0f, 5.0f};
+    const int32 priority = 0;
     badProjection.write(&version, sizeof(version));
     badProjection.write(&projection, sizeof(projection));
     badProjection.write(values, sizeof(values));
+    badProjection.write(&priority, sizeof(priority));
     badProjection.seek(0);
     CameraComponent fromBad;
     REQUIRE_FALSE(fromBad.deserialize(badProjection));
@@ -7007,6 +7039,28 @@ TEST_CASE("chCore - Script objects")
     )lua"));
     REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3(0, 0, 0))"));
     REQUIRE_FALSE(scripts.runString("Scene.raycast(Vector3(0, 0, 0), Vector3.UP, 1, 5)"));
+  }
+
+  SECTION("Active camera")
+  {
+    REQUIRE(scripts.runString("assert(Scene.getActiveCamera() == nil)"));
+    const SPtr<GameObject> high = scene.createGameObject("High");
+    high->addComponent<CameraComponent>().setPriority(5);
+    const SPtr<GameObject> low = scene.createGameObject("Low");
+    CameraComponent& lowCamera = low->addComponent<CameraComponent>();
+    REQUIRE(scripts.runString(R"lua(
+      assert(Scene.getActiveCamera() == Scene.find("High"))
+      Scene.setActiveCamera(Scene.find("Low"))
+      assert(Scene.getActiveCamera() == Scene.find("Low"))
+      Scene.setActiveCamera(nil)
+      assert(Scene.getActiveCamera() == Scene.find("High"))
+      Scene.setActiveCamera(Scene.find("Low"))
+    )lua"));
+    REQUIRE(scene.getActiveCamera() == &lowCamera);
+    REQUIRE_FALSE(scripts.runString("Scene.setActiveCamera(Scene.find('Parent'))"));
+    lowCamera.setEnabled(false);
+    REQUIRE_FALSE(scripts.runString("Scene.setActiveCamera(Scene.find('Low'))"));
+    REQUIRE(scripts.runString("assert(Scene.getActiveCamera() == Scene.find('High'))"));
   }
 
   SECTION("Animator")

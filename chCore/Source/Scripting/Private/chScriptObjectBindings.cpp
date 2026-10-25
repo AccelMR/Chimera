@@ -13,6 +13,7 @@
 #include "chAnimationGraphAsset.h"
 #include "chAnimatorComponent.h"
 #include "chAssetManager.h"
+#include "chCameraComponent.h"
 #include "chGameObject.h"
 #include "chMath.h"
 #include "chMatrix4.h"
@@ -557,6 +558,48 @@ raycastScene(lua_State* state)
   setVectorField(state, table, "point", hit.point);
   setVectorField(state, table, "normal", hit.normal);
   return 1;
+}
+
+/*
+ * Scene.getActiveCamera(): the object of the camera the game views through, nil when the
+ * scene has none.
+ */
+int32
+getActiveCamera(lua_State* state)
+{
+  const Scene* scene = ScriptManager::instance().getCurrentScene();
+  if (!scene) {
+    return luaL_error(state, "Scene.getActiveCamera needs a running script's scene");
+  }
+  const CameraComponent* camera = scene->getActiveCamera();
+  return pushFound(state, camera ? camera->getOwner() : nullptr);
+}
+
+/*
+ * Scene.setActiveCamera(gameObject?): views through the camera of that object until it is
+ * disabled or destroyed; nil goes back to the camera priorities.
+ */
+int32
+setActiveCamera(lua_State* state)
+{
+  Scene* scene = ScriptManager::instance().getCurrentScene();
+  if (!scene) {
+    return luaL_error(state, "Scene.setActiveCamera needs a running script's scene");
+  }
+  if (lua_isnoneornil(state, 1)) {
+    scene->setActiveCamera(nullptr);
+    return 0;
+  }
+  GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
+  CameraComponent* camera = gameObject.getComponent<CameraComponent>();
+  if (!camera) {
+    return luaL_error(state, "GameObject '%s' has no Camera", gameObject.getName().c_str());
+  }
+  if (!scene->setActiveCamera(camera)) {
+    return luaL_error(state, "the Camera of '%s' is disabled or in another scene",
+                      gameObject.getName().c_str());
+  }
+  return 0;
 }
 
 /*
@@ -1354,7 +1397,9 @@ ScriptBindings::registerObjects(lua_State* state)
       .rawFunction("find", &findInScene, "fun(name: string): GameObject?")
       .rawFunction("raycast", &raycastScene,
                    "fun(origin: Vector3, direction: Vector3, maxDistance?: number, "
-                   "ignore?: GameObject, out?: RaycastHit): RaycastHit?");
+                   "ignore?: GameObject, out?: RaycastHit): RaycastHit?")
+      .rawFunction("getActiveCamera", &getActiveCamera, "fun(): GameObject?")
+      .rawFunction("setActiveCamera", &setActiveCamera, "fun(camera?: GameObject)");
 }
 
 } // namespace chEngineSDK

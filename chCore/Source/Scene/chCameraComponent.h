@@ -22,7 +22,8 @@ namespace chEngineSDK {
  * Exists so a scene saves the point of view a game shows it from. It looks along its
  * GameObject's forward axis from the object's position; roll is dropped and the pitch stops
  * short of straight up or down, as with Camera. While registered the scene knows it; when
- * the scene has several, the last one registered is used.
+ * the scene has several, the one with the highest priority is used (the last one registered
+ * among equals), unless code picked one with Scene::setActiveCamera.
  */
 class CH_CORE_EXPORT CameraComponent : public Component
 {
@@ -67,6 +68,15 @@ class CH_CORE_EXPORT CameraComponent : public Component
   getOrthographicSize() const noexcept { return m_orthographicSize; }
 
   /**
+   * Among the cameras of a scene, the highest priority is the one the game views through.
+   */
+  FORCEINLINE void
+  setPriority(int32 priority) noexcept { m_priority = priority; }
+
+  NODISCARD FORCEINLINE int32
+  getPriority() const noexcept { return m_priority; }
+
+  /**
    * Writes the view and projection of this camera into a Camera for a viewport of this
    * size in pixels.
    */
@@ -94,6 +104,7 @@ class CH_CORE_EXPORT CameraComponent : public Component
   float m_nearPlane = 0.1f;
   float m_farPlane = 10000.0f;
   float m_orthographicSize = 5.0f;
+  int32 m_priority = 0;
 };
 
 DECLARE_TYPE_TRAITS(CameraComponent)

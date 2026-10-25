@@ -24,8 +24,9 @@ struct CameraFileData
   float nearPlane;
   float farPlane;
   float orthographicSize;
+  int32 priority;
 };
-static_assert(sizeof(CameraFileData) == 20, "CameraFileData must have no padding");
+static_assert(sizeof(CameraFileData) == 24, "CameraFileData must have no padding");
 
 constexpr float kMinFieldOfView = 1.0f;
 constexpr float kMaxFieldOfView = 170.0f;
@@ -117,7 +118,8 @@ CameraComponent::serialize(DataStream& stream) const
                             .fieldOfViewDegrees = m_fieldOfView.valueDegree(),
                             .nearPlane = m_nearPlane,
                             .farPlane = m_farPlane,
-                            .orthographicSize = m_orthographicSize};
+                            .orthographicSize = m_orthographicSize,
+                            .priority = m_priority};
   stream.write(&version, sizeof(version));
   stream.write(&data, sizeof(data));
 }
@@ -139,6 +141,7 @@ CameraComponent::deserialize(DataStream& stream)
   setFieldOfView(Degree(data.fieldOfViewDegrees));
   setClipPlanes(data.nearPlane, data.farPlane);
   setOrthographicSize(data.orthographicSize);
+  m_priority = data.priority;
   return true;
 }
 

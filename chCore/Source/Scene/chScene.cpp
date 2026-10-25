@@ -10,6 +10,7 @@
 #include "chScene.h"
 
 #include "chAlgorithm.h"
+#include "chCameraComponent.h"
 #include "chFrustum.h"
 #include "chMath.h"
 #include "chMesh.h"
@@ -443,6 +444,38 @@ void
 Scene::removeCamera(CameraComponent& camera)
 {
   Algorithm::removeFirst(m_cameras, &camera);
+  if (m_chosenCamera == &camera) {
+    m_chosenCamera = nullptr;
+  }
+}
+
+/*
+ */
+const CameraComponent*
+Scene::getActiveCamera() const
+{
+  if (m_chosenCamera) {
+    return m_chosenCamera;
+  }
+  const CameraComponent* active = nullptr;
+  for (const CameraComponent* camera : m_cameras) {
+    if (!active || camera->getPriority() >= active->getPriority()) {
+      active = camera;
+    }
+  }
+  return active;
+}
+
+/*
+ */
+bool
+Scene::setActiveCamera(CameraComponent* camera)
+{
+  if (camera && !Algorithm::contains(m_cameras, camera)) {
+    return false;
+  }
+  m_chosenCamera = camera;
+  return true;
 }
 
 } // namespace chEngineSDK

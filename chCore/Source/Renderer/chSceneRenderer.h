@@ -125,6 +125,26 @@ class CH_CORE_EXPORT SceneRenderer
   }
 
   /**
+   * Off draws no shadow maps, whatever Renderer.Shadows says, for small views where they
+   * cost more than they show. On by default.
+   */
+  FORCEINLINE void
+  setShadowsEnabled(bool bEnabled) noexcept
+  {
+    m_bShadows = bEnabled;
+  }
+
+  /**
+   * Off skips the screen space ambient occlusion, whatever Renderer.SSAO says. On by
+   * default.
+   */
+  FORCEINLINE void
+  setScreenSpaceAOEnabled(bool bEnabled) noexcept
+  {
+    m_bScreenSpaceAO = bEnabled;
+  }
+
+  /**
    * Compiles the graph and records it into the command list of the frame.
    */
   void
@@ -185,6 +205,8 @@ class CH_CORE_EXPORT SceneRenderer
   UniquePtr<TonemapPass> m_tonemapPass;
 
   ViewMode m_viewMode = ViewMode::Lit;
+  bool m_bShadows = true;
+  bool m_bScreenSpaceAO = true;
   // The console variable texts the settings were parsed from, so they are parsed only on
   // change.
   String m_viewModeText;

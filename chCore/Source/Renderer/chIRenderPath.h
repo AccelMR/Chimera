@@ -106,6 +106,8 @@ struct RenderView
   LinearColor clearColor = LinearColor::BLACK;
   // Tints the lit image by the shadow cascade each pixel reads.
   bool bShowShadowCascades = false;
+  // Off skips the screen space ambient occlusion whatever Renderer.SSAO says.
+  bool bScreenSpaceAO = true;
 };
 
 /**

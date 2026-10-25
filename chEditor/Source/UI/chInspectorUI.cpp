@@ -17,6 +17,7 @@
 #include "chAnimatorComponent.h"
 #include "chAssetDragDrop.h"
 #include "chCameraComponent.h"
+#include "chCameraPreviewUI.h"
 #include "chEditorScene.h"
 #include "chAssetManager.h"
 #include "chAnimationGraphEditorUI.h"
@@ -33,6 +34,7 @@
 #include "chPrefabAsset.h"
 #include "chQuaternion.h"
 #include "chRotator.h"
+#include "chScene.h"
 #include "chShapeComponent.h"
 #include "chSkeleton.h"
 #include "chSkeletonAsset.h"
@@ -768,7 +770,25 @@ InspectorUI::renderCameraComponent(CameraComponent& camera)
     EditorScene::recordChange(gameObject, "Edit Enabled");
     camera.setEnabled(bEnabled);
   }
-  ImGui::SetItemTooltip("A game views the scene through the last enabled camera");
+  ImGui::SetItemTooltip("Only enabled cameras can be the one a game views through");
+  ImGui::SameLine();
+  const Scene* scene = gameObject.getScene();
+  const CameraComponent* active = scene ? scene->getActiveCamera() : nullptr;
+  if (active == &camera) {
+    ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK "  Active camera");
+  }
+  else if (active) {
+    ImGui::TextDisabled("Active: %s", active->getOwner()->getName().c_str());
+  }
+
+  int32 priority = camera.getPriority();
+  if (ImGui::DragInt("Priority", &priority, 0.1f)) {
+    EditorScene::recordChange(gameObject, "Edit Priority");
+    camera.setPriority(priority);
+  }
+  ImGui::SetItemTooltip("The enabled camera with the highest priority is the one a game "
+                        "views through (the last one among equals); scripts can pick "
+                        "another with Scene.setActiveCamera");
 
   constexpr const ANSICHAR* kProjectionNames[] = {"Perspective", "Orthographic"};
   static_assert(sizeof(kProjectionNames) / sizeof(kProjectionNames[0]) ==
@@ -808,6 +828,9 @@ InspectorUI::renderCameraComponent(CameraComponent& camera)
     EditorScene::recordChange(gameObject, "Edit Clip Planes");
     camera.setClipPlanes(nearPlane, farPlane);
   }
+
+  ImGui::Separator();
+  CameraPreviewUI::renderInspectorView(EditorSelection::getSelectedGameObject());
 }
 
 /*

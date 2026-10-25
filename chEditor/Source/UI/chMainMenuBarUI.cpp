@@ -30,6 +30,7 @@
 #include "chProjectSettingsUI.h"
 #include "chAnimationPreviewUI.h"
 #include "chAnimationGraphEditorUI.h"
+#include "chCameraPreviewUI.h"
 #include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
@@ -393,6 +394,10 @@ MainMenuBarUI::renderMainMenuBar() {
     if (ImGui::MenuItem(ICON_FA_PROJECT_DIAGRAM "  Animation Graph Editor", nullptr,
                         AnimationGraphEditorUI::isWindowVisible())) {
       AnimationGraphEditorUI::setWindowVisible(!AnimationGraphEditorUI::isWindowVisible());
+    }
+    if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera Preview", nullptr,
+                        CameraPreviewUI::isWindowVisible())) {
+      CameraPreviewUI::setWindowVisible(!CameraPreviewUI::isWindowVisible());
     }
     if (ImGui::MenuItem(ICON_FA_CHART_LINE "  Profiler", nullptr,
                         ProfilerUI::isWindowVisible())) {

@@ -226,11 +226,21 @@ class CH_CORE_EXPORT Scene : public Object
   removeCamera(CameraComponent& camera);
 
   /**
-   * The camera a game views the scene through: the last one registered, null when there
-   * is none.
+   * The camera a game views the scene through: the one setActiveCamera picked while it is
+   * registered, else the highest priority (the last registered among equals), null when
+   * there is none. A scene holds a few cameras, so the search is cheap enough for every
+   * frame.
    */
-  NODISCARD FORCEINLINE const CameraComponent*
-  getActiveCamera() const { return m_cameras.empty() ? nullptr : m_cameras.back(); }
+  NODISCARD const CameraComponent*
+  getActiveCamera() const;
+
+  /**
+   * Makes camera the active one until it is unregistered or another is picked; null goes
+   * back to the priorities. Not saved. Returns false, changing nothing, for a camera that
+   * is not registered in this scene.
+   */
+  bool
+  setActiveCamera(CameraComponent* camera);
 
   /**
    * Every registered camera, in registration order.
@@ -270,6 +280,7 @@ class CH_CORE_EXPORT Scene : public Object
   uint32 m_nextSkyLightOrder = 0;
   // In registration order.
   Vector<CameraComponent*> m_cameras;
+  CameraComponent* m_chosenCamera = nullptr;
   DebugDraw m_debugDraw;
   DebugDraw m_fixedDebugDraw;
   bool m_bPlaying = false;

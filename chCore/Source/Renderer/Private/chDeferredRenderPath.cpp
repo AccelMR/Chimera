@@ -172,7 +172,9 @@ DeferredRenderPath::addPasses(RenderGraph& graph,
   const GBuffer gbuffer =
       addGBufferPass(graph, view, viewIndex, outputDesc.width, outputDesc.height);
   const RGTextureHandle occlusion =
-      m_screenSpaceAO.addPasses(graph, gbuffer.depth, gbuffer.normal, viewIndex);
+      view.bScreenSpaceAO
+          ? m_screenSpaceAO.addPasses(graph, gbuffer.depth, gbuffer.normal, viewIndex)
+          : RGTextureHandle{};
   updateFullscreenPipeline(m_lighting, outputDesc.format);
 
   RenderPassBuilder pass = graph.addPass("DeferredLighting");

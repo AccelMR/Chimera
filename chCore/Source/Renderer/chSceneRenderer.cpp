@@ -101,7 +101,8 @@ SceneRenderer::addScenePasses(RGTextureHandle output)
                         .items = m_visibleItems,
                         .lights = m_visibleLights,
                         .clearColor = m_frame.getClearColor(),
-                        .bShowShadowCascades = m_viewMode == ViewMode::ShadowCascades};
+                        .bShowShadowCascades = m_viewMode == ViewMode::ShadowCascades,
+                        .bScreenSpaceAO = m_bScreenSpaceAO};
 
   const RGTextureHandle depth = addViewModePasses(view, output);
 #if USING(CH_DEBUG_DRAW)
@@ -190,11 +191,14 @@ SceneRenderer::addLitPasses(const RenderView& view, RGTextureHandle output)
   const RenderView litView{.camera = view.camera,
                            .items = view.items,
                            .lights = view.lights,
-                           .shadows = m_shadowRenderer->addPasses(m_graph, m_frame, view),
+                           .shadows = m_bShadows
+                                          ? m_shadowRenderer->addPasses(m_graph, m_frame, view)
+                                          : Span<const ShadowView>{},
                            .ibl = m_imageBasedLighting->addPasses(
                                m_graph, m_frame.getSkyLight()),
                            .clearColor = view.clearColor,
-                           .bShowShadowCascades = view.bShowShadowCascades};
+                           .bShowShadowCascades = view.bShowShadowCascades,
+                           .bScreenSpaceAO = view.bScreenSpaceAO};
   const RGTextureDesc outputDesc = m_graph.getTextureDesc(output);
   const RGTextureHandle sceneColor = m_graph.createTexture(
       "SceneColor",

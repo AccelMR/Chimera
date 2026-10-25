@@ -123,10 +123,23 @@ class EditorApplication : public WindowedApplication
 
   /**
    * Picks the camera the viewport shows this frame: the scene's while playing (unless
-   * ejected or the scene has none), else the editor's.
+   * ejected or the scene has none), the piloted one, else the editor's.
    */
   void
   updateViewCamera(const Scene& scene);
+
+  /**
+   * Puts the editor camera where the piloted camera is when piloting starts, and again
+   * whenever the camera moved by other means (gizmo, Inspector, undo).
+   */
+  void
+  syncPilotedCamera();
+
+  /**
+   * Moves the piloted camera's object where the editor camera went this frame.
+   */
+  void
+  movePilotedCamera(const Vector3& positionBefore, const Vector3& lookAtBefore);
 
   NODISCARD const Camera&
   getViewCamera() const;
@@ -170,6 +183,12 @@ class EditorApplication : public WindowedApplication
   Camera m_gameCamera;
   // The viewport looked through m_gameCamera in the last update.
   bool m_bGameView = false;
+  // Piloting, m_gameCamera holds the piloted camera's view, and the editor tools stay.
+  bool m_bPilotView = false;
+  // The object of the piloted camera and its world matrix after the last update, so a move
+  // made by other means is seen.
+  GameObject* m_pilotObject = nullptr;
+  Matrix4 m_pilotWorld = Matrix4::IDENTITY;
   bool m_bWasPlaying = false;
   // The editor camera's view when Play started, given back at Stop.
   Vector3 m_positionBeforePlay = Vector3::ZERO;
