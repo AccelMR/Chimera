@@ -15,8 +15,10 @@
 #include "chAssetManager.h"
 #include "chCameraComponent.h"
 #include "chGameObject.h"
+#include "chGameObjectSerializer.h"
 #include "chMath.h"
 #include "chMatrix4.h"
+#include "chPrefabAsset.h"
 #include "chRay.h"
 #include "chScene.h"
 #include "chScriptApi.h"
@@ -375,14 +377,16 @@ getChildCount(const GameObject& gameObject)
 }
 
 /*
- * Does not raise for a destroyed object: this is how scripts ask.
+ * Does not raise for a destroyed object: this is how scripts ask. False as soon as destroy()
+ * was called, although the object works until the update ends.
  */
 int32
 isValid(lua_State* state)
 {
   const GameObjectHandle* handle = static_cast<const GameObjectHandle*>(
       luaL_checkudata(state, 1, ScriptHandleType<GameObject>::NAME));
-  lua_pushboolean(state, isAlive(handle->object) ? 1 : 0);
+  const bool bValid = isAlive(handle->object) && !handle->object->isDestroyRequested();
+  lua_pushboolean(state, bValid ? 1 : 0);
   return 1;
 }
 
@@ -600,6 +604,212 @@ setActiveCamera(lua_State* state)
                       gameObject.getName().c_str());
   }
   return 0;
+}
+
+/*
+ * The prefab asset of a Prefab value, or null when it no longer exists.
+ */
+SPtr<PrefabAsset>
+findPrefabAsset(const ScriptPrefab& prefab)
+{
+  if (prefab.prefab.isNull() || !AssetManager::isStarted()) {
+    return nullptr;
+  }
+  const SPtr<IAsset> asset = AssetManager::instance().getAsset(prefab.prefab);
+  return asset ? asset->as<PrefabAsset>() : nullptr;
+}
+
+/*
+ * The prefab at index, a Prefab value or a path or name, loaded. Raises when there is none.
+ * A path or name walks every asset, so spawners keep the Prefab value Scene.findPrefab gives.
+ */
+SPtr<PrefabAsset>
+checkPrefab(lua_State* state, const int32 index, const ANSICHAR* function)
+{
+  if (!AssetManager::isStarted()) {
+    luaL_error(state, "%s: there are no assets to search", function);
+  }
+  AssetManager& assetManager = AssetManager::instance();
+  SPtr<PrefabAsset> prefab;
+  if (const auto* value = static_cast<const ScriptPrefab*>(
+          luaL_testudata(state, index, ScriptValueType<ScriptPrefab>::NAME))) {
+    prefab = findPrefabAsset(*value);
+    if (!prefab) {
+      luaL_error(state, "%s: the prefab was deleted", function);
+    }
+  }
+  else {
+    const StringView text = ScriptTraits<StringView>::check(state, index);
+    const SPtr<IAsset> asset =
+        assetManager.findAsset(AssetTypeTraits<PrefabAsset>::getTypeId(), text);
+    if (!asset) {
+      luaL_error(state, "%s: there is no prefab %s", function, String(text).c_str());
+    }
+    prefab = asset->as<PrefabAsset>();
+  }
+  if (!assetManager.syncLoadAsset(prefab)) {
+    luaL_error(state, "%s: prefab %s could not be loaded", function, prefab->getName());
+  }
+  return prefab;
+}
+
+/*
+ * The optional parent at index: nil for a root object, else an object of scene.
+ */
+GameObject*
+checkOptionalParent(lua_State* state, const int32 index, const Scene& scene)
+{
+  if (lua_isnoneornil(state, index)) {
+    return nullptr;
+  }
+  GameObject& parent = ScriptTraits<GameObject>::check(state, index);
+  if (parent.getScene() != &scene) {
+    luaL_error(state, "GameObject '%s' is in another scene", parent.getName().c_str());
+  }
+  return &parent;
+}
+
+/*
+ * The optional world position and rotation at index and index + 1.
+ */
+void
+placeInWorld(lua_State* state, GameObject& gameObject, const int32 index)
+{
+  if (!lua_isnoneornil(state, index)) {
+    setWorldPosition(gameObject, ScriptTraits<Vector3>::check(state, index));
+  }
+  if (!lua_isnoneornil(state, index + 1)) {
+    setWorldRotation(gameObject, ScriptTraits<Quaternion>::check(state, index + 1));
+  }
+}
+
+/*
+ * Scene.findPrefab(pathOrName): a Prefab value, nil when there is none. Walks every asset,
+ * so call it once (in onStart).
+ */
+int32
+findPrefab(lua_State* state)
+{
+  const StringView text = ScriptTraits<StringView>::check(state, 1);
+  if (!AssetManager::isStarted()) {
+    return luaL_error(state, "Scene.findPrefab: there are no assets to search");
+  }
+  const SPtr<IAsset> asset = AssetManager::instance().findAsset(
+      AssetTypeTraits<PrefabAsset>::getTypeId(), text);
+  if (!asset) {
+    lua_pushnil(state);
+    return 1;
+  }
+  ScriptTraits<ScriptPrefab>::push(state, ScriptPrefab{asset->getUUID()});
+  return 1;
+}
+
+/*
+ * Scene.instantiate(prefab, parent?, position?, rotation?): a new instance in the running
+ * script's scene, under parent (a root object when nil), at a world position and rotation
+ * (else at the parent's origin, with the prefab root's rotation). Its scripts start at their
+ * first update, the next frame, or when getScript asks for them.
+ */
+int32
+instantiatePrefab(lua_State* state)
+{
+  Scene* scene = ScriptManager::instance().getCurrentScene();
+  if (!scene) {
+    return luaL_error(state, "Scene.instantiate needs a running script's scene");
+  }
+  const SPtr<PrefabAsset> prefab = checkPrefab(state, 1, "Scene.instantiate");
+  GameObject* parent = checkOptionalParent(state, 2, *scene);
+  const SPtr<GameObject> gameObject =
+      GameObjectSerializer::instantiate(*prefab, *scene, parent);
+  placeInWorld(state, *gameObject, 3);
+  ScriptTraits<GameObject>::push(state, *gameObject);
+  return 1;
+}
+
+/*
+ * gameObject:clone(parent?, position?, rotation?): a copy with its children under parent (a
+ * root object when nil), standing where the original stands in the world unless a world
+ * position or rotation is given. The local scale is copied as it is.
+ */
+int32
+cloneGameObject(lua_State* state)
+{
+  const GameObject& source = ScriptTraits<GameObject>::check(state, 1);
+  Scene& scene = *source.getScene();
+  GameObject* parent = checkOptionalParent(state, 2, scene);
+  const Vector3 position = getWorldPositionNow(source);
+  const Quaternion rotation = getWorldRotationNow(source);
+  const SPtr<GameObject> copy = GameObjectSerializer::copyTo(source, parent);
+  if (!copy) {
+    return luaL_error(state, "GameObject '%s' could not be copied", source.getName().c_str());
+  }
+  if (parent != source.getParent()) {
+    setWorldPosition(*copy, position);
+    setWorldRotation(*copy, rotation);
+  }
+  placeInWorld(state, *copy, 3);
+  ScriptTraits<GameObject>::push(state, *copy);
+  return 1;
+}
+
+/*
+ * gameObject:destroy(): isValid() is false from now on, and the object and its children go
+ * when the update ends (their scripts get onDestroy then). Until then it still works.
+ */
+int32
+destroyGameObject(lua_State* state)
+{
+  GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
+  gameObject.getScene()->requestDestroy(gameObject);
+  return 0;
+}
+
+int32
+getPrefabName(lua_State* state)
+{
+  const auto& prefab = ScriptTraits<ScriptPrefab>::check(state, 1);
+  const SPtr<PrefabAsset> asset = findPrefabAsset(prefab);
+  if (asset) {
+    lua_pushstring(state, asset->getName());
+  }
+  else {
+    lua_pushnil(state);
+  }
+  return 1;
+}
+
+/*
+ * The virtual path, such as /Game/Enemies/Orc.
+ */
+int32
+getPrefabPath(lua_State* state)
+{
+  const auto& prefab = ScriptTraits<ScriptPrefab>::check(state, 1);
+  const SPtr<PrefabAsset> asset = findPrefabAsset(prefab);
+  if (!asset) {
+    lua_pushnil(state);
+    return 1;
+  }
+  const String path = Path(asset->getAssetPath()).join(Path(asset->getName())).toString();
+  lua_pushlstring(state, path.data(), path.size());
+  return 1;
+}
+
+int32
+isPrefabValid(lua_State* state)
+{
+  const auto& prefab = ScriptTraits<ScriptPrefab>::check(state, 1);
+  lua_pushboolean(state, findPrefabAsset(prefab) ? 1 : 0);
+  return 1;
+}
+
+int32
+prefabToString(lua_State* state)
+{
+  const auto& prefab = ScriptTraits<ScriptPrefab>::check(state, 1);
+  const SPtr<PrefabAsset> asset = findPrefabAsset(prefab);
+  lua_pushfstring(state, "Prefab(%s)", asset ? asset->getName() : "missing");
+  return 1;
 }
 
 /*
@@ -1308,8 +1518,19 @@ ScriptBindings::registerObjects(lua_State* state)
       .rawMethod("findDescendant", &findDescendant, "fun(name: string): GameObject?")
       .rawMethod("getScript", &getScript, "fun(name: string): Script?")
       .rawMethod("setScriptEnabled", &setScriptEnabled, "fun(name: string, enabled: boolean)")
-      .rawMethod("isScriptEnabled", &isScriptEnabled, "fun(name: string): boolean");
+      .rawMethod("isScriptEnabled", &isScriptEnabled, "fun(name: string): boolean")
+      .rawMethod("clone", &cloneGameObject,
+                 "fun(parent?: GameObject, position?: Vector3, rotation?: Quaternion): "
+                 "GameObject")
+      .rawMethod("destroy", &destroyGameObject, "fun()");
   setToString(state, ScriptHandleType<GameObject>::NAME, &gameObjectToString);
+
+  ScriptClass<ScriptPrefab>(state)
+      .rawMethod("isValid", &isPrefabValid, "fun(): boolean")
+      .rawMethod("getName", &getPrefabName, "fun(): string?")
+      .rawMethod("getPath", &getPrefabPath, "fun(): string?")
+      .operators<ScriptOperator::Equal>();
+  setToString(state, ScriptValueType<ScriptPrefab>::NAME, &prefabToString);
 
   const ANSICHAR* const kGetVector = "fun(out?: Vector3): Vector3";
   const ANSICHAR* const kGetRotation = "fun(out?: Quaternion): Quaternion";
@@ -1399,7 +1620,11 @@ ScriptBindings::registerObjects(lua_State* state)
                    "fun(origin: Vector3, direction: Vector3, maxDistance?: number, "
                    "ignore?: GameObject, out?: RaycastHit): RaycastHit?")
       .rawFunction("getActiveCamera", &getActiveCamera, "fun(): GameObject?")
-      .rawFunction("setActiveCamera", &setActiveCamera, "fun(camera?: GameObject)");
+      .rawFunction("setActiveCamera", &setActiveCamera, "fun(camera?: GameObject)")
+      .rawFunction("findPrefab", &findPrefab, "fun(pathOrName: string): Prefab?")
+      .rawFunction("instantiate", &instantiatePrefab,
+                   "fun(prefab: Prefab|string, parent?: GameObject, position?: Vector3, "
+                   "rotation?: Quaternion): GameObject");
 }
 
 } // namespace chEngineSDK

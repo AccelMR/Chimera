@@ -51,6 +51,7 @@ constexpr const ANSICHAR* kAnimationGraphPayload = "CH_ANIMATION_GRAPH";
 constexpr const ANSICHAR* kScriptPayload = "CH_SCRIPT";
 constexpr const ANSICHAR* kOtherAssetPayload = "CH_ASSET";
 constexpr const ANSICHAR* kGameObjectPayload = "CH_GAMEOBJECT";
+constexpr const ANSICHAR* kFolderPayload = "CH_FOLDER";
 
 constexpr Array<const ANSICHAR*, 8> kAssetPayloads = {
     kModelPayload,     kTexturePayload,        kMaterialPayload, kPrefabPayload,
@@ -188,6 +189,29 @@ AssetDragDrop::acceptAnyAsset()
     return AssetManager::instance().getAsset(uuid);
   }
   return nullptr;
+}
+
+/*
+ */
+void
+AssetDragDrop::setFolderPayload(const String& folder)
+{
+  // ImGui copies the bytes.
+  ImGui::SetDragDropPayload(kFolderPayload, folder.data(), folder.size());
+}
+
+/*
+ */
+bool
+AssetDragDrop::acceptFolder(String& outFolder)
+{
+  const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kFolderPayload);
+  if (!payload) {
+    return false;
+  }
+  outFolder.assign(static_cast<const ANSICHAR*>(payload->Data),
+                   static_cast<SIZE_T>(payload->DataSize));
+  return true;
 }
 
 /*

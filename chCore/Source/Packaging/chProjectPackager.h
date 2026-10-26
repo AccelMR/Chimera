@@ -12,6 +12,7 @@
 #include "chPrerequisitesCore.h"
 
 #if USING(CH_EDITOR)
+#include "chPackageRules.h"
 #include "chPath.h"
 #include "chSTDThreading.h"
 #include "chUUID.h"
@@ -110,11 +111,14 @@ class CH_CORE_EXPORT ProjectPackager
                 Vector<UUID>& outAssets,
                 Vector<UUID>& outMissing);
 
-  static constexpr StringView GAME_EXECUTABLE_NAME = "chGame";
+  /**
+   * Every root of content and where its package rules are: the project's /Game today. A
+   * plugin with content will add its own, with its own Config/Package.ini.
+   */
+  NODISCARD static Vector<PackageContentSource>
+  getContentSources();
 
-  // In the project's Config folder: what the editor packages (the scenes), kept with the
-  // project but never copied into a package.
-  static constexpr StringView PACKAGE_SETTINGS_FILE = "Package.ini";
+  static constexpr StringView GAME_EXECUTABLE_NAME = "chGame";
 
 #if USING(CH_PLATFORM_WIN32)
   static constexpr StringView EXECUTABLE_EXTENSION = ".exe";

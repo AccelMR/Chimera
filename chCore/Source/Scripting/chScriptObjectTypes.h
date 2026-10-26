@@ -12,12 +12,27 @@
 #include "chPrerequisitesCore.h"
 
 #include "chScriptBinder.h"
+#include "chUUID.h"
 
 namespace chEngineSDK {
 class AnimatorComponent;
 class GameObject;
 class Transform;
 
+/**
+ * Exists so scripts hold a prefab as a plain value (Scene.findPrefab and Prefab properties
+ * give one, Scene.instantiate takes it). Only the asset's UUID is kept, so it never keeps the
+ * asset loaded and never dangles.
+ */
+struct ScriptPrefab
+{
+  NODISCARD bool
+  operator==(const ScriptPrefab& other) const { return prefab == other.prefab; }
+
+  UUID prefab;
+};
+
+CH_SCRIPT_VALUE_TYPE(ScriptPrefab, "Prefab");
 CH_SCRIPT_HANDLE_TYPE(GameObject, "GameObject");
 CH_SCRIPT_HANDLE_TYPE(Transform, "Transform");
 CH_SCRIPT_HANDLE_TYPE(AnimatorComponent, "Animator");

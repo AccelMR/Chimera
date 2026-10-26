@@ -315,14 +315,26 @@ GameObjectSerializer::readInto(DataStream& stream, GameObject& target)
 SPtr<GameObject>
 GameObjectSerializer::duplicate(const GameObject& source)
 {
+  SPtr<GameObject> copy = copyTo(source, source.m_parent);
+  if (copy) {
+    source.getScene()->setSiblingIndex(*copy, source.getScene()->getSiblingIndex(source) + 1);
+  }
+  return copy;
+}
+
+/*
+ */
+SPtr<GameObject>
+GameObjectSerializer::copyTo(const GameObject& source, GameObject* parent)
+{
   CH_ASSERT(source.getScene() && "The source must be in a scene.");
   Scene& scene = *source.getScene();
+  CH_ASSERT((!parent || parent->getScene() == &scene) && "The parent must be in that scene.");
   MemoryDataStream written;
   write(written, source);
 
   // Only read, so the bytes are never changed through the stream.
   MemoryDataStream stream(written.getStartPtr(), written.size(), false);
-  GameObject* parent = source.m_parent;
   const Vector<SPtr<GameObject>>& siblings =
       parent ? parent->m_children : scene.getRootGameObjects();
   const SIZE_T siblingCount = siblings.size();
@@ -337,7 +349,6 @@ GameObjectSerializer::duplicate(const GameObject& source)
     scene.destroyGameObject(*copy);
     return nullptr;
   }
-  scene.setSiblingIndex(*copy, scene.getSiblingIndex(source) + 1);
   return copy;
 }
 

@@ -78,6 +78,13 @@ class CH_CORE_EXPORT GameObjectSerializer
   duplicate(const GameObject& source);
 
   /**
+   * Same copy as duplicate, but as the last child of parent (a root object when null), which
+   * must be in the source's scene. Its local transform is the source's.
+   */
+  static SPtr<GameObject>
+  copyTo(const GameObject& source, GameObject* parent);
+
+  /**
    * Makes an instance of prefab under parent: an object named after the prefab, linked to it,
    * with the prefab's content and the rotation and scale of the prefab's root. Its position
    * stays at zero; the caller places it.

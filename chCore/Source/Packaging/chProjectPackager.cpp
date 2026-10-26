@@ -181,9 +181,9 @@ addConfig(const PackageDesc& desc, Vector<FileCopy>& outCopies)
   FileSystem::getChildren(sourceConfig, files, directories);
   for (const Path& file : files) {
     String fileName = file.getFileName();
-    // The editor's config and the package settings are never read by a game.
+    // The editor's config and the package rules are never read by a game.
     if (file.getExtension() != ".ini" || fileName == "Editor.ini" ||
-        fileName == ProjectPackager::PACKAGE_SETTINGS_FILE) {
+        fileName == PackageRules::FILE_NAME) {
       continue;
     }
     outCopies.push_back(
@@ -352,6 +352,20 @@ ProjectPackager::isDebugBuild(const Path& directory)
   String fileName("chCored");
   fileName += DynamicLibrary::EXTENSION;
   return FileSystem::isFile(directory.join(Path(std::move(fileName))));
+}
+
+/*
+ */
+Vector<PackageContentSource>
+ProjectPackager::getContentSources()
+{
+  Vector<PackageContentSource> sources;
+  if (EnginePaths::hasProject()) {
+    sources.push_back({.mountName = "/Game",
+                       .rulesFile = EnginePaths::getProjectConfigDirectory().join(
+                           Path(String(PackageRules::FILE_NAME)))});
+  }
+  return sources;
 }
 
 /*

@@ -44,6 +44,20 @@ class AssetDragDrop
   acceptAnyAsset();
 
   /**
+   * Call between BeginDragDropSource and EndDragDropSource: drags a Content Browser folder by
+   * its virtual path (/Game/Enemies).
+   */
+  static void
+  setFolderPayload(const String& folder);
+
+  /**
+   * Call between BeginDragDropTarget and EndDragDropTarget. True, with the folder's virtual
+   * path, when a folder was dropped this frame.
+   */
+  NODISCARD static bool
+  acceptFolder(String& outFolder);
+
+  /**
    * Call between BeginDragDropTarget and EndDragDropTarget. Returns the model dropped this
    * frame, already loaded, or null.
    */

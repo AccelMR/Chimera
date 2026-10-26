@@ -67,6 +67,14 @@ class CH_CORE_EXPORT Scene : public Object
   void
   destroyGameObject(GameObject& gameObject);
 
+  /**
+   * Marks the object to be destroyed with destroyGameObject when the next update or fixed
+   * step ends, so code walking the hierarchy (a script of that same object) never sees it
+   * vanish. Until then it works as before and isDestroyRequested() is true.
+   */
+  void
+  requestDestroy(GameObject& gameObject);
+
   NODISCARD FORCEINLINE const Vector<SPtr<GameObject>>&
   getRootGameObjects() const { return m_rootGameObjects; }
 
@@ -268,6 +276,9 @@ class CH_CORE_EXPORT Scene : public Object
   getFixedDebugDraw() const { return m_fixedDebugDraw; }
 
  private:
+  void
+  applyDestroyRequests();
+
   Vector<SPtr<GameObject>> m_rootGameObjects;
   Vector<RenderItem> m_renderItems;
   Vector<uint32> m_freeRenderItems;
@@ -283,6 +294,7 @@ class CH_CORE_EXPORT Scene : public Object
   CameraComponent* m_chosenCamera = nullptr;
   DebugDraw m_debugDraw;
   DebugDraw m_fixedDebugDraw;
+  Vector<SPtr<GameObject>> m_destroyRequests;
   bool m_bPlaying = false;
 };
 

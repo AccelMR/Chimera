@@ -11,7 +11,6 @@
 
 #include "chAlgorithm.h"
 #include "chAssetManager.h"
-#include "chConfigFile.h"
 #include "chEditorScene.h"
 #include "chEngineConfig.h"
 #include "chEnginePaths.h"
@@ -19,6 +18,7 @@
 #include "chLogger.h"
 #include "chMath.h"
 #include "chProjectPackager.h"
+#include "chProjectSettingsUI.h"
 #include "chSTDThreading.h"
 #include "chSceneAsset.h"
 #include "chStringUtils.h"
@@ -82,10 +82,6 @@ constexpr const ANSICHAR* kOutputDirectoryKey = "OutputDirectory";
 constexpr const ANSICHAR* kBuildDirectoryKeys[] = {"ReleaseBuildDirectory",
                                                    "DebugBuildDirectory"};
 
-// What the editor packages lives with the project (shared through version control), not
-// with the user, so it is its own file in the project's Config folder.
-constexpr const ANSICHAR* kSettingsSection = "Package";
-constexpr const ANSICHAR* kScenesKey = "Scenes";
 // A finished package stays on screen this long, unless the mouse is over it.
 constexpr double kResultSeconds = 8.0;
 constexpr SIZE_T kMaxSceneRows = 8;
@@ -111,6 +107,8 @@ struct DialogState
   String startupScene;
   // Every scene of the project, sorted by path; the startup scene is always packaged.
   Vector<SceneEntry> scenes;
+  // The project's package rules as read when the dialog opened.
+  PackageRules rules;
   // Release unless changed while the dialog is open, so a player never gets a debug build
   // by accident.
   PackageConfiguration configuration = PackageConfiguration::Release;
@@ -169,8 +167,7 @@ remember(StringView key, StringView value)
 Path
 getSettingsPath()
 {
-  return EnginePaths::getProjectConfigDirectory().join(
-      Path(String(ProjectPackager::PACKAGE_SETTINGS_FILE)));
+  return EnginePaths::getProjectConfigDirectory().join(Path(String(PackageRules::FILE_NAME)));
 }
 
 bool
@@ -242,15 +239,6 @@ getProjectName()
   return "Game";
 }
 
-String
-getScenePath(const IAsset& asset)
-{
-  String path(asset.getAssetPath());
-  path += '/';
-  path += asset.getName();
-  return path;
-}
-
 /*
  * What the game plays today: its config, else the open scene, else the usual name.
  */
@@ -262,7 +250,7 @@ getDefaultStartupScene()
     return *configured;
   }
   if (const SPtr<SceneAsset>& open = EditorScene::getAsset()) {
-    return getScenePath(*open);
+    return PackageRules::getAssetPath(*open);
   }
   return kDefaultStartupScene;
 }
@@ -273,17 +261,13 @@ getDefaultStartupScene()
 void
 loadScenes(DialogState& state)
 {
-  ConfigFile settings;
-  settings.load(getSettingsPath());
-  Vector<String> included;
-  if (const String* value = settings.getValue(kSettingsSection, kScenesKey)) {
-    included = StringUtils::splitString(*value, ',');
-  }
+  state.rules = PackageRules::load(getSettingsPath());
+  const Vector<String>& included = state.rules.scenes;
 
   state.scenes.clear();
   for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
     if (asset->isTypeOf<SceneAsset>()) {
-      String path = getScenePath(*asset);
+      String path = PackageRules::getAssetPath(*asset);
       const bool bIncluded = Algorithm::contains(included, path);
       state.scenes.push_back({std::move(path), bIncluded});
     }
@@ -306,16 +290,10 @@ saveScenes(const DialogState& state)
       included.push_back(scene.path);
     }
   }
-  const String value = StringUtils::join(included, ",");
-
-  ConfigFile settings;
-  settings.load(getSettingsPath());
-  const String* saved = settings.getValue(kSettingsSection, kScenesKey);
-  if ((saved ? *saved : String()) == value) {
-    return;
-  }
-  settings.setValue(kSettingsSection, kScenesKey, value);
-  if (!settings.save(getSettingsPath())) {
+  // Read again, so what Project Settings changed meanwhile is kept.
+  PackageRules rules = PackageRules::load(getSettingsPath());
+  rules.scenes = std::move(included);
+  if (!rules.save(getSettingsPath())) {
     CH_LOG_ERROR(PackageDialogLog, "Could not write {0}", getSettingsPath());
   }
 }
@@ -461,6 +439,17 @@ startPackage(DialogState& state, const Path& binaryDirectory, bool bDevelopment)
     return;
   }
   saveScenes(state);
+
+  // What every root of content always packages, for what code names only by text.
+  const Vector<SPtr<IAsset>> allAssets = assetManager.getAllAssets();
+  for (const PackageContentSource& source : ProjectPackager::getContentSources()) {
+    Vector<String> unmatched;
+    PackageRules::load(source.rulesFile).collectAlwaysIncluded(allAssets, roots, &unmatched);
+    for (const String& entry : unmatched) {
+      CH_LOG_WARNING(PackageDialogLog, "{0} always includes {1}, which names no asset.",
+                     source.rulesFile, entry);
+    }
+  }
 
   Vector<UUID> assets;
   Vector<UUID> missing;
@@ -669,6 +658,17 @@ renderSceneList(DialogState& state)
     }
   }
   ImGui::EndChild();
+
+  ImGui::TextDisabled("Always included: %u folder(s) or asset(s)",
+                      static_cast<uint32>(state.rules.alwaysInclude.size()));
+  ImGui::SetItemTooltip("What code names only by text, such as a prefab a script spawns by "
+                        "its path, goes in from this list.");
+  ImGui::SameLine();
+  if (ImGui::SmallButton("Edit in Project Settings")) {
+    saveScenes(state);
+    ProjectSettingsUI::showSection(ProjectSettingsSection::Packaging);
+    ImGui::CloseCurrentPopup();
+  }
 }
 
 void

@@ -29,6 +29,7 @@ enum class ScriptPropertyType : uint8
   Vector4 = 6,
   Color = 7,
   GameObject = 8,
+  Prefab = 9,
   COUNT
 };
 
@@ -55,7 +56,8 @@ struct CH_CORE_EXPORT ScriptPropertyValue
   // Vectors use their first components; colors are r, g, b, a.
   float components[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   String text;
-  // The UUID of an object in the same scene; null for none.
+  // GameObject: the UUID of an object in the same scene. Prefab: the UUID of a prefab asset.
+  // Null for none.
   UUID object = UUID::null();
 };
 

@@ -8,12 +8,18 @@
 /************************************************************************/
 #include "chProjectSettingsUI.h"
 
+#include "chAlgorithm.h"
+#include "chAssetDragDrop.h"
+#include "chAssetManager.h"
 #include "chConfigFile.h"
 #include "chConsoleVariable.h"
 #include "chEngineConfig.h"
 #include "chEnginePaths.h"
 #include "chInputManager.h"
 #include "chLogger.h"
+#include "chMath.h"
+#include "chPackageRules.h"
+#include "chSceneAsset.h"
 #include "chStringUtils.h"
 
 #include "imgui.h"
@@ -43,11 +49,10 @@ constexpr ImVec4 kErrorColor(1.0f, 0.4f, 0.4f, 1.0f);
 constexpr uint32 kNone = ~0u;
 constexpr StringView kNewActionName = "NewAction";
 
-enum class SettingsSection : uint8 { Input, COUNT };
-
-const ANSICHAR* const kSectionNames[] = {ICON_FA_GAMEPAD "  Input"};
+const ANSICHAR* const kSectionNames[] = {ICON_FA_GAMEPAD "  Input",
+                                         ICON_FA_BOX_OPEN "  Packaging"};
 static_assert(sizeof(kSectionNames) / sizeof(kSectionNames[0])
-              == static_cast<SIZE_T>(SettingsSection::COUNT));
+              == static_cast<SIZE_T>(ProjectSettingsSection::COUNT));
 
 struct BindingEntry
 {
@@ -68,7 +73,7 @@ struct ActionEntry
 
 struct SettingsState
 {
-  SettingsSection section = SettingsSection::Input;
+  ProjectSettingsSection section = ProjectSettingsSection::Input;
   bool bFocus = false;
   bool bLoaded = false;
 
@@ -98,6 +103,15 @@ struct SettingsState
 
   // Reused for the keys the player changed, built only for actions that show them.
   String playerKeys;
+
+  // Config/Package.ini, read when the window is shown and written at every change.
+  PackageRules packageRules;
+  // Every scene of the project, sorted, for the ticks.
+  Vector<String> scenePaths;
+  // How many assets each AlwaysInclude entry names, counted only when the list changes.
+  Vector<uint32> entryAssetCounts;
+  ANSICHAR newEntryBuffer[256] = "";
+  uint32 removeEntry = kNone;
 };
 
 NODISCARD SettingsState&
@@ -873,6 +887,188 @@ renderInputSection(SettingsState& state)
   applyPendingChanges(state);
   applyCapturedKey(state);
 }
+
+NODISCARD Path
+getPackageRulesPath()
+{
+  return EnginePaths::getProjectConfigDirectory().join(Path(String(PackageRules::FILE_NAME)));
+}
+
+/*
+ * Walks every asset once per entry, so it runs only when the list changes.
+ */
+void
+countEntryAssets(SettingsState& state)
+{
+  const Vector<SPtr<IAsset>> assets = AssetManager::instance().getAllAssets();
+  state.entryAssetCounts.assign(state.packageRules.alwaysInclude.size(), 0);
+  for (SIZE_T i = 0; i < state.packageRules.alwaysInclude.size(); ++i) {
+    const String& entry = state.packageRules.alwaysInclude[i];
+    for (const SPtr<IAsset>& asset : assets) {
+      if (PackageRules::matches(entry, PackageRules::getAssetPath(*asset))) {
+        ++state.entryAssetCounts[i];
+      }
+    }
+  }
+}
+
+void
+loadPackaging(SettingsState& state)
+{
+  state.packageRules = PackageRules::load(getPackageRulesPath());
+  state.scenePaths.clear();
+  for (const SPtr<IAsset>& asset : AssetManager::instance().getAllAssets()) {
+    if (asset->isTypeOf<SceneAsset>()) {
+      state.scenePaths.push_back(PackageRules::getAssetPath(*asset));
+    }
+  }
+  Algorithm::sort(state.scenePaths);
+  countEntryAssets(state);
+}
+
+void
+savePackaging(SettingsState& state)
+{
+  if (!state.packageRules.save(getPackageRulesPath())) {
+    CH_LOG_ERROR(ProjectSettingsLog, "Could not write {0}", getPackageRulesPath());
+  }
+  countEntryAssets(state);
+}
+
+/*
+ * Entries are virtual paths without a trailing '/'; one already listed is not added again.
+ */
+void
+addAlwaysIncluded(SettingsState& state, StringView path)
+{
+  String entry = StringUtils::trim(String(path));
+  while (entry.size() > 1 && entry.back() == '/') {
+    entry.pop_back();
+  }
+  if (entry.empty() || entry.front() != '/' ||
+      Algorithm::contains(state.packageRules.alwaysInclude, entry)) {
+    return;
+  }
+  state.packageRules.alwaysInclude.push_back(std::move(entry));
+  savePackaging(state);
+}
+
+void
+renderPackagedScenes(SettingsState& state)
+{
+  ImGui::SeparatorText("Scenes");
+  const String* startup = EngineConfig::getFile("Game").getValue("Game", "StartupScene");
+  ImGui::TextDisabled("The startup scene (Game.ini, or the one picked in File > Package "
+                      "Project) always goes in.");
+  if (state.scenePaths.empty()) {
+    ImGui::TextDisabled("The project has no scenes yet.");
+  }
+  Vector<String>& scenes = state.packageRules.scenes;
+  for (const String& path : state.scenePaths) {
+    const bool bStartup = startup && *startup == path;
+    bool bChecked = bStartup || Algorithm::contains(scenes, path);
+    ImGui::BeginDisabled(bStartup);
+    if (ImGui::Checkbox(path.c_str(), &bChecked)) {
+      if (bChecked) {
+        scenes.push_back(path);
+      }
+      else {
+        Algorithm::removeFirst(scenes, path);
+      }
+      savePackaging(state);
+    }
+    ImGui::EndDisabled();
+    if (bStartup) {
+      ImGui::SameLine();
+      ImGui::TextDisabled("(startup)");
+    }
+  }
+}
+
+void
+renderAlwaysIncluded(SettingsState& state)
+{
+  ImGui::SeparatorText("Always include");
+  ImGui::TextWrapped("Folders or assets that go in even when no scene uses them, for what "
+                     "code names only by text, such as Scene.instantiate(\"/Game/Enemies/"
+                     "Orc\"). Drop folders or assets from the Content Browser into the list.");
+
+  const Vector<String>& entries = state.packageRules.alwaysInclude;
+  const float rows = static_cast<float>(Math::max(entries.size(), SIZE_T(3)));
+  if (ImGui::BeginChild("##AlwaysInclude",
+                        ImVec2(0.0f, rows * ImGui::GetFrameHeightWithSpacing() +
+                                         ImGui::GetStyle().WindowPadding.y * 2.0f),
+                        ImGuiChildFlags_Borders)) {
+    if (entries.empty()) {
+      ImGui::TextDisabled("Nothing yet.");
+    }
+    for (uint32 i = 0; i < entries.size(); ++i) {
+      ImGui::PushID(static_cast<int32>(i));
+      if (ImGui::SmallButton(ICON_FA_TRASH)) {
+        state.removeEntry = i;
+      }
+      ImGui::SetItemTooltip("Remove from the list");
+      ImGui::SameLine();
+      const uint32 count = i < state.entryAssetCounts.size() ? state.entryAssetCounts[i] : 0;
+      if (count == 0) {
+        ImGui::TextColored(kErrorColor, "%s", entries[i].c_str());
+        ImGui::SetItemTooltip("Names no asset: it was moved, renamed or deleted.");
+      }
+      else {
+        ImGui::TextUnformatted(entries[i].c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled(count == 1 ? "(1 asset)" : "(%u assets)", count);
+      }
+      ImGui::PopID();
+    }
+  }
+  ImGui::EndChild();
+  if (ImGui::BeginDragDropTarget()) {
+    String folder;
+    if (AssetDragDrop::acceptFolder(folder)) {
+      addAlwaysIncluded(state, folder);
+    }
+    else if (const SPtr<IAsset> asset = AssetDragDrop::acceptAnyAsset()) {
+      addAlwaysIncluded(state, PackageRules::getAssetPath(*asset));
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  ImGui::SetNextItemWidth(-ImGui::CalcTextSize("Add").x - ImGui::GetStyle().FramePadding.x * 2.0f -
+                          ImGui::GetStyle().ItemSpacing.x);
+  const bool bEnter = ImGui::InputTextWithHint("##NewEntry", "/Game/Folder or /Game/Asset",
+                                               state.newEntryBuffer,
+                                               sizeof(state.newEntryBuffer),
+                                               ImGuiInputTextFlags_EnterReturnsTrue);
+  ImGui::SameLine();
+  if (ImGui::Button("Add") || bEnter) {
+    addAlwaysIncluded(state, state.newEntryBuffer);
+    state.newEntryBuffer[0] = '\0';
+  }
+
+  if (state.removeEntry != kNone) {
+    if (state.removeEntry < entries.size()) {
+      state.packageRules.alwaysInclude.erase(state.packageRules.alwaysInclude.begin() +
+                                             state.removeEntry);
+      savePackaging(state);
+    }
+    state.removeEntry = kNone;
+  }
+}
+
+void
+renderPackagingSection(SettingsState& state)
+{
+  ImGui::TextWrapped("What a package of this project holds, saved in Config/Package.ini at "
+                     "every change. Each scene and asset goes in with everything it uses.");
+  ImGui::SameLine();
+  if (ImGui::SmallButton(ICON_FA_SYNC "  Reload")) {
+    loadPackaging(state);
+  }
+  ImGui::SetItemTooltip("Reads Config/Package.ini and the scene list again.");
+  renderPackagedScenes(state);
+  renderAlwaysIncluded(state);
+}
 } // namespace
 
 /*
@@ -886,6 +1082,7 @@ ProjectSettingsUI::render()
   }
   if (!state.bLoaded) {
     loadActions(state);
+    loadPackaging(state);
   }
 
   ImGui::SetNextWindowSize(ImVec2(kWindowWidth, kWindowHeight), ImGuiCond_FirstUseEver);
@@ -897,8 +1094,8 @@ ProjectSettingsUI::render()
   if (ImGui::Begin(ICON_FA_COGS "  Project Settings###ProjectSettings", &bVisible)) {
     if (ImGui::BeginChild("##sections", ImVec2(kSectionListWidth, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
-      for (uint32 i = 0; i < static_cast<uint32>(SettingsSection::COUNT); ++i) {
-        const SettingsSection section = static_cast<SettingsSection>(i);
+      for (uint32 i = 0; i < static_cast<uint32>(ProjectSettingsSection::COUNT); ++i) {
+        const ProjectSettingsSection section = static_cast<ProjectSettingsSection>(i);
         if (ImGui::Selectable(kSectionNames[i], state.section == section)) {
           state.section = section;
         }
@@ -909,8 +1106,11 @@ ProjectSettingsUI::render()
     ImGui::SameLine();
     if (ImGui::BeginChild("##section")) {
       switch (state.section) {
-      case SettingsSection::Input:
+      case ProjectSettingsSection::Input:
         renderInputSection(state);
+        break;
+      case ProjectSettingsSection::Packaging:
+        renderPackagingSection(state);
         break;
       default:
         break;
@@ -949,6 +1149,15 @@ ProjectSettingsUI::setWindowVisible(bool bVisible)
   g_cvarShowProjectSettings.set(bVisible, ConsoleVariableSource::Console);
   EngineConfig::setUserValue("Editor", "Editor", "ShowProjectSettings",
                              bVisible ? "true" : "false");
+}
+
+/*
+ */
+void
+ProjectSettingsUI::showSection(ProjectSettingsSection section)
+{
+  getState().section = section;
+  setWindowVisible(true);
 }
 
 /*

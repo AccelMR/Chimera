@@ -83,6 +83,13 @@ class CH_CORE_EXPORT GameObject : public Object
   NODISCARD FORCEINLINE Scene*
   getScene() const { return m_scene; }
 
+  /**
+   * True once Scene::requestDestroy marked this object or one above it; it is destroyed when
+   * the running update ends.
+   */
+  NODISCARD bool
+  isDestroyRequested() const;
+
   NODISCARD FORCEINLINE GameObject*
   getParent() const { return m_parent; }
 
@@ -148,6 +155,7 @@ class CH_CORE_EXPORT GameObject : public Object
   GameObject* m_parent = nullptr;
   Scene* m_scene = nullptr;
   UUID m_prefab = UUID::null();
+  bool m_bDestroyRequested = false;
   // Registry reference of the handle scripts see this object through (LUA_NOREF until a
   // script first does). It is cleared when the object dies, so scripts get an error instead
   // of a dangling pointer.

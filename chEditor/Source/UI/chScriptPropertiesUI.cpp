@@ -9,9 +9,11 @@
 #include "chScriptPropertiesUI.h"
 
 #include "chAssetDragDrop.h"
+#include "chAssetManager.h"
 #include "chEditorScene.h"
 #include "chEditorSelection.h"
 #include "chGameObject.h"
+#include "chPrefabAsset.h"
 #include "chScene.h"
 #include "chScriptAsset.h"
 #include "chScriptComponent.h"
@@ -171,6 +173,70 @@ renderObjectRow(const ScriptProperty& property,
 }
 
 /*
+ * A button with the prefab's name that lists every prefab when clicked and takes prefabs
+ * dragged from the Content Browser, and a button to clear it.
+ */
+bool
+renderPrefabRow(const ScriptProperty& property, ScriptPropertyValue& value)
+{
+  const SPtr<IAsset> asset =
+      value.object.isNull() ? nullptr : AssetManager::instance().getAsset(value.object);
+  const ANSICHAR* prefabName = "None (drop a prefab)";
+  if (asset) {
+    prefabName = asset->getName();
+  }
+  else if (!value.object.isNull()) {
+    prefabName = "Missing prefab";
+  }
+
+  bool bChanged = false;
+  const float clearWidth = value.object.isNull() ? 0.0f : ImGui::GetFrameHeight();
+  const float width = ImGui::CalcItemWidth() - clearWidth;
+  if (ImGui::Button(prefabName, ImVec2(width > 1.0f ? width : 1.0f, 0.0f))) {
+    ImGui::OpenPopup("##prefabs");
+  }
+  ImGui::SetItemTooltip("%s\nClick to pick a prefab, or drop one from the Content Browser",
+                        prefabName);
+  if (ImGui::BeginDragDropTarget()) {
+    if (const SPtr<PrefabAsset> dropped = AssetDragDrop::acceptPrefab()) {
+      value.object = dropped->getUUID();
+      bChanged = true;
+    }
+    ImGui::EndDragDropTarget();
+  }
+  if (ImGui::BeginPopup("##prefabs")) {
+    // Only while the list is open, so walking every asset costs nothing on other frames.
+    Vector<SPtr<IAsset>> prefabs;
+    AssetManager::instance().getAssetsOfType(AssetTypeTraits<PrefabAsset>::getTypeId(),
+                                             prefabs);
+    if (prefabs.empty()) {
+      ImGui::TextDisabled("The project has no prefabs");
+    }
+    for (const SPtr<IAsset>& prefab : prefabs) {
+      ImGui::PushID(prefab.get());
+      if (ImGui::Selectable(prefab->getName(), prefab->getUUID() == value.object)) {
+        value.object = prefab->getUUID();
+        bChanged = true;
+      }
+      ImGui::SetItemTooltip("%s", prefab->getAssetPath());
+      ImGui::PopID();
+    }
+    ImGui::EndPopup();
+  }
+  if (!value.object.isNull()) {
+    ImGui::SameLine(0.0f, 0.0f);
+    if (ImGui::Button(ICON_FA_TIMES, ImVec2(clearWidth, 0.0f))) {
+      value.object = UUID::null();
+      bChanged = true;
+    }
+    ImGui::SetItemTooltip("Clear");
+  }
+  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::TextUnformatted(property.name.c_str());
+  return bChanged;
+}
+
+/*
  * The widget of the property's type, editing value. True when it changed.
  */
 bool
@@ -191,6 +257,8 @@ renderValue(const ScriptProperty& property, ScriptPropertyValue& value, const Ga
       return false;
     case ScriptPropertyType::GameObject:
       return renderObjectRow(property, value, owner);
+    case ScriptPropertyType::Prefab:
+      return renderPrefabRow(property, value);
     default:
       return renderVectorRow(property, value);
   }

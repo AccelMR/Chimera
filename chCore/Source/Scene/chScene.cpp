@@ -205,9 +205,13 @@ void
 Scene::fixedUpdate(float deltaTime)
 {
   m_fixedDebugDraw.clear();
-  for (const SPtr<GameObject>& root : m_rootGameObjects) {
-    root->fixedUpdate(deltaTime, m_bPlaying);
+  // By index with the count taken first: a script may add objects, which only update from
+  // the next step, and nothing is removed until the step ends.
+  const SIZE_T count = m_rootGameObjects.size();
+  for (SIZE_T i = 0; i < count; ++i) {
+    m_rootGameObjects[i]->fixedUpdate(deltaTime, m_bPlaying);
   }
+  applyDestroyRequests();
 }
 
 /*
@@ -216,8 +220,54 @@ void
 Scene::update(float deltaTime)
 {
   m_debugDraw.clear();
-  for (const SPtr<GameObject>& root : m_rootGameObjects) {
-    root->update(deltaTime, m_bPlaying);
+  const SIZE_T count = m_rootGameObjects.size();
+  for (SIZE_T i = 0; i < count; ++i) {
+    m_rootGameObjects[i]->update(deltaTime, m_bPlaying);
+  }
+  applyDestroyRequests();
+}
+
+/*
+ */
+void
+Scene::requestDestroy(GameObject& gameObject)
+{
+  if (gameObject.getScene() != this || gameObject.m_bDestroyRequested) {
+    return;
+  }
+  // Always queued, also outside an update: onDestroy of a script may ask while the scene is
+  // unregistering a subtree, and the tree must not change under it.
+  const Vector<SPtr<GameObject>>& siblings =
+      gameObject.m_parent ? gameObject.m_parent->m_children : m_rootGameObjects;
+  for (const SPtr<GameObject>& sibling : siblings) {
+    if (sibling.get() == &gameObject) {
+      gameObject.m_bDestroyRequested = true;
+      m_destroyRequests.push_back(sibling);
+      return;
+    }
+  }
+}
+
+/*
+ */
+void
+Scene::applyDestroyRequests()
+{
+  if (m_destroyRequests.empty()) {
+    return;
+  }
+  // onDestroy of a script may ask for more while a subtree is being unregistered, so those
+  // are queued too and destroyed in the next round. A chain that never ends waits for the
+  // next update.
+  constexpr uint32 kMaxRounds = 8;
+  Vector<SPtr<GameObject>> requests;
+  for (uint32 round = 0; round < kMaxRounds && !m_destroyRequests.empty(); ++round) {
+    requests.swap(m_destroyRequests);
+    for (const SPtr<GameObject>& gameObject : requests) {
+      // An object whose parent went first already left the scene.
+      destroyGameObject(*gameObject);
+    }
+    requests.clear();
   }
 }
 

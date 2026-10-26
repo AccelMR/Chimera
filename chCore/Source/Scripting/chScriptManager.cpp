@@ -245,6 +245,17 @@ toPropertyValue(lua_State* state,
       }
       return gameObject != nullptr;
     }
+    case ScriptPropertyType::Prefab: {
+      if (lua_isnil(state, index)) {
+        return true;
+      }
+      const auto* prefab = static_cast<const ScriptPrefab*>(
+          luaL_testudata(state, index, ScriptValueType<ScriptPrefab>::NAME));
+      if (prefab) {
+        outValue.object = prefab->prefab;
+      }
+      return prefab != nullptr;
+    }
     default:
       return false;
   }
@@ -329,6 +340,14 @@ pushPropertyValue(lua_State* state, const ScriptPropertyValue& value, const Scen
       }
       break;
     }
+    case ScriptPropertyType::Prefab:
+      if (value.object.isNull()) {
+        lua_pushnil(state);
+      }
+      else {
+        ScriptTraits<ScriptPrefab>::push(state, ScriptPrefab{value.object});
+      }
+      break;
     default:
       lua_pushnil(state);
       break;
@@ -417,7 +436,7 @@ readProperty(lua_State* state, const lua_Integer position, ScriptClassInfo& info
         !ScriptPropertyUtils::fromTypeName(lua_tostring(state, -1), type)) {
       luaL_error(state,
                  "property '%s' has an unknown type '%s' (number, integer, boolean, string, "
-                 "Vector2, Vector3, Vector4, Color, GameObject)",
+                 "Vector2, Vector3, Vector4, Color, GameObject, Prefab)",
                  name, luaL_tolstring(state, -1, nullptr));
     }
   }
@@ -430,10 +449,10 @@ readProperty(lua_State* state, const lua_Integer position, ScriptClassInfo& info
   }
   lua_pop(state, 1);
 
-  if (type == ScriptPropertyType::GameObject && !lua_isnil(state, defaultIndex)) {
-    luaL_error(state, "property '%s' is a GameObject: it is picked in the editor and has no "
-                      "default",
-               name);
+  if ((type == ScriptPropertyType::GameObject || type == ScriptPropertyType::Prefab) &&
+      !lua_isnil(state, defaultIndex)) {
+    luaL_error(state, "property '%s' is a %s: it is picked in the editor and has no default",
+               name, ScriptPropertyUtils::getTypeName(type));
   }
   if (lua_isnil(state, defaultIndex)) {
     property.defaultValue = ScriptPropertyValue::makeDefault(type);
@@ -664,7 +683,7 @@ ScriptManager::openLibraries()
 
     m_apiDescription->addAlias("ScriptPropertyType",
                                "\"number\"|\"integer\"|\"boolean\"|\"string\"|\"Vector2\"|"
-                               "\"Vector3\"|\"Vector4\"|\"Color\"|\"GameObject\"");
+                               "\"Vector3\"|\"Vector4\"|\"Color\"|\"GameObject\"|\"Prefab\"");
     ScriptApiType& entry =
         m_apiDescription->addType("ScriptPropertyEntry", ScriptApiTypeKind::Shape);
     entry.description = "One value the editor shows for each object using the script: "

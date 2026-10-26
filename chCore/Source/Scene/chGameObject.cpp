@@ -42,13 +42,17 @@ GameObject::~GameObject()
 void
 GameObject::fixedUpdate(float deltaTime, bool bPlaying)
 {
-  for (const UniquePtr<Component>& component : m_components) {
-    if (component->isEnabled() && (bPlaying || component->updatesWhileEditing())) {
-      component->fixedUpdate(deltaTime);
+  // By index with the counts taken first: scripts may add children while this runs.
+  const SIZE_T componentCount = m_components.size();
+  for (SIZE_T i = 0; i < componentCount; ++i) {
+    Component& component = *m_components[i];
+    if (component.isEnabled() && (bPlaying || component.updatesWhileEditing())) {
+      component.fixedUpdate(deltaTime);
     }
   }
-  for (const SPtr<GameObject>& child : m_children) {
-    child->fixedUpdate(deltaTime, bPlaying);
+  const SIZE_T childCount = m_children.size();
+  for (SIZE_T i = 0; i < childCount; ++i) {
+    m_children[i]->fixedUpdate(deltaTime, bPlaying);
   }
 }
 
@@ -57,14 +61,30 @@ GameObject::fixedUpdate(float deltaTime, bool bPlaying)
 void
 GameObject::update(float deltaTime, bool bPlaying)
 {
-  for (const UniquePtr<Component>& component : m_components) {
-    if (component->isEnabled() && (bPlaying || component->updatesWhileEditing())) {
-      component->update(deltaTime);
+  const SIZE_T componentCount = m_components.size();
+  for (SIZE_T i = 0; i < componentCount; ++i) {
+    Component& component = *m_components[i];
+    if (component.isEnabled() && (bPlaying || component.updatesWhileEditing())) {
+      component.update(deltaTime);
     }
   }
-  for (const SPtr<GameObject>& child : m_children) {
-    child->update(deltaTime, bPlaying);
+  const SIZE_T childCount = m_children.size();
+  for (SIZE_T i = 0; i < childCount; ++i) {
+    m_children[i]->update(deltaTime, bPlaying);
   }
+}
+
+/*
+ */
+bool
+GameObject::isDestroyRequested() const
+{
+  for (const GameObject* current = this; current; current = current->m_parent) {
+    if (current->m_bDestroyRequested) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /*

@@ -26,7 +26,6 @@
 #include "chAnimationGraphEditorUI.h"
 #include "chAssetManager.h"
 #include "chAssetThumbnails.h"
-#include "chConfigFile.h"
 #include "chLogger.h"
 #include "chImportDialog.h"
 #include "chEditorScene.h"
@@ -93,8 +92,6 @@ shortenName(const ANSICHAR* name, ShortName& outBuffer)
   return outBuffer;
 }
 
-constexpr const ANSICHAR* kFolderPayload = "CH_FOLDER";
-
 /*
  * Names every file system takes: no separators or characters Windows refuses, and no
  * trailing dot or space, which Windows drops.
@@ -119,15 +116,6 @@ isInsideFolder(StringView path, StringView folder)
 {
   return path == folder || (path.size() > folder.size() && path.starts_with(folder) &&
                             path[folder.size()] == '/');
-}
-
-String
-getScenePath(const IAsset& scene)
-{
-  String path(scene.getAssetPath());
-  path += '/';
-  path += scene.getName();
-  return path;
 }
 
 /*
@@ -1059,9 +1047,7 @@ ContentAssetUI::folderDragSource(uint32 folderIndex)
   if (folderIndex == 0 || !ImGui::BeginDragDropSource()) {
     return;
   }
-  // ImGui copies the bytes; the path is read back on drop.
-  const String& path = m_folders[folderIndex].path.toString();
-  ImGui::SetDragDropPayload(kFolderPayload, path.data(), path.size());
+  AssetDragDrop::setFolderPayload(m_folders[folderIndex].path.toString());
   ImGui::Text("%s %s", UIHelpers::getFolderIcon(false), m_folders[folderIndex].name.c_str());
   ImGui::EndDragDropSource();
 }
@@ -1086,9 +1072,8 @@ ContentAssetUI::acceptFolderDrop(const Path& folder)
   else if (const SPtr<IAsset> asset = AssetDragDrop::acceptAnyAsset()) {
     requestAssetMove(asset, folder);
   }
-  else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kFolderPayload)) {
-    const Path dragged(String(static_cast<const ANSICHAR*>(payload->Data),
-                              static_cast<SIZE_T>(payload->DataSize)));
+  else if (String draggedFolder; AssetDragDrop::acceptFolder(draggedFolder)) {
+    const Path dragged(std::move(draggedFolder));
     requestFolderMove(dragged, folder.join(Path(dragged.getFileName())));
   }
   ImGui::EndDragDropTarget();
@@ -1119,7 +1104,7 @@ ContentAssetUI::requestAssetMove(const SPtr<IAsset>& asset, const Path& folder)
   m_moveFolder = Path();
   m_moveTarget = folder;
   m_bMoveRequested = true;
-  findBrokenScenePaths();
+  findBrokenPaths();
   m_bOpenMoveConfirmation = !m_moveWarnings.empty();
 }
 
@@ -1135,34 +1120,45 @@ ContentAssetUI::requestFolderMove(const Path& folder, const Path& newFolder)
   m_moveFolder = folder;
   m_moveTarget = newFolder;
   m_bMoveRequested = true;
-  findBrokenScenePaths();
+  findBrokenPaths();
   m_bOpenMoveConfirmation = !m_moveWarnings.empty();
 }
 
 /*
  */
 void
-ContentAssetUI::findBrokenScenePaths()
+ContentAssetUI::findBrokenPaths()
 {
   m_moveWarnings.clear();
 
+  // Where each moved asset is now and will be, as settings name them.
+  Vector<std::pair<String, String>> moves;
   Vector<String> movedScenes;
+  const String target = m_moveTarget.toString();
+  const auto addMove = [&](const IAsset& asset, String newFolder) {
+    String oldPath = PackageRules::getAssetPath(asset);
+    if (asset.isTypeOf<SceneAsset>()) {
+      movedScenes.push_back(oldPath);
+    }
+    newFolder += '/';
+    newFolder += asset.getName();
+    moves.emplace_back(std::move(oldPath), std::move(newFolder));
+  };
   if (m_moveFolder.empty()) {
     for (const SPtr<IAsset>& asset : m_moveAssets) {
-      if (asset->isTypeOf<SceneAsset>()) {
-        movedScenes.push_back(getScenePath(*asset));
-      }
+      addMove(*asset, target);
     }
   }
   else {
+    const String folder = m_moveFolder.toString();
     for (const SPtr<IAsset>& asset : m_assets) {
-      if (asset->isTypeOf<SceneAsset>() &&
-          isInsideFolder(asset->getAssetPath(), m_moveFolder.toString())) {
-        movedScenes.push_back(getScenePath(*asset));
+      const StringView assetFolder(asset->getAssetPath());
+      if (isInsideFolder(assetFolder, folder)) {
+        addMove(*asset, target + String(assetFolder.substr(folder.size())));
       }
     }
   }
-  if (movedScenes.empty()) {
+  if (moves.empty()) {
     return;
   }
 
@@ -1175,15 +1171,22 @@ ContentAssetUI::findBrokenScenePaths()
     }
   }
 
-  ConfigFile packageSettings;
-  const Path packagePath = EnginePaths::getProjectConfigDirectory().join(
-      Path(String(ProjectPackager::PACKAGE_SETTINGS_FILE)));
-  if (FileSystem::exists(packagePath) && packageSettings.load(packagePath)) {
-    if (const String* scenes = packageSettings.getValue("Package", "Scenes")) {
-      for (const String& scene : StringUtils::splitString(*scenes, ',')) {
-        if (Algorithm::contains(movedScenes, scene)) {
+  for (const PackageContentSource& source : ProjectPackager::getContentSources()) {
+    const PackageRules rules = PackageRules::load(source.rulesFile);
+    for (const String& scene : rules.scenes) {
+      if (Algorithm::contains(movedScenes, scene)) {
+        m_moveWarnings.push_back(
+            StringUtils::format("Package.ini [Package] Scenes lists {0}", scene));
+      }
+    }
+    // An entry breaks when something it packages moves out of it.
+    for (const String& entry : rules.alwaysInclude) {
+      for (const std::pair<String, String>& move : moves) {
+        if (PackageRules::matches(entry, move.first) &&
+            !PackageRules::matches(entry, move.second)) {
           m_moveWarnings.push_back(
-              StringUtils::format("Package.ini [Package] Scenes lists {0}", scene));
+              StringUtils::format("Package.ini [Package] AlwaysInclude lists {0}", entry));
+          break;
         }
       }
     }
@@ -1196,14 +1199,14 @@ void
 ContentAssetUI::renderMoveConfirmationPopup()
 {
   if (m_bOpenMoveConfirmation) {
-    ImGui::OpenPopup("Move Scene?");
+    ImGui::OpenPopup("Move Assets?");
     m_bOpenMoveConfirmation = false;
   }
-  if (!ImGui::BeginPopupModal("Move Scene?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (!ImGui::BeginPopupModal("Move Assets?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     return;
   }
 
-  ImGui::TextUnformatted("These settings name a scene by its path and will not find it:");
+  ImGui::TextUnformatted("These settings name what moves by its path and will not find it:");
   for (const String& warning : m_moveWarnings) {
     ImGui::BulletText("%s", warning.c_str());
   }

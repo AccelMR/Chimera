@@ -17,7 +17,8 @@ namespace {
 // In ScriptPropertyType order.
 constexpr const ANSICHAR* kTypeNames[] = {"number",  "integer", "boolean",
                                           "string",  "Vector2", "Vector3",
-                                          "Vector4", "Color",   "GameObject"};
+                                          "Vector4", "Color",   "GameObject",
+                                          "Prefab"};
 static_assert(sizeof(kTypeNames) / sizeof(kTypeNames[0]) ==
               static_cast<SIZE_T>(ScriptPropertyType::COUNT));
 
@@ -74,6 +75,7 @@ ScriptPropertyValue::operator==(const ScriptPropertyValue& other) const
     case ScriptPropertyType::String:
       return text == other.text;
     case ScriptPropertyType::GameObject:
+    case ScriptPropertyType::Prefab:
       return object == other.object;
     default:
       for (uint32 i = 0; i < getComponentCount(type); ++i) {
@@ -133,6 +135,7 @@ ScriptPropertyUtils::writeValue(DataStream& stream, const ScriptPropertyValue& v
           stream, StringView(value.text).substr(0, static_cast<SIZE_T>(MAX_TEXT_LENGTH)));
       break;
     case ScriptPropertyType::GameObject:
+    case ScriptPropertyType::Prefab:
       stream.write(&value.object, sizeof(value.object));
       break;
     default:
@@ -168,6 +171,7 @@ ScriptPropertyUtils::readValue(DataStream& stream, ScriptPropertyValue& outValue
     case ScriptPropertyType::String:
       return AssetFile::readString(stream, outValue.text, MAX_TEXT_LENGTH);
     case ScriptPropertyType::GameObject:
+    case ScriptPropertyType::Prefab:
       return AssetFile::readValue(stream, outValue.object);
     default:
       return AssetFile::readBytes(stream, outValue.components,

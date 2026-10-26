@@ -2092,6 +2092,81 @@ TEST_CASE("chCore - Packaged assets follow references")
   REQUIRE(missingAssets.size() == 1);
   REQUIRE(missingAssets[0] == missing);
 }
+
+TEST_CASE("chCore - Package rules")
+{
+  SECTION("Entries name a folder with everything inside, or one asset")
+  {
+    REQUIRE(PackageRules::matches("/Game/Enemies", "/Game/Enemies/Orc"));
+    REQUIRE(PackageRules::matches("/Game/Enemies/", "/Game/Enemies/Big/Troll"));
+    REQUIRE(PackageRules::matches("/Game/Enemies/Orc", "/Game/Enemies/Orc"));
+    REQUIRE_FALSE(PackageRules::matches("/Game/Enemies", "/Game/EnemiesOld/Orc"));
+    REQUIRE_FALSE(PackageRules::matches("/Game/Enemies/Orc", "/Game/Enemies/OrcBoss"));
+    REQUIRE_FALSE(PackageRules::matches("", "/Game/Enemies/Orc"));
+  }
+
+  SECTION("Always included assets are found once each")
+  {
+    const auto makePrefab = [](const ANSICHAR* folder, const ANSICHAR* name) {
+      AssetMetadata metadata;
+      metadata.uuid = chEngineSDK::UUID::createRandom();
+      metadata.assetType = AssetTypeTraits<PrefabAsset>::getTypeId();
+      StringUtils::copyToBuffer(metadata.name, name);
+      StringUtils::copyToBuffer(metadata.assetPath, folder);
+      return SPtr<IAsset>(chMakeShared<PrefabAsset>(metadata));
+    };
+    const Vector<SPtr<IAsset>> assets = {makePrefab("/Game/Enemies", "Orc"),
+                                         makePrefab("/Game/Enemies/Big", "Troll"),
+                                         makePrefab("/Game/Props", "Barrel"),
+                                         makePrefab("/Game/Props", "Crate")};
+    REQUIRE(PackageRules::getAssetPath(*assets[0]) == "/Game/Enemies/Orc");
+
+    PackageRules rules;
+    rules.alwaysInclude = {"/Game/Enemies", "/Game/Enemies/Orc", "/Game/Props/Crate",
+                           "/Game/Gone"};
+    Vector<chEngineSDK::UUID> roots = {assets[3]->getUUID()};
+    Vector<String> unmatched;
+    rules.collectAlwaysIncluded(assets, roots, &unmatched);
+    REQUIRE(roots.size() == 3);
+    REQUIRE(roots[0] == assets[3]->getUUID());
+    REQUIRE(Algorithm::contains(roots, assets[0]->getUUID()));
+    REQUIRE(Algorithm::contains(roots, assets[1]->getUUID()));
+    REQUIRE(unmatched.size() == 1);
+    REQUIRE(unmatched[0] == "/Game/Gone");
+  }
+
+  SECTION("Saving keeps other sections and skips an unchanged file")
+  {
+    const Path root = FileSystem::absolutePath(Path("PackageRulesTestDir"));
+    FileSystem::removeAll(root);
+    const Path file = root.join(Path(String(PackageRules::FILE_NAME)));
+    writeTestFile(file, "[Package]\nScenes = /Game/Maps/A , /Game/Maps/B\n[Other]\nKey=1\n");
+
+    PackageRules rules = PackageRules::load(file);
+    REQUIRE(rules.scenes == Vector<String>{"/Game/Maps/A", "/Game/Maps/B"});
+    REQUIRE(rules.alwaysInclude.empty());
+
+    rules.alwaysInclude = {"/Game/Enemies"};
+    REQUIRE(rules.save(file));
+    ConfigFile saved;
+    REQUIRE(saved.load(file));
+    REQUIRE(*saved.getValue("Package", "AlwaysInclude") == "/Game/Enemies");
+    REQUIRE(*saved.getValue("Other", "Key") == "1");
+    const PackageRules loaded = PackageRules::load(file);
+    REQUIRE(loaded.scenes == rules.scenes);
+    REQUIRE(loaded.alwaysInclude == rules.alwaysInclude);
+
+    // Unchanged rules leave the file as it is, comments too.
+    writeTestFile(file, "; kept\n[Package]\nScenes=/Game/Maps/A\n");
+    REQUIRE(PackageRules::load(file).save(file));
+    {
+      FileDataStream stream(file);
+      REQUIRE(stream.getAsString().starts_with("; kept"));
+    }
+    REQUIRE(PackageRules::load(root.join(Path("Missing.ini"))).scenes.empty());
+    FileSystem::removeAll(root);
+  }
+}
 #endif // USING(CH_EDITOR)
 
 namespace {
@@ -6575,6 +6650,7 @@ TEST_CASE("chCore - Script properties")
         "return { properties = { { \"a\", 2.5, type = \"integer\" } } }",
         "return { properties = { { \"a\", 1, type = \"Vector9\" } } }",
         "return { properties = { { \"a\", 1, type = \"GameObject\" } } }",
+        "return { properties = { { \"a\", 1, type = \"Prefab\" } } }",
         "return { properties = { { \"a\", 1, min = \"low\" } } }",
     };
     for (const ANSICHAR* source : kBroken) {
@@ -7246,6 +7322,166 @@ TEST_CASE("chCore - Script objects")
     REQUIRE(scripts.runString("DebugDraw.line(Vector3(0, 0, 0))"));
 #endif
   }
+}
+
+TEST_CASE("chCore - Script spawning")
+{
+  ScriptManager& scripts = getTestScriptManager();
+  REQUIRE(scripts.runString("Spawn = { updates = 0, destroyed = 0 }"));
+  const SPtr<ScriptAsset> spawner = createTestScriptAsset("Spawner", R"lua(
+    local Spawner = {}
+    function Spawner:update(dt)
+      Spawn.updates = Spawn.updates + 1
+      if Spawn.updates == 1 then
+        local copy = self.gameObject:clone(nil, Vector3(5, 0, 0))
+        Spawn.copy = copy
+        Spawn.copyValid = copy:isValid()
+        Spawn.kid = self.gameObject:getChild(1)
+        self.gameObject:destroy()
+        Spawn.selfValid = self.gameObject:isValid()
+        Spawn.kidValid = Spawn.kid:isValid()
+        -- Still usable until the update ends.
+        Spawn.nameAfterDestroy = self.gameObject:getName()
+      end
+    end
+    function Spawner:onDestroy()
+      Spawn.destroyed = Spawn.destroyed + 1
+    end
+    return Spawner
+  )lua");
+
+  Scene scene("Spawning", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+  scripts.setCurrentScene(&scene);
+
+  SECTION("A script clones and destroys its own object during the update")
+  {
+    const SPtr<GameObject> original = scene.createGameObject("Original");
+    original->getTransform().setLocalPosition(Vector3(1.0f, 2.0f, 3.0f));
+    scene.createGameObject("Kid", original.get());
+    original->addComponent<ScriptComponent>(spawner);
+
+    scene.update(0.1f);
+    // The copy is added during the update and only updates from the next one.
+    REQUIRE(scripts.runString(R"lua(
+      assert(Spawn.updates == 1, Spawn.updates)
+      assert(Spawn.copyValid and not Spawn.selfValid and not Spawn.kidValid)
+      assert(Spawn.nameAfterDestroy == "Original")
+      assert(Spawn.destroyed == 1)
+      assert(Spawn.copy:isValid() and Spawn.copy:getChildCount() == 1)
+      assert(Spawn.copy:getTransform():getWorldPosition():nearEqual(Vector3(5, 0, 0)))
+    )lua"));
+    REQUIRE(original->getScene() == nullptr);
+    REQUIRE(scene.getRootGameObjects().size() == 1);
+    const SPtr<GameObject> copy = scene.getRootGameObjects()[0];
+    REQUIRE(copy->getName() == "Original");
+    REQUIRE(copy->getUUID() != original->getUUID());
+    REQUIRE(copy->getChildren()[0]->getName() == "Kid");
+    REQUIRE_FALSE(scripts.runString("return Spawn.kid:getName()"));
+
+    scene.update(0.1f);
+    // Without an AssetManager the copy's script component cannot find its script, so only the
+    // original ran.
+    REQUIRE(scripts.runString("assert(Spawn.updates == 1 and Spawn.copy:isValid())"));
+
+    // Asked outside an update, it waits for the next one to end.
+    REQUIRE(scripts.runString("Spawn.copy:destroy()"));
+    REQUIRE(scripts.runString("assert(not Spawn.copy:isValid())"));
+    REQUIRE(scene.getRootGameObjects().size() == 1);
+    REQUIRE(copy->isDestroyRequested());
+    scene.update(0.1f);
+    REQUIRE(scene.getRootGameObjects().empty());
+    REQUIRE(scripts.runString("assert(not Spawn.copy:isValid())"));
+    REQUIRE_FALSE(scripts.runString("Spawn.copy:destroy()"));
+  }
+
+  SECTION("A clone under another parent keeps its world placement")
+  {
+    const SPtr<GameObject> parent = scene.createGameObject("Parent");
+    parent->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+    parent->getTransform().setLocalRotation(Quaternion(Rotator(0.0f, 90.0f, 0.0f)));
+    const SPtr<GameObject> source = scene.createGameObject("Source");
+    source->getTransform().setLocalPosition(Vector3(1.0f, 0.0f, 0.0f));
+    REQUIRE(scripts.runString(R"lua(
+      local source = Scene.find("Source")
+      local parent = Scene.find("Parent")
+      local copy = source:clone(parent)
+      assert(copy:getParent() == parent)
+      assert(copy:getTransform():getWorldPosition():nearEqual(Vector3(1, 0, 0)))
+      assert(copy:getTransform():getForward():nearEqual(Vector3.FORWARD))
+
+      local placed = source:clone(parent, Vector3(0, 0, 4), Quaternion.FromEuler(0, 90, 0))
+      assert(placed:getTransform():getWorldPosition():nearEqual(Vector3(0, 0, 4)))
+      assert(placed:getTransform():getForward():nearEqual(Vector3.RIGHT))
+
+      -- A root clone by default stands where the source stands.
+      assert(source:clone():getTransform():getWorldPosition():nearEqual(Vector3(1, 0, 0)))
+    )lua"));
+    REQUIRE(parent->getChildren().size() == 2);
+    REQUIRE(scene.getRootGameObjects().size() == 3);
+
+    Scene other("Other", chEngineSDK::UUID::createRandom());
+    const SPtr<GameObject> stranger = other.createGameObject("Stranger");
+    ScriptTraits<GameObject>::push(scripts.getState(), *stranger);
+    lua_setglobal(scripts.getState(), "Stranger");
+    REQUIRE_FALSE(scripts.runString("Scene.find('Source'):clone(Stranger)"));
+    REQUIRE(scripts.runString("Stranger = nil"));
+  }
+
+  SECTION("Without assets, prefabs cannot be found")
+  {
+    REQUIRE_FALSE(scripts.runString("Scene.instantiate('/Game/Enemies/Orc')"));
+    REQUIRE_FALSE(scripts.runString("Scene.findPrefab('Orc')"));
+    REQUIRE_FALSE(scripts.runString("Prefab()"));
+  }
+
+  SECTION("A Prefab property gives a Prefab value and is a reference")
+  {
+    const SPtr<ScriptAsset> gun = createTestScriptAsset("Gun", R"lua(
+      local Gun = {}
+      Gun.properties = { { "bullet", type = "Prefab" } }
+      function Gun:onStart()
+        Spawn[self.gameObject:getName()] = self.bullet
+      end
+      return Gun
+    )lua");
+    const ScriptClassInfo* scriptClass = scripts.getClass(*gun);
+    REQUIRE(scriptClass);
+    REQUIRE(scriptClass->bValid);
+    REQUIRE(scriptClass->properties[0].defaultValue.type == ScriptPropertyType::Prefab);
+    REQUIRE(scriptClass->properties[0].defaultValue.object.isNull());
+
+    const SPtr<GameObject> empty = scene.createGameObject("Empty");
+    const SPtr<GameObject> loaded = scene.createGameObject("Loaded");
+    const SPtr<GameObject> again = scene.createGameObject("Again");
+    empty->addComponent<ScriptComponent>(gun);
+    ScriptPropertyValue bullet = ScriptPropertyValue::makeDefault(ScriptPropertyType::Prefab);
+    bullet.object = chEngineSDK::UUID::createRandom();
+    ScriptComponent& loadedScript = loaded->addComponent<ScriptComponent>(gun);
+    loadedScript.setOverride("bullet", bullet);
+    again->addComponent<ScriptComponent>(gun).setOverride("bullet", bullet);
+    scene.update(0.1f);
+    REQUIRE(scripts.runString(R"lua(
+      assert(Spawn.Empty == nil)
+      assert(Spawn.Loaded ~= nil and Spawn.Loaded == Spawn.Again)
+      assert(not Spawn.Loaded:isValid() and Spawn.Loaded:getName() == nil)
+      assert(tostring(Spawn.Loaded) == "Prefab(missing)")
+    )lua"));
+
+    Vector<chEngineSDK::UUID> references;
+    loadedScript.collectReferences(references);
+    REQUIRE(references.size() == 2);
+    REQUIRE(references[1] == bullet.object);
+
+    MemoryDataStream stream;
+    ScriptPropertyUtils::writeValue(stream, bullet);
+    stream.seek(0);
+    ScriptPropertyValue read;
+    REQUIRE(ScriptPropertyUtils::readValue(stream, read));
+    REQUIRE(read == bullet);
+  }
+  scripts.setCurrentScene(nullptr);
+  scripts.forgetClass(spawner->getUUID());
 }
 
 TEST_CASE("chCore - Script input")

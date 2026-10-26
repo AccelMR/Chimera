@@ -105,7 +105,7 @@ class ContentAssetUI
 
   /**
    * The move runs after the frame's lists are drawn, because it reads the folders from
-   * disk again. When a setting names a scene that moves by its path, it asks first. A
+   * disk again. When a setting names by its path what moves, it asks first. A
    * dragged asset that is part of a selection moves the whole selection.
    */
   void
@@ -145,11 +145,12 @@ class ContentAssetUI
   renderMoveConfirmationPopup();
 
   /**
-   * The settings that name, by path, a scene the pending move takes elsewhere. Assets
-   * reference each other by UUID, so only text paths in config files break.
+   * The settings that name, by path, an asset the pending move takes elsewhere (startup
+   * scene, package rules). Assets reference each other by UUID, so only text paths in config
+   * files break.
    */
   void
-  findBrokenScenePaths();
+  findBrokenPaths();
 
   void
   renderSearchBar();

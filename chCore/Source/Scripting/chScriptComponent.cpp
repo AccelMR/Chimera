@@ -345,6 +345,12 @@ ScriptComponent::collectReferences(Vector<UUID>& outReferences) const
   if (!m_scriptId.isNull()) {
     outReferences.push_back(m_scriptId);
   }
+  // So the prefabs a script spawns load with the scene and go into packages.
+  for (const ScriptPropertyOverride& entry : m_overrides) {
+    if (entry.value.type == ScriptPropertyType::Prefab && !entry.value.object.isNull()) {
+      outReferences.push_back(entry.value.object);
+    }
+  }
 }
 
 /*
