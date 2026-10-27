@@ -9,6 +9,8 @@
 /************************************************************************/
 #include "chSceneAsset.h"
 
+#include "chAlgorithm.h"
+#include "chAssetFile.h"
 #include "chAssetManager.h"
 #include "chFileStream.h"
 #include "chGameObjectSerializer.h"
@@ -23,6 +25,18 @@
 #endif // USING(CH_EDITOR)
 
 namespace chEngineSDK {
+
+namespace {
+// Above any real map; only a broken file asks for more.
+constexpr uint32 kMaxSubLevels = 4096;
+
+struct SubLevelFileData
+{
+  UUID asset;
+  uint32 loadAtStart;
+};
+static_assert(sizeof(SubLevelFileData) == 20, "SubLevelFileData must have no padding");
+} // namespace
 
 #if USING(CH_EDITOR)
 namespace {
@@ -85,6 +99,15 @@ SceneAsset::serialize(SPtr<DataStream> stream)
   const uint32 version = SERIALIZATION_VERSION;
   stream->write(&version, sizeof(version));
   GameObjectSerializer::write(*stream, m_scene->getRootGameObjects());
+
+  const Vector<SceneSubLevel>& subLevels = m_scene->getSubLevels();
+  const uint32 subLevelCount = static_cast<uint32>(subLevels.size());
+  stream->write(&subLevelCount, sizeof(subLevelCount));
+  for (const SceneSubLevel& subLevel : subLevels) {
+    const SubLevelFileData data{.asset = subLevel.asset,
+                                .loadAtStart = subLevel.bLoadAtStart ? 1u : 0u};
+    stream->write(&data, sizeof(data));
+  }
   return true;
 }
 
@@ -106,6 +129,23 @@ SceneAsset::deserialize(SPtr<DataStream> stream)
     CH_LOG_ERROR(AssetSystem, "Failed to read the objects of scene {0}", getName());
     return false;
   }
+
+  uint32 subLevelCount = 0;
+  if (!AssetFile::readValue(*stream, subLevelCount) || subLevelCount > kMaxSubLevels ||
+      subLevelCount * sizeof(SubLevelFileData) > AssetFile::getBytesLeft(*stream)) {
+    CH_LOG_ERROR(AssetSystem, "Scene {0} has a broken list of sublevels", getName());
+    return false;
+  }
+  Vector<SceneSubLevel> subLevels(subLevelCount);
+  for (SceneSubLevel& subLevel : subLevels) {
+    SubLevelFileData data;
+    if (!AssetFile::readValue(*stream, data)) {
+      return false;
+    }
+    subLevel = {.asset = data.asset, .bLoadAtStart = data.loadAtStart != 0};
+  }
+  scene->setSubLevels(subLevels);
+  scene->setMapLevel(getName(), getUUID());
   m_scene = std::move(scene);
   return true;
 }
@@ -125,6 +165,12 @@ SceneAsset::collectReferences(Vector<UUID>& outReferences) const
 {
   if (m_scene) {
     GameObjectSerializer::collectReferences(m_scene->getRootGameObjects(), outReferences);
+    // Named only: scenes are not loaded with their referrers, so this only packages them.
+    for (const SceneSubLevel& subLevel : m_scene->getSubLevels()) {
+      if (!subLevel.asset.isNull() && !Algorithm::contains(outReferences, subLevel.asset)) {
+        outReferences.push_back(subLevel.asset);
+      }
+    }
   }
 }
 

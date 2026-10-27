@@ -69,6 +69,18 @@ GameObject::getOutermostPrefabInstance()
 
 /*
  */
+SceneLevelId
+GameObject::getLevel() const
+{
+  const GameObject* root = this;
+  while (root->m_parent) {
+    root = root->m_parent;
+  }
+  return root->m_level;
+}
+
+/*
+ */
 bool
 GameObject::getHierarchyWorldBounds(AABox& outBounds) const
 {

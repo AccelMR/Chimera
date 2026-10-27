@@ -205,6 +205,28 @@ SceneGraphUI::renderSceneGraphUI()
     ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
     renderGameObject(*scene, prefabRoot, kNoParent, false);
   }
+  else if (scene->getLevels().size() > 1) {
+    // Only while sublevels are loaded (Play): a header per level, the map first.
+    for (const SceneLevel& level : scene->getLevels()) {
+      ImGui::PushID(static_cast<int32>(level.id));
+      if (m_revealTarget && m_revealTarget->getLevel() == level.id) {
+        ImGui::SetNextItemOpen(true);
+      }
+      const bool bOpen = ImGui::TreeNodeEx(
+          "##level", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth,
+          "%s  %s", level.id == Scene::MAP_LEVEL ? ICON_FA_MAP : ICON_FA_LAYER_GROUP,
+          level.name.c_str());
+      if (bOpen) {
+        for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
+          if (root->getLevel() == level.id) {
+            renderGameObject(*scene, root, kNoParent, false);
+          }
+        }
+        ImGui::TreePop();
+      }
+      ImGui::PopID();
+    }
+  }
   else {
     for (const SPtr<GameObject>& root : scene->getRootGameObjects()) {
       renderGameObject(*scene, root, kNoParent, false);

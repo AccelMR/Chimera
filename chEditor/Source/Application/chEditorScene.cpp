@@ -362,6 +362,7 @@ saveAsNew(EditorSceneState& state, const Path& folder)
   }
   asset->setScene(state.scene);
   state.scene->setName(asset->getName());
+  state.scene->setMapLevel(asset->getName(), asset->getUUID());
   state.asset = asset;
   ++state.revision;
   state.onAssetCreated(asset);
@@ -552,8 +553,11 @@ applyHistory(EditorSceneState& state, bool bEditing)
   state.bRedoRequested = false;
 
   if (bApplied) {
-    // Null when the step removed the object.
-    EditorSelection::setSelectedGameObject(scene.findGameObject(focus));
+    // The object is null when the step removed it; a step that only changed the list of
+    // sublevels has no object and keeps the selection.
+    if (!focus.isNull()) {
+      EditorSelection::setSelectedGameObject(scene.findGameObject(focus));
+    }
     setDirty(state, !state.history.isAtSavedState());
   }
   else if (!bEditing && state.history.isEntryOpen()) {
@@ -878,6 +882,8 @@ startPlaying(EditorSceneState& state)
     return;
   }
   playScene->setPlaying(true);
+  // Read from their files: only the map is edited.
+  sceneManager.loadStartLevels(*playScene);
 
   rememberSelection(state);
   state.editScene = std::move(state.scene);
@@ -1007,6 +1013,20 @@ EditorScene::recordChange(GameObject& gameObject, StringView action)
     return;
   }
   state.history.recordChange(gameObject, action);
+  setDirty(state, true);
+}
+
+/*
+ */
+void
+EditorScene::setSubLevels(const Vector<SceneSubLevel>& subLevels, StringView action)
+{
+  EditorSceneState& state = getState();
+  if (!state.scene || state.editScene || state.prefab) {
+    return;
+  }
+  state.history.recordSubLevels(*state.scene, action);
+  state.scene->setSubLevels(subLevels);
   setDirty(state, true);
 }
 
@@ -1352,6 +1372,26 @@ EditorScene::requestStop()
   EditorSceneState& state = getState();
   state.bStopRequested = state.editScene != nullptr;
   state.bPlayRequested = false;
+}
+
+/*
+ */
+void
+EditorScene::followActiveScene()
+{
+  EditorSceneState& state = getState();
+  if (!state.editScene) {
+    return;
+  }
+  SPtr<Scene> active = SceneManager::instance().getActiveScene().lock();
+  if (!active || active == state.scene) {
+    return;
+  }
+  // The objects of the old map are gone, so nothing stays selected.
+  EditorSelection::clear();
+  state.scene = std::move(active);
+  ++state.revision;
+  CH_LOG_INFO(EditorSceneLog, "Playing the map {0}.", state.scene->getName());
 }
 
 /*

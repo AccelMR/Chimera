@@ -31,6 +31,7 @@
 #include "chAnimationPreviewUI.h"
 #include "chAnimationGraphEditorUI.h"
 #include "chCameraPreviewUI.h"
+#include "chLevelsUI.h"
 #include "chAssetInspectorUI.h"
 #include "chRenderSettings.h"
 #include "chSceneAsset.h"
@@ -394,6 +395,9 @@ MainMenuBarUI::renderMainMenuBar() {
     if (ImGui::MenuItem(ICON_FA_PROJECT_DIAGRAM "  Animation Graph Editor", nullptr,
                         AnimationGraphEditorUI::isWindowVisible())) {
       AnimationGraphEditorUI::setWindowVisible(!AnimationGraphEditorUI::isWindowVisible());
+    }
+    if (ImGui::MenuItem(ICON_FA_LAYER_GROUP "  Levels", nullptr, LevelsUI::isWindowVisible())) {
+      LevelsUI::setWindowVisible(!LevelsUI::isWindowVisible());
     }
     if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera Preview", nullptr,
                         CameraPreviewUI::isWindowVisible())) {

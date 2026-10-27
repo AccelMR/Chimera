@@ -229,6 +229,9 @@ IAsset::load() {
              m_metadata.name, reference);
       continue;
     }
+    if (!referenced->isLoadedWithReferrers()) {
+      continue;
+    }
     if (!assetManager.syncLoadAsset(referenced)) {
       CH_LOG(AssetSystem, Warning, "Asset {0} could not load its reference {1}",
              m_metadata.name, referenced->getName());

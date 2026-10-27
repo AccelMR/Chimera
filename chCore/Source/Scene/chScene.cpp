@@ -17,6 +17,7 @@
 #include "chRay.h"
 #include "chRayCast.h"
 #include "chRenderCulling.h"
+#include "chSceneManager.h"
 
 namespace chEngineSDK {
 
@@ -79,7 +80,9 @@ closeGaps(Vector<Component*>& components, uint32 Component::*slot)
  */
 Scene::Scene(const String& name, UUID id)
  : Object(name, id)
-{}
+{
+  m_levels.push_back({.name = name, .asset = UUID::null(), .id = MAP_LEVEL});
+}
 
 /*
  */
@@ -186,6 +189,8 @@ Scene::setParent(GameObject& gameObject, GameObject* newParent)
   if (gameObject.m_parent == newParent) {
     return true;
   }
+  // Read before the object leaves its root.
+  const SceneLevelId level = gameObject.getLevel();
 
   Transform& transform = gameObject.m_transform;
   const Matrix4& world = transform.getWorldMatrix();
@@ -213,6 +218,9 @@ Scene::setParent(GameObject& gameObject, GameObject* newParent)
   oldSiblings.erase(oldSiblings.begin() + index);
 
   gameObject.m_parent = newParent;
+  if (!newParent) {
+    gameObject.m_level = level;
+  }
   Vector<SPtr<GameObject>>& newSiblings = newParent ? newParent->m_children : m_rootGameObjects;
   newSiblings.push_back(std::move(moved));
   return true;
@@ -600,6 +608,20 @@ Scene::addSkyLight(const SkyLightItem& skyLight)
   }
   m_skyLights[id].bInUse = true;
   m_skyLights[id].order = m_nextSkyLightOrder++;
+
+  // Within a level the last one wins on purpose (a script swapping skies); across levels it
+  // is usually two files that each brought their own.
+  const SceneLevelId level = skyLight.owner ? skyLight.owner->getLevel() : MAP_LEVEL;
+  for (const SkyLightItem& other : m_skyLights) {
+    if (other.bInUse && &other != &m_skyLights[id] && other.owner &&
+        other.owner->getLevel() != level) {
+      CH_LOG_WARNING(SceneManagerLog,
+                     "Scene {0} has sky lights in several levels; the one of the first level "
+                     "is used.",
+                     m_name);
+      break;
+    }
+  }
   return id;
 }
 
@@ -619,9 +641,17 @@ const SkyLightItem*
 Scene::getActiveSkyLight() const
 {
   const SkyLightItem* active = nullptr;
+  uint32 activeRank = MAX_LEVEL_RANK;
   for (const SkyLightItem& skyLight : m_skyLights) {
-    if (skyLight.bInUse && (active == nullptr || skyLight.order > active->order)) {
+    if (!skyLight.bInUse) {
+      continue;
+    }
+    const uint32 rank =
+        skyLight.owner ? getLevelRank(skyLight.owner->getLevel()) : MAP_LEVEL;
+    if (!active || rank < activeRank ||
+        (rank == activeRank && skyLight.order > active->order)) {
       active = &skyLight;
+      activeRank = rank;
     }
   }
   return active;
@@ -655,12 +685,170 @@ Scene::getActiveCamera() const
     return m_chosenCamera;
   }
   const CameraComponent* active = nullptr;
+  uint32 activeRank = MAX_LEVEL_RANK;
   for (const CameraComponent* camera : m_cameras) {
-    if (!active || camera->getPriority() >= active->getPriority()) {
+    const uint32 rank = getLevelRank(camera->getOwner()->getLevel());
+    if (!active || camera->getPriority() > active->getPriority() ||
+        (camera->getPriority() == active->getPriority() && rank <= activeRank)) {
       active = camera;
+      activeRank = rank;
     }
   }
   return active;
+}
+
+/*
+ */
+void
+Scene::setMapLevel(const String& name, const UUID& asset)
+{
+  m_levels[0].name = name;
+  m_levels[0].asset = asset;
+}
+
+/*
+ */
+const SceneLevel*
+Scene::findLevel(const UUID& asset) const
+{
+  for (const SceneLevel& level : m_levels) {
+    if (level.asset == asset && !asset.isNull()) {
+      return &level;
+    }
+  }
+  return nullptr;
+}
+
+/*
+ */
+const SceneLevel*
+Scene::findLevelById(const SceneLevelId id) const
+{
+  for (const SceneLevel& level : m_levels) {
+    if (level.id == id) {
+      return &level;
+    }
+  }
+  return nullptr;
+}
+
+/*
+ */
+uint32
+Scene::getLevelRank(const SceneLevelId id) const
+{
+  // The map is always first, and most scenes have no other level.
+  if (id == MAP_LEVEL) {
+    return 0;
+  }
+  for (SIZE_T i = 1; i < m_levels.size(); ++i) {
+    if (m_levels[i].id == id) {
+      return static_cast<uint32>(i);
+    }
+  }
+  return MAX_LEVEL_RANK;
+}
+
+/*
+ */
+SceneLevelId
+Scene::addLevel(const String& name, const UUID& asset)
+{
+  // The counter wraps after enough loads (a game streaming levels for hours), so ids still
+  // in use and the map's are skipped; a level keeps its id until it is unloaded.
+  CH_ASSERT(m_levels.size() < MAX_LEVEL_COUNT);
+  SceneLevelId id = m_nextLevelId;
+  while (id == MAP_LEVEL || getLevelRank(id) != MAX_LEVEL_RANK) {
+    ++id;
+  }
+  m_nextLevelId = static_cast<SceneLevelId>(id + 1);
+  m_levels.push_back({.name = name, .asset = asset, .id = id});
+  return id;
+}
+
+/*
+ */
+void
+Scene::setSceneRecursive(GameObject& gameObject)
+{
+  gameObject.m_scene = this;
+  for (const SPtr<GameObject>& child : gameObject.m_children) {
+    setSceneRecursive(*child);
+  }
+}
+
+/*
+ */
+void
+Scene::moveRootObjectsFrom(Scene& source, const SceneLevelId level)
+{
+  CH_ASSERT(&source != this);
+  Vector<SPtr<GameObject>> roots = std::move(source.m_rootGameObjects);
+  source.m_rootGameObjects.clear();
+
+  m_rootGameObjects.reserve(m_rootGameObjects.size() + roots.size());
+  for (const SPtr<GameObject>& root : roots) {
+    if (root->m_scene) {
+      root->setRegisteredRecursive(false);
+    }
+    setSceneRecursive(*root);
+    root->m_level = level;
+    m_rootGameObjects.push_back(root);
+
+    // The world matrices were built in the other scene, or never; built again here.
+    Transform& transform = root->m_transform;
+    if (transform.isDirty()) {
+      addDirtyTransform(*root);
+    }
+    else {
+      transform.setLocalPosition(transform.getLocalPosition());
+    }
+    root->setRegisteredRecursive(true);
+  }
+}
+
+/*
+ */
+bool
+Scene::removeLevel(const SceneLevelId id)
+{
+  if (id == MAP_LEVEL) {
+    return false;
+  }
+  const uint32 rank = getLevelRank(id);
+  if (rank == MAX_LEVEL_RANK) {
+    return false;
+  }
+
+  for (const SPtr<GameObject>& root : m_rootGameObjects) {
+    if (root->m_level == id) {
+      requestDestroy(*root);
+    }
+  }
+  applyDestroyRequests();
+  compactUpdateLists();
+  m_levels.erase(m_levels.begin() + rank);
+  return true;
+}
+
+/*
+ */
+bool
+Scene::moveToLevel(GameObject& gameObject, const SceneLevelId level)
+{
+  if (gameObject.m_scene != this || getLevelRank(level) == MAX_LEVEL_RANK) {
+    return false;
+  }
+  if (gameObject.m_parent) {
+    if (gameObject.m_parent->getLevel() == level) {
+      return true;
+    }
+    if (!setParent(gameObject, nullptr)) {
+      return false;
+    }
+  }
+  gameObject.m_level = level;
+  return true;
 }
 
 /*

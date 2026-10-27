@@ -239,6 +239,8 @@ GameObjectSerializer::readCopies(DataStream& stream, Scene& scene, GameObject* p
 bool
 GameObjectSerializer::copyScene(const Scene& source, Scene& target)
 {
+  target.setMapLevel(source.getLevels()[0].name, source.getLevels()[0].asset);
+  target.setSubLevels(source.getSubLevels());
   MemoryDataStream written;
   write(written, source.getRootGameObjects());
   // Only read, so the bytes are never changed through the stream.

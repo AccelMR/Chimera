@@ -30,6 +30,7 @@ enum class ScriptPropertyType : uint8
   Color = 7,
   GameObject = 8,
   Prefab = 9,
+  Scene = 10,
   COUNT
 };
 
@@ -57,6 +58,7 @@ struct CH_CORE_EXPORT ScriptPropertyValue
   float components[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   String text;
   // GameObject: the UUID of an object in the same scene. Prefab: the UUID of a prefab asset.
+  // Scene: the UUID of a scene asset.
   // Null for none.
   UUID object = UUID::null();
 };

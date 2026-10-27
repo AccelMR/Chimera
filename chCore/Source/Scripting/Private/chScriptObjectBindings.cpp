@@ -21,6 +21,8 @@
 #include "chPrefabAsset.h"
 #include "chRay.h"
 #include "chScene.h"
+#include "chSceneAsset.h"
+#include "chSceneManager.h"
 #include "chScriptApi.h"
 #include "chScriptAsset.h"
 #include "chScriptComponent.h"
@@ -761,6 +763,179 @@ destroyGameObject(lua_State* state)
 {
   GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
   gameObject.getScene()->requestDestroy(gameObject);
+  return 0;
+}
+
+/*
+ * The scene asset a path or name at index names. Raises when there is none. Walks every
+ * asset, so levels are changed now and then, not every frame.
+ */
+SPtr<SceneAsset>
+checkSceneAsset(lua_State* state, const int32 index, const ANSICHAR* function)
+{
+  const StringView text = ScriptTraits<StringView>::check(state, index);
+  if (!AssetManager::isStarted()) {
+    luaL_error(state, "%s: there are no assets to search", function);
+  }
+  SPtr<SceneAsset> asset = AssetManager::instance().findScene(text);
+  if (!asset) {
+    luaL_error(state, "%s: there is no scene %s", function, String(text).c_str());
+  }
+  return asset;
+}
+
+/*
+ * The scene manager that applies level requests; raises without one (tests).
+ */
+SceneManager&
+checkSceneManager(lua_State* state, const ANSICHAR* function)
+{
+  if (!SceneManager::isStarted()) {
+    luaL_error(state, "%s: scenes are not available", function);
+  }
+  return SceneManager::instance();
+}
+
+/*
+ */
+Scene&
+checkCurrentScene(lua_State* state, const ANSICHAR* function)
+{
+  Scene* scene = ScriptManager::instance().getCurrentScene();
+  if (!scene) {
+    luaL_error(state, "%s needs a running script's scene", function);
+  }
+  return *scene;
+}
+
+/*
+ * Scene.openMap(pathOrName): when the update ends, every object of every level goes (their
+ * scripts get onDestroy) and that scene becomes the map, with the sublevels it loads at
+ * start. Only Lua globals carry over.
+ */
+int32
+openMap(lua_State* state)
+{
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 1, "Scene.openMap");
+  checkSceneManager(state, "Scene.openMap").requestOpenMap(asset);
+  return 0;
+}
+
+/*
+ * Scene.loadLevel(pathOrName): adds the objects of that scene as a sublevel when the update
+ * ends; they start updating in the next one. A level already loaded logs a warning.
+ */
+int32
+loadLevel(lua_State* state)
+{
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 1, "Scene.loadLevel");
+  checkSceneManager(state, "Scene.loadLevel").requestLoadLevel(asset);
+  return 0;
+}
+
+/*
+ * Scene.unloadLevel(pathOrName): destroys the objects of that sublevel when the update ends.
+ */
+int32
+unloadLevel(lua_State* state)
+{
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 1, "Scene.unloadLevel");
+  checkSceneManager(state, "Scene.unloadLevel").requestUnloadLevel(asset->getUUID());
+  return 0;
+}
+
+/*
+ * Scene.isLevelLoaded(pathOrName): true once its objects are in the scene. The map counts.
+ */
+int32
+isLevelLoaded(lua_State* state)
+{
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 1, "Scene.isLevelLoaded");
+  const Scene& scene = checkCurrentScene(state, "Scene.isLevelLoaded");
+  lua_pushboolean(state, scene.findLevel(asset->getUUID()) != nullptr);
+  return 1;
+}
+
+/*
+ * Scene.isLevelLoading(pathOrName): true between loadLevel and the end of the update that
+ * loads it. Loading is not spread over frames yet, so a script that waits on it keeps
+ * working when it is.
+ */
+int32
+isLevelLoading(lua_State* state)
+{
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 1, "Scene.isLevelLoading");
+  const bool bLoading = SceneManager::isStarted() &&
+                        SceneManager::instance().isLevelLoadRequested(asset->getUUID());
+  lua_pushboolean(state, bLoading);
+  return 1;
+}
+
+/*
+ * Scene.getLevels(): the names of the loaded levels, the map first, then the sublevels in the
+ * order they loaded. A new table each call.
+ */
+int32
+getLevels(lua_State* state)
+{
+  const Scene& scene = checkCurrentScene(state, "Scene.getLevels");
+  const Vector<SceneLevel>& levels = scene.getLevels();
+  lua_createtable(state, static_cast<int32>(levels.size()), 0);
+  for (SIZE_T i = 0; i < levels.size(); ++i) {
+    lua_pushlstring(state, levels[i].name.data(), levels[i].name.size());
+    lua_rawseti(state, -2, static_cast<lua_Integer>(i + 1));
+  }
+  return 1;
+}
+
+/*
+ * Scene.getMapName(): the name of the map, level 1 of getLevels.
+ */
+int32
+getMapName(lua_State* state)
+{
+  const Scene& scene = checkCurrentScene(state, "Scene.getMapName");
+  const String& name = scene.getLevels()[0].name;
+  lua_pushlstring(state, name.data(), name.size());
+  return 1;
+}
+
+/*
+ * gameObject:getLevel(): the name of the level the object belongs to.
+ */
+int32
+getGameObjectLevel(lua_State* state)
+{
+  const GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
+  const SceneLevel* level = gameObject.getScene()->findLevelById(gameObject.getLevel());
+  if (!level) {
+    lua_pushnil(state);
+    return 1;
+  }
+  lua_pushlstring(state, level->name.data(), level->name.size());
+  return 1;
+}
+
+/*
+ * gameObject:moveToLevel(pathOrName): the object and its children belong to that loaded
+ * level from now on and go when it is unloaded. One whose parent is in another level becomes
+ * a root object, keeping where it stands.
+ */
+int32
+moveGameObjectToLevel(lua_State* state)
+{
+  GameObject& gameObject = ScriptTraits<GameObject>::check(state, 1);
+  const SPtr<SceneAsset> asset = checkSceneAsset(state, 2, "GameObject.moveToLevel");
+  Scene& scene = *gameObject.getScene();
+  const SceneLevel* level = scene.findLevel(asset->getUUID());
+  if (!level) {
+    return luaL_error(state, "GameObject.moveToLevel: the level %s is not loaded",
+                      asset->getName());
+  }
+  if (!scene.moveToLevel(gameObject, level->id)) {
+    return luaL_error(state, "GameObject '%s' could not move to level %s",
+                      gameObject.getName().c_str(), asset->getName());
+  }
   return 0;
 }
 
@@ -1522,7 +1697,9 @@ ScriptBindings::registerObjects(lua_State* state)
       .rawMethod("clone", &cloneGameObject,
                  "fun(parent?: GameObject, position?: Vector3, rotation?: Quaternion): "
                  "GameObject")
-      .rawMethod("destroy", &destroyGameObject, "fun()");
+      .rawMethod("destroy", &destroyGameObject, "fun()")
+      .rawMethod("getLevel", &getGameObjectLevel, "fun(): string?")
+      .rawMethod("moveToLevel", &moveGameObjectToLevel, "fun(level: string)");
   setToString(state, ScriptHandleType<GameObject>::NAME, &gameObjectToString);
 
   ScriptClass<ScriptPrefab>(state)
@@ -1614,7 +1791,15 @@ ScriptBindings::registerObjects(lua_State* state)
                   {"normal", "Vector3"}};
   }
 
-  ScriptTable(state, "Scene", "The scene of the running script.")
+  ScriptTable(state, "Scene",
+              "The scene of the running script: the map and the sublevels loaded into it.")
+      .rawFunction("openMap", &openMap, "fun(map: string)")
+      .rawFunction("loadLevel", &loadLevel, "fun(level: string)")
+      .rawFunction("unloadLevel", &unloadLevel, "fun(level: string)")
+      .rawFunction("isLevelLoaded", &isLevelLoaded, "fun(level: string): boolean")
+      .rawFunction("isLevelLoading", &isLevelLoading, "fun(level: string): boolean")
+      .rawFunction("getLevels", &getLevels, "fun(): string[]")
+      .rawFunction("getMapName", &getMapName, "fun(): string")
       .rawFunction("find", &findInScene, "fun(name: string): GameObject?")
       .rawFunction("raycast", &raycastScene,
                    "fun(origin: Vector3, direction: Vector3, maxDistance?: number, "

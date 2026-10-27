@@ -18,6 +18,7 @@ class EditorCamera;
 class IAsset;
 class PrefabAsset;
 class SceneAsset;
+struct SceneSubLevel;
 
 /**
  * Exists to keep track of what the editor shows: a scene, or a prefab being edited (prefab
@@ -78,6 +79,13 @@ class EditorScene
    */
   static void
   recordCreated(GameObject& gameObject, StringView action);
+
+  /**
+   * Replaces the list of sublevels of the open map, as one undo step named action. Ignored
+   * while playing and in prefab mode.
+   */
+  static void
+  setSubLevels(const Vector<SceneSubLevel>& subLevels, StringView action);
 
   NODISCARD static bool
   canUndo();
@@ -224,6 +232,13 @@ class EditorScene
 
   static void
   requestStop();
+
+  /**
+   * While playing, a script may open another map (Scene.openMap), which the scene manager
+   * makes active; this makes it getScene() too. Call it after the scene update.
+   */
+  static void
+  followActiveScene();
 
   /**
    * A paused game does not update; requestStep lets it run one frame.

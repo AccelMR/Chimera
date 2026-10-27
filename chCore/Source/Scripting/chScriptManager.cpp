@@ -15,6 +15,7 @@
 #include "chScriptAllocator.h"
 #include "chScriptApi.h"
 #include "chScriptAsset.h"
+#include "chSceneAsset.h"
 #include "chScriptBinder.h"
 #include "chScriptBindings.h"
 #include "chScriptMathTypes.h"
@@ -256,6 +257,22 @@ toPropertyValue(lua_State* state,
       }
       return prefab != nullptr;
     }
+    case ScriptPropertyType::Scene: {
+      if (lua_isnil(state, index)) {
+        return true;
+      }
+      if (lua_type(state, index) != LUA_TSTRING || !AssetManager::isStarted()) {
+        return false;
+      }
+      SIZE_T length = 0;
+      const ANSICHAR* text = lua_tolstring(state, index, &length);
+      const SPtr<SceneAsset> scene =
+          AssetManager::instance().findScene(StringView(text, length));
+      if (scene) {
+        outValue.object = scene->getUUID();
+      }
+      return scene != nullptr;
+    }
     default:
       return false;
   }
@@ -348,6 +365,21 @@ pushPropertyValue(lua_State* state, const ScriptPropertyValue& value, const Scen
         ScriptTraits<ScriptPrefab>::push(state, ScriptPrefab{value.object});
       }
       break;
+    case ScriptPropertyType::Scene: {
+      // Its path, which the Scene functions take; nil once the scene was deleted.
+      const SPtr<IAsset> sceneAsset = value.object.isNull() || !AssetManager::isStarted()
+                                          ? nullptr
+                                          : AssetManager::instance().getAsset(value.object);
+      if (sceneAsset) {
+        const String path =
+            Path(sceneAsset->getAssetPath()).join(Path(sceneAsset->getName())).toString();
+        lua_pushlstring(state, path.data(), path.size());
+      }
+      else {
+        lua_pushnil(state);
+      }
+      break;
+    }
     default:
       lua_pushnil(state);
       break;
@@ -449,7 +481,8 @@ readProperty(lua_State* state, const lua_Integer position, ScriptClassInfo& info
   }
   lua_pop(state, 1);
 
-  if ((type == ScriptPropertyType::GameObject || type == ScriptPropertyType::Prefab) &&
+  if ((type == ScriptPropertyType::GameObject || type == ScriptPropertyType::Prefab ||
+       type == ScriptPropertyType::Scene) &&
       !lua_isnil(state, defaultIndex)) {
     luaL_error(state, "property '%s' is a %s: it is picked in the editor and has no default",
                name, ScriptPropertyUtils::getTypeName(type));

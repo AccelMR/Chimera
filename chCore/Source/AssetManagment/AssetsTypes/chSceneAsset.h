@@ -53,6 +53,12 @@ class CH_CORE_EXPORT SceneAsset : public IAsset
   setEditorView(const Vector3& position, const Vector3& lookAt);
 #endif // USING(CH_EDITOR)
 
+  /**
+   * A map names its sublevels; loading it never loads them.
+   */
+  NODISCARD bool
+  isLoadedWithReferrers() const override { return false; }
+
   static constexpr uint32 SERIALIZATION_VERSION = 1;
 
  protected:

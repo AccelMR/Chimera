@@ -38,6 +38,30 @@ struct SceneRayHit
 };
 
 /**
+ * A scene file whose objects are in a scene: the map (id 0, the scene's own file) or a
+ * sublevel loaded into it. Objects know their level through their root object.
+ */
+struct SceneLevel
+{
+  String name;
+  // Null for a map that never came from a file.
+  UUID asset = UUID::null();
+  SceneLevelId id = 0;
+};
+
+/**
+ * A sublevel the map lists, saved with the map. Those with bLoadAtStart are loaded with it.
+ */
+struct SceneSubLevel
+{
+  UUID asset = UUID::null();
+  bool bLoadAtStart = false;
+
+  NODISCARD bool
+  operator==(const SceneSubLevel& other) const = default;
+};
+
+/**
  * Exists to own a hierarchy of GameObjects and the flat list of what they draw. Components
  * add and update render items here, so the renderer only asks for the items a camera sees
  * and never walks the hierarchy.
@@ -220,8 +244,9 @@ class CH_CORE_EXPORT Scene : public Object
   removeSkyLight(uint32 id);
 
   /**
-   * The sky light that lights the scene: the last one registered, null when there is none.
-   * A scene holds one or two, so the search is cheap enough for every frame.
+   * The sky light that lights the scene: the one of the first level (see getLevels) that has
+   * one, the last registered within a level; null when there is none. A scene holds one or
+   * two, so the search is cheap enough for every frame.
    */
   NODISCARD const SkyLightItem*
   getActiveSkyLight() const;
@@ -237,8 +262,8 @@ class CH_CORE_EXPORT Scene : public Object
 
   /**
    * The camera a game views the scene through: the one setActiveCamera picked while it is
-   * registered, else the highest priority (the last registered among equals), null when
-   * there is none. A scene holds a few cameras, so the search is cheap enough for every
+   * registered, else the highest priority (among equals the one of the first level, then the
+   * last registered), null when there is none. A scene holds a few cameras, so the search is cheap enough for every
    * frame.
    */
   NODISCARD const CameraComponent*
@@ -277,12 +302,89 @@ class CH_CORE_EXPORT Scene : public Object
   NODISCARD FORCEINLINE const DebugDraw&
   getFixedDebugDraw() const { return m_fixedDebugDraw; }
 
+  /**
+   * The levels whose objects are in the scene: the map first, then the sublevels in the
+   * order they were loaded. That order decides which sky light and camera win.
+   */
+  NODISCARD FORCEINLINE const Vector<SceneLevel>&
+  getLevels() const { return m_levels; }
+
+  /**
+   * The name and file of the map, kept in level 0.
+   */
+  void
+  setMapLevel(const String& name, const UUID& asset);
+
+  /**
+   * Null when no level was loaded from asset.
+   */
+  NODISCARD const SceneLevel*
+  findLevel(const UUID& asset) const;
+
+  NODISCARD const SceneLevel*
+  findLevelById(SceneLevelId id) const;
+
+  /**
+   * Place of the level in getLevels(); MAX_LEVEL_RANK when it is not loaded.
+   */
+  NODISCARD uint32
+  getLevelRank(SceneLevelId id) const;
+
+  /**
+   * Adds an empty level after the others and returns its id: the next one no loaded level
+   * uses, so ids are reused once their level is gone.
+   */
+  SceneLevelId
+  addLevel(const String& name, const UUID& asset);
+
+  /**
+   * Moves every root object of source, with its children and components, into this scene as
+   * objects of level. source is left empty.
+   */
+  void
+  moveRootObjectsFrom(Scene& source, SceneLevelId level);
+
+  /**
+   * Destroys the objects of the level at once (their scripts run onDestroy) and forgets it.
+   * Never during an update of this scene. The map (id 0) cannot be removed.
+   */
+  bool
+  removeLevel(SceneLevelId id);
+
+  /**
+   * Makes the object, with its children, part of level. One whose parent is in another level
+   * becomes a root object first, keeping where it stands in the world. False for a level that
+   * is not loaded.
+   */
+  bool
+  moveToLevel(GameObject& gameObject, SceneLevelId level);
+
+  /**
+   * The sublevels the map lists, saved with it.
+   */
+  NODISCARD FORCEINLINE const Vector<SceneSubLevel>&
+  getSubLevels() const { return m_subLevels; }
+
+  void
+  setSubLevels(const Vector<SceneSubLevel>& subLevels) { m_subLevels = subLevels; }
+
+  static constexpr uint32 MAX_LEVEL_RANK = 0xFFFFFFFF;
+  static constexpr SceneLevelId MAP_LEVEL = 0;
+  // Every id but the map's can be in use at once.
+  static constexpr SIZE_T MAX_LEVEL_COUNT = 65536;
+
  private:
   friend class Component;
   friend class GameObject;
 
   void
   applyDestroyRequests();
+
+  /**
+   * Points the object and its children at this scene, before their components register.
+   */
+  void
+  setSceneRecursive(GameObject& gameObject);
 
   /**
    * Takes out of siblings, in one pass, the objects a destroy request took out of the scene.
@@ -334,6 +436,9 @@ class CH_CORE_EXPORT Scene : public Object
   // Objects whose transform changed since the last updateTransforms; null where one left.
   Vector<GameObject*> m_dirtyTransforms;
   bool m_bPlaying = false;
+  Vector<SceneLevel> m_levels;
+  SceneLevelId m_nextLevelId = 1;
+  Vector<SceneSubLevel> m_subLevels;
 };
 
 } // namespace chEngineSDK

@@ -11,6 +11,7 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chScene.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {
@@ -41,6 +42,13 @@ class CH_CORE_EXPORT SceneHistory
    */
   void
   recordCreated(GameObject& gameObject, StringView action);
+
+  /**
+   * Call before the list of sublevels of scene changes. Opens an entry named action when
+   * none is open.
+   */
+  void
+  recordSubLevels(const Scene& scene, StringView action);
 
   NODISCARD FORCEINLINE bool
   isEntryOpen() const { return m_bEntryOpen; }
@@ -122,6 +130,10 @@ class CH_CORE_EXPORT SceneHistory
   {
     String name;
     Vector<ObjectRecord> records;
+    // The list of sublevels of the map, when the entry changed it.
+    bool bSubLevels = false;
+    Vector<SceneSubLevel> subLevelsBefore;
+    Vector<SceneSubLevel> subLevelsAfter;
   };
 
   NODISCARD bool

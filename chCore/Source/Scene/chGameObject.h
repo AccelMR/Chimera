@@ -20,6 +20,9 @@ namespace chEngineSDK {
 template<typename T>
 struct ScriptTraits;
 
+// Names a level of a scene (Scene::getLevels) while it is loaded; never saved.
+using SceneLevelId = uint16;
+
 /**
  * Exists as the node of a scene hierarchy: it has a transform relative to its parent, owns
  * its children and its components. Make it with Scene::createGameObject and remove it with
@@ -110,6 +113,12 @@ class CH_CORE_EXPORT GameObject : public Object,
   getOutermostPrefabInstance();
 
   /**
+   * Id of the scene level (Scene::getLevels) the object belongs to: its root object's.
+   */
+  NODISCARD SceneLevelId
+  getLevel() const;
+
+  /**
    * Box around what the components of this object and of all its children draw, in world
    * space as of the last transform update. False when none draws anything.
    */
@@ -164,6 +173,8 @@ class CH_CORE_EXPORT GameObject : public Object,
   bool m_bChildLeft = false;
   // Place in the scene's list of changed transforms, while listed.
   uint32 m_dirtyTransformSlot = NO_SLOT;
+  // Only read on root objects; children belong to their root's level.
+  SceneLevelId m_level = 0;
   // Registry reference of the handle scripts see this object through (LUA_NOREF until a
   // script first does). It is cleared when the object dies, so scripts get an error instead
   // of a dangling pointer.

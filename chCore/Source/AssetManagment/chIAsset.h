@@ -140,13 +140,22 @@ class CH_CORE_EXPORT IAsset : public EnableSharedFromThis<IAsset>
   NODISCARD virtual bool
   isPlainFile() const { return false; }
 
+  /**
+   * False for an asset that what references it only names (a scene a map lists as a
+   * sublevel): loading the referrer does not load it, but packaging still follows the
+   * reference.
+   */
+  NODISCARD virtual bool
+  isLoadedWithReferrers() const { return true; }
+
 #if USING(CH_EDITOR)
   NODISCARD FORCEINLINE const AssetEditorData&
   getEditorData() const { return m_editorData; }
 #endif // USING(CH_EDITOR)
 
   /**
-   * The assets this one points to, as saved in its file. They are loaded before it. Read
+   * The assets this one points to, as saved in its file. They are loaded before it, except
+   * those that are not loaded with their referrers (isLoadedWithReferrers). Read
    * when the file is first found and kept while unloaded, so what uses an asset can be
    * found without loading anything.
    */

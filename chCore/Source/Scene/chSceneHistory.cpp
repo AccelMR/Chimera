@@ -87,6 +87,21 @@ SceneHistory::recordCreated(GameObject& gameObject, StringView action)
 /*
  */
 void
+SceneHistory::recordSubLevels(const Scene& scene, StringView action)
+{
+  if (!m_bEntryOpen) {
+    m_bEntryOpen = true;
+    m_openEntry.name.assign(action);
+  }
+  if (!m_openEntry.bSubLevels) {
+    m_openEntry.bSubLevels = true;
+    m_openEntry.subLevelsBefore = scene.getSubLevels();
+  }
+}
+
+/*
+ */
+void
 SceneHistory::setEntryName(StringView name)
 {
   if (m_bEntryOpen) {
@@ -117,7 +132,11 @@ SceneHistory::commit(Scene& scene)
     return record.before == record.after && record.parentBefore == record.parentAfter &&
            record.indexBefore == record.indexAfter;
   });
-  if (m_openEntry.records.empty()) {
+  if (m_openEntry.bSubLevels) {
+    m_openEntry.subLevelsAfter = scene.getSubLevels();
+    m_openEntry.bSubLevels = m_openEntry.subLevelsBefore != m_openEntry.subLevelsAfter;
+  }
+  if (m_openEntry.records.empty() && !m_openEntry.bSubLevels) {
     m_openEntry = Entry{};
     return;
   }
@@ -191,7 +210,10 @@ SceneHistory::undo(Scene& scene, UUID& outFocus)
   for (SIZE_T i = entry.records.size(); i > 0; --i) {
     applyRecord(scene, entry.records[i - 1], true);
   }
-  outFocus = entry.records.front().object;
+  if (entry.bSubLevels) {
+    scene.setSubLevels(entry.subLevelsBefore);
+  }
+  outFocus = entry.records.empty() ? UUID::null() : entry.records.front().object;
   return true;
 }
 
@@ -208,6 +230,9 @@ SceneHistory::redo(Scene& scene, UUID& outFocus)
   ++m_position;
   for (const ObjectRecord& record : entry.records) {
     applyRecord(scene, record, false);
+  }
+  if (entry.bSubLevels) {
+    scene.setSubLevels(entry.subLevelsAfter);
   }
 
   // The places after the change were all saved at commit, so they are set again from the
@@ -229,7 +254,7 @@ SceneHistory::redo(Scene& scene, UUID& outFocus)
       }
     }
   }
-  outFocus = entry.records.front().object;
+  outFocus = entry.records.empty() ? UUID::null() : entry.records.front().object;
   return true;
 }
 

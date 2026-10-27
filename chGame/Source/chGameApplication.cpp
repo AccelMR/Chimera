@@ -77,9 +77,7 @@ GameApplication::openStartupScene()
   const String& sceneName = g_cvarStartupScene.get();
   SceneManager& sceneManager = SceneManager::instance();
   if (const SPtr<SceneAsset> asset = AssetManager::instance().findScene(sceneName)) {
-    const SPtr<Scene> scene = sceneManager.loadScene(asset).lock();
-    if (scene && sceneManager.setActiveScene(scene)) {
-      scene->setPlaying(true);
+    if (const SPtr<Scene> scene = sceneManager.openMap(asset, true).lock()) {
       m_scene = scene;
       CH_LOG_INFO(GameApp, "Playing scene {0}.", sceneName);
       return;
@@ -92,6 +90,10 @@ GameApplication::openStartupScene()
                sceneName, EnginePaths::getProjectDirectory());
   m_scene = chMakeShared<Scene>("Empty", UUID::createRandom());
   m_scene->setPlaying(true);
+  // Kept by the manager, so a script could still open another map from it.
+  if (!sceneManager.addScene(m_scene) || !sceneManager.setActiveScene(m_scene)) {
+    CH_LOG_WARNING(GameApp, "Scripts of the empty scene cannot open other maps.");
+  }
 }
 
 /*
@@ -136,7 +138,13 @@ GameApplication::update(const float deltaTime)
 {
   {
     CH_PROFILE_SCOPE("SceneUpdate");
-    SceneManager::instance().update(deltaTime);
+    SceneManager& sceneManager = SceneManager::instance();
+    sceneManager.update(deltaTime);
+    // A script may have opened another map, which the update made active.
+    SPtr<Scene> active = sceneManager.getActiveScene().lock();
+    if (active && active != m_scene) {
+      m_scene = std::move(active);
+    }
   }
   {
     CH_PROFILE_SCOPE("UpdateTransforms");

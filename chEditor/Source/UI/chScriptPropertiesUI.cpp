@@ -15,6 +15,7 @@
 #include "chGameObject.h"
 #include "chPrefabAsset.h"
 #include "chScene.h"
+#include "chSceneAsset.h"
 #include "chScriptAsset.h"
 #include "chScriptComponent.h"
 #include "chStringUtils.h"
@@ -173,52 +174,78 @@ renderObjectRow(const ScriptProperty& property,
 }
 
 /*
- * A button with the prefab's name that lists every prefab when clicked and takes prefabs
- * dragged from the Content Browser, and a button to clear it.
+ * What an asset row differs in per asset type.
+ */
+struct AssetRowKind
+{
+  UUID typeId;
+  const ANSICHAR* noneText;
+  const ANSICHAR* missingText;
+  const ANSICHAR* tooltip;
+  const ANSICHAR* emptyListText;
+};
+
+/*
+ * The asset dropped on the last item when it has the kind's type; null otherwise.
+ */
+SPtr<IAsset>
+acceptAssetOfType(const UUID& typeId)
+{
+  if (typeId == AssetTypeTraits<PrefabAsset>::getTypeId()) {
+    return AssetDragDrop::acceptPrefab();
+  }
+  // Scenes are dragged as any asset.
+  const SPtr<IAsset> dropped = AssetDragDrop::acceptAnyAsset();
+  return dropped && dropped->getAssetTypeId() == typeId ? dropped : nullptr;
+}
+
+/*
+ * A button with the asset's name that lists every asset of the kind when clicked and takes
+ * those dragged from the Content Browser, and a button to clear it.
  */
 bool
-renderPrefabRow(const ScriptProperty& property, ScriptPropertyValue& value)
+renderAssetRow(const ScriptProperty& property,
+               ScriptPropertyValue& value,
+               const AssetRowKind& kind)
 {
   const SPtr<IAsset> asset =
       value.object.isNull() ? nullptr : AssetManager::instance().getAsset(value.object);
-  const ANSICHAR* prefabName = "None (drop a prefab)";
+  const ANSICHAR* assetName = kind.noneText;
   if (asset) {
-    prefabName = asset->getName();
+    assetName = asset->getName();
   }
   else if (!value.object.isNull()) {
-    prefabName = "Missing prefab";
+    assetName = kind.missingText;
   }
 
   bool bChanged = false;
   const float clearWidth = value.object.isNull() ? 0.0f : ImGui::GetFrameHeight();
   const float width = ImGui::CalcItemWidth() - clearWidth;
-  if (ImGui::Button(prefabName, ImVec2(width > 1.0f ? width : 1.0f, 0.0f))) {
-    ImGui::OpenPopup("##prefabs");
+  if (ImGui::Button(assetName, ImVec2(width > 1.0f ? width : 1.0f, 0.0f))) {
+    ImGui::OpenPopup("##assets");
   }
-  ImGui::SetItemTooltip("%s\nClick to pick a prefab, or drop one from the Content Browser",
-                        prefabName);
+  ImGui::SetItemTooltip("%s\n%s", assetName, kind.tooltip);
   if (ImGui::BeginDragDropTarget()) {
-    if (const SPtr<PrefabAsset> dropped = AssetDragDrop::acceptPrefab()) {
+    if (const SPtr<IAsset> dropped = acceptAssetOfType(kind.typeId)) {
       value.object = dropped->getUUID();
       bChanged = true;
     }
     ImGui::EndDragDropTarget();
   }
-  if (ImGui::BeginPopup("##prefabs")) {
+  if (ImGui::BeginPopup("##assets")) {
     // Only while the list is open, so walking every asset costs nothing on other frames.
-    Vector<SPtr<IAsset>> prefabs;
-    AssetManager::instance().getAssetsOfType(AssetTypeTraits<PrefabAsset>::getTypeId(),
-                                             prefabs);
-    if (prefabs.empty()) {
-      ImGui::TextDisabled("The project has no prefabs");
+    Vector<SPtr<IAsset>> assets;
+    AssetManager::instance().getAssetsOfType(kind.typeId, assets);
+    if (assets.empty()) {
+      ImGui::TextDisabled("%s", kind.emptyListText);
     }
-    for (const SPtr<IAsset>& prefab : prefabs) {
-      ImGui::PushID(prefab.get());
-      if (ImGui::Selectable(prefab->getName(), prefab->getUUID() == value.object)) {
-        value.object = prefab->getUUID();
+    for (const SPtr<IAsset>& listed : assets) {
+      ImGui::PushID(listed.get());
+      if (ImGui::Selectable(listed->getName(), listed->getUUID() == value.object)) {
+        value.object = listed->getUUID();
         bChanged = true;
       }
-      ImGui::SetItemTooltip("%s", prefab->getAssetPath());
+      ImGui::SetItemTooltip("%s", listed->getAssetPath());
       ImGui::PopID();
     }
     ImGui::EndPopup();
@@ -258,7 +285,21 @@ renderValue(const ScriptProperty& property, ScriptPropertyValue& value, const Ga
     case ScriptPropertyType::GameObject:
       return renderObjectRow(property, value, owner);
     case ScriptPropertyType::Prefab:
-      return renderPrefabRow(property, value);
+      return renderAssetRow(property, value,
+                            {.typeId = AssetTypeTraits<PrefabAsset>::getTypeId(),
+                             .noneText = "None (drop a prefab)",
+                             .missingText = "Missing prefab",
+                             .tooltip = "Click to pick a prefab, or drop one from the Content "
+                                        "Browser",
+                             .emptyListText = "The project has no prefabs"});
+    case ScriptPropertyType::Scene:
+      return renderAssetRow(property, value,
+                            {.typeId = AssetTypeTraits<SceneAsset>::getTypeId(),
+                             .noneText = "None (drop a scene)",
+                             .missingText = "Missing scene",
+                             .tooltip = "Click to pick a scene, or drop one from the Content "
+                                        "Browser. Scenes picked here go into packages.",
+                             .emptyListText = "The project has no scenes"});
     default:
       return renderVectorRow(property, value);
   }

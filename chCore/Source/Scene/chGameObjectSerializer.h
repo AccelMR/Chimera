@@ -55,8 +55,9 @@ class CH_CORE_EXPORT GameObjectSerializer
 
   /**
    * Makes every object of source again in target, an empty scene, with the same UUIDs, so an
-   * object of one can be found in the other (Play in the editor). False when something could
-   * not be read; what was read stays in target.
+   * object of one can be found in the other (Play in the editor). The map's file and its list
+   * of sublevels are copied too. False when something could not be read; what was read stays
+   * in target.
    */
   NODISCARD static bool
   copyScene(const Scene& source, Scene& target);

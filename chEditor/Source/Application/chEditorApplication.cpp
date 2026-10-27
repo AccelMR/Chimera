@@ -64,6 +64,7 @@
 #include "chAnimationGraphEditorUI.h"
 #include "chAssetThumbnails.h"
 #include "chCameraPreviewUI.h"
+#include "chLevelsUI.h"
 
 #if USING(CH_CODECS)
 #include "chAssetCodec.h"
@@ -94,6 +95,8 @@ constexpr float kMaxDropDistanceScale = 10.0f;
 constexpr float kLayoutLeftFraction = 0.18f;
 constexpr float kLayoutRightFraction = 0.25f;
 constexpr float kLayoutBottomFraction = 0.3f;
+// Of the left column, under the Scene Graph.
+constexpr float kLayoutLevelsFraction = 0.25f;
 // A texture needs some pixels even while its panel is squeezed to nothing.
 constexpr uint32 kMinViewportSize = 16;
 constexpr ImVec4 kPlayingBorderColor(0.35f, 0.8f, 0.35f, 1.0f);
@@ -293,7 +296,6 @@ EditorApplication::update(const float deltaTime)
     quit();
   }
   updateWindowTitle();
-  Scene& scene = *EditorScene::getScene();
 
   // A flight only starts with the mouse over the scene image. The keyboard is not checked: a
   // panel keeps the keyboard focus after any click, and the camera only reads keys while
@@ -325,13 +327,16 @@ EditorApplication::update(const float deltaTime)
       sceneManager.update(deltaTime);
     }
   }
+  // A script may have opened another map during Play.
+  EditorScene::followActiveScene();
+  Scene& updatedScene = *EditorScene::getScene();
 
   // After the UI and the scene update, which may have moved or added objects.
   {
     CH_PROFILE_SCOPE("UpdateTransforms");
-    scene.updateTransforms();
+    updatedScene.updateTransforms();
   }
-  updateViewCamera(scene);
+  updateViewCamera(updatedScene);
 
   // Like the grid, the editor's lines hide with the rest of the UI, and while the viewport
   // shows the game.
@@ -339,11 +344,12 @@ EditorApplication::update(const float deltaTime)
   m_bFrameDrawsViewport = bPanel;
   m_editorLines.clear();
   if (m_bFrameHasUI && !m_bGameView) {
-    ViewportTools::addSelectionBounds(scene, m_editorLines);
+    ViewportTools::addSelectionBounds(updatedScene, m_editorLines);
     ViewportTools::addSelectionSkeletons(m_editorLines);
   }
 
-  m_sceneRenderer->extract(scene, getViewCamera(), UIHelpers::rendererColor, &m_editorLines);
+  m_sceneRenderer->extract(updatedScene, getViewCamera(), UIHelpers::rendererColor,
+                           &m_editorLines);
   AnimationPreviewUI::update(deltaTime);
   AnimationGraphEditorUI::update(deltaTime);
   CameraPreviewUI::update();
@@ -624,6 +630,7 @@ EditorApplication::renderUI()
   m_contentAssetUI->renderContentAssetUI();
   m_outputLogUI->renderOutputLogUI();
   m_sceneGraphUI->renderSceneGraphUI();
+  LevelsUI::render();
   m_inspectorUI->renderInspectorUI();
   // After the Inspector, which reads what the window showed in the last frame.
   CameraPreviewUI::render();
@@ -679,11 +686,16 @@ EditorApplication::renderDockSpace()
                                                       kLayoutRightFraction, nullptr, &center);
     const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,
                                                        kLayoutBottomFraction, nullptr, &center);
+    ImGuiID leftTop = left;
+    const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(leftTop, ImGuiDir_Down,
+                                                           kLayoutLevelsFraction, nullptr,
+                                                           &leftTop);
     // Names hash only from ###, so the ids find the panels whatever their titles say.
     ImGui::DockBuilderDockWindow("###Viewport", center);
     ImGui::DockBuilderDockWindow("###ProjectSettings", center);
     ImGui::DockBuilderDockWindow("###AnimationGraphEditor", center);
-    ImGui::DockBuilderDockWindow("###SceneGraph", left);
+    ImGui::DockBuilderDockWindow("###SceneGraph", leftTop);
+    ImGui::DockBuilderDockWindow("###Levels", leftBottom);
     ImGui::DockBuilderDockWindow("###Inspector", right);
     ImGui::DockBuilderDockWindow("###AssetInspector", right);
     ImGui::DockBuilderDockWindow("###AnimationPreview", right);
