@@ -143,7 +143,7 @@
 # if USING(CH_COMPILER_MSVC)
 #   define FORCEINLINE __forceinline
 # else
-#   define FORCEINLINE __inline
+#   define FORCEINLINE inline __attribute__((always_inline))
 # endif
 #endif
 

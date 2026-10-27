@@ -72,9 +72,6 @@ class CH_UTILITY_EXPORT UUID  {
  private:
   friend Hash<UUID>;
   uuids::uuid m_uuid;
-
-  static const String CH_UUID_STR;
-  static uuids::uuid_name_generator UUID_NAME_GENERATOR;
 };
 
 } // namespace chEngineSDK

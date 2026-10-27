@@ -13,8 +13,18 @@
 #include "chUUID.h"
 
 namespace chEngineSDK {
-const String UUID::CH_UUID_STR = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6";
-uuids::uuid_name_generator UUID::UUID_NAME_GENERATOR(uuids::uuid::from_string(CH_UUID_STR).value());
+namespace {
+constexpr ANSICHAR kNameNamespace[] = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6";
+
+// Built on first use: type ids are made from names while other modules run their global
+// constructors, which may come before the globals of this file.
+uuids::uuid_name_generator&
+getNameGenerator()
+{
+  static uuids::uuid_name_generator generator(uuids::uuid::from_string(kNameNamespace).value());
+  return generator;
+}
+} // namespace
 
 /*
 */
@@ -30,7 +40,7 @@ UUID::createRandom() {
 UUID
 UUID::createFromName(const String& name, const UUID& namespace_uuid) {
   if (namespace_uuid.isNull()) {
-    return UUID(UUID_NAME_GENERATOR(name));
+    return UUID(getNameGenerator()(name));
   }
   else {
     uuids::uuid_name_generator generator(namespace_uuid.m_uuid);

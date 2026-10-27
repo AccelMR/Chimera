@@ -23,7 +23,7 @@ namespace chEngineSDK{
  * Description:
  *     Random number generator class
  */
-class CH_UTILITY_EXPORT Random
+class Random
 {
  public:
 
@@ -77,12 +77,12 @@ class CH_UTILITY_EXPORT Random
   /**
    *  The "Multiplier" in the Linear Congruential Generator Formula
    */
-  static const uint32 A;
+  static constexpr uint32 A = 24589395;
 
   /**
    *  The "Increment" in the Linear Congruential Generator Formula
    */
-  static const uint32 C;
+  static constexpr uint32 C = 72790363;
 
   /************************************************************************/
   /*
