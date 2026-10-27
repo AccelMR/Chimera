@@ -11,9 +11,22 @@
 
 #include "chPrerequisitesCore.h"
 
+#include "chFlags.h"
 #include "chUUID.h"
 
 namespace chEngineSDK {
+
+/**
+ * Which updates a component type runs. The scene keeps a list per update and only calls the
+ * components in it, so components that never update cost nothing per frame.
+ */
+enum class ComponentUpdate : uint8
+{
+  None = 0,
+  Frame = 1 << 0,
+  Fixed = 1 << 1
+};
+CH_FLAGS(ComponentUpdate);
 
 /**
  * Exists so a GameObject gets its behaviour from parts it can mix, instead of from a class
@@ -35,14 +48,16 @@ class CH_CORE_EXPORT Component
 
   /**
    * Runs at the fixed rate of the application, zero or more times per frame (physics and
-   * logic that must not depend on the frame rate).
+   * logic that must not depend on the frame rate). Only called when the update flags have
+   * Fixed.
    */
   virtual void
   fixedUpdate(float deltaTime);
 
   /**
    * Runs once per frame with the real frame time, before the world matrices are rebuilt
-   * (animation and anything that must look smooth).
+   * (animation and anything that must look smooth). Only called when the update flags have
+   * Frame.
    */
   virtual void
   update(float deltaTime);
@@ -103,6 +118,9 @@ class CH_CORE_EXPORT Component
   NODISCARD FORCEINLINE bool
   updatesWhileEditing() const { return m_bUpdatesWhileEditing; }
 
+  NODISCARD FORCEINLINE ComponentUpdateFlags
+  getUpdateFlags() const { return m_updateFlags; }
+
   NODISCARD FORCEINLINE GameObject*
   getOwner() const { return m_owner; }
 
@@ -128,11 +146,25 @@ class CH_CORE_EXPORT Component
   FORCEINLINE void
   setUpdatesWhileEditing(bool bUpdates) { m_bUpdatesWhileEditing = bUpdates; }
 
+  /**
+   * Which of update and fixedUpdate the scene calls (none by default). Set it in the
+   * constructor: the scene reads it when the component registers.
+   */
+  FORCEINLINE void
+  setUpdateFlags(ComponentUpdateFlags flags)
+  {
+    CH_ASSERT(!m_registered && "Set the update flags before the component registers.");
+    m_updateFlags = flags;
+  }
+
  private:
   friend class GameObject;
+  friend class Scene;
 
   void
   setRegistered(bool registered);
+
+  static constexpr uint32 NO_SLOT = 0xFFFFFFFF;
 
   GameObject* m_owner = nullptr;
   // Kept by value: the UUID TypeTraits returns lives in the module that asked for it.
@@ -140,6 +172,10 @@ class CH_CORE_EXPORT Component
   bool m_enabled = true;
   bool m_registered = false;
   bool m_bUpdatesWhileEditing = false;
+  ComponentUpdateFlags m_updateFlags;
+  // Places in the scene's update lists while registered.
+  uint32 m_frameUpdateSlot = NO_SLOT;
+  uint32 m_fixedUpdateSlot = NO_SLOT;
 };
 
 } // namespace chEngineSDK

@@ -155,7 +155,7 @@ class CH_CORE_EXPORT AssetManager : public Module<AssetManager>
   createAsset(const String& name,
               const Path& assetPath); // Must be relative to the asset directory
 
-  FORCEINLINE Vector<SPtr<IAsset>>
+  NODISCARD Vector<SPtr<IAsset>>
   getAllAssets() const {
     Vector<SPtr<IAsset>> assets;
     assets.reserve(m_assets.size());

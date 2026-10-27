@@ -53,6 +53,7 @@ isNameEnding(StringView name, StringView text)
  */
 AnimatorComponent::AnimatorComponent()
 {
+  setUpdateFlags(ComponentUpdate::Frame);
   setUpdatesWhileEditing(true);
 }
 

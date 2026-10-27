@@ -9,6 +9,7 @@
 /************************************************************************/
 #include "chTransform.h"
 
+#include "chGameObject.h"
 #include "chMatrixHelpers.h"
 #include "chRotator.h"
 #include "chStringUtils.h"
@@ -36,7 +37,7 @@ void
 Transform::setLocalPosition(const Vector3& position)
 {
   m_localPosition = position;
-  m_dirty = true;
+  markDirty();
 }
 
 /*
@@ -45,7 +46,7 @@ void
 Transform::setLocalRotation(const Quaternion& rotation)
 {
   m_localRotation = rotation;
-  m_dirty = true;
+  markDirty();
 }
 
 /*
@@ -54,7 +55,7 @@ void
 Transform::setLocalScale(const Vector3& scale)
 {
   m_localScale = scale;
-  m_dirty = true;
+  markDirty();
 }
 
 /*
@@ -97,6 +98,21 @@ String
 Transform::toString() const
 {
   return StringUtils::toString(*this);
+}
+
+/*
+ */
+void
+Transform::markDirty()
+{
+  // Only the first change since the last rebuild tells the scene, so it lists it once.
+  if (m_dirty) {
+    return;
+  }
+  m_dirty = true;
+  if (m_owner) {
+    m_owner->markTransformDirty();
+  }
 }
 
 /*

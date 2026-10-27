@@ -56,6 +56,23 @@ findInList(const Vector<SPtr<GameObject>>& gameObjects, const UUID& id)
   }
   return nullptr;
 }
+
+/*
+ * Drops the null slots and tells each component its new place, through slot (a member of
+ * Component the scene may name).
+ */
+void
+closeGaps(Vector<Component*>& components, uint32 Component::*slot)
+{
+  SIZE_T kept = 0;
+  for (Component* component : components) {
+    if (component) {
+      component->*slot = static_cast<uint32>(kept);
+      components[kept++] = component;
+    }
+  }
+  components.resize(kept);
+}
 } // namespace
 
 /*
@@ -88,6 +105,8 @@ Scene::createGameObject(const String& name, GameObject* parent)
   else {
     m_rootGameObjects.push_back(gameObject);
   }
+  // A new transform starts dirty, so it never tells the scene by itself.
+  addDirtyTransform(*gameObject);
   return gameObject;
 }
 
@@ -205,13 +224,17 @@ void
 Scene::fixedUpdate(float deltaTime)
 {
   m_fixedDebugDraw.clear();
-  // By index with the count taken first: a script may add objects, which only update from
-  // the next step, and nothing is removed until the step ends.
-  const SIZE_T count = m_rootGameObjects.size();
+  // By index with the count taken first: components registered meanwhile (objects a script
+  // made) start from the next step, and those that leave only null their slot.
+  const SIZE_T count = m_fixedUpdates.size();
   for (SIZE_T i = 0; i < count; ++i) {
-    m_rootGameObjects[i]->fixedUpdate(deltaTime, m_bPlaying);
+    Component* component = m_fixedUpdates[i];
+    if (component && (m_bPlaying || component->updatesWhileEditing())) {
+      component->fixedUpdate(deltaTime);
+    }
   }
   applyDestroyRequests();
+  compactUpdateLists();
 }
 
 /*
@@ -220,11 +243,15 @@ void
 Scene::update(float deltaTime)
 {
   m_debugDraw.clear();
-  const SIZE_T count = m_rootGameObjects.size();
+  const SIZE_T count = m_frameUpdates.size();
   for (SIZE_T i = 0; i < count; ++i) {
-    m_rootGameObjects[i]->update(deltaTime, m_bPlaying);
+    Component* component = m_frameUpdates[i];
+    if (component && (m_bPlaying || component->updatesWhileEditing())) {
+      component->update(deltaTime);
+    }
   }
   applyDestroyRequests();
+  compactUpdateLists();
 }
 
 /*
@@ -237,15 +264,8 @@ Scene::requestDestroy(GameObject& gameObject)
   }
   // Always queued, also outside an update: onDestroy of a script may ask while the scene is
   // unregistering a subtree, and the tree must not change under it.
-  const Vector<SPtr<GameObject>>& siblings =
-      gameObject.m_parent ? gameObject.m_parent->m_children : m_rootGameObjects;
-  for (const SPtr<GameObject>& sibling : siblings) {
-    if (sibling.get() == &gameObject) {
-      gameObject.m_bDestroyRequested = true;
-      m_destroyRequests.push_back(sibling);
-      return;
-    }
-  }
+  gameObject.m_bDestroyRequested = true;
+  m_destroyRequests.push_back(gameObject.shared_from_this());
 }
 
 /*
@@ -260,15 +280,118 @@ Scene::applyDestroyRequests()
   // are queued too and destroyed in the next round. A chain that never ends waits for the
   // next update.
   constexpr uint32 kMaxRounds = 8;
-  Vector<SPtr<GameObject>> requests;
   for (uint32 round = 0; round < kMaxRounds && !m_destroyRequests.empty(); ++round) {
-    requests.swap(m_destroyRequests);
-    for (const SPtr<GameObject>& gameObject : requests) {
+    m_destroyBatch.swap(m_destroyRequests);
+    bool bRootLeft = false;
+    for (const SPtr<GameObject>& gameObject : m_destroyBatch) {
       // An object whose parent went first already left the scene.
-      destroyGameObject(*gameObject);
+      if (gameObject->m_scene != this) {
+        continue;
+      }
+      gameObject->setRegisteredRecursive(false);
+      if (GameObject* parent = gameObject->m_parent) {
+        parent->m_bChildLeft = true;
+      }
+      else {
+        bRootLeft = true;
+      }
     }
-    requests.clear();
+
+    // One pass per list of siblings, instead of a search and an erase per object, which cost
+    // as much as the list is long.
+    for (const SPtr<GameObject>& gameObject : m_destroyBatch) {
+      GameObject* parent = gameObject->m_parent;
+      if (parent && parent->m_bChildLeft) {
+        parent->m_bChildLeft = false;
+        removeDestroyedObjects(parent->m_children);
+      }
+    }
+    if (bRootLeft) {
+      removeDestroyedObjects(m_rootGameObjects);
+    }
+    m_destroyBatch.clear();
   }
+}
+
+/*
+ */
+void
+Scene::removeDestroyedObjects(Vector<SPtr<GameObject>>& siblings)
+{
+  const auto hasLeft = [](const SPtr<GameObject>& sibling) {
+    return sibling->m_bDestroyRequested && sibling->m_scene == nullptr;
+  };
+  for (const SPtr<GameObject>& sibling : siblings) {
+    if (hasLeft(sibling)) {
+      sibling->m_parent = nullptr;
+    }
+  }
+  // Last, because it may release the last reference to the objects.
+  Algorithm::removeAllIf(siblings, hasLeft);
+}
+
+/*
+ */
+void
+Scene::addUpdatingComponent(Component& component)
+{
+  const ComponentUpdateFlags flags = component.m_updateFlags;
+  if (flags.isSet(ComponentUpdate::Frame)) {
+    component.m_frameUpdateSlot = static_cast<uint32>(m_frameUpdates.size());
+    m_frameUpdates.push_back(&component);
+  }
+  if (flags.isSet(ComponentUpdate::Fixed)) {
+    component.m_fixedUpdateSlot = static_cast<uint32>(m_fixedUpdates.size());
+    m_fixedUpdates.push_back(&component);
+  }
+}
+
+/*
+ */
+void
+Scene::removeUpdatingComponent(Component& component)
+{
+  if (component.m_frameUpdateSlot != Component::NO_SLOT) {
+    m_frameUpdates[component.m_frameUpdateSlot] = nullptr;
+    component.m_frameUpdateSlot = Component::NO_SLOT;
+    m_bUpdateListsHaveGaps = true;
+  }
+  if (component.m_fixedUpdateSlot != Component::NO_SLOT) {
+    m_fixedUpdates[component.m_fixedUpdateSlot] = nullptr;
+    component.m_fixedUpdateSlot = Component::NO_SLOT;
+    m_bUpdateListsHaveGaps = true;
+  }
+}
+
+/*
+ */
+void
+Scene::compactUpdateLists()
+{
+  if (!m_bUpdateListsHaveGaps) {
+    return;
+  }
+  closeGaps(m_frameUpdates, &Component::m_frameUpdateSlot);
+  closeGaps(m_fixedUpdates, &Component::m_fixedUpdateSlot);
+  m_bUpdateListsHaveGaps = false;
+}
+
+/*
+ */
+void
+Scene::addDirtyTransform(GameObject& gameObject)
+{
+  gameObject.m_dirtyTransformSlot = static_cast<uint32>(m_dirtyTransforms.size());
+  m_dirtyTransforms.push_back(&gameObject);
+}
+
+/*
+ */
+void
+Scene::removeDirtyTransform(GameObject& gameObject)
+{
+  m_dirtyTransforms[gameObject.m_dirtyTransformSlot] = nullptr;
+  gameObject.m_dirtyTransformSlot = GameObject::NO_SLOT;
 }
 
 /*
@@ -276,9 +399,33 @@ Scene::applyDestroyRequests()
 void
 Scene::updateTransforms()
 {
-  for (const SPtr<GameObject>& root : m_rootGameObjects) {
-    root->updateWorldMatrices(Matrix4::IDENTITY, false);
+  // The size is read every time: a component told about a new matrix may move another
+  // object, which is then rebuilt in this same pass.
+  for (SIZE_T i = 0; i < m_dirtyTransforms.size(); ++i) {
+    GameObject* gameObject = m_dirtyTransforms[i];
+    if (!gameObject) {
+      continue;
+    }
+    // Listed again after an earlier rebuild in this pass; the later slot is its place.
+    if (gameObject->m_dirtyTransformSlot == i) {
+      gameObject->m_dirtyTransformSlot = GameObject::NO_SLOT;
+    }
+    // Already rebuilt with a parent that had changed too.
+    if (!gameObject->m_transform.isDirty()) {
+      continue;
+    }
+
+    // The highest changed object above rebuilds everything under it, this one included.
+    GameObject* top = gameObject;
+    for (GameObject* parent = gameObject->m_parent; parent; parent = parent->m_parent) {
+      if (parent->m_transform.isDirty()) {
+        top = parent;
+      }
+    }
+    top->updateWorldMatrices(top->m_parent ? top->m_parent->m_transform.getWorldMatrix()
+                                           : Matrix4::IDENTITY);
   }
+  m_dirtyTransforms.clear();
 }
 
 /*

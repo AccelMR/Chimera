@@ -106,6 +106,10 @@ using SPtr = std::shared_ptr<T>;
 template<typename T>
 using WeakPtr = std::weak_ptr<T>;
 
+// Base of a class that needs an SPtr to itself from a plain reference (shared_from_this).
+template<typename T>
+using EnableSharedFromThis = std::enable_shared_from_this<T>;
+
 template<typename T>
 struct ForwardDeleter
 {

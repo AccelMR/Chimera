@@ -4928,6 +4928,7 @@ class TestCounterComponent : public Component
  public:
   explicit TestCounterComponent(bool bUpdatesWhileEditing = false)
   {
+    setUpdateFlags(ComponentUpdate::Frame | ComponentUpdate::Fixed);
     setUpdatesWhileEditing(bUpdatesWhileEditing);
   }
 
@@ -5041,6 +5042,194 @@ TEST_CASE("chCore - Scene play")
     sceneManager.unloadScene(*copy);
     REQUIRE(sceneManager.getActiveScene().expired());
     SceneManager::shutDown();
+  }
+}
+
+namespace chEngineSDK {
+/**
+ * Exists so the tests can see which updates and transform rebuilds a scene runs. Without
+ * update flags its update is never called.
+ */
+class TestHookComponent : public Component
+{
+ public:
+  explicit TestHookComponent(bool bUpdates = true)
+  {
+    if (bUpdates) {
+      setUpdateFlags(ComponentUpdate::Frame);
+    }
+  }
+
+  void
+  update(float deltaTime) override
+  {
+    CH_PARAMETER_UNUSED(deltaTime);
+    ++updates;
+    if (onUpdate) {
+      onUpdate();
+    }
+  }
+
+  uint32 updates = 0;
+  uint32 transformChanges = 0;
+  Function<void()> onUpdate;
+
+ protected:
+  void
+  onTransformChanged() override
+  {
+    ++transformChanges;
+  }
+};
+DECLARE_TYPE_TRAITS(TestHookComponent)
+} // namespace chEngineSDK
+
+TEST_CASE("chCore - Scene update lists")
+{
+  Scene scene("Lists", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+
+  SECTION("Only components with update flags update")
+  {
+    const SPtr<GameObject> gameObject = scene.createGameObject("A");
+    const TestHookComponent& updating = gameObject->addComponent<TestHookComponent>();
+    const TestHookComponent& still = gameObject->addComponent<TestHookComponent>(false);
+    REQUIRE(updating.getUpdateFlags().isSet(ComponentUpdate::Frame));
+    REQUIRE_FALSE(still.getUpdateFlags());
+    scene.update(0.1f);
+    scene.fixedUpdate(0.1f);
+    REQUIRE(updating.updates == 1);
+    REQUIRE(still.updates == 0);
+  }
+
+  SECTION("Components that register or leave during an update")
+  {
+    const SPtr<GameObject> first = scene.createGameObject("First");
+    const SPtr<GameObject> second = scene.createGameObject("Second");
+    TestHookComponent& firstHook = first->addComponent<TestHookComponent>();
+    TestHookComponent& secondHook = second->addComponent<TestHookComponent>();
+    TestHookComponent* added = nullptr;
+    firstHook.onUpdate = [&]() {
+      secondHook.setEnabled(false);
+      added = &scene.createGameObject("Added")->addComponent<TestHookComponent>();
+    };
+    scene.update(0.1f);
+    // Disabled before its turn, it is skipped; the new one waits for the next update.
+    REQUIRE(firstHook.updates == 1);
+    REQUIRE(secondHook.updates == 0);
+    REQUIRE(added->updates == 0);
+
+    firstHook.onUpdate = nullptr;
+    secondHook.setEnabled(true);
+    scene.update(0.1f);
+    REQUIRE(added->updates == 1);
+    REQUIRE(secondHook.updates == 1);
+
+    // Removed during the update: the components after it still run, in the same order.
+    firstHook.onUpdate = [&]() { second->removeComponent(secondHook); };
+    scene.update(0.1f);
+    REQUIRE(second->getComponents().empty());
+    REQUIRE(added->updates == 2);
+    firstHook.onUpdate = nullptr;
+    scene.update(0.1f);
+    REQUIRE(firstHook.updates == 4);
+    REQUIRE(added->updates == 3);
+  }
+
+  SECTION("Only moved objects and what is under them are rebuilt")
+  {
+    const SPtr<GameObject> parent = scene.createGameObject("Parent");
+    const SPtr<GameObject> child = scene.createGameObject("Child", parent.get());
+    const SPtr<GameObject> other = scene.createGameObject("Other");
+    const TestHookComponent& parentHook = parent->addComponent<TestHookComponent>(false);
+    const TestHookComponent& childHook = child->addComponent<TestHookComponent>(false);
+    const TestHookComponent& otherHook = other->addComponent<TestHookComponent>(false);
+
+    // New objects start dirty.
+    scene.updateTransforms();
+    REQUIRE(parentHook.transformChanges == 1);
+    REQUIRE(childHook.transformChanges == 1);
+    REQUIRE(otherHook.transformChanges == 1);
+    scene.updateTransforms();
+    REQUIRE(parentHook.transformChanges == 1);
+
+    child->getTransform().setLocalPosition(Vector3(0.0f, 1.0f, 0.0f));
+    child->getTransform().setLocalScale(Vector3(2.0f, 2.0f, 2.0f));
+    scene.updateTransforms();
+    REQUIRE(parentHook.transformChanges == 1);
+    REQUIRE(childHook.transformChanges == 2);
+    REQUIRE(otherHook.transformChanges == 1);
+
+    // The child is listed before its parent, and is still rebuilt once, after it.
+    child->getTransform().setLocalPosition(Vector3(0.0f, 2.0f, 0.0f));
+    parent->getTransform().setLocalPosition(Vector3(10.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(parentHook.transformChanges == 2);
+    REQUIRE(childHook.transformChanges == 3);
+    REQUIRE(otherHook.transformChanges == 1);
+    REQUIRE(child->getTransform().getWorldPosition().nearEqual(Vector3(10.0f, 2.0f, 0.0f)));
+
+    // A parent that moves alone rebuilds its children too.
+    parent->getTransform().setLocalPosition(Vector3(20.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(childHook.transformChanges == 4);
+    REQUIRE(child->getTransform().getWorldPosition().nearEqual(Vector3(20.0f, 2.0f, 0.0f)));
+
+    // Moved, then out of the scene before the rebuild, kept alive here or freed.
+    other->getTransform().setLocalPosition(Vector3(1.0f, 0.0f, 0.0f));
+    scene.destroyGameObject(*other);
+    {
+      const SPtr<GameObject> freed = scene.createGameObject("Freed");
+      scene.destroyGameObject(*freed);
+    }
+    scene.updateTransforms();
+    REQUIRE(otherHook.transformChanges == 1);
+    // Out of a scene, a change tells nobody.
+    other->getTransform().setLocalPosition(Vector3(2.0f, 0.0f, 0.0f));
+    scene.updateTransforms();
+    REQUIRE(otherHook.transformChanges == 1);
+  }
+
+  SECTION("A destroyed batch keeps the order of what stays")
+  {
+    Vector<SPtr<GameObject>> roots;
+    for (const ANSICHAR* name : {"R0", "R1", "R2", "R3", "R4"}) {
+      roots.push_back(scene.createGameObject(name));
+    }
+    const SPtr<GameObject> parent = scene.createGameObject("Parent");
+    Vector<SPtr<GameObject>> kids;
+    for (const ANSICHAR* name : {"K0", "K1", "K2", "K3"}) {
+      kids.push_back(scene.createGameObject(name, parent.get()));
+    }
+    const auto namesOf = [](const Vector<SPtr<GameObject>>& objects) {
+      String names;
+      for (const SPtr<GameObject>& gameObject : objects) {
+        names += gameObject->getName();
+        names += ' ';
+      }
+      return names;
+    };
+
+    scene.requestDestroy(*roots[3]);
+    scene.requestDestroy(*kids[1]);
+    scene.requestDestroy(*roots[1]);
+    scene.requestDestroy(*kids[2]);
+    scene.requestDestroy(*roots[1]);
+    scene.update(0.1f);
+    REQUIRE(namesOf(scene.getRootGameObjects()) == "R0 R2 R4 Parent ");
+    REQUIRE(namesOf(parent->getChildren()) == "K0 K3 ");
+    REQUIRE(kids[1]->getParent() == nullptr);
+    REQUIRE(kids[1]->getScene() == nullptr);
+    REQUIRE(roots[1]->getScene() == nullptr);
+
+    // A child asked for before its parent: the parent leaves with the children it keeps.
+    scene.requestDestroy(*kids[0]);
+    scene.requestDestroy(*parent);
+    scene.update(0.1f);
+    REQUIRE(namesOf(scene.getRootGameObjects()) == "R0 R2 R4 ");
+    REQUIRE(namesOf(parent->getChildren()) == "K3 ");
+    REQUIRE(kids[3]->getScene() == nullptr);
+    REQUIRE(kids[0]->getParent() == nullptr);
   }
 }
 
@@ -6948,6 +7137,182 @@ TEST_CASE("chCore - Script steering benchmark", "[.benchmark]")
               std::chrono::duration<double, std::milli>(end - start).count() /
                   (kWarmUpFrames + kFrames));
   REQUIRE(agents[0].position.magnitude() < 50.0f);
+}
+
+/*
+ * Not run by default (ctest skips hidden tags); run it in Release:
+ *   chCoreTest "chCore - Spawn benchmark"
+ * Spawns 100 bullets per frame that live 60 frames, so 6000 are alive once it runs steady:
+ * copied and destroyed from C++, the same from Lua, and objects reused by turning their
+ * components off and on (the least a pool could cost).
+ */
+TEST_CASE("chCore - Spawn benchmark", "[.benchmark]")
+{
+  constexpr uint32 kSpawnsPerFrame = 100;
+  constexpr uint32 kLifetimeFrames = 60;
+  constexpr uint32 kAlive = kSpawnsPerFrame * kLifetimeFrames;
+  constexpr uint32 kWarmUpFrames = kLifetimeFrames + 30;
+  constexpr uint32 kFrames = 300;
+  constexpr float kDeltaTime = 1.0f / 60.0f;
+  using Clock = std::chrono::steady_clock;
+  const auto toMilliseconds = [](Clock::duration duration) {
+    return std::chrono::duration<double, std::milli>(duration).count() / kFrames;
+  };
+
+  ScriptManager& scripts = getTestScriptManager();
+  Scene scene("SpawnBenchmark", chEngineSDK::UUID::createRandom());
+  scene.setPlaying(true);
+  scripts.setCurrentScene(&scene);
+
+  // A sphere with a light and a box child, like a bullet with its trail.
+  const SPtr<GameObject> bullet = scene.createGameObject("Bullet");
+  bullet->addComponent<ShapeComponent>(
+      ShapeDesc{.type = ShapeType::Sphere, .radius = 0.1f, .segments = 8, .rings = 6});
+  bullet->addComponent<PointLightComponent>();
+  const SPtr<GameObject> trail = scene.createGameObject("Trail", bullet.get());
+  trail->addComponent<ShapeComponent>(ShapeDesc{.size = Vector3(0.5f, 0.05f, 0.05f)});
+  scene.updateTransforms();
+
+  const auto setComponentsEnabled = [](GameObject& gameObject, bool bEnabled) {
+    for (const UniquePtr<Component>& component : gameObject.getComponents()) {
+      component->setEnabled(bEnabled);
+    }
+    for (const SPtr<GameObject>& child : gameObject.getChildren()) {
+      for (const UniquePtr<Component>& component : child->getComponents()) {
+        component->setEnabled(bEnabled);
+      }
+    }
+  };
+
+  SECTION("Copy and destroy from C++")
+  {
+    Vector<SPtr<GameObject>> ring(kAlive);
+    uint32 head = 0;
+    Clock::duration spawnTime{};
+    Clock::duration updateTime{};
+    for (uint32 frame = 0; frame < kWarmUpFrames + kFrames; ++frame) {
+      if (frame == kWarmUpFrames) {
+        spawnTime = updateTime = Clock::duration{};
+      }
+      const auto start = Clock::now();
+      for (uint32 spawn = 0; spawn < kSpawnsPerFrame; ++spawn) {
+        SPtr<GameObject>& slot = ring[head++ % kAlive];
+        if (slot) {
+          scene.requestDestroy(*slot);
+        }
+        slot = GameObjectSerializer::copyTo(*bullet, nullptr);
+        slot->getTransform().setLocalPosition(
+            Vector3(static_cast<float>(spawn), static_cast<float>(frame % 100), 0.0f));
+      }
+      const auto spawned = Clock::now();
+      scene.update(kDeltaTime);
+      scene.updateTransforms();
+      spawnTime += spawned - start;
+      updateTime += Clock::now() - spawned;
+    }
+    REQUIRE(scene.getRootGameObjects().size() == kAlive + 1);
+    CH_LOG_INFO(ScriptTestLog,
+                "C++ copy: {:.3f} ms spawning, {:.3f} ms update (destroys, transforms) per frame",
+                toMilliseconds(spawnTime), toMilliseconds(updateTime));
+  }
+
+  SECTION("Clone and destroy from Lua")
+  {
+    REQUIRE(scripts.runString(R"lua(
+      Bench = { ring = {}, head = 0, template = Scene.find("Bullet"), position = Vector3() }
+      function Bench.step(frame, spawns, alive)
+        local ring, template, position = Bench.ring, Bench.template, Bench.position
+        for spawn = 1, spawns do
+          local index = Bench.head % alive + 1
+          Bench.head = Bench.head + 1
+          local old = ring[index]
+          if old then old:destroy() end
+          position:set(spawn, frame % 100, 0)
+          ring[index] = template:clone(nil, position)
+        end
+      end
+    )lua"));
+    lua_State* const state = scripts.getState();
+    uint64 allocationsBefore = 0;
+    int32 kilobytesBefore = 0;
+    Clock::duration spawnTime{};
+    Clock::duration updateTime{};
+    for (uint32 frame = 0; frame < kWarmUpFrames + kFrames; ++frame) {
+      if (frame == kWarmUpFrames) {
+        spawnTime = updateTime = Clock::duration{};
+        scripts.collectGarbage();
+        allocationsBefore = scripts.getAllocationCount();
+        kilobytesBefore = lua_gc(state, LUA_GCCOUNT, 0);
+      }
+      const auto start = Clock::now();
+      lua_getglobal(state, "Bench");
+      lua_getfield(state, -1, "step");
+      lua_pushinteger(state, frame);
+      lua_pushinteger(state, kSpawnsPerFrame);
+      lua_pushinteger(state, kAlive);
+      lua_call(state, 3, 0);
+      lua_pop(state, 1);
+      const auto spawned = Clock::now();
+      scene.update(kDeltaTime);
+      scene.updateTransforms();
+      spawnTime += spawned - start;
+      updateTime += Clock::now() - spawned;
+    }
+    scripts.collectGarbage();
+    const int32 kilobytesAfter = lua_gc(state, LUA_GCCOUNT, 0);
+    REQUIRE(scene.getRootGameObjects().size() == kAlive + 1);
+    CH_LOG_INFO(ScriptTestLog,
+                "Lua clone: {:.3f} ms spawning, {:.3f} ms update per frame, {:.0f} Lua "
+                "allocations per frame, Lua memory {} KB -> {} KB",
+                toMilliseconds(spawnTime), toMilliseconds(updateTime),
+                static_cast<double>(scripts.getAllocationCount() - allocationsBefore) / kFrames,
+                kilobytesBefore, kilobytesAfter);
+    REQUIRE(scripts.runString("Bench = nil"));
+    scripts.collectGarbage();
+  }
+
+  SECTION("Reuse objects by turning their components off and on")
+  {
+    Vector<GameObject*> freeObjects;
+    freeObjects.reserve(kAlive + kSpawnsPerFrame);
+    for (uint32 i = 0; i < kAlive + kSpawnsPerFrame; ++i) {
+      GameObject& copy = *GameObjectSerializer::copyTo(*bullet, nullptr);
+      setComponentsEnabled(copy, false);
+      freeObjects.push_back(&copy);
+    }
+    Vector<GameObject*> ring(kAlive, nullptr);
+    uint32 head = 0;
+    Clock::duration spawnTime{};
+    Clock::duration updateTime{};
+    for (uint32 frame = 0; frame < kWarmUpFrames + kFrames; ++frame) {
+      if (frame == kWarmUpFrames) {
+        spawnTime = updateTime = Clock::duration{};
+      }
+      const auto start = Clock::now();
+      for (uint32 spawn = 0; spawn < kSpawnsPerFrame; ++spawn) {
+        GameObject*& slot = ring[head++ % kAlive];
+        if (slot) {
+          setComponentsEnabled(*slot, false);
+          freeObjects.push_back(slot);
+        }
+        slot = freeObjects.back();
+        freeObjects.pop_back();
+        setComponentsEnabled(*slot, true);
+        slot->getTransform().setLocalPosition(
+            Vector3(static_cast<float>(spawn), static_cast<float>(frame % 100), 0.0f));
+      }
+      const auto spawned = Clock::now();
+      scene.update(kDeltaTime);
+      scene.updateTransforms();
+      spawnTime += spawned - start;
+      updateTime += Clock::now() - spawned;
+    }
+    REQUIRE(scene.getRootGameObjects().size() == kAlive + kSpawnsPerFrame + 1);
+    CH_LOG_INFO(ScriptTestLog, "Reuse: {:.3f} ms spawning, {:.3f} ms update per frame",
+                toMilliseconds(spawnTime), toMilliseconds(updateTime));
+  }
+
+  scripts.setCurrentScene(nullptr);
 }
 
 TEST_CASE("chCore - Script objects")

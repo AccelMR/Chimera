@@ -117,22 +117,24 @@ class CH_CORE_EXPORT Scene : public Object
   isPlaying() const { return m_bPlaying; }
 
   /**
-   * Runs the fixed step of the components of every object; the application calls it zero or
-   * more times per frame at a fixed rate.
+   * Runs the fixed step of the registered components whose update flags have Fixed, in the
+   * order they registered; the application calls it zero or more times per frame at a fixed
+   * rate.
    */
   void
   fixedUpdate(float deltaTime);
 
   /**
-   * Runs the per frame update of the components of every object, once per frame before
-   * updateTransforms.
+   * Runs the per frame update of the registered components whose update flags have Frame,
+   * in the order they registered, once per frame before updateTransforms.
    */
   void
   update(float deltaTime);
 
   /**
    * Rebuilds the world matrix of every object whose transform or parent changed and tells
-   * their components. Call it once per frame before rendering.
+   * their components; objects that did not move cost nothing. Call it once per frame before
+   * rendering.
    */
   void
   updateTransforms();
@@ -276,8 +278,35 @@ class CH_CORE_EXPORT Scene : public Object
   getFixedDebugDraw() const { return m_fixedDebugDraw; }
 
  private:
+  friend class Component;
+  friend class GameObject;
+
   void
   applyDestroyRequests();
+
+  /**
+   * Takes out of siblings, in one pass, the objects a destroy request took out of the scene.
+   */
+  static void
+  removeDestroyedObjects(Vector<SPtr<GameObject>>& siblings);
+
+  void
+  addUpdatingComponent(Component& component);
+
+  void
+  removeUpdatingComponent(Component& component);
+
+  /**
+   * Closes the slots components left in the update lists, outside the loops over them.
+   */
+  void
+  compactUpdateLists();
+
+  void
+  addDirtyTransform(GameObject& gameObject);
+
+  void
+  removeDirtyTransform(GameObject& gameObject);
 
   Vector<SPtr<GameObject>> m_rootGameObjects;
   Vector<RenderItem> m_renderItems;
@@ -295,6 +324,15 @@ class CH_CORE_EXPORT Scene : public Object
   DebugDraw m_debugDraw;
   DebugDraw m_fixedDebugDraw;
   Vector<SPtr<GameObject>> m_destroyRequests;
+  // The requests being applied; a member so its memory is kept.
+  Vector<SPtr<GameObject>> m_destroyBatch;
+  // Components to update, in registration order. One that leaves only nulls its slot, so
+  // leaving during an update moves nothing; the gaps close when the update ends.
+  Vector<Component*> m_frameUpdates;
+  Vector<Component*> m_fixedUpdates;
+  bool m_bUpdateListsHaveGaps = false;
+  // Objects whose transform changed since the last updateTransforms; null where one left.
+  Vector<GameObject*> m_dirtyTransforms;
   bool m_bPlaying = false;
 };
 

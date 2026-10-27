@@ -16,12 +16,14 @@
 #include "chVector3.h"
 
 namespace chEngineSDK {
+class GameObject;
 
 /**
  * Exists so a GameObject keeps its placement relative to its parent and the scene knows
- * which world matrices to rebuild. Setters only mark it dirty; Scene::updateTransforms
- * rebuilds the world matrix of every dirty object (and of its children) once per frame, so
- * several changes in a frame cost one rebuild.
+ * which world matrices to rebuild. Setters only mark it dirty, and the first change since
+ * the last rebuild puts the object in its scene's list; Scene::updateTransforms rebuilds the
+ * world matrix of every listed object (and of its children) once per frame, so several
+ * changes in a frame cost one rebuild and objects that do not move cost nothing.
  */
 class CH_CORE_EXPORT Transform
 {
@@ -71,8 +73,13 @@ class CH_CORE_EXPORT Transform
   friend class GameObject;
 
   void
+  markDirty();
+
+  void
   updateWorldMatrix(const Matrix4& parentWorldMatrix);
 
+  // Set by the GameObject that holds it, so the first change tells its scene.
+  GameObject* m_owner = nullptr;
   Vector3 m_localPosition = Vector3::ZERO;
   Quaternion m_localRotation = Quaternion::IDENTITY;
   Vector3 m_localScale = Vector3::UNIT;

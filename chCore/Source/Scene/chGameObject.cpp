@@ -11,6 +11,7 @@
 
 #include "chAlgorithm.h"
 #include "chBox.h"
+#include "chScene.h"
 #include "chScriptManager.h"
 #include "chScriptObjectTypes.h"
 #include "chStringUtils.h"
@@ -22,7 +23,9 @@ namespace chEngineSDK {
 GameObject::GameObject(const String& name, Scene* scene)
  : Object(name, UUID::createRandom()),
    m_scene(scene)
-{}
+{
+  m_transform.m_owner = this;
+}
 
 /*
  */
@@ -34,43 +37,6 @@ GameObject::~GameObject()
   }
   if (m_scriptHandle != ScriptClassInfo::NO_REFERENCE) {
     ScriptTraits<GameObject>::release(*this);
-  }
-}
-
-/*
- */
-void
-GameObject::fixedUpdate(float deltaTime, bool bPlaying)
-{
-  // By index with the counts taken first: scripts may add children while this runs.
-  const SIZE_T componentCount = m_components.size();
-  for (SIZE_T i = 0; i < componentCount; ++i) {
-    Component& component = *m_components[i];
-    if (component.isEnabled() && (bPlaying || component.updatesWhileEditing())) {
-      component.fixedUpdate(deltaTime);
-    }
-  }
-  const SIZE_T childCount = m_children.size();
-  for (SIZE_T i = 0; i < childCount; ++i) {
-    m_children[i]->fixedUpdate(deltaTime, bPlaying);
-  }
-}
-
-/*
- */
-void
-GameObject::update(float deltaTime, bool bPlaying)
-{
-  const SIZE_T componentCount = m_components.size();
-  for (SIZE_T i = 0; i < componentCount; ++i) {
-    Component& component = *m_components[i];
-    if (component.isEnabled() && (bPlaying || component.updatesWhileEditing())) {
-      component.update(deltaTime);
-    }
-  }
-  const SIZE_T childCount = m_children.size();
-  for (SIZE_T i = 0; i < childCount; ++i) {
-    m_children[i]->update(deltaTime, bPlaying);
   }
 }
 
@@ -195,7 +161,10 @@ GameObject::setRegisteredRecursive(bool registered)
   for (const SPtr<GameObject>& child : m_children) {
     child->setRegisteredRecursive(registered);
   }
-  if (!registered) {
+  if (!registered && m_scene) {
+    if (m_dirtyTransformSlot != NO_SLOT) {
+      m_scene->removeDirtyTransform(*this);
+    }
     m_scene = nullptr;
   }
 }
@@ -203,20 +172,27 @@ GameObject::setRegisteredRecursive(bool registered)
 /*
  */
 void
-GameObject::updateWorldMatrices(const Matrix4& parentWorldMatrix, bool parentChanged)
+GameObject::markTransformDirty()
 {
-  const bool bChanged = parentChanged || m_transform.isDirty();
-  if (bChanged) {
-    m_transform.updateWorldMatrix(parentWorldMatrix);
-    for (const UniquePtr<Component>& component : m_components) {
-      if (component->isRegistered()) {
-        component->onTransformChanged();
-      }
+  if (m_scene) {
+    m_scene->addDirtyTransform(*this);
+  }
+}
+
+/*
+ */
+void
+GameObject::updateWorldMatrices(const Matrix4& parentWorldMatrix)
+{
+  m_transform.updateWorldMatrix(parentWorldMatrix);
+  for (const UniquePtr<Component>& component : m_components) {
+    if (component->isRegistered()) {
+      component->onTransformChanged();
     }
   }
 
   for (const SPtr<GameObject>& child : m_children) {
-    child->updateWorldMatrices(m_transform.getWorldMatrix(), bChanged);
+    child->updateWorldMatrices(m_transform.getWorldMatrix());
   }
 }
 

@@ -10,6 +10,7 @@
 #include "chComponent.h"
 
 #include "chGameObject.h"
+#include "chScene.h"
 
 namespace chEngineSDK {
 
@@ -96,11 +97,18 @@ Component::setRegistered(bool registered)
   }
   m_registered = registered;
 
+  Scene& scene = *m_owner->getScene();
   if (registered) {
+    if (m_updateFlags) {
+      scene.addUpdatingComponent(*this);
+    }
     onRegister();
   }
   else {
     onUnregister();
+    if (m_updateFlags) {
+      scene.removeUpdatingComponent(*this);
+    }
   }
 }
 

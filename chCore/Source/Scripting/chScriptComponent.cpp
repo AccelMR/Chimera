@@ -21,7 +21,15 @@ namespace chEngineSDK {
 
 /*
  */
+ScriptComponent::ScriptComponent()
+{
+  setUpdateFlags(ComponentUpdate::Frame | ComponentUpdate::Fixed);
+}
+
+/*
+ */
 ScriptComponent::ScriptComponent(const SPtr<ScriptAsset>& script)
+  : ScriptComponent()
 {
   setScript(script);
 }

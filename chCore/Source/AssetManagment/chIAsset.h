@@ -46,7 +46,7 @@ struct AssetMetadata
   ANSICHAR assetPath[256] = "";
 };
 
-class CH_CORE_EXPORT IAsset : public std::enable_shared_from_this<IAsset>
+class CH_CORE_EXPORT IAsset : public EnableSharedFromThis<IAsset>
 {
  public:
   virtual ~IAsset() = default;

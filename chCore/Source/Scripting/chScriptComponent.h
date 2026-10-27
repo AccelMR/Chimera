@@ -32,7 +32,7 @@ class ScriptAsset;
 class CH_CORE_EXPORT ScriptComponent : public Component
 {
  public:
-  ScriptComponent() = default;
+  ScriptComponent();
 
   explicit ScriptComponent(const SPtr<ScriptAsset>& script);
 

@@ -25,7 +25,8 @@ struct ScriptTraits;
  * its children and its components. Make it with Scene::createGameObject and remove it with
  * Scene::destroyGameObject, so the scene can register and unregister its components.
  */
-class CH_CORE_EXPORT GameObject : public Object
+class CH_CORE_EXPORT GameObject : public Object,
+                                  public EnableSharedFromThis<GameObject>
 {
  public:
   /**
@@ -64,15 +65,6 @@ class CH_CORE_EXPORT GameObject : public Object
 
   NODISCARD FORCEINLINE const Vector<UniquePtr<Component>>&
   getComponents() const { return m_components; }
-
-  /**
-   * With bPlaying false only the components that update while editing run.
-   */
-  void
-  fixedUpdate(float deltaTime, bool bPlaying);
-
-  void
-  update(float deltaTime, bool bPlaying);
 
   NODISCARD FORCEINLINE Transform&
   getTransform() { return m_transform; }
@@ -133,6 +125,7 @@ class CH_CORE_EXPORT GameObject : public Object
  private:
   friend class Scene;
   friend class GameObjectSerializer;
+  friend class Transform;
   // Keeps the script handle of the object (m_scriptHandle).
   friend struct ScriptTraits<GameObject>;
 
@@ -146,8 +139,19 @@ class CH_CORE_EXPORT GameObject : public Object
   void
   setRegisteredRecursive(bool registered);
 
+  /**
+   * Called by the transform the first time it changes after a rebuild.
+   */
   void
-  updateWorldMatrices(const Matrix4& parentWorldMatrix, bool parentChanged);
+  markTransformDirty();
+
+  /**
+   * Rebuilds the world matrix of this object and of everything under it.
+   */
+  void
+  updateWorldMatrices(const Matrix4& parentWorldMatrix);
+
+  static constexpr uint32 NO_SLOT = 0xFFFFFFFF;
 
   Transform m_transform;
   Vector<UniquePtr<Component>> m_components;
@@ -156,6 +160,10 @@ class CH_CORE_EXPORT GameObject : public Object
   Scene* m_scene = nullptr;
   UUID m_prefab = UUID::null();
   bool m_bDestroyRequested = false;
+  // Set while the scene destroys a batch, when a child of this object left.
+  bool m_bChildLeft = false;
+  // Place in the scene's list of changed transforms, while listed.
+  uint32 m_dirtyTransformSlot = NO_SLOT;
   // Registry reference of the handle scripts see this object through (LUA_NOREF until a
   // script first does). It is cleared when the object dies, so scripts get an error instead
   // of a dangling pointer.
